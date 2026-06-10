@@ -520,6 +520,16 @@
   .budget-item { background:var(--surface2); border:1px solid var(--border); padding:12px; }
   .budget-label { font-size:9px; letter-spacing:0.16em; text-transform:uppercase; color:var(--text-light); margin-bottom:6px; }
   .budget-value { font-family:'Playfair Display',serif; font-size:22px; color:var(--vino); }
+  .review-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(170px, 1fr)); gap:12px; margin:12px 0 16px; }
+  .review-card { background:var(--surface2); border:1px solid var(--border); padding:13px 14px; min-height:84px; }
+  .review-card.good { border-left:3px solid var(--green); }
+  .review-card.warn { border-left:3px solid var(--amber); }
+  .review-card.bad { border-left:3px solid var(--red); }
+  .review-label { font-size:9px; letter-spacing:0.17em; text-transform:uppercase; color:var(--text-light); margin-bottom:7px; }
+  .review-value { font-family:'Playfair Display',serif; font-size:24px; color:var(--vino); }
+  .review-note { font-size:11px; color:var(--text-light); margin-top:6px; line-height:1.45; }
+  .review-actions { display:flex; gap:8px; flex-wrap:wrap; margin:4px 0 14px; }
+  .review-split { display:grid; grid-template-columns:1fr; gap:12px; }
 
   .overdue-flag {
     display: inline-flex;
@@ -1429,17 +1439,7 @@ function renderEventPage(ev){
     </div>
     <span class="readiness-value ${readiness.status}" style="font-size:18px">${readiness.label}</span>
   </div>` : '';
-  const reviewPanel = selectedStage==='review' ? `
-    <div class="budget-panel">
-      <div class="section-header" style="margin-bottom:8px"><div class="section-title">Budget & Artist Costs</div></div>
-      <div class="budget-grid">
-        <div class="budget-item"><div class="budget-label">Target Revenue</div><div class="budget-value">${fmt(targetRev)}</div></div>
-        <div class="budget-item"><div class="budget-label">Artist Budget</div><div class="budget-value">${fmt(ev.entertainment_cost)}</div></div>
-        <div class="budget-item"><div class="budget-label">Committed Costs</div><div class="budget-value">${fmt(committed)}</div></div>
-        <div class="budget-item"><div class="budget-label">Cost vs Target</div><div class="budget-value">${targetRev ? Math.round(committed/targetRev*100) : 0}%</div></div>
-      </div>
-      ${renderFinanceTrack(fin, wid, ev.id)}
-    </div>` : '';
+  const reviewPanel = selectedStage==='review' ? renderReviewPanel(ev, week, tasks, fin, wid) : '';
 
   const stageButtons = STAGE_KEYS.map(stage=>{
     const stats = stageStats(tasks, stage);
@@ -1587,6 +1587,79 @@ function renderAddTaskBar(track, weekId, eventId, forcedStage=null){
     </select>
     <button class="btn btn-gold btn-sm" onclick="addTask('${key}','${weekId}','${eventId}')">Add Task</button>
   </div>`;
+}
+
+function renderReviewPanel(ev, week, tasks, fin, weekId){
+  const targetCovers = Number(ev.capacity)||0;
+  const targetAvg = Number(ev.avg_spend_target)||0;
+  const targetRev = targetCovers * targetAvg;
+  const actualCovers = Number(week?.covers_actual)||0;
+  const savedRevenue = Number(week?.revenue_actual)||0;
+  const savedAvg = Number(week?.avg_spend_actual)||0;
+  const actualRevenue = savedRevenue || (actualCovers && savedAvg ? actualCovers * savedAvg : 0);
+  const actualAvg = savedAvg || (actualCovers && actualRevenue ? actualRevenue / actualCovers : 0);
+  const expenses = fin.reduce((s,f)=>s+(Number(f.amount)||0),0);
+  const net = actualRevenue - expenses;
+  const revenueDelta = actualRevenue - targetRev;
+  const taskDone = tasks.filter(t=>t.status==='done').length;
+  const taskBlocked = tasks.filter(t=>t.status==='blocked').length;
+  const taskPct = tasks.length ? Math.round(taskDone/tasks.length*100) : 0;
+  const expenseShare = actualRevenue ? Math.round(expenses/actualRevenue*100) : 0;
+  const netClass = net >= 0 ? 'good' : 'bad';
+  const revenueClass = actualRevenue >= targetRev && targetRev ? 'good' : (actualRevenue ? 'warn' : '');
+  const taskClass = taskBlocked ? 'bad' : (taskPct===100 ? 'good' : 'warn');
+  const actualNote = actualRevenue
+    ? `${actualCovers || '-'} covers at ${fmt(actualAvg)} average spend`
+    : 'Enter results to calculate actual revenue';
+
+  return `
+    <div class="budget-panel">
+      <div class="section-header" style="margin-bottom:8px">
+        <div>
+          <div class="section-title">Review Summary</div>
+          <div class="section-sub">Financial result, expenses, and execution close-out for this event night.</div>
+        </div>
+      </div>
+      <div class="review-actions">
+        <button class="btn btn-gold btn-sm" onclick="openWeekActuals('${weekId}')">Enter Results</button>
+        <button class="btn btn-outline btn-sm" onclick="openAddFinance('${weekId}','${ev.id}')">Add Expense</button>
+      </div>
+      <div class="review-grid">
+        <div class="review-card ${revenueClass}">
+          <div class="review-label">Actual Revenue</div>
+          <div class="review-value">${fmt(actualRevenue)}</div>
+          <div class="review-note">${actualNote}</div>
+        </div>
+        <div class="review-card">
+          <div class="review-label">Target Revenue</div>
+          <div class="review-value">${fmt(targetRev)}</div>
+          <div class="review-note">${targetCovers} covers at ${fmt(targetAvg)} target spend</div>
+        </div>
+        <div class="review-card ${revenueDelta >= 0 ? 'good' : 'warn'}">
+          <div class="review-label">Revenue vs Target</div>
+          <div class="review-value">${actualRevenue ? fmt(revenueDelta) : '-'}</div>
+          <div class="review-note">${actualRevenue && targetRev ? Math.round(actualRevenue/targetRev*100) : 0}% of target</div>
+        </div>
+        <div class="review-card warn">
+          <div class="review-label">Expenses</div>
+          <div class="review-value">${fmt(expenses)}</div>
+          <div class="review-note">${fin.length} expense item${fin.length===1?'':'s'}${actualRevenue ? ` | ${expenseShare}% of revenue` : ''}</div>
+        </div>
+        <div class="review-card ${netClass}">
+          <div class="review-label">Net After Expenses</div>
+          <div class="review-value">${actualRevenue ? fmt(net) : '-'}</div>
+          <div class="review-note">Revenue minus listed expenses</div>
+        </div>
+        <div class="review-card ${taskClass}">
+          <div class="review-label">Tasks Completed</div>
+          <div class="review-value">${taskDone}/${tasks.length}</div>
+          <div class="review-note">${taskPct}% complete${taskBlocked ? ` | ${taskBlocked} blocked` : ''}</div>
+        </div>
+      </div>
+      ${week?.notes ? `<div class="review-card" style="margin-bottom:14px"><div class="review-label">Review Notes</div><div class="review-note" style="font-size:12px;color:var(--text-mid)">${week.notes}</div></div>` : ''}
+      <div class="section-header" style="margin:4px 0 8px"><div class="section-title">Expenses</div></div>
+      ${renderFinanceTrack(fin, weekId, ev.id)}
+    </div>`;
 }
 
 function renderFinanceTrack(items, weekId, eventId){
@@ -2194,11 +2267,11 @@ function openWeekActuals(weekId){
     <div class="form-row">
       <div class="form-group">
         <label class="form-label">Covers (Actual)</label>
-        <input class="form-input" id="act-covers" type="number" value="${week.covers_actual||''}">
+        <input class="form-input" id="act-covers" type="number" value="${week.covers_actual||''}" oninput="recalcActuals()">
       </div>
       <div class="form-group">
         <label class="form-label">Revenue (Actual AED)</label>
-        <input class="form-input" id="act-revenue" type="number" value="${week.revenue_actual||''}">
+        <input class="form-input" id="act-revenue" type="number" value="${week.revenue_actual||''}" oninput="recalcActuals()">
       </div>
     </div>
     <div class="form-group">
@@ -2223,9 +2296,18 @@ function openWeekActuals(weekId){
     <button class="btn btn-gold" onclick="saveActuals('${weekId}')">Save Results</button>`;
 
   document.getElementById('modal-overlay').classList.add('open');
+  recalcActuals();
+}
+
+function recalcActuals(){
+  const covers = parseFloat(document.getElementById('act-covers')?.value)||0;
+  const revenue = parseFloat(document.getElementById('act-revenue')?.value)||0;
+  const avgEl = document.getElementById('act-avg');
+  if(avgEl && covers && revenue) avgEl.value = (revenue / covers).toFixed(2);
 }
 
 async function saveActuals(weekId){
+  recalcActuals();
   const updates = {
     covers_actual: parseInt(document.getElementById('act-covers').value)||null,
     revenue_actual: parseFloat(document.getElementById('act-revenue').value)||null,
