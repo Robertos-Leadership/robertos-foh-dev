@@ -26,6 +26,7 @@
     --text-light: #8B7355;
     --red: #c0392b;
     --amber: #d4870a;
+    --blue: #315F7C;
     --green: #2d7a4f;
     --border: rgba(107,31,42,0.12);
     --border-strong: rgba(107,31,42,0.3);
@@ -411,9 +412,9 @@
     border: 1px solid transparent;
     white-space: nowrap;
   }
-  .priority-pill.non_negotiable { background: rgba(192,57,43,0.1); border-color: rgba(192,57,43,0.22); color: var(--red); }
-  .priority-pill.important { background: rgba(212,135,10,0.1); border-color: rgba(212,135,10,0.22); color: var(--amber); }
-  .priority-pill.enhancement { background: rgba(139,115,85,0.1); border-color: rgba(139,115,85,0.2); color: var(--text-light); }
+  .priority-pill.non_negotiable { background: rgba(192,57,43,0.16); border-color: rgba(192,57,43,0.48); color: var(--red); }
+  .priority-pill.important { background: rgba(201,168,76,0.22); border-color: rgba(201,168,76,0.62); color: var(--gold-dim); }
+  .priority-pill.enhancement { background: rgba(49,95,124,0.14); border-color: rgba(49,95,124,0.42); color: var(--blue); }
 
   .owner-filter {
     display: flex;
@@ -438,6 +439,12 @@
     color: var(--vino);
     background: var(--surface2);
   }
+  .filter-chip.pr-non_negotiable { border-color: rgba(192,57,43,0.34); color: var(--red); background: rgba(192,57,43,0.08); }
+  .filter-chip.pr-important { border-color: rgba(201,168,76,0.5); color: var(--gold-dim); background: rgba(201,168,76,0.16); }
+  .filter-chip.pr-enhancement { border-color: rgba(49,95,124,0.34); color: var(--blue); background: rgba(49,95,124,0.08); }
+  .filter-chip.pr-non_negotiable.active { background: var(--red); border-color: var(--red); color: #fff; }
+  .filter-chip.pr-important.active { background: var(--gold); border-color: var(--gold); color: var(--vino-dark); }
+  .filter-chip.pr-enhancement.active { background: var(--blue); border-color: var(--blue); color: #fff; }
 
   .readiness-row {
     display: grid;
@@ -1477,7 +1484,8 @@ function renderDashboard(){
   ).join('');
   const priorityChips = ['All', ...Object.keys(PRIORITIES)].map(priority=>{
     const label = priority==='All' ? 'All Priorities' : PRIORITIES[priority].label;
-    return `<button class="filter-chip ${state.leaderPriorityFilter===priority?'active':''}" onclick="setLeaderPriorityFilter('${priority}')">${label}</button>`;
+    const cls = priority==='All' ? '' : ' pr-'+priority;
+    return `<button class="filter-chip${cls} ${state.leaderPriorityFilter===priority?'active':''}" onclick="setLeaderPriorityFilter('${priority}')">${label}</button>`;
   }).join('');
 
   return `
