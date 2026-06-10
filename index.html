@@ -1151,7 +1151,7 @@ function inferStage(task){
   const title = (task?.title||'').toLowerCase();
   if(title.includes('actual') || title.includes('results') || title.includes('notes')) return 'review';
   if(title.includes('sequence of service') || title.includes('service leader')) return 'execute';
-  if(title.includes('social') || title.includes('website') || title.includes('invitation') || title.includes('artist image') || title.includes('audio') || title.includes('stage name')) return 'promote';
+  if(title.includes('launch date') || title.includes('recurrence') || title.includes('social') || title.includes('website') || title.includes('invitation') || title.includes('artist image') || title.includes('imagery') || title.includes('audio') || title.includes('music link') || title.includes('stage name')) return 'promote';
   if(title.includes('selector') || title.includes('artist rotation') || title.includes('contract') || title.includes('permit') || title.includes('technical rider') || title.includes('fee')) return 'prepare';
   if(task?.track==='marketing') return 'promote';
   if(task?.track==='champion' || task?.track==='documents') return 'prepare';
@@ -1617,15 +1617,15 @@ async function duplicateWeek(eventId, sourceWeekId){
 // ── SEED DEFAULT TASKS ──
 async function seedDefaultTasks(weekId, eventId, eventName, eventDate){
   const isJazz = eventName.includes('Jazz');
+  const firstDate = isJazz ? '16 June 2026' : '15 June 2026';
+  const recurrence = isJazz ? 'Weekly on Tuesdays' : 'Weekly on Mondays';
   const defaults = [
     // Marketing
-    { track:'marketing', title:'Confirm launch date and time with Nicole', priority:'non_negotiable', stage:'plan', assigned_to:'Manuel', champion:'Alessandro', sort_order:1 },
-    { track:'marketing', title:'Send artist stage name to Nicole', stage:'promote', assigned_to:'Manuel', champion:'Alessandro', sort_order:2 },
-    { track:'marketing', title:'Send hi-res artist image via WeTransfer to Nicole', stage:'promote', assigned_to:'Manuel', champion:'Alessandro', sort_order:3 },
-    { track:'marketing', title:'Send audio/reference music links to Nicole', stage:'promote', assigned_to:'Manuel', champion:'Alessandro', sort_order:4 },
-    { track:'marketing', title:'Confirm 3 business days lead time met', stage:'promote', assigned_to:'Nicole', champion:'Francesco', sort_order:5 },
-    { track:'marketing', title:'Social media live', stage:'promote', assigned_to:'Nicole', champion:'Francesco', sort_order:6 },
-    { track:'marketing', title:'Website updated', stage:'promote', assigned_to:'Nicole', champion:'Francesco', sort_order:7 },
+    { track:'marketing', title:'Launch date and time', priority:'non_negotiable', stage:'promote', assigned_to:'Manuel', champion:'Alessandro', notes:`First launch: ${firstDate}. Confirm exact public time.`, sort_order:1 },
+    { track:'marketing', title:'Recurrence', priority:'non_negotiable', stage:'promote', assigned_to:'Manuel', champion:'Alessandro', notes:recurrence, sort_order:2 },
+    { track:'marketing', title:'Artist stage name', stage:'promote', assigned_to:'Manuel', champion:'Alessandro', sort_order:3 },
+    { track:'marketing', title:'High resolution artist imagery sent via WeTransfer link', stage:'promote', assigned_to:'Manuel', champion:'Alessandro', sort_order:4 },
+    { track:'marketing', title:'Artist audio or reference music links for marketing', stage:'promote', assigned_to:'Manuel', champion:'Alessandro', sort_order:5 },
     // Champion
     { track:'champion', title: isJazz ? 'Confirm artist rotation (Ryan Gibbs / Salt N Pepper / Jazz Trio)' : 'Confirm vinyl selector for the week', priority:'non_negotiable', stage:'prepare', assigned_to:'Manuel', champion:'Alessandro', sort_order:1 },
     { track:'champion', title:'Artist briefed on format and timing', priority:'non_negotiable', stage:'prepare', assigned_to:'Manuel', champion:'Alessandro', sort_order:2 },
@@ -1637,7 +1637,7 @@ async function seedDefaultTasks(weekId, eventId, eventName, eventDate){
     { track:'technical', title:'Lighting briefed for atmosphere', stage:'prepare', assigned_to:'Danilo', champion:'Manuel', sort_order:4 },
     // Guest & Revenue
     { track:'guest_revenue', title:'Covers target confirmed (50 guests)', priority:'non_negotiable', stage:'plan', assigned_to:'Alessandro', champion:'Francesco', sort_order:1 },
-    { track:'guest_revenue', title:'Invitations sent', stage:'promote', assigned_to:'Alessandro', champion:'Francesco', sort_order:2 },
+    { track:'guest_revenue', title:'Invitations sent', stage:'prepare', assigned_to:'Alessandro', champion:'Francesco', sort_order:2 },
     { track:'guest_revenue', title:'Ladies/atmosphere confirmed', priority:'enhancement', stage:'prepare', assigned_to:'Alessandro', champion:'Manuel', sort_order:3 },
     { track:'guest_revenue', title:'Reservations tracking updated', stage:'prepare', assigned_to:'Alessandro', champion:'Francesco', sort_order:4 },
     // Service
