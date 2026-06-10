@@ -861,6 +861,7 @@
   .leader-task-card.s-in_progress { border-left-color:var(--amber); }
   .leader-task-card.s-done { border-left-color:var(--green); }
   .leader-task-card.s-blocked { border-left-color:var(--red); background:rgba(192,57,43,0.03); }
+  .leader-event-label { display:inline-flex; align-items:center; background:rgba(107,31,42,0.08); border:1px solid rgba(107,31,42,0.16); color:var(--vino); font-size:9px; letter-spacing:0.16em; text-transform:uppercase; padding:3px 8px; margin-bottom:7px; font-weight:600; }
 
   /* finance track */
   .finance-row {
@@ -1178,6 +1179,7 @@ let state = {
   currentWeek: {},// eventId -> weekId
   currentTab: 'dashboard',
   ownerFilter: 'All',
+  leaderPriorityFilter: 'All',
   selectedStage: {}
 };
 
@@ -1292,6 +1294,11 @@ function readinessForTasks(tasks){
 function setOwnerFilter(owner){
   state.ownerFilter = owner;
   try{ localStorage.setItem('rl_owner', owner); }catch(e){}
+  renderMain();
+}
+function setLeaderPriorityFilter(priority){
+  state.leaderPriorityFilter = priority;
+  try{ localStorage.setItem('rl_leader_priority', priority); }catch(e){}
   renderMain();
 }
 function setStage(eventId, stage){
@@ -1444,6 +1451,7 @@ function renderDashboard(){
   const leaderTasks = allTasks
     .filter(t=>ownerMatches(t, activeLeader))
     .filter(t=>t.status!=='done')
+    .filter(t=>state.leaderPriorityFilter==='All' || getPriority(t)===state.leaderPriorityFilter)
     .sort(taskSort)
     .slice(0,60);
   const leaderList = leaderTasks.length
@@ -1467,6 +1475,10 @@ function renderDashboard(){
   const ownerChips = ['All', ...TEAM].map(name=>
     `<button class="filter-chip ${state.ownerFilter===name?'active':''}" onclick="setOwnerFilter('${name}')">${name}</button>`
   ).join('');
+  const priorityChips = ['All', ...Object.keys(PRIORITIES)].map(priority=>{
+    const label = priority==='All' ? 'All Priorities' : PRIORITIES[priority].label;
+    return `<button class="filter-chip ${state.leaderPriorityFilter===priority?'active':''}" onclick="setLeaderPriorityFilter('${priority}')">${label}</button>`;
+  }).join('');
 
   return `
   <div class="dashboard-header">
@@ -1496,6 +1508,7 @@ function renderDashboard(){
     <button class="btn btn-gold btn-sm" onclick="addLeaderTask()">Add Task</button>
   </div>
   <div class="section-header"><div class="section-title">Pending Jobs${activeLeader!=='All' ? ' | '+activeLeader : ''}</div></div>
+  <div class="owner-filter" style="margin-bottom:12px">${priorityChips}</div>
   <div class="leader-task-list">${leaderList}</div>
   <div class="section-header"><div class="section-title">Needs Attention${activeLeader!=='All' ? ' | '+activeLeader : ''}</div></div>
   <div class="attention-list">${attention}</div>
@@ -1515,9 +1528,9 @@ function renderLeaderTaskRow(t){
   return `
   <div class="leader-task-card s-${t.status} ${over?'overdue':''}">
     <div>
+      <div class="leader-event-label">${t.eventName}</div>
       <div class="task-card-title editable" onclick="openEditTask('${t.id}')">${t.title}</div>
       <div class="task-card-meta">
-        <span>${t.eventName}</span>
         <span>${stageLabel(getStage(t))}</span>
         <span class="priority-pill ${getPriority(t)}">${priorityLabel(t)}</span>
         <span>${t.assigned_to||'Unassigned'}</span>
@@ -2550,6 +2563,8 @@ function attachEventListeners(){ /* delegated via onclick */ }
   try{
     const owner = localStorage.getItem('rl_owner');
     if(owner) state.ownerFilter = owner;
+    const leaderPriority = localStorage.getItem('rl_leader_priority');
+    if(leaderPriority) state.leaderPriorityFilter = leaderPriority;
     if(localStorage.getItem('rl_inapp')==='1'){
       const tab = localStorage.getItem('rl_tab') || 'dashboard';
       state.currentTab = tab;
