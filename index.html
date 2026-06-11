@@ -1282,6 +1282,51 @@
     .topbar { padding: 0 14px; }
     .main { padding: 16px 14px; }
   }
+
+  /* -- MOBILE POLISH -- */
+  @media (max-width: 768px) {
+    html, body { overflow-x: hidden; max-width: 100vw; }
+    .main { max-width: 100vw; }
+
+    /* Bottom tab bar: swipe sideways instead of overflowing the page */
+    .nav-tabs {
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      justify-content: flex-start;
+      scrollbar-width: none;
+    }
+    .nav-tabs::-webkit-scrollbar { display: none; }
+    .nav-tab { flex: 0 0 auto; padding: 13px 16px 16px; }
+
+    /* Name filter: one swipeable row instead of a wall of chips */
+    .owner-filter {
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+      padding-bottom: 4px;
+    }
+    .owner-filter::-webkit-scrollbar { display: none; }
+    .filter-chip { flex: 0 0 auto; padding: 8px 12px; }
+
+    /* Team summary cards: compact two-per-row */
+    .leader-summary-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
+    .leader-summary-card { min-height: 0; padding: 12px 12px 10px; }
+    .leader-summary-total { font-size: 21px; margin-bottom: 6px; }
+    .leader-summary-breakdown { gap: 4px; }
+    .leader-summary-breakdown > * { font-size: 8px; padding: 2px 5px; }
+
+    /* Event Brief: compact on phone */
+    .overview-card { padding: 14px 16px 15px; }
+    .overview-grid { gap: 10px; }
+    .overview-label { font-size: 10px; margin-bottom: 2px; }
+    .overview-value { font-size: 17px; }
+    .overview-value.muted { font-size: 13px; }
+
+    /* Week action bar: tidy buttons */
+    .week-bar { gap: 6px; }
+    .week-bar .btn { padding: 8px 10px; font-size: 10px; letter-spacing: 0.1em; }
+  }
 </style>
 </head>
 <body>
