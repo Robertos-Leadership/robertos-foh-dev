@@ -1656,7 +1656,8 @@ function renderEventPage(ev){
     </select>
     <button class="btn btn-gold" onclick="newWeek('${ev.id}')">+ New Week</button>
     ${wid ? `<button class="btn btn-outline btn-sm" onclick="openWeekActuals('${wid}')">Enter Results</button>` : ''}
-    ${wid ? `<button class="btn btn-outline btn-sm" onclick="resetEventTasks('${ev.id}')">Reset Event</button>` : ''}
+    ${wid ? `<button class="btn btn-outline btn-sm" onclick="resetEventTasks('${ev.id}')">Reset Tasks</button>` : ''}
+    ${wid ? `<button class="btn btn-outline btn-sm" onclick="resetEventTasks('${ev.id}', true)">Reset Tasks + Responsibilities</button>` : ''}
     <button class="btn btn-outline btn-sm" onclick="openEditEvent('${ev.id}')" title="Targets & budget - leadership only">Targets</button>
   </div>
 
@@ -2213,15 +2214,23 @@ function openLeaderActions(owner){
   document.getElementById('modal-overlay').classList.add('open');
 }
 
-async function resetTasksByIds(taskIds, label){
+async function resetTasksByIds(taskIds, label, clearResponsibilities=false){
   if(!taskIds.length){ toast('No tasks to reset'); return; }
-  if(!confirm(`Reset ${taskIds.length} task${taskIds.length===1?'':'s'} for ${label} to Not Started?`)) return;
-  const { error } = await sb.from('tasks').update({ status:'not_started', updated_at: new Date().toISOString() }).in('id', taskIds);
+  const message = clearResponsibilities
+    ? `Reset ${taskIds.length} task${taskIds.length===1?'':'s'} for ${label} to Not Started and remove assigned people/champions?`
+    : `Reset ${taskIds.length} task${taskIds.length===1?'':'s'} for ${label} to Not Started?`;
+  if(!confirm(message)) return;
+  const updates = { status:'not_started', updated_at: new Date().toISOString() };
+  if(clearResponsibilities){
+    updates.assigned_to = null;
+    updates.champion = null;
+  }
+  const { error } = await sb.from('tasks').update(updates).in('id', taskIds);
   if(error){ toast('Error resetting tasks',true); return; }
   for(const wid in state.tasks){
-    state.tasks[wid] = state.tasks[wid].map(t=> taskIds.includes(t.id) ? {...t, status:'not_started'} : t);
+    state.tasks[wid] = state.tasks[wid].map(t=> taskIds.includes(t.id) ? {...t, ...updates} : t);
   }
-  toast('Tasks reset');
+  toast(clearResponsibilities ? 'Tasks and responsibilities reset' : 'Tasks reset');
   renderMain();
 }
 
@@ -2235,7 +2244,7 @@ function resetLeaderTasks(owner){
   resetTasksByIds(ids, owner==='All' ? 'all leaders' : owner);
 }
 
-function resetEventTasks(eventId){
+function resetEventTasks(eventId, clearResponsibilities=false){
   const ev = state.events.find(e=>e.id===eventId);
   const ids = [];
   for(const wid in state.tasks){
@@ -2243,7 +2252,7 @@ function resetEventTasks(eventId){
       if(t.event_id===eventId) ids.push(t.id);
     });
   }
-  resetTasksByIds(ids, ev?.name || 'this event');
+  resetTasksByIds(ids, ev?.name || 'this event', clearResponsibilities);
 }
 
 async function deleteTask(taskId){
