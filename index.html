@@ -1838,9 +1838,12 @@ function renderDashboard(){
   return `
   <div class="dashboard-header">
     <div><div class="page-title">Leaders</div><div class="page-sub">One clear action list by person, across every event.</div></div>
-    <div class="week-scope">
-      <button class="week-scope-btn ${scope==='this'?'active':''}" onclick="setWeekScope('this')">This Week</button>
-      <button class="week-scope-btn ${scope==='next'?'active':''}" onclick="setWeekScope('next')">Next Week</button>
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <div class="week-scope">
+        <button class="week-scope-btn ${scope==='this'?'active':''}" onclick="setWeekScope('this')">This Week</button>
+        <button class="week-scope-btn ${scope==='next'?'active':''}" onclick="setWeekScope('next')">Next Week</button>
+      </div>
+      <button class="btn btn-outline btn-sm" onclick="openActivity()">Activity</button>
     </div>
   </div>
   ${tonightBanner}
@@ -2313,6 +2316,7 @@ async function createNewWeek(eventId){
   const { data: tasks } = await sb.from('tasks').select('*').eq('week_id',data.id).order('sort_order');
   state.tasks[data.id] = tasks||[];
   state.finance[data.id] = [];
+  logActivity('created week', label + ' \u2014 ' + ev.name);
   toast('New week created - '+label);
   renderMain();
 }
@@ -2334,6 +2338,7 @@ async function deleteWeek(weekId, eventId){
   delete state.tasks[weekId];
   delete state.finance[weekId];
   state.currentWeek[eventId] = pickDefaultWeekId(state.weeks[eventId]);
+  logActivity('deleted week', label, tCount + ' tasks, ' + fCount + ' finance items');
   toast('Week deleted');
   renderMain();
 }
@@ -2479,6 +2484,7 @@ async function addTask(track, weekId, eventId){
   if(error){ toast('Error adding task',true); return; }
   if(!state.tasks[weekId]) state.tasks[weekId]=[];
   state.tasks[weekId].push(data);
+  logActivity('added task', data.title);
   toast('Task added');
   renderMain();
   const again = document.getElementById('new-task-'+track);
@@ -2580,7 +2586,7 @@ async function updateTaskStatus(taskId, status){
   if(error){ toast('Error updating status',true); return; }
   for(const wid in state.tasks){
     const t = state.tasks[wid].find(t=>t.id===taskId);
-    if(t){ t.status=status; break; }
+    if(t){ t.status=status; logActivity('marked task ' + status.replace('_',' '), t.title); break; }
   }
   renderMain();
 }
@@ -2644,11 +2650,14 @@ function resetEventTasks(eventId, clearResponsibilities=false){
 
 async function deleteTask(taskId){
   if(!confirm('Delete this task?')) return;
+  let _delTitle = null;
+  for(const wid in state.tasks){ const t = state.tasks[wid].find(x=>x.id===taskId); if(t){ _delTitle = t.title; break; } }
   const { error } = await sb.from('tasks').delete().eq('id',taskId);
   if(error){ toast('Error deleting task',true); return; }
   for(const wid in state.tasks){
     state.tasks[wid] = state.tasks[wid].filter(t=>t.id!==taskId);
   }
+  logActivity('deleted task', _delTitle);
   toast('Task deleted');
   renderMain();
 }
@@ -2746,6 +2755,7 @@ async function saveEditTask(taskId){
     const idx = state.tasks[wid].findIndex(t=>t.id===taskId);
     if(idx>-1){ state.tasks[wid][idx]={...state.tasks[wid][idx],...updates}; break; }
   }
+  logActivity('edited task', updates.title);
   closeModal(); toast('Task saved'); renderMain();
 }
 
@@ -2832,6 +2842,7 @@ async function saveAddFinance(weekId, eventId){
   if(error){ toast('Error adding expense',true); return; }
   if(!state.finance[weekId]) state.finance[weekId]=[];
   state.finance[weekId].push(data);
+  logActivity('added expense', data.supplier_name, data.amount ? 'AED ' + data.amount : null);
   closeModal(); toast('Expense added'); renderMain();
 }
 
@@ -2925,16 +2936,20 @@ async function saveEditFinance(finId){
     const idx = state.finance[wid].findIndex(f=>f.id===finId);
     if(idx>-1){ state.finance[wid][idx]={...state.finance[wid][idx],...updates}; break; }
   }
+  logActivity('edited expense', updates.supplier_name, updates.amount ? 'AED ' + updates.amount : null);
   closeModal(); toast('Expense saved'); renderMain();
 }
 
 async function deleteFinance(finId){
   if(!confirm('Delete this expense?')) return;
+  let _delFin = null;
+  for(const wid in state.finance){ const f = state.finance[wid].find(x=>x.id===finId); if(f){ _delFin = f.supplier_name; break; } }
   const { error } = await sb.from('finance').delete().eq('id',finId);
   if(error){ toast('Error deleting',true); return; }
   for(const wid in state.finance){
     state.finance[wid] = state.finance[wid].filter(f=>f.id!==finId);
   }
+  logActivity('deleted expense', _delFin);
   toast('Deleted'); renderMain();
 }
 
@@ -3009,6 +3024,7 @@ async function saveEditOverview(eventId){
       if(wIdx>-1) state.weeks[eventId][wIdx] = {...state.weeks[eventId][wIdx], artist};
     }
   }
+  logActivity('updated event brief', (state.events.find(e=>e.id===eventId)||{}).name);
   closeModal(); toast('Brief saved'); renderMain();
 }
 
@@ -3066,6 +3082,7 @@ async function saveEditEvent(eventId){
   if(error){ toast('Error saving event targets',true); return; }
   const idx = state.events.findIndex(e=>e.id===eventId);
   if(idx>-1) state.events[idx] = {...state.events[idx], ...updates};
+  logActivity('updated targets', updates.name);
   closeModal(); toast('Targets saved'); renderMain();
 }
 
@@ -3136,6 +3153,7 @@ async function saveActuals(weekId){
     const idx = state.weeks[eid].findIndex(w=>w.id===weekId);
     if(idx>-1){ state.weeks[eid][idx]={...state.weeks[eid][idx],...updates}; break; }
   }
+  logActivity('entered results', null, (updates.covers_actual||0) + ' covers, AED ' + (updates.revenue_actual||0));
   closeModal(); toast('Results saved'); renderMain();
 }
 
@@ -3150,6 +3168,49 @@ function closeModalOnOverlay(e){
 
 // -- EVENT LISTENERS --
 function attachEventListeners(){ /* delegated via onclick */ }
+
+// -- ACTIVITY LOG --
+function logActivity(action, label, details){
+  try{
+    sb.from('activity').insert({
+      user_email: state.userEmail || null,
+      action: action,
+      entity_label: label || null,
+      details: details || null
+    }).then(()=>{});
+  }catch(e){}
+}
+
+function actorName(email){
+  if(!email) return 'Someone';
+  const n = email.split('@')[0];
+  return n.charAt(0).toUpperCase() + n.slice(1);
+}
+
+async function openActivity(){
+  document.getElementById('modal-title').textContent = 'Activity Log';
+  document.getElementById('modal-body').innerHTML = '<div class="loading">Loading...</div>';
+  document.getElementById('modal-footer').innerHTML = `<button class="btn btn-gold" onclick="closeModal()">Close</button>`;
+  document.getElementById('modal').classList.add('wide');
+  document.getElementById('modal-overlay').classList.add('open');
+  const { data, error } = await sb.from('activity').select('*').order('created_at', { ascending: false }).limit(120);
+  if(error){ document.getElementById('modal-body').innerHTML = '<div class="empty-state">Could not load activity.</div>'; return; }
+  if(!data || !data.length){ document.getElementById('modal-body').innerHTML = '<div class="empty-state">No activity recorded yet.</div>'; return; }
+  let lastDay = '';
+  const rows = data.map(a=>{
+    const d = new Date(a.created_at);
+    const day = d.toLocaleDateString('en-GB', { weekday:'short', day:'numeric', month:'short' });
+    const time = d.toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
+    const head = day !== lastDay ? `<div style="font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:var(--text-light);margin:16px 0 8px">${day}</div>` : '';
+    lastDay = day;
+    return `${head}
+      <div style="display:flex;gap:12px;align-items:baseline;padding:7px 0;border-bottom:1px solid var(--border);font-size:13px">
+        <span style="color:var(--text-light);font-size:11px;white-space:nowrap">${time}</span>
+        <span><b style="color:var(--vino)">${actorName(a.user_email)}</b> ${a.action}${a.entity_label ? ' \u2014 <b>'+a.entity_label+'</b>' : ''}${a.details ? ' <span style="color:var(--text-light)">('+a.details+')</span>' : ''}</span>
+      </div>`;
+  }).join('');
+  document.getElementById('modal-body').innerHTML = rows;
+}
 
 // -- LIVE SYNC --
 let syncChannel = null;
@@ -3282,8 +3343,9 @@ async function signIn(){
   const btn = document.getElementById('login-btn');
   if(!email || !password){ errEl.textContent = 'Enter your email and password.'; return; }
   btn.disabled = true; btn.textContent = 'Signing in...';
-  const { error } = await sb.auth.signInWithPassword({ email, password });
+  const { data: authData, error } = await sb.auth.signInWithPassword({ email, password });
   btn.disabled = false; btn.textContent = 'Sign In';
+  if(!error) state.userEmail = authData?.user?.email || email;
   if(error){
     errEl.textContent = 'Wrong email or password. Please try again.';
     return;
@@ -3304,7 +3366,7 @@ async function signOut(){
 (async function init(){
   try{
     const { data } = await sb.auth.getSession();
-    if(data && data.session){ startApp(); }
+    if(data && data.session){ state.userEmail = data.session.user?.email || null; startApp(); }
     else { showLogin(); }
     sb.auth.onAuthStateChange((event)=>{
       if(event==='SIGNED_OUT') showLogin();
