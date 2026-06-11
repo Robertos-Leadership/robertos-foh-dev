@@ -43,81 +43,61 @@
   #login {
     min-height: 100vh;
     display: none;
-    grid-template-columns: minmax(0, 0.92fr) minmax(360px, 0.78fr);
-    background: #F8F4EC;
-    position: relative;
-    overflow: hidden;
-  }
-  #login.open { display: grid; }
-  #login::before {
-    content:'';
-    position:absolute;
-    inset:0;
-    background:
-      linear-gradient(90deg, rgba(248,244,236,0.98) 0%, rgba(248,244,236,0.92) 48%, rgba(74,21,32,0.16) 100%),
-      repeating-linear-gradient(0deg, transparent, transparent 72px, rgba(107,31,42,0.045) 72px, rgba(107,31,42,0.045) 73px);
-    pointer-events:none;
-  }
-  #login::after {
-    content:'';
-    position:absolute;
-    top:0;
-    right:0;
-    width: 46%;
-    height:100%;
-    background:
-      linear-gradient(180deg, rgba(44,24,16,0.08), rgba(44,24,16,0.28)),
-      url('https://cdn.prod.website-files.com/68b1adb67aae8a1c4f33bfa5/6978863119fac3dc920f9f63_Home%20Gallery%20Image%20-%20Dubai%20-%20Scala.jpg') center/cover;
-    clip-path: polygon(14% 0, 100% 0, 100% 100%, 0 100%);
-  }
-  .login-content {
-    position: relative;
-    z-index: 2;
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
+    align-items: center;
     justify-content: center;
-    padding: 64px clamp(28px, 7vw, 104px);
+    padding: 32px 20px;
+    position: relative;
+    background:
+      linear-gradient(180deg, rgba(74,21,32,0.86) 0%, rgba(44,24,16,0.92) 100%),
+      url('https://cdn.prod.website-files.com/68b1adb67aae8a1c4f33bfa5/6978863119fac3dc920f9f63_Home%20Gallery%20Image%20-%20Dubai%20-%20Scala.jpg') center/cover fixed;
+  }
+  #login.open { display: flex; }
+  .login-panel {
+    position: relative;
+    background: #F8F4EC;
+    width: 100%;
+    max-width: 420px;
+    padding: 48px 44px 40px;
+    box-shadow: 0 30px 80px rgba(0,0,0,0.45);
+    text-align: center;
+  }
+  .login-panel::before {
+    content:'';
+    position:absolute;
+    top:0;left:0;right:0;
+    height:3px;
+    background: linear-gradient(90deg, var(--gold) 0%, var(--gold-light) 50%, var(--gold) 100%);
   }
   .login-brand {
-    width: min(300px, 68vw);
+    display: block;
+    width: 100%;
+    max-width: 220px;
     height: auto;
-    margin-bottom: 36px;
+    margin: 0 auto 24px;
   }
   .login-kicker {
-    color: var(--vino);
+    color: var(--gold-dim);
     font-size: 10px;
     font-weight: 600;
     letter-spacing: 0.32em;
     text-transform: uppercase;
-    margin-bottom: 16px;
+    margin-bottom: 10px;
   }
   .login-title {
     font-family: 'Playfair Display', serif;
-    font-size: clamp(38px, 5vw, 64px);
+    font-size: 34px;
+    font-style: italic;
     font-weight: 400;
-    color: var(--vino-dark);
-    line-height: 1.02;
+    color: var(--vino);
     margin-bottom: 18px;
   }
-  .login-title span {
-    color: var(--vino);
-    font-style: italic;
-  }
   .login-divider {
-    width: 72px;
+    width: 56px;
     height: 1px;
     background: var(--gold);
-    margin: 0 0 22px;
+    margin: 0 auto 28px;
   }
-  .login-sub {
-    font-size: 13px;
-    color: var(--text-mid);
-    line-height: 1.8;
-    max-width: 380px;
-    margin-bottom: 38px;
-  }
-  .login-form { max-width: 360px; width: 100%; }
+  .login-form { text-align: left; }
   .login-label {
     display: block;
     font-size: 10px;
@@ -164,11 +144,23 @@
     font-size: 12px;
     min-height: 18px;
     margin-top: 14px;
+    text-align: center;
   }
-  @media (max-width: 880px) {
-    #login { grid-template-columns: 1fr; }
-    #login::after { display: none; }
-    .login-content { padding: 48px 28px; }
+  .login-foot {
+    position: absolute;
+    bottom: 22px;
+    left: 0;
+    right: 0;
+    text-align: center;
+    color: rgba(255,255,255,0.55);
+    font-size: 10px;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+    pointer-events: none;
+  }
+  @media (max-width: 520px) {
+    .login-panel { padding: 38px 26px 32px; }
+    #login { background-attachment: scroll; }
   }
   .topbar-signout {
     background: transparent;
@@ -1296,12 +1288,11 @@
 
 <!-- LOGIN -->
 <div id="login">
-  <div class="login-content">
+  <div class="login-panel">
     <img class="login-brand" src="https://cdn.prod.website-files.com/68b1adb67aae8a1c4f33bfa5/68d1e4ffcb7414691a2bf1a6_robertos_logo_burgundy_apostrophe_color.svg" alt="Roberto's">
     <div class="login-kicker">Dubai private workspace</div>
-    <div class="login-title">Welcome to <span>Leadership</span></div>
+    <div class="login-title">Leadership</div>
     <div class="login-divider"></div>
-    <div class="login-sub">Reserved access for Roberto's leadership team. Sign in to continue to events, finance, and weekly execution.</div>
     <div class="login-form">
       <label class="login-label" for="login-email">Email</label>
       <input class="login-input" id="login-email" type="email" autocomplete="username">
@@ -1311,6 +1302,7 @@
       <div class="login-error" id="login-error"></div>
     </div>
   </div>
+  <div class="login-foot">Roberto's &middot; Dubai DIFC</div>
 </div>
 
 <!-- LANDING -->
