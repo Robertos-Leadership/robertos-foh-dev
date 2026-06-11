@@ -39,6 +39,71 @@
 
   * { margin:0; padding:0; box-sizing:border-box; }
 
+  /* -- EVENT BRIEF -- */
+  .overview-card {
+    background: var(--vino);
+    border: 1px solid var(--vino-dark);
+    box-shadow: var(--shadow);
+    padding: 16px 28px 18px;
+    margin-bottom: 20px;
+    position: relative;
+    overflow: hidden;
+  }
+  .overview-card::before {
+    content:'';
+    position:absolute;
+    top:0;left:0;right:0;
+    height:3px;
+    background: linear-gradient(90deg, var(--gold) 0%, transparent 60%);
+  }
+  .overview-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+  }
+  .overview-title {
+    font-size: 9px;
+    letter-spacing: 0.35em;
+    text-transform: uppercase;
+    color: var(--gold-light);
+    font-weight: 600;
+  }
+  .overview-edit {
+    background: transparent;
+    border: 1px solid rgba(255,255,255,0.35);
+    color: rgba(255,255,255,0.85);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    padding: 5px 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .overview-edit:hover { border-color: var(--gold-light); color: var(--gold-light); }
+  .overview-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 24px;
+  }
+  .overview-label {
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.6);
+    margin-bottom: 6px;
+  }
+  .overview-value {
+    font-family: 'Playfair Display', serif;
+    font-size: 24px;
+    color: #FFFFFF;
+    line-height: 1.35;
+  }
+  .overview-value.muted { color: rgba(255,255,255,0.45); font-style: italic; font-family: 'Inter', sans-serif; font-size: 15px; }
+  @media (max-width: 720px) {
+    .overview-grid { grid-template-columns: 1fr; gap: 12px; }
+  }
+
   body {
     background: var(--bg);
     color: var(--text);
@@ -1651,6 +1716,27 @@ function renderEventPage(ev){
     </div>
   </div>
 
+  <div class="overview-card">
+    <div class="overview-head">
+      <span class="overview-title">Event Brief</span>
+      <button class="overview-edit" onclick="openEditOverview('${ev.id}')">Edit</button>
+    </div>
+    <div class="overview-grid">
+      <div>
+        <div class="overview-label">Time</div>
+        <div class="overview-value ${ev.time_start ? '' : 'muted'}">${ev.time_start ? `${ev.time_start} – ${ev.time_end||''}` : 'Set event time'}</div>
+      </div>
+      <div>
+        <div class="overview-label">F&amp;B Offer</div>
+        <div class="overview-value ${ev.fb_offer ? '' : 'muted'}">${ev.fb_offer || 'Set F&amp;B offer'}</div>
+      </div>
+      <div>
+        <div class="overview-label">Artist · This Week</div>
+        <div class="overview-value ${week?.artist ? '' : 'muted'}">${week?.artist || 'To confirm'}</div>
+      </div>
+    </div>
+  </div>
+
   ${countdown}
 
   <div class="week-bar">
@@ -2558,6 +2644,76 @@ async function deleteFinance(finId){
 // -- WEEK ACTUALS MODAL --
 
 // EVENT TARGETS MODAL
+function timeOptions(selected){
+  const opts = ['<option value="">Select time</option>'];
+  for(let m=12*60; m<=27*60; m+=30){
+    const h24 = Math.floor(m/60)%24;
+    const min = m%60;
+    const ampm = h24>=12 ? 'PM' : 'AM';
+    let h12 = h24%12; if(h12===0) h12=12;
+    const label = `${h12}:${min===0?'00':'30'} ${ampm}`;
+    opts.push(`<option value="${label}" ${label===selected?'selected':''}>${label}</option>`);
+  }
+  return opts.join('');
+}
+
+function openEditOverview(eventId){
+  const ev = state.events.find(e=>e.id===eventId);
+  if(!ev) return;
+  const wid = state.currentWeek[ev.id];
+  const week = (state.weeks[ev.id]||[]).find(w=>w.id===wid);
+  document.getElementById('modal-title').textContent = 'Edit Event Brief';
+  document.getElementById('modal-body').innerHTML = `
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Start Time</label>
+        <select class="form-select" id="ov-start">${timeOptions(ev.time_start||'')}</select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">End Time</label>
+        <select class="form-select" id="ov-end">${timeOptions(ev.time_end||'')}</select>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">F&B Offer</label>
+      <textarea class="form-textarea" id="ov-fb" placeholder="e.g. Aperitivo offer extended until 11 PM">${ev.fb_offer||''}</textarea>
+    </div>
+    ${week ? `
+    <div class="form-group">
+      <label class="form-label">Artist · ${week.week_label||week.week_date}</label>
+      <input class="form-input" id="ov-artist" value="${week.artist||''}" placeholder="Artist name for this week">
+    </div>` : `<div class="form-group"><label class="form-label">Artist</label><div style="font-size:12px;color:var(--text-light)">Select or create a week to set this week's artist.</div></div>`}`;
+  document.getElementById('modal-footer').innerHTML = `
+    <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+    <button class="btn btn-gold" onclick="saveEditOverview('${eventId}')">Save Brief</button>`;
+  document.getElementById('modal-overlay').classList.add('open');
+}
+
+async function saveEditOverview(eventId){
+  const updates = {
+    time_start: document.getElementById('ov-start').value.trim()||null,
+    time_end: document.getElementById('ov-end').value.trim()||null,
+    fb_offer: document.getElementById('ov-fb').value.trim()||null
+  };
+  const { error } = await sb.from('events').update(updates).eq('id',eventId);
+  if(error){ toast('Error saving brief',true); return; }
+  const idx = state.events.findIndex(e=>e.id===eventId);
+  if(idx>-1) state.events[idx] = {...state.events[idx], ...updates};
+
+  const artistEl = document.getElementById('ov-artist');
+  const wid = state.currentWeek[eventId];
+  if(artistEl && wid){
+    const artist = artistEl.value.trim()||null;
+    const { error: wErr } = await sb.from('weeks').update({ artist }).eq('id',wid);
+    if(wErr){ toast('Saved, but artist failed to save',true); }
+    else {
+      const wIdx = (state.weeks[eventId]||[]).findIndex(w=>w.id===wid);
+      if(wIdx>-1) state.weeks[eventId][wIdx] = {...state.weeks[eventId][wIdx], artist};
+    }
+  }
+  closeModal(); toast('Brief saved'); renderMain();
+}
+
 function openEditEvent(eventId){
   const ev = state.events.find(e=>e.id===eventId);
   if(!ev) return;
