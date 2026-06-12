@@ -673,14 +673,25 @@
     padding: 16px 18px;
     box-shadow: var(--shadow);
   }
+  .leader-summary-card.active { border: 1px solid var(--gold); box-shadow: 0 0 0 1px var(--gold); }
   .readiness-card.ready { border-left: 3px solid var(--green); }
   .readiness-card.at_risk { border-left: 3px solid var(--amber); }
   .readiness-card.not_ready { border-left: 3px solid var(--red); }
+  .readiness-card.perfect { border-left: 3px solid #1e6b3a; }
+  .readiness-card.almost_ready { border-left: 3px solid var(--gold); }
+  .readiness-card.low_risk { border-left: 3px solid var(--amber); }
+  .readiness-card.medium_risk { border-left: 3px solid #d97a1f; }
+  .readiness-card.high_risk { border-left: 3px solid var(--red); }
   .readiness-label { font-size: 9px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--text-light); margin-bottom: 8px; }
   .readiness-value { font-family: 'Playfair Display', serif; font-size: 24px; color: var(--text); }
   .readiness-value.ready { color: var(--green); }
   .readiness-value.at_risk { color: var(--amber); }
   .readiness-value.not_ready { color: var(--red); }
+  .readiness-value.perfect { color: #1e6b3a; }
+  .readiness-value.almost_ready { color: var(--gold); }
+  .readiness-value.low_risk { color: var(--amber); }
+  .readiness-value.medium_risk { color: #d97a1f; }
+  .readiness-value.high_risk { color: var(--red); }
   .readiness-note { font-size: 11px; color: var(--text-light); margin-top: 6px; line-height: 1.5; }
 
 
@@ -834,6 +845,11 @@
   .progress-fill { height:100%; background:linear-gradient(90deg, var(--gold), var(--gold-light)); border-radius:6px; transition:width .4s; }
   .progress-fill.ready { background:linear-gradient(90deg, #2d7a4f, #3f9c68); }
   .progress-fill.not_ready { background:linear-gradient(90deg, #c0392b, #d35445); }
+  .progress-fill.high_risk { background:linear-gradient(90deg, #c0392b, #d35445); }
+  .progress-fill.medium_risk { background:linear-gradient(90deg, #d97a1f, #e69138); }
+  .progress-fill.low_risk { background:linear-gradient(90deg, #c9972f, #d8b04a); }
+  .progress-fill.almost_ready { background:linear-gradient(90deg, var(--gold), #d8c07a); }
+  .progress-fill.perfect { background:linear-gradient(90deg, #1e6b3a, #2e8b57); }
 
   /* tonight banner */
   .tonight-banner { background:var(--vino); color:#fff; padding:16px 20px; margin-bottom:18px; display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap; box-shadow:var(--shadow); }
@@ -1486,7 +1502,8 @@ let state = {
   currentTab: 'dashboard',
   ownerFilter: 'All',
   leaderPriorityFilter: 'All',
-  selectedStage: {}
+  selectedStage: {},
+  journeyView: {}
 };
 
 // -- UTILS --
@@ -1592,10 +1609,21 @@ function readinessForTasks(tasks){
   const blocked = non.filter(t=>t.status==='blocked');
   const allBlocked = tasks.filter(t=>t.status==='blocked');
   const done = non.length - open.length;
-  let status = 'ready', label = 'Ready';
-  if(blocked.length){ status = 'not_ready'; label = 'Not Ready'; }
-  else if(open.length){ status = 'at_risk'; label = 'At Risk'; }
-  return { status, label, nonTotal: non.length, nonDone: done, nonOpen: open.length, nonBlocked: blocked.length, blockedTotal: allBlocked.length };
+  const allDone = tasks.filter(t=>t.status==='done').length;
+  const base = { nonTotal: non.length, nonDone: done, nonOpen: open.length, nonBlocked: blocked.length, blockedTotal: allBlocked.length };
+  if(!tasks.length) return { status:'none', label:'\u2014', ...base };
+  const overallPct = (allDone / tasks.length) * 100;
+  // No non-negotiables defined: fall back to overall completion
+  const nonPct = non.length ? (done / non.length) * 100 : overallPct;
+  let status, label;
+  if(blocked.length || nonPct < 50){ status='high_risk'; label='High Risk'; }
+  else if(nonPct < 80 || (allBlocked.length && open.length)){ status='medium_risk'; label='Medium Risk'; }
+  else if(open.length || (non.length===0 && overallPct < 90)){ status='low_risk'; label='Low Risk'; }
+  else if(allBlocked.length){ status='medium_risk'; label='Medium Risk'; }
+  else if(overallPct >= 100){ status='perfect'; label='Perfect'; }
+  else if(overallPct >= 90 && non.length){ status='ready'; label='Ready'; }
+  else { status='almost_ready'; label='Almost Ready'; }
+  return { status, label, ...base };
 }
 function setOwnerFilter(owner){
   state.ownerFilter = owner;
@@ -1610,6 +1638,17 @@ function setLeaderPriorityFilter(priority){
 function setStage(eventId, stage){
   state.selectedStage[eventId] = stage;
   renderMain();
+}
+function setJourneyView(eventId, view){
+  state.journeyView = state.journeyView || {};
+  state.journeyView[eventId] = view;
+  renderMain();
+}
+function openJourney(eventId, view){
+  state.journeyView = state.journeyView || {};
+  state.journeyView[eventId] = view;
+  const ev = state.events.find(e=>e.id===eventId);
+  if(ev) switchTab(eventTab(ev));
 }
 function eventTab(ev){ return 'event_'+ev.id; }
 function tabEventId(tab){ return tab && tab.startsWith('event_') ? tab.slice(6) : null; }
@@ -1815,8 +1854,8 @@ function renderDashboard(){
         <div style="margin:8px 0 4px"><div class="progress-bar" style="height:8px"><div class="progress-fill ${readiness.status}" style="width:${cardPct}%"></div></div></div>
         <div class="event-card-note"><strong>${tasks.length-doneCt} remaining</strong> | ${doneCt}/${tasks.length} done | ${readiness.label}${nonOpen ? ` | ${nonOpen} non-negotiable open` : ''}${blocked ? ` | ${blocked} blocked` : ''}${nextDue ? ` | Next: ${fmtDate(nextDue.due_date)}` : ''}</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <button class="btn btn-gold btn-sm" onclick="switchTab('${eventTab(ev)}')">Open Journey</button>
-          <button class="btn btn-outline btn-sm" onclick="toggleEventPause('${ev.id}')">Pause</button>
+          <button class="btn btn-gold btn-sm" onclick="openJourney('${ev.id}','full')">Open Journey</button>
+          <button class="btn btn-outline btn-sm" onclick="openJourney('${ev.id}','pending')">Pending Journey</button>
         </div>
       </div>`);
   }
@@ -1851,9 +1890,6 @@ function renderDashboard(){
       </div>`).join('')
     : '<div class="empty-state" style="background:var(--surface);border:1px solid var(--border);box-shadow:var(--shadow)">No urgent action. Events are on track.</div>';
 
-  const ownerChips = ['All', ...TEAM].map(name=>
-    `<button class="filter-chip ${state.ownerFilter===name?'active':''}" onclick="setOwnerFilter('${name}')">${name}</button>`
-  ).join('');
   // all-time done counts across every loaded week
   const allTimeDone = {};
   for(const wid in state.tasks){
@@ -1868,7 +1904,7 @@ function renderDashboard(){
     const doneAll = allTimeDone[name]||0;
     const counts = Object.keys(PRIORITIES).reduce((acc,p)=>{ acc[p]=tasks.filter(t=>getPriority(t)===p).length; return acc; }, {});
     return `
-      <div class="leader-summary-card" onclick="setOwnerFilter('${name}')">
+      <div class="leader-summary-card ${state.ownerFilter===name?'active':''}" onclick="setOwnerFilter(state.ownerFilter==='${name}' ? 'All' : '${name}')">
         <div class="leader-summary-name">${name}</div>
         <div class="leader-summary-total">${tasks.length} pending</div>
         <div class="leader-summary-done">&check; ${doneWeek} done this week &middot; ${doneAll} total</div>
@@ -1898,11 +1934,14 @@ function renderDashboard(){
     </div>
   </div>
   ${tonightBanner}
-  <div class="owner-filter" style="margin-bottom:18px">${ownerChips}</div>
+  <div class="section-header"><div class="section-title">This Week</div></div>
+  <div class="home-card-grid">${eventCards.join('')}</div>
+  <div class="section-header" style="margin-top:26px"><div class="section-title">Team</div></div>
   <div class="leader-summary-grid">${leaderSummary}</div>
   <div class="leader-actions-row">
     <div class="section-title">Pending Jobs${activeLeader!=='All' ? ' | '+activeLeader : ''}</div>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
+      ${activeLeader!=='All' ? `<button class="btn btn-outline btn-sm" onclick="setOwnerFilter('All')">Show All</button>` : ''}
       <button class="btn btn-gold btn-sm" onclick="openLeaderAddTask()">+ Add Task</button>
       <button class="btn btn-outline btn-sm" onclick="openLeaderActions('${activeLeader}')">More Actions</button>
     </div>
@@ -1910,9 +1949,7 @@ function renderDashboard(){
   <div class="owner-filter" style="margin-bottom:12px">${priorityChips}</div>
   <div class="leader-task-list">${leaderList}</div>
   <div class="section-header"><div class="section-title">Needs Attention${activeLeader!=='All' ? ' | '+activeLeader : ''}</div></div>
-  <div class="attention-list">${attention}</div>
-  <div class="section-header"><div class="section-title">This Week</div></div>
-  <div class="home-card-grid">${eventCards.join('')}</div>`;
+  <div class="attention-list">${attention}</div>`;
 }
 function openTonight(eventId){
   const ev = state.events.find(e=>e.id===eventId);
@@ -1998,35 +2035,41 @@ function renderEventPage(ev){
     </div>
     <span class="readiness-value ${readiness.status}" style="font-size:18px">${readiness.label}</span>
   </div>` : '';
-  const reviewPanel = selectedStage==='review' ? renderReviewPanel(ev, week, tasks, fin, wid) : '';
+  const reviewPanel = wid ? renderReviewPanel(ev, week, tasks, fin, wid) : '';
 
-  const stageButtons = STAGE_KEYS.map(stage=>{
-    const stats = stageStats(tasks, stage);
-    const active = selectedStage===stage ? 'active' : '';
-    return `<button class="journey-step ${active} ${stats.stateName}" onclick="setStage('${ev.id}','${stage}')">
-      <span class="journey-step-label">${STAGES[stage].label}${stats.total && stats.stateName==='complete' ? ' &check;' : ''}</span>
-      <span class="journey-step-meta">${stats.total ? `${stats.done}/${stats.total} done${stats.blocked ? ` | ${stats.blocked} blocked` : ''}` : 'No tasks'}</span>
-    </button>`;
+  const view = (state.journeyView && state.journeyView[ev.id]) || 'full';
+  const activeOwner = 'All';
+
+  const fullJourneyView = STAGE_KEYS.map(stage=>{
+    const items = tasks.filter(t=>getStage(t)===stage && ownerMatches(t, activeOwner)).sort(taskSort);
+    const doneN = items.filter(t=>t.status==='done').length;
+    return `<div class="stage-panel">
+      <div class="stage-heading">
+        <div><div class="stage-title">Stage ${STAGES[stage].rank+1} \u00b7 ${STAGES[stage].label}</div></div>
+        <span class="journey-step-meta">${items.length ? `${doneN}/${items.length} done` : 'No tasks'}</span>
+      </div>
+      ${items.length ? items.map(t=>renderTaskRow(t)).join('') : '<div class="empty-state">No tasks in this stage.</div>'}
+      ${renderAddTaskBar('stage_'+stage, wid, ev.id, stage)}
+    </div>`;
   }).join('');
 
-  const allStageTasks = tasks.filter(t=>getStage(t)===selectedStage);
-  const stagePeople = [...new Set(allStageTasks.flatMap(t=>[t.assigned_to, t.champion]).filter(Boolean))];
-  const activeOwner = (state.ownerFilter && (state.ownerFilter==='All' || stagePeople.includes(state.ownerFilter))) ? state.ownerFilter : 'All';
-  const stageTasks = allStageTasks
-    .filter(t=>ownerMatches(t, activeOwner))
-    .sort(taskSort);
-  const prioritySections = Object.keys(PRIORITIES).map(priority=>{
-    const items = stageTasks.filter(t=>getPriority(t)===priority);
+  const pendingTasks = tasks.filter(t=>t.status!=='done' && ownerMatches(t, activeOwner))
+    .sort((a,b)=> (stageRank(a)-stageRank(b)) || taskSort(a,b));
+  const pendingGroups = STAGE_KEYS.map(stage=>{
+    const items = pendingTasks.filter(t=>getStage(t)===stage);
     if(!items.length) return '';
-    return `<div class="priority-section">
-      <div class="priority-heading">${PRIORITIES[priority].label}</div>
-      ${items.map(t=>renderTaskRow(t)).join('')}
-    </div>`;
-  }).join('') || '<div class="empty-state">No tasks in this stage for this view.</div>';
-
-  const ownerChips = ['All', ...stagePeople].map(name=>
-    `<button class="filter-chip ${activeOwner===name?'active':''}" onclick="setOwnerFilter('${name}')">${name}</button>`
-  ).join('');
+    return `<div class="priority-heading">${STAGES[stage].label}</div>${items.map(t=>renderTaskRow(t)).join('')}`;
+  }).join('');
+  const pendingJourneyView = `<div class="stage-panel">
+    <div class="stage-heading">
+      <div>
+        <div class="stage-title">Pending Journey</div>
+        <div class="stage-sub">Every open item across all stages, in sequence. Clear this list and the night is ready.</div>
+      </div>
+      <span class="readiness-value ${readiness.status}" style="font-size:20px">${pendingTasks.length} open</span>
+    </div>
+    ${pendingTasks.length ? pendingGroups : '<div class="empty-state">Nothing pending. Perfect.</div>'}
+  </div>`;
 
   return `
   <div class="event-header">
@@ -2074,29 +2117,25 @@ function renderEventPage(ev){
       <option value="">Select week</option>
       ${weekOptions}
     </select>
-    <button class="btn btn-gold" onclick="newWeek('${ev.id}')">+ New Week</button>
-    ${wid ? `<button class="btn btn-outline btn-sm" onclick="openWeekActuals('${wid}')">Enter Results</button>` : ''}
-    ${wid ? `<button class="btn btn-outline btn-sm" onclick="resetEventTasks('${ev.id}')">Reset Tasks</button>` : ''}
-    ${wid ? `<button class="btn btn-outline btn-sm" onclick="resetEventTasks('${ev.id}', true)">Reset Tasks + Responsibilities</button>` : ''}
-    ${wid ? `<button class="btn btn-outline btn-sm" style="color:var(--red);border-color:rgba(192,57,43,0.45)" onclick="deleteWeek('${wid}','${ev.id}')">Delete Week</button>` : ''}
-    <button class="btn btn-outline btn-sm" onclick="openEditEvent('${ev.id}')" title="Targets & budget - leadership only">Targets</button>
+    <div class="task-actions" style="position:relative">
+      <button class="btn btn-outline btn-sm more-btn" onclick="toggleTaskMenu(event,'weekbar-${ev.id}')" title="More actions">&#8943;</button>
+      <div class="task-menu" id="task-menu-weekbar-${ev.id}" style="top:36px;min-width:240px">
+        <button onclick="toggleEventPause('${ev.id}')">${(ev.status||'active')==='paused' ? 'Resume Event' : 'Pause Event'}</button>
+        <button onclick="newWeek('${ev.id}')">New Week (manual)</button>
+        <button onclick="openEditEvent('${ev.id}')">Targets &amp; Budget</button>
+        ${wid ? `<button onclick="resetEventTasks('${ev.id}')">Reset Tasks</button>` : ''}
+        ${wid ? `<button onclick="resetEventTasks('${ev.id}', true)">Reset Tasks + Responsibilities</button>` : ''}
+        ${wid ? `<button class="danger" onclick="deleteWeek('${wid}','${ev.id}')">Delete Week</button>` : ''}
+      </div>
+    </div>
   </div>
 
   ${!wid ? '<div class="empty-state" style="padding:60px;text-align:center">No week selected. Create a week to start the journey.</div>' : `
-    <div class="journey-strip">${stageButtons}</div>
-    <div class="owner-filter">${ownerChips}</div>
-    ${selectedStage==='review' ? '' : `<div class="stage-panel">
-      <div class="stage-heading">
-        <div>
-          <div class="stage-title">${STAGES[selectedStage].label}</div>
-          <div class="stage-sub">Focus only on this stage. Finish non-negotiables first, then important, then enhancements.</div>
-        </div>
-        <span class="readiness-value ${readiness.status}" style="font-size:20px">${readiness.label}</span>
-      </div>
-      ${prioritySections}
-      ${renderAddTaskBar('stage_'+selectedStage, wid, ev.id, selectedStage)}
-    </div>`}
-    ${reviewPanel}`}`;
+    <div class="week-scope" style="margin-bottom:14px">
+      <button class="week-scope-btn ${view==='full'?'active':''}" onclick="setJourneyView('${ev.id}','full')">Open Journey</button>
+      <button class="week-scope-btn ${view==='pending'?'active':''}" onclick="setJourneyView('${ev.id}','pending')">Pending Journey</button>
+    </div>
+    ${view==='pending' ? pendingJourneyView : `${fullJourneyView}${reviewPanel}`}`}`;
 }
 
 function renderTaskRow(t){
