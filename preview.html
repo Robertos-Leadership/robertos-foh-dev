@@ -676,11 +676,21 @@
   .readiness-card.ready { border-left: 3px solid var(--green); }
   .readiness-card.at_risk { border-left: 3px solid var(--amber); }
   .readiness-card.not_ready { border-left: 3px solid var(--red); }
+  .readiness-card.perfect { border-left: 3px solid #1e6b3a; }
+  .readiness-card.almost_ready { border-left: 3px solid var(--gold); }
+  .readiness-card.low_risk { border-left: 3px solid var(--amber); }
+  .readiness-card.medium_risk { border-left: 3px solid #d97a1f; }
+  .readiness-card.high_risk { border-left: 3px solid var(--red); }
   .readiness-label { font-size: 9px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--text-light); margin-bottom: 8px; }
   .readiness-value { font-family: 'Playfair Display', serif; font-size: 24px; color: var(--text); }
   .readiness-value.ready { color: var(--green); }
   .readiness-value.at_risk { color: var(--amber); }
   .readiness-value.not_ready { color: var(--red); }
+  .readiness-value.perfect { color: #1e6b3a; }
+  .readiness-value.almost_ready { color: var(--gold); }
+  .readiness-value.low_risk { color: var(--amber); }
+  .readiness-value.medium_risk { color: #d97a1f; }
+  .readiness-value.high_risk { color: var(--red); }
   .readiness-note { font-size: 11px; color: var(--text-light); margin-top: 6px; line-height: 1.5; }
 
 
@@ -834,6 +844,11 @@
   .progress-fill { height:100%; background:linear-gradient(90deg, var(--gold), var(--gold-light)); border-radius:6px; transition:width .4s; }
   .progress-fill.ready { background:linear-gradient(90deg, #2d7a4f, #3f9c68); }
   .progress-fill.not_ready { background:linear-gradient(90deg, #c0392b, #d35445); }
+  .progress-fill.high_risk { background:linear-gradient(90deg, #c0392b, #d35445); }
+  .progress-fill.medium_risk { background:linear-gradient(90deg, #d97a1f, #e69138); }
+  .progress-fill.low_risk { background:linear-gradient(90deg, #c9972f, #d8b04a); }
+  .progress-fill.almost_ready { background:linear-gradient(90deg, var(--gold), #d8c07a); }
+  .progress-fill.perfect { background:linear-gradient(90deg, #1e6b3a, #2e8b57); }
 
   /* tonight banner */
   .tonight-banner { background:var(--vino); color:#fff; padding:16px 20px; margin-bottom:18px; display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap; box-shadow:var(--shadow); }
@@ -1592,10 +1607,21 @@ function readinessForTasks(tasks){
   const blocked = non.filter(t=>t.status==='blocked');
   const allBlocked = tasks.filter(t=>t.status==='blocked');
   const done = non.length - open.length;
-  let status = 'ready', label = 'Ready';
-  if(blocked.length){ status = 'not_ready'; label = 'Not Ready'; }
-  else if(open.length){ status = 'at_risk'; label = 'At Risk'; }
-  return { status, label, nonTotal: non.length, nonDone: done, nonOpen: open.length, nonBlocked: blocked.length, blockedTotal: allBlocked.length };
+  const allDone = tasks.filter(t=>t.status==='done').length;
+  const base = { nonTotal: non.length, nonDone: done, nonOpen: open.length, nonBlocked: blocked.length, blockedTotal: allBlocked.length };
+  if(!tasks.length) return { status:'none', label:'\u2014', ...base };
+  const overallPct = (allDone / tasks.length) * 100;
+  // No non-negotiables defined: fall back to overall completion
+  const nonPct = non.length ? (done / non.length) * 100 : overallPct;
+  let status, label;
+  if(blocked.length || nonPct < 50){ status='high_risk'; label='High Risk'; }
+  else if(nonPct < 80 || (allBlocked.length && open.length)){ status='medium_risk'; label='Medium Risk'; }
+  else if(open.length || (non.length===0 && overallPct < 90)){ status='low_risk'; label='Low Risk'; }
+  else if(allBlocked.length){ status='medium_risk'; label='Medium Risk'; }
+  else if(overallPct >= 100){ status='perfect'; label='Perfect'; }
+  else if(overallPct >= 90 && non.length){ status='ready'; label='Ready'; }
+  else { status='almost_ready'; label='Almost Ready'; }
+  return { status, label, ...base };
 }
 function setOwnerFilter(owner){
   state.ownerFilter = owner;
