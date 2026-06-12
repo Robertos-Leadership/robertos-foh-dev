@@ -2852,6 +2852,11 @@ async function saveEditTask(taskId){
     doc_url: document.getElementById('edit-doc').value||null,
     updated_at: new Date().toISOString()
   };
+  // If the due date changed, clear the notification stamp so the task
+  // earns exactly one fresh email when the new date arrives
+  let _prevDue = null;
+  for(const wid in state.tasks){ const t = state.tasks[wid].find(x=>x.id===taskId); if(t){ _prevDue = t.due_date; break; } }
+  if((_prevDue||null) !== (updates.due_date||null)){ updates.due_notified_at = null; }
   const { error } = await sb.from('tasks').update(updates).eq('id',taskId);
   if(error){ toast('Error saving task',true); return; }
   for(const wid in state.tasks){
