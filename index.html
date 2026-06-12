@@ -1813,7 +1813,7 @@ function renderDashboard(){
         </div>
         <div class="event-card-stage">Stage ${stage.rank+1} of 5: ${stage.label}</div>
         <div style="margin:8px 0 4px"><div class="progress-bar" style="height:8px"><div class="progress-fill ${readiness.status}" style="width:${cardPct}%"></div></div></div>
-        <div class="event-card-note">${doneCt}/${tasks.length} done | ${readiness.label}${nonOpen ? ` | ${nonOpen} non-negotiable open` : ''}${blocked ? ` | ${blocked} blocked` : ''}${nextDue ? ` | Next: ${fmtDate(nextDue.due_date)}` : ''}</div>
+        <div class="event-card-note"><strong>${tasks.length-doneCt} remaining</strong> | ${doneCt}/${tasks.length} done | ${readiness.label}${nonOpen ? ` | ${nonOpen} non-negotiable open` : ''}${blocked ? ` | ${blocked} blocked` : ''}${nextDue ? ` | Next: ${fmtDate(nextDue.due_date)}` : ''}</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn btn-gold btn-sm" onclick="switchTab('${eventTab(ev)}')">Open Journey</button>
           <button class="btn btn-outline btn-sm" onclick="toggleEventPause('${ev.id}')">Pause</button>
@@ -1993,7 +1993,7 @@ function renderEventPage(ev){
   <div class="event-countdown">
     <div class="countdown-days ${dleft===0?'tonight':''}">${cdLabel}</div>
     <div class="countdown-progress">
-      <div class="countdown-progress-label"><span>${doneCount} of ${tasks.length} tasks done</span><span>${pct}%</span></div>
+      <div class="countdown-progress-label"><span>${doneCount} of ${tasks.length} tasks done${tasks.length-doneCount>0 ? ` \u00b7 <strong>${tasks.length-doneCount} remaining</strong>` : ' \u00b7 all done'}</span><span>${pct}%</span></div>
       <div class="progress-bar"><div class="progress-fill ${readiness.status}" style="width:${pct}%"></div></div>
     </div>
     <span class="readiness-value ${readiness.status}" style="font-size:18px">${readiness.label}</span>
@@ -2037,6 +2037,7 @@ function renderEventPage(ev){
         <p>${week?.week_label || week?.week_date || 'Select or create a week'} | Stage ${STAGES[selectedStage].rank+1} of 5: ${STAGES[selectedStage].label}</p>
       </div>
       <div class="event-kpis">
+        <div class="kpi"><div class="kpi-label">Tasks Remaining</div><div class="kpi-value" style="${tasks.length-doneCount>0?'color:var(--vino)':''}">${tasks.length ? tasks.length-doneCount : '\u2014'}</div></div>
         <div class="kpi"><div class="kpi-label">Readiness</div><div class="kpi-value">${readiness.label}</div></div>
         <div class="kpi"><div class="kpi-label">Target Covers</div><div class="kpi-value">${ev.capacity}</div></div>
         <div class="kpi"><div class="kpi-label">Target Revenue</div><div class="kpi-value">${fmt(targetRev)}</div></div>
