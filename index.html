@@ -1201,6 +1201,57 @@
   .form-select option { background: var(--surface); }
   .form-textarea { resize: vertical; min-height: 80px; }
   .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  /* -- Finance worksheet (Enter Results) -- */
+  .fin-sheet { font-family:'Inter',sans-serif; }
+  .fin-section { margin-bottom: 22px; }
+  .fin-section-head {
+    display:flex; align-items:baseline; justify-content:space-between;
+    font-size:10px; letter-spacing:0.22em; text-transform:uppercase;
+    color:var(--vino); font-weight:600;
+    padding-bottom:8px; margin-bottom:10px;
+    border-bottom:1px solid var(--border);
+  }
+  .fin-section-head .hint { color:var(--text-light); font-weight:400; letter-spacing:0.08em; }
+  .fin-line {
+    display:grid; grid-template-columns: 1fr 168px; align-items:center;
+    gap:12px; padding:7px 0;
+  }
+  .fin-line + .fin-line { border-top:1px solid rgba(107,31,42,0.05); }
+  .fin-line label { font-size:13px; color:var(--text-mid); }
+  .fin-line label .sub { display:block; font-size:10px; color:var(--text-light); letter-spacing:0.04em; margin-top:1px; }
+  .fin-input-wrap { position:relative; }
+  .fin-input-wrap .cur {
+    position:absolute; left:12px; top:50%; transform:translateY(-50%);
+    font-size:10px; letter-spacing:0.1em; color:var(--text-light); pointer-events:none; font-weight:600;
+  }
+  .fin-input {
+    width:100%; text-align:right;
+    background:var(--surface2); border:1px solid var(--border);
+    color:var(--vino-dark); font-family:'Inter',sans-serif;
+    font-size:15px; font-weight:600; font-variant-numeric:tabular-nums;
+    padding:9px 13px 9px 40px; outline:none; transition:border-color .15s, background .15s;
+  }
+  .fin-input.plain { padding-left:13px; text-align:right; }
+  .fin-input:focus { border-color:var(--vino); background:#fff; }
+  .fin-input::-webkit-outer-spin-button, .fin-input::-webkit-inner-spin-button { -webkit-appearance:none; margin:0; }
+  .fin-input[type=number] { -moz-appearance:textfield; }
+  .fin-readout {
+    background:var(--surface3); padding:14px 16px; margin-top:6px;
+  }
+  .fin-readout-row {
+    display:flex; align-items:center; justify-content:space-between;
+    padding:5px 0; font-size:13px; color:var(--text-mid);
+  }
+  .fin-readout-row .v { font-variant-numeric:tabular-nums; font-weight:600; color:var(--vino-dark); }
+  .fin-readout-row.total {
+    border-top:1px solid var(--border-strong); margin-top:4px; padding-top:10px;
+    font-size:11px; letter-spacing:0.14em; text-transform:uppercase; color:var(--vino);
+  }
+  .fin-readout-row.total .v { font-family:'Playfair Display',serif; font-size:21px; font-weight:400; }
+  .fin-check { font-size:11px; margin-top:8px; padding:7px 12px; font-variant-numeric:tabular-nums; }
+  .fin-check.ok { background:rgba(45,122,79,0.1); color:var(--green); }
+  .fin-check.off { background:rgba(212,135,10,0.12); color:var(--amber); }
+  .fin-check.empty { background:transparent; color:var(--text-light); padding-left:0; }
   .modal-footer {
     padding: 16px 24px;
     border-top: 1px solid var(--border);
@@ -1643,6 +1694,17 @@ function setJourneyView(eventId, view){
   state.journeyView = state.journeyView || {};
   state.journeyView[eventId] = view;
   renderMain();
+}
+function goToReview(eventId){
+  state.journeyView = state.journeyView || {};
+  if(state.journeyView[eventId] !== 'full'){
+    state.journeyView[eventId] = 'full';
+    renderMain();
+  }
+  setTimeout(()=>{
+    const el = document.getElementById('review-panel');
+    if(el) el.scrollIntoView({behavior:'smooth', block:'start'});
+  }, 60);
 }
 function openJourney(eventId, view){
   state.journeyView = state.journeyView || {};
@@ -2134,6 +2196,7 @@ function renderEventPage(ev){
     <div class="week-scope" style="margin-bottom:14px">
       <button class="week-scope-btn ${view==='full'?'active':''}" onclick="setJourneyView('${ev.id}','full')">Open Journey</button>
       <button class="week-scope-btn ${view==='pending'?'active':''}" onclick="setJourneyView('${ev.id}','pending')">Pending Journey</button>
+      <button class="week-scope-btn" onclick="goToReview('${ev.id}')" style="margin-left:auto">Go to Review &#8595;</button>
     </div>
     ${view==='pending' ? pendingJourneyView : `${fullJourneyView}${reviewPanel}`}`}`;
 }
@@ -2221,6 +2284,7 @@ function renderReviewPanel(ev, week, tasks, fin, weekId){
   const savedAvg = Number(week?.avg_spend_actual)||0;
   const foodRev = Number(week?.food_revenue)||0;
   const bevRev = Number(week?.beverage_revenue)||0;
+  const compRev = Number(week?.complimentary)||0;
   const actualRevenue = savedRevenue || (actualCovers && savedAvg ? actualCovers * savedAvg : 0);
   const actualAvg = savedAvg || (actualCovers && actualRevenue ? actualRevenue / actualCovers : 0);
   const expenses = fin.reduce((s,f)=>s+(Number(f.amount)||0),0);
@@ -2238,7 +2302,7 @@ function renderReviewPanel(ev, week, tasks, fin, weekId){
     : 'Enter results to calculate actual revenue';
 
   return `
-    <div class="budget-panel">
+    <div id="review-panel" class="budget-panel">
       <div class="section-header" style="margin-bottom:8px">
         <div>
           <div class="section-title">Review Summary</div>
@@ -2267,6 +2331,11 @@ function renderReviewPanel(ev, week, tasks, fin, weekId){
           <div class="review-note">${bevRev && actualRevenue ? Math.round(bevRev/actualRevenue*100)+'% of revenue' : 'Net of VAT'}</div>
         </div>
         <div class="review-card">
+          <div class="review-label">Complimentary</div>
+          <div class="review-value">${compRev ? fmt(compRev) : '-'}</div>
+          <div class="review-note">${compRev && actualRevenue ? Math.round(compRev/actualRevenue*100)+'% of revenue' : 'Net of VAT'}</div>
+        </div>
+        <div class="review-card">
           <div class="review-label">Target Revenue</div>
           <div class="review-value">${fmt(targetRev)}</div>
           <div class="review-note">${targetCovers} covers at ${fmt(targetAvg)} target spend</div>
@@ -2285,11 +2354,6 @@ function renderReviewPanel(ev, week, tasks, fin, weekId){
           <div class="review-label">Net After Expenses</div>
           <div class="review-value">${actualRevenue ? fmt(net) : '-'}</div>
           <div class="review-note">Revenue minus listed expenses</div>
-        </div>
-        <div class="review-card ${taskClass}">
-          <div class="review-label">Tasks Completed</div>
-          <div class="review-value">${taskDone}/${tasks.length}</div>
-          <div class="review-note">${taskPct}% complete${taskBlocked ? ` | ${taskBlocked} blocked` : ''}</div>
         </div>
       </div>
       ${week?.notes ? `<div class="review-card" style="margin-bottom:14px"><div class="review-label">Review Notes</div><div class="review-note" style="font-size:12px;color:var(--text-mid)">${week.notes}</div></div>` : ''}
@@ -3207,50 +3271,85 @@ async function saveEditEvent(eventId){
 }
 
 function openWeekActuals(weekId){
-  let week = null;
+  let week = null, ev = null;
   for(const eid in state.weeks){
     week = state.weeks[eid].find(w=>w.id===weekId);
-    if(week) break;
+    if(week){ ev = state.events.find(e=>e.id===eid) || {}; break; }
   }
   if(!week) return;
+  ev = ev || {};
 
-  document.getElementById('modal-title').textContent = 'Event Actuals - '+week.week_label;
+  document.getElementById('modal-title').textContent = 'Enter Results · '+week.week_label;
   document.getElementById('modal-body').innerHTML = `
-    <div class="form-row">
-      <div class="form-group">
-        <label class="form-label">Covers (Actual)</label>
-        <input class="form-input" id="act-covers" type="number" value="${week.covers_actual||''}" oninput="recalcActuals()">
+    <div class="fin-sheet">
+
+      <div class="fin-section">
+        <div class="fin-section-head"><span>Revenue Breakdown</span><span class="hint">Net of VAT</span></div>
+        <div class="fin-line">
+          <label>Food Revenue<span class="sub">Kitchen / food covers</span></label>
+          <div class="fin-input-wrap"><span class="cur">AED</span>
+            <input class="fin-input" id="act-food" type="number" inputmode="decimal" placeholder="0" value="${week.food_revenue||''}" oninput="recalcActuals()"></div>
+        </div>
+        <div class="fin-line">
+          <label>Beverage Revenue<span class="sub">Alcoholic + wine + non-alc</span></label>
+          <div class="fin-input-wrap"><span class="cur">AED</span>
+            <input class="fin-input" id="act-bev" type="number" inputmode="decimal" placeholder="0" value="${week.beverage_revenue||''}" oninput="recalcActuals()"></div>
+        </div>
+        <div class="fin-line">
+          <label>Complimentary<span class="sub">Comp value (memo)</span></label>
+          <div class="fin-input-wrap"><span class="cur">AED</span>
+            <input class="fin-input" id="act-comp" type="number" inputmode="decimal" placeholder="0" value="${week.complimentary||''}"></div>
+        </div>
+      </div>
+
+      <div class="fin-section">
+        <div class="fin-section-head"><span>Total · Scala + Bar</span><span class="hint">Source of truth</span></div>
+        <div class="fin-line">
+          <label>Scala + Bar Revenue<span class="sub">Net total for the night</span></label>
+          <div class="fin-input-wrap"><span class="cur">AED</span>
+            <input class="fin-input" id="act-revenue" type="number" inputmode="decimal" placeholder="0" value="${week.revenue_actual||''}" oninput="recalcActuals()"></div>
+        </div>
+        <div id="act-check" class="fin-check empty"></div>
+      </div>
+
+      <div class="fin-section">
+        <div class="fin-section-head"><span>Covers &amp; Average Spend</span></div>
+        <div class="fin-line">
+          <label>Total Covers<span class="sub">Guest count</span></label>
+          <div class="fin-input-wrap">
+            <input class="fin-input plain" id="act-covers" type="number" inputmode="numeric" placeholder="0" value="${week.covers_actual||''}" oninput="recalcActuals()"></div>
+        </div>
+        <div class="fin-line">
+          <label>Average Spend<span class="sub">Auto: revenue ÷ covers · editable</span></label>
+          <div class="fin-input-wrap"><span class="cur">AED</span>
+            <input class="fin-input" id="act-avg" type="number" inputmode="decimal" placeholder="0" value="${week.avg_spend_actual||''}"></div>
+        </div>
+      </div>
+
+      <div class="fin-readout">
+        <div class="fin-readout-row"><span>Target Revenue</span><span class="v" id="ro-target">—</span></div>
+        <div class="fin-readout-row"><span>Variance to Target</span><span class="v" id="ro-var">—</span></div>
+        <div class="fin-readout-row total"><span>Actual · Scala + Bar</span><span class="v" id="ro-actual">—</span></div>
+      </div>
+
+      <div class="form-row" style="margin-top:22px">
+        <div class="form-group">
+          <label class="form-label">Week Status</label>
+          <select class="form-select" id="act-status">
+            <option value="upcoming" ${week.status==='upcoming'?'selected':''}>Upcoming</option>
+            <option value="active" ${week.status==='active'?'selected':''}>Active</option>
+            <option value="completed" ${week.status==='completed'?'selected':''}>Completed</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Covers Target</label>
+          <input class="form-input" type="number" value="${ev.capacity||''}" disabled style="opacity:.6">
+        </div>
       </div>
       <div class="form-group">
-        <label class="form-label">Scala + Bar Revenue (Net AED)</label>
-        <input class="form-input" id="act-revenue" type="number" value="${week.revenue_actual||''}" oninput="recalcActuals()">
+        <label class="form-label">Notes</label>
+        <textarea class="form-textarea" id="act-notes" placeholder="Service notes, comps context, anything for the report…">${week.notes||''}</textarea>
       </div>
-    </div>
-    <div class="form-row">
-      <div class="form-group">
-        <label class="form-label">Food Revenue (Net AED)</label>
-        <input class="form-input" id="act-food" type="number" value="${week.food_revenue||''}">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Beverage Revenue (Net AED)</label>
-        <input class="form-input" id="act-bev" type="number" value="${week.beverage_revenue||''}">
-      </div>
-    </div>
-    <div class="form-group">
-      <label class="form-label">Avg Spend (Actual AED)</label>
-      <input class="form-input" id="act-avg" type="number" value="${week.avg_spend_actual||''}">
-    </div>
-    <div class="form-group">
-      <label class="form-label">Week Status</label>
-      <select class="form-select" id="act-status">
-        <option value="upcoming" ${week.status==='upcoming'?'selected':''}>Upcoming</option>
-        <option value="active" ${week.status==='active'?'selected':''}>Active</option>
-        <option value="completed" ${week.status==='completed'?'selected':''}>Completed</option>
-      </select>
-    </div>
-    <div class="form-group">
-      <label class="form-label">Notes</label>
-      <textarea class="form-textarea" id="act-notes">${week.notes||''}</textarea>
     </div>`;
 
   document.getElementById('modal-footer').innerHTML = `
@@ -3258,14 +3357,56 @@ function openWeekActuals(weekId){
     <button class="btn btn-gold" onclick="saveActuals('${weekId}')">Save Results</button>`;
 
   document.getElementById('modal-overlay').classList.add('open');
-  recalcActuals();
+  window._actualsEv = ev;
+  recalcActuals(ev);
 }
 
-function recalcActuals(){
-  const covers = parseFloat(document.getElementById('act-covers')?.value)||0;
-  const revenue = parseFloat(document.getElementById('act-revenue')?.value)||0;
+function recalcActuals(ev){
+  ev = ev || window._actualsEv || {};
+  const num = id => parseFloat(document.getElementById(id)?.value)||0;
+  const covers = num('act-covers');
+  const revenue = num('act-revenue');
+  const food = num('act-food');
+  const bev = num('act-bev');
   const avgEl = document.getElementById('act-avg');
+  // auto avg spend if not manually diverged
   if(avgEl && covers && revenue) avgEl.value = (revenue / covers).toFixed(2);
+
+  // food + beverage check vs total
+  const comp = num('act-comp');
+  const checkEl = document.getElementById('act-check');
+  if(checkEl){
+    const sum = food + bev;
+    if(!revenue || !sum){
+      checkEl.className = 'fin-check empty';
+      checkEl.textContent = 'Food + Beverage will reconcile against the Scala + Bar total here.';
+    } else {
+      const diff = revenue - sum;
+      const pct = Math.abs(diff)/revenue*100;
+      if(pct <= 1.5){
+        checkEl.className = 'fin-check ok';
+        checkEl.textContent = `Food + Beverage = AED ${sum.toLocaleString()} · reconciles to total (${diff>=0?'+':''}${Math.round(diff).toLocaleString()})`;
+      } else {
+        checkEl.className = 'fin-check off';
+        checkEl.textContent = `Food + Beverage = AED ${sum.toLocaleString()} · ${diff>=0?'short by':'over by'} AED ${Math.abs(Math.round(diff)).toLocaleString()} vs total`;
+      }
+    }
+  }
+
+  // readout strip
+  const roA = document.getElementById('ro-actual');
+  const roT = document.getElementById('ro-target');
+  const roV = document.getElementById('ro-var');
+  if(roA){
+    const targetRev = (Number(ev.capacity)||0) * (Number(ev.avg_spend_target)||0);
+    roA.textContent = revenue ? 'AED '+revenue.toLocaleString() : '—';
+    roT.textContent = targetRev ? 'AED '+targetRev.toLocaleString() : '—';
+    if(revenue && targetRev){
+      const v = revenue - targetRev;
+      roV.textContent = (v>=0?'+':'−')+'AED '+Math.abs(v).toLocaleString()+'  ('+Math.round(revenue/targetRev*100)+'%)';
+      roV.style.color = v>=0 ? 'var(--green)' : 'var(--amber)';
+    } else { roV.textContent='—'; roV.style.color=''; }
+  }
 }
 
 async function saveActuals(weekId){
@@ -3275,6 +3416,7 @@ async function saveActuals(weekId){
     revenue_actual: parseFloat(document.getElementById('act-revenue').value)||null,
     food_revenue: parseFloat(document.getElementById('act-food').value)||null,
     beverage_revenue: parseFloat(document.getElementById('act-bev').value)||null,
+    complimentary: parseFloat(document.getElementById('act-comp').value)||null,
     avg_spend_actual: parseFloat(document.getElementById('act-avg').value)||null,
     status: document.getElementById('act-status').value,
     notes: document.getElementById('act-notes').value||null
