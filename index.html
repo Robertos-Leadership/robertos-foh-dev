@@ -1583,8 +1583,7 @@ const PRIORITIES = {
   important: { label:'Important', rank:1 },
   enhancement: { label:'Enhancement', rank:2 }
 };
-const FOOD_COST_PCT = 0.28;
-const BEV_COST_PCT = 0.26;
+const FB_COST_PCT = 0.27;
 const STAGES = {
   plan: { label:'Plan', rank:0 },
   promote: { label:'Promote', rank:1 },
@@ -2361,9 +2360,7 @@ function renderReviewPanel(ev, week, tasks, fin, weekId){
   const actualRevenue = savedRevenue || (actualCovers && savedAvg ? actualCovers * savedAvg : 0);
   const actualAvg = savedAvg || (actualCovers && actualRevenue ? actualRevenue / actualCovers : 0);
   const expenses = fin.reduce((s,f)=>s+(Number(f.amount)||0),0);
-  const foodCost = foodRev * FOOD_COST_PCT;
-  const bevCost = bevRev * BEV_COST_PCT;
-  const fbCost = foodCost + bevCost;
+  const fbCost = actualRevenue * FB_COST_PCT;
   const grossProfit = actualRevenue - fbCost;
   const net = grossProfit - expenses;
   const grossClass = grossProfit >= 0 ? 'good' : 'bad';
@@ -2437,14 +2434,14 @@ function renderReviewPanel(ev, week, tasks, fin, weekId){
         ${bevRev?`<span class="bev" style="width:${bPct}%">${bPct>=12?'Bev '+bPct+'%':''}</span>`:''}
       </div>
       <div class="rv2-mixlegend">
-        <span><i class="food"></i>Food ${fmt(foodRev)} <span style="color:var(--text-light)">· cost ${fmt(Math.round(foodCost))} (${Math.round(FOOD_COST_PCT*100)}%)</span></span>
-        <span><i class="bev"></i>Beverage ${fmt(bevRev)} <span style="color:var(--text-light)">· cost ${fmt(Math.round(bevCost))} (${Math.round(BEV_COST_PCT*100)}%)</span></span>
+        <span><i class="food"></i>Food ${fmt(foodRev)}</span>
+        <span><i class="bev"></i>Beverage ${fmt(bevRev)}</span>
         ${compRev?`<span><i class="comp"></i>Complimentary ${fmt(compRev)} (memo, not in total)</span>`:''}
       </div>` : ''}
 
       <div class="rv2-pl">
         <div class="rv2-pl-row"><span>Revenue · Scala + Bar</span><span class="v">${fmt(actualRevenue)}</span></div>
-        <div class="rv2-pl-row sub"><span>Less F&amp;B cost <span class="mut">(food ${Math.round(FOOD_COST_PCT*100)}% · bev ${Math.round(BEV_COST_PCT*100)}%)</span></span><span class="v neg">− ${fmt(Math.round(fbCost))}</span></div>
+        <div class="rv2-pl-row sub"><span>Less F&amp;B cost <span class="mut">(${Math.round(FB_COST_PCT*100)}% of revenue)</span></span><span class="v neg">− ${fmt(Math.round(fbCost))}</span></div>
         <div class="rv2-pl-row gross ${actualRevenue?grossClass:''}"><span>Gross Profit</span><span class="v">${actualRevenue ? fmt(Math.round(grossProfit)) : '—'}<span class="mut" style="font-weight:400"> ${actualRevenue?'· '+Math.round(grossProfit/actualRevenue*100)+'% margin':''}</span></span></div>
         <div class="rv2-pl-row sub"><span>Less expenses <span class="mut">(${fin.length} item${fin.length===1?'':'s'})</span></span><span class="v neg">− ${fmt(expenses)}</span></div>
         <div class="rv2-pl-row net ${actualRevenue?netClass:''}"><span>Net After Expenses</span><span class="v">${actualRevenue ? fmt(Math.round(net)) : '—'}</span></div>
@@ -2503,7 +2500,7 @@ function openWeekReport(eventId){
     const revenue = savedRevenue || (covers && savedAvg ? covers * savedAvg : 0);
     const avg = savedAvg || (covers && revenue ? revenue / covers : 0);
     const expenses = fin.reduce((s,f)=>s+(Number(f.amount)||0),0);
-    const fbCost = (Number(w.food_revenue)||0)*FOOD_COST_PCT + (Number(w.beverage_revenue)||0)*BEV_COST_PCT;
+    const fbCost = revenue * FB_COST_PCT;
     const net = revenue - fbCost - expenses;
     const done = tasks.filter(t=>t.status==='done').length;
     const pct = tasks.length ? Math.round(done/tasks.length*100) : 0;
