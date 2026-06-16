@@ -2219,6 +2219,8 @@ function renderReviewPanel(ev, week, tasks, fin, weekId){
   const actualCovers = Number(week?.covers_actual)||0;
   const savedRevenue = Number(week?.revenue_actual)||0;
   const savedAvg = Number(week?.avg_spend_actual)||0;
+  const foodRev = Number(week?.food_revenue)||0;
+  const bevRev = Number(week?.beverage_revenue)||0;
   const actualRevenue = savedRevenue || (actualCovers && savedAvg ? actualCovers * savedAvg : 0);
   const actualAvg = savedAvg || (actualCovers && actualRevenue ? actualRevenue / actualCovers : 0);
   const expenses = fin.reduce((s,f)=>s+(Number(f.amount)||0),0);
@@ -2250,9 +2252,19 @@ function renderReviewPanel(ev, week, tasks, fin, weekId){
       </div>
       <div class="review-grid">
         <div class="review-card ${revenueClass}">
-          <div class="review-label">Actual Revenue</div>
+          <div class="review-label">Scala + Bar Revenue</div>
           <div class="review-value">${fmt(actualRevenue)}</div>
           <div class="review-note">${actualNote}</div>
+        </div>
+        <div class="review-card">
+          <div class="review-label">Food Revenue</div>
+          <div class="review-value">${foodRev ? fmt(foodRev) : '-'}</div>
+          <div class="review-note">${foodRev && actualRevenue ? Math.round(foodRev/actualRevenue*100)+'% of revenue' : 'Net of VAT'}</div>
+        </div>
+        <div class="review-card">
+          <div class="review-label">Beverage Revenue</div>
+          <div class="review-value">${bevRev ? fmt(bevRev) : '-'}</div>
+          <div class="review-note">${bevRev && actualRevenue ? Math.round(bevRev/actualRevenue*100)+'% of revenue' : 'Net of VAT'}</div>
         </div>
         <div class="review-card">
           <div class="review-label">Target Revenue</div>
@@ -3210,8 +3222,18 @@ function openWeekActuals(weekId){
         <input class="form-input" id="act-covers" type="number" value="${week.covers_actual||''}" oninput="recalcActuals()">
       </div>
       <div class="form-group">
-        <label class="form-label">Revenue (Actual AED)</label>
+        <label class="form-label">Scala + Bar Revenue (Net AED)</label>
         <input class="form-input" id="act-revenue" type="number" value="${week.revenue_actual||''}" oninput="recalcActuals()">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Food Revenue (Net AED)</label>
+        <input class="form-input" id="act-food" type="number" value="${week.food_revenue||''}">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Beverage Revenue (Net AED)</label>
+        <input class="form-input" id="act-bev" type="number" value="${week.beverage_revenue||''}">
       </div>
     </div>
     <div class="form-group">
@@ -3251,6 +3273,8 @@ async function saveActuals(weekId){
   const updates = {
     covers_actual: parseInt(document.getElementById('act-covers').value)||null,
     revenue_actual: parseFloat(document.getElementById('act-revenue').value)||null,
+    food_revenue: parseFloat(document.getElementById('act-food').value)||null,
+    beverage_revenue: parseFloat(document.getElementById('act-bev').value)||null,
     avg_spend_actual: parseFloat(document.getElementById('act-avg').value)||null,
     status: document.getElementById('act-status').value,
     notes: document.getElementById('act-notes').value||null
