@@ -1704,6 +1704,7 @@ function goToReview(eventId){
   setTimeout(()=>{
     const el = document.getElementById('review-panel');
     if(el) el.scrollIntoView({behavior:'smooth', block:'start'});
+    else toast('Select a week first to see its review');
   }, 60);
 }
 function openJourney(eventId, view){
@@ -2140,6 +2141,7 @@ function renderEventPage(ev){
         <div class="event-eyebrow">Journey to event | ${ev.day_of_week}s</div>
         <h2>${ev.name}</h2>
         <p>${week?.week_label || week?.week_date || 'Select or create a week'} | Stage ${STAGES[selectedStage].rank+1} of 5: ${STAGES[selectedStage].label}</p>
+        <button class="btn btn-gold btn-sm" style="margin-top:12px" onclick="goToReview('${ev.id}')">Go to Review &#8595;</button>
       </div>
       <div class="event-kpis">
         <div class="kpi"><div class="kpi-label">Tasks Remaining</div><div class="kpi-value" style="${tasks.length-doneCount>0?'color:var(--vino)':''}">${tasks.length ? tasks.length-doneCount : '\u2014'}</div></div>
