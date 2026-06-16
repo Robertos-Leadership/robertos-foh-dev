@@ -763,70 +763,56 @@
   .review-note { font-size:11px; color:var(--text-light); margin-top:6px; line-height:1.45; }
   .review-actions { display:flex; gap:8px; flex-wrap:wrap; margin:4px 0 14px; }
   .review-split { display:grid; grid-template-columns:1fr; gap:12px; }
-  /* -- Review verdict + tiered layout -- */
-  .rv-verdict {
-    display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;
-    padding:16px 20px; margin:12px 0 18px; border-left:4px solid var(--text-light);
-    background:var(--surface2);
-  }
-  .rv-verdict.good { border-left-color:var(--green); background:rgba(45,122,79,0.07); }
-  .rv-verdict.warn { border-left-color:var(--amber); background:rgba(212,135,10,0.08); }
-  .rv-verdict.bad  { border-left-color:var(--red);   background:rgba(192,57,43,0.07); }
-  .rv-verdict.empty{ border-left-color:var(--border-strong); }
-  .rv-verdict-main { display:flex; flex-direction:column; gap:3px; }
-  .rv-verdict-tag {
-    font-size:10px; letter-spacing:0.2em; text-transform:uppercase; font-weight:600;
-    color:var(--text-light);
-  }
-  .rv-verdict.good .rv-verdict-tag { color:var(--green); }
-  .rv-verdict.warn .rv-verdict-tag { color:var(--amber); }
-  .rv-verdict.bad  .rv-verdict-tag { color:var(--red); }
-  .rv-verdict-headline { font-family:'Playfair Display',serif; font-size:26px; color:var(--vino-dark); }
-  .rv-verdict-sub { font-size:12px; color:var(--text-mid); }
-  .rv-verdict-pct { text-align:right; }
-  .rv-verdict-pct .n { font-family:'Playfair Display',serif; font-size:40px; line-height:1; color:var(--vino-dark); }
-  .rv-verdict.good .rv-verdict-pct .n { color:var(--green); }
-  .rv-verdict.bad  .rv-verdict-pct .n { color:var(--red); }
-  .rv-verdict-pct .l { font-size:10px; letter-spacing:0.16em; text-transform:uppercase; color:var(--text-light); margin-top:4px; }
-
-  .rv-tier-label { font-size:10px; letter-spacing:0.2em; text-transform:uppercase; color:var(--text-light); margin:18px 0 9px; font-weight:600; }
-
-  .rv-hero {
-    display:grid; grid-template-columns:1.4fr 1fr 1fr; gap:0;
-    border:1px solid var(--border); background:var(--surface); margin-bottom:4px;
-  }
-  .rv-hero-main { padding:18px 22px; border-right:1px solid var(--border); background:var(--surface2); }
-  .rv-hero-main .lbl { font-size:10px; letter-spacing:0.18em; text-transform:uppercase; color:var(--vino); font-weight:600; margin-bottom:8px; }
-  .rv-hero-main .val { font-family:'Playfair Display',serif; font-size:38px; color:var(--vino-dark); line-height:1; }
-  .rv-hero-main .sub { font-size:12px; color:var(--text-mid); margin-top:8px; }
-  .rv-hero-cell { padding:18px 20px; border-right:1px solid var(--border); }
-  .rv-hero-cell:last-child { border-right:none; }
-  .rv-hero-cell .lbl { font-size:9px; letter-spacing:0.16em; text-transform:uppercase; color:var(--text-light); margin-bottom:7px; }
-  .rv-hero-cell .val { font-family:'Playfair Display',serif; font-size:22px; color:var(--vino); }
-  .rv-hero-cell .sub { font-size:11px; color:var(--text-light); margin-top:5px; }
-
-  .rv-breakdown { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:4px; }
-  .rv-bd-card { background:var(--surface2); border:1px solid var(--border); padding:13px 15px; }
-  .rv-bd-card .lbl { font-size:9px; letter-spacing:0.16em; text-transform:uppercase; color:var(--text-light); margin-bottom:6px; }
-  .rv-bd-card .val { font-family:'Playfair Display',serif; font-size:21px; color:var(--vino); }
-  .rv-bd-bar { height:4px; background:var(--surface3); margin-top:9px; position:relative; overflow:hidden; }
-  .rv-bd-bar > i { position:absolute; left:0; top:0; bottom:0; background:var(--gold); display:block; }
-  .rv-bd-card .pct { font-size:11px; color:var(--text-light); margin-top:6px; }
-
-  .rv-outcome { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; }
-  .rv-oc-card { background:var(--surface2); border:1px solid var(--border); padding:13px 15px; border-top:3px solid var(--border-strong); }
-  .rv-oc-card.good { border-top-color:var(--green); }
-  .rv-oc-card.warn { border-top-color:var(--amber); }
-  .rv-oc-card.bad  { border-top-color:var(--red); }
-  .rv-oc-card .lbl { font-size:9px; letter-spacing:0.16em; text-transform:uppercase; color:var(--text-light); margin-bottom:6px; }
-  .rv-oc-card .val { font-family:'Playfair Display',serif; font-size:22px; color:var(--vino); }
-  .rv-oc-card.good .val { color:var(--green); }
-  .rv-oc-card.bad .val { color:var(--red); }
-  .rv-oc-card .sub { font-size:11px; color:var(--text-light); margin-top:5px; }
+  /* -- Review: hierarchy-driven layout -- */
+  .rv2-hero { border:1px solid var(--border); background:var(--surface); padding:24px 26px; margin:12px 0 16px; }
+  .rv2-hero.good { border-top:4px solid var(--green); }
+  .rv2-hero.warn { border-top:4px solid var(--amber); }
+  .rv2-hero.bad  { border-top:4px solid var(--red); }
+  .rv2-hero.empty{ border-top:4px solid var(--border-strong); }
+  .rv2-tag { font-size:10px; letter-spacing:0.22em; text-transform:uppercase; font-weight:600; color:var(--text-light); margin-bottom:10px; }
+  .rv2-hero.good .rv2-tag { color:var(--green); }
+  .rv2-hero.warn .rv2-tag { color:var(--amber); }
+  .rv2-hero.bad  .rv2-tag { color:var(--red); }
+  .rv2-bignum { display:flex; align-items:baseline; gap:14px; flex-wrap:wrap; }
+  .rv2-bignum .n { font-family:'Playfair Display',serif; font-size:54px; line-height:0.95; color:var(--vino-dark); }
+  .rv2-bignum .of { font-size:14px; color:var(--text-mid); }
+  .rv2-bignum .of b { color:var(--vino); font-weight:600; }
+  /* progress to target */
+  .rv2-track { height:10px; background:var(--surface3); margin:16px 0 8px; position:relative; }
+  .rv2-track > i { position:absolute; left:0; top:0; bottom:0; display:block; }
+  .rv2-track.good > i { background:var(--green); }
+  .rv2-track.warn > i { background:var(--amber); }
+  .rv2-track.bad  > i { background:var(--red); }
+  .rv2-track-marks { display:flex; justify-content:space-between; font-size:10px; color:var(--text-light); letter-spacing:0.04em; }
+  /* thin supporting stat row */
+  .rv2-stats { display:flex; flex-wrap:wrap; gap:0; border:1px solid var(--border); margin-bottom:16px; background:var(--surface2); }
+  .rv2-stat { flex:1; min-width:120px; padding:12px 16px; border-right:1px solid var(--border); }
+  .rv2-stat:last-child { border-right:none; }
+  .rv2-stat .l { font-size:9px; letter-spacing:0.15em; text-transform:uppercase; color:var(--text-light); margin-bottom:5px; }
+  .rv2-stat .v { font-size:16px; font-weight:600; color:var(--vino); font-variant-numeric:tabular-nums; }
+  .rv2-stat .v.green { color:var(--green); } .rv2-stat .v.red { color:var(--red); }
+  /* revenue mix single stacked bar */
+  .rv2-mix-head { display:flex; justify-content:space-between; align-items:baseline; margin:18px 0 8px; }
+  .rv2-mix-title { font-size:10px; letter-spacing:0.2em; text-transform:uppercase; color:var(--text-light); font-weight:600; }
+  .rv2-mixbar { display:flex; height:34px; border:1px solid var(--border); overflow:hidden; }
+  .rv2-mixbar > span { display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:600; color:#fff; white-space:nowrap; overflow:hidden; min-width:0; }
+  .rv2-mixbar .food { background:var(--vino); }
+  .rv2-mixbar .bev  { background:var(--gold-dim); }
+  .rv2-mixbar .comp { background:var(--text-light); }
+  .rv2-mixlegend { display:flex; gap:18px; margin-top:9px; flex-wrap:wrap; }
+  .rv2-mixlegend span { font-size:11px; color:var(--text-mid); display:flex; align-items:center; gap:6px; }
+  .rv2-mixlegend i { width:10px; height:10px; display:inline-block; }
+  .rv2-mixlegend .food { background:var(--vino); } .rv2-mixlegend .bev { background:var(--gold-dim); } .rv2-mixlegend .comp { background:var(--text-light); }
+  /* net result line */
+  .rv2-net { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; padding:18px 22px; border:1px solid var(--border); margin:18px 0 4px; }
+  .rv2-net.good { border-left:4px solid var(--green); } .rv2-net.bad { border-left:4px solid var(--red); }
+  .rv2-net-l { font-size:11px; letter-spacing:0.18em; text-transform:uppercase; color:var(--text-light); }
+  .rv2-net-calc { font-size:12px; color:var(--text-light); margin-top:3px; }
+  .rv2-net-v { font-family:'Playfair Display',serif; font-size:34px; line-height:1; }
+  .rv2-net.good .rv2-net-v { color:var(--green); } .rv2-net.bad .rv2-net-v { color:var(--red); }
   @media(max-width:760px){
-    .rv-hero { grid-template-columns:1fr 1fr; }
-    .rv-hero-main { grid-column:1/-1; border-right:none; border-bottom:1px solid var(--border); }
-    .rv-breakdown, .rv-outcome { grid-template-columns:1fr 1fr; }
+    .rv2-bignum .n { font-size:40px; }
+    .rv2-stat { min-width:50%; border-bottom:1px solid var(--border); }
   }
 
   .overdue-flag {
@@ -2371,18 +2357,20 @@ function renderReviewPanel(ev, week, tasks, fin, weekId){
     : 'Enter results to calculate actual revenue';
 
   const pctOfTarget = actualRevenue && targetRev ? Math.round(actualRevenue/targetRev*100) : 0;
-  let verdictClass = 'empty', verdictTag = 'Awaiting Results', verdictHead = 'No results entered yet', verdictSub = 'Tap Enter Results to record the night.';
+  let heroClass = 'empty', heroTag = 'Awaiting Results';
   if(actualRevenue){
-    if(pctOfTarget >= 100){ verdictClass='good'; verdictTag='Target Achieved'; }
-    else if(pctOfTarget >= 85){ verdictClass='warn'; verdictTag='Just Below Target'; }
-    else { verdictClass='bad'; verdictTag='Below Target'; }
-    const gap = revenueDelta>=0 ? `AED ${Math.round(revenueDelta).toLocaleString()} over target` : `AED ${Math.abs(Math.round(revenueDelta)).toLocaleString()} short of target`;
-    verdictHead = `${fmt(actualRevenue)} on the night`;
-    verdictSub = `${actualCovers||'-'} covers · ${fmt(actualAvg)} avg spend · ${gap}`;
+    if(pctOfTarget >= 100){ heroClass='good'; heroTag='Target Achieved'; }
+    else if(pctOfTarget >= 85){ heroClass='warn'; heroTag='Just Below Target'; }
+    else { heroClass='bad'; heroTag='Below Target'; }
   }
-  const maxBd = Math.max(foodRev, bevRev, compRev, 1);
-  const bdPct = v => Math.round(v/maxBd*100);
-  const ofRev = v => v && actualRevenue ? Math.round(v/actualRevenue*100)+'% of revenue' : 'Net of VAT';
+  const trackPct = Math.min(pctOfTarget, 100);
+  const gapTxt = !actualRevenue ? '' : (revenueDelta>=0
+    ? `+AED ${Math.round(revenueDelta).toLocaleString()} over`
+    : `−AED ${Math.abs(Math.round(revenueDelta)).toLocaleString()} short`);
+  // revenue mix proportions (food/bev only; comp is memo)
+  const mixBase = foodRev + bevRev;
+  const fPct = mixBase ? Math.round(foodRev/mixBase*100) : 0;
+  const bPct = mixBase ? 100 - fPct : 0;
 
   return `
     <div id="review-panel" class="budget-panel">
@@ -2398,81 +2386,48 @@ function renderReviewPanel(ev, week, tasks, fin, weekId){
         <button class="btn btn-outline btn-sm" onclick="openWeekReport('${ev.id}')">Report</button>
       </div>
 
-      <div class="rv-verdict ${verdictClass}">
-        <div class="rv-verdict-main">
-          <div class="rv-verdict-tag">${verdictTag}</div>
-          <div class="rv-verdict-headline">${verdictHead}</div>
-          <div class="rv-verdict-sub">${verdictSub}</div>
+      <div class="rv2-hero ${heroClass}">
+        <div class="rv2-tag">${heroTag}${actualRevenue?` · ${pctOfTarget}% of target`:''}</div>
+        <div class="rv2-bignum">
+          <div class="n">${actualRevenue ? fmt(actualRevenue) : '—'}</div>
+          <div class="of">${actualRevenue ? `of <b>${fmt(targetRev)}</b> target · ${gapTxt}` : 'No results entered yet'}</div>
         </div>
-        ${actualRevenue ? `<div class="rv-verdict-pct"><div class="n">${pctOfTarget}%</div><div class="l">of target</div></div>` : ''}
+        <div class="rv2-track ${heroClass}"><i style="width:${trackPct}%"></i></div>
+        <div class="rv2-track-marks"><span>0</span><span>Target ${fmt(targetRev)}</span></div>
       </div>
 
-      <div class="rv-tier-label">The Result</div>
-      <div class="rv-hero">
-        <div class="rv-hero-main">
-          <div class="lbl">Scala + Bar · Total</div>
-          <div class="val">${fmt(actualRevenue)}</div>
-          <div class="sub">${actualNote}</div>
-        </div>
-        <div class="rv-hero-cell">
-          <div class="lbl">Target Revenue</div>
-          <div class="val">${fmt(targetRev)}</div>
-          <div class="sub">${targetCovers} cov · ${fmt(targetAvg)} spend</div>
-        </div>
-        <div class="rv-hero-cell">
-          <div class="lbl">vs Target</div>
-          <div class="val" style="color:${!actualRevenue?'var(--text-light)':(revenueDelta>=0?'var(--green)':'var(--red)')}">${actualRevenue ? (revenueDelta>=0?'+':'−')+'AED '+Math.abs(Math.round(revenueDelta)).toLocaleString() : '—'}</div>
-          <div class="sub">${pctOfTarget}% of target</div>
-        </div>
+      <div class="rv2-stats">
+        <div class="rv2-stat"><div class="l">Covers</div><div class="v">${actualCovers||'—'}<span style="font-size:11px;color:var(--text-light);font-weight:400"> / ${targetCovers} target</span></div></div>
+        <div class="rv2-stat"><div class="l">Avg Spend</div><div class="v">${actualRevenue?fmt(actualAvg):'—'}<span style="font-size:11px;color:var(--text-light);font-weight:400"> / ${fmt(targetAvg)}</span></div></div>
+        <div class="rv2-stat"><div class="l">Food</div><div class="v">${foodRev?fmt(foodRev):'—'}</div></div>
+        <div class="rv2-stat"><div class="l">Beverage</div><div class="v">${bevRev?fmt(bevRev):'—'}</div></div>
+        <div class="rv2-stat"><div class="l">Complimentary</div><div class="v">${compRev?fmt(compRev):'—'}</div></div>
       </div>
 
-      <div class="rv-tier-label">Revenue Breakdown</div>
-      <div class="rv-breakdown">
-        <div class="rv-bd-card">
-          <div class="lbl">Food</div>
-          <div class="val">${foodRev ? fmt(foodRev) : '—'}</div>
-          <div class="rv-bd-bar"><i style="width:${bdPct(foodRev)}%"></i></div>
-          <div class="pct">${ofRev(foodRev)}</div>
+      ${mixBase ? `
+      <div class="rv2-mix-head">
+        <span class="rv2-mix-title">Revenue Mix</span>
+        <span style="font-size:11px;color:var(--text-light)">Food ${fPct}% · Beverage ${bPct}%</span>
+      </div>
+      <div class="rv2-mixbar">
+        ${foodRev?`<span class="food" style="width:${fPct}%">${fPct>=12?'Food '+fPct+'%':''}</span>`:''}
+        ${bevRev?`<span class="bev" style="width:${bPct}%">${bPct>=12?'Bev '+bPct+'%':''}</span>`:''}
+      </div>
+      <div class="rv2-mixlegend">
+        <span><i class="food"></i>Food ${fmt(foodRev)}</span>
+        <span><i class="bev"></i>Beverage ${fmt(bevRev)}</span>
+        ${compRev?`<span><i class="comp"></i>Complimentary ${fmt(compRev)} (memo, not in total)</span>`:''}
+      </div>` : ''}
+
+      <div class="rv2-net ${actualRevenue?netClass:''}">
+        <div>
+          <div class="rv2-net-l">Net After Expenses</div>
+          <div class="rv2-net-calc">${fmt(actualRevenue)} revenue − ${fmt(expenses)} expenses (${fin.length} item${fin.length===1?'':'s'})</div>
         </div>
-        <div class="rv-bd-card">
-          <div class="lbl">Beverage</div>
-          <div class="val">${bevRev ? fmt(bevRev) : '—'}</div>
-          <div class="rv-bd-bar"><i style="width:${bdPct(bevRev)}%"></i></div>
-          <div class="pct">${ofRev(bevRev)}</div>
-        </div>
-        <div class="rv-bd-card">
-          <div class="lbl">Complimentary</div>
-          <div class="val">${compRev ? fmt(compRev) : '—'}</div>
-          <div class="rv-bd-bar"><i style="width:${bdPct(compRev)}%"></i></div>
-          <div class="pct">${compRev ? ofRev(compRev)+' (memo)' : 'Comp value'}</div>
-        </div>
+        <div class="rv2-net-v">${actualRevenue ? fmt(net) : '—'}</div>
       </div>
 
-      <div class="rv-tier-label">Bottom Line</div>
-      <div class="rv-outcome">
-        <div class="rv-oc-card">
-          <div class="lbl">Revenue</div>
-          <div class="val">${fmt(actualRevenue)}</div>
-          <div class="sub">Net of VAT</div>
-        </div>
-        <div class="rv-oc-card warn">
-          <div class="lbl">Expenses</div>
-          <div class="val">${fmt(expenses)}</div>
-          <div class="sub">${fin.length} item${fin.length===1?'':'s'}${actualRevenue?` · ${expenseShare}% of rev`:''}</div>
-        </div>
-        <div class="rv-oc-card ${actualRevenue?netClass:''}">
-          <div class="lbl">Net After Expenses</div>
-          <div class="val">${actualRevenue ? fmt(net) : '—'}</div>
-          <div class="sub">Revenue − expenses</div>
-        </div>
-        <div class="rv-oc-card ${!actualRevenue?'':(revenueDelta>=0?'good':'bad')}">
-          <div class="lbl">vs Target</div>
-          <div class="val">${actualRevenue ? (revenueDelta>=0?'+':'−')+'AED '+Math.abs(Math.round(revenueDelta)).toLocaleString() : '—'}</div>
-          <div class="sub">${pctOfTarget}% of target</div>
-        </div>
-      </div>
-
-      ${week?.notes ? `<div class="rv-bd-card" style="margin-top:14px;background:var(--surface)"><div class="lbl" style="font-size:9px;letter-spacing:0.16em;text-transform:uppercase;color:var(--text-light);margin-bottom:6px">Review Notes</div><div style="font-size:12px;color:var(--text-mid);line-height:1.5">${week.notes}</div></div>` : ''}
+      ${week?.notes ? `<div style="margin-top:14px;padding:13px 15px;border:1px solid var(--border);background:var(--surface)"><div style="font-size:9px;letter-spacing:0.16em;text-transform:uppercase;color:var(--text-light);margin-bottom:6px">Review Notes</div><div style="font-size:12px;color:var(--text-mid);line-height:1.5">${week.notes}</div></div>` : ''}
       <div class="section-header" style="margin:18px 0 8px"><div class="section-title">Expenses</div></div>
       ${renderFinanceTrack(fin, weekId, ev.id)}
     </div>`;
