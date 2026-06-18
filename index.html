@@ -10,7 +10,7 @@
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 <link rel="manifest" href="site.webmanifest">
 <meta name="theme-color" content="#6B1F2A">
-<title>Roberto's Front of House</title><!-- v=fd1cf81b -->
+<title>Roberto's Front of House</title><!-- v=20250618d -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400;1,600&family=Inter:wght@300;400;500;600&display=swap');
@@ -1988,16 +1988,18 @@
         <div style="font-size:8px;letter-spacing:.3em;text-transform:uppercase;color:rgba(255,255,255,.45);margin-bottom:4px;">Tonight</div>
         <div id="foh-tn-count" style="font-family:'Playfair Display',serif;font-size:40px;line-height:1;color:#fff;">—</div>
         <div style="font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:rgba(255,255,255,.45);margin-top:2px;">covers booked</div>
+        <div id="foh-tn-day" style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:rgba(255,255,255,.35);margin-top:6px;"></div>
       </div>
       <div style="text-align:right;">
-        <div id="foh-tn-day" style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:rgba(255,255,255,.5);"></div>
-        <div style="margin-top:4px;"><span id="foh-tm-count" style="font-family:'Playfair Display',serif;font-size:26px;color:rgba(255,255,255,.7);">—</span> <span style="font-size:9px;color:rgba(255,255,255,.35);letter-spacing:.1em;text-transform:uppercase;">tmrw</span></div>
-        <div id="foh-tn-sync" style="font-size:8px;color:rgba(255,255,255,.28);font-style:italic;margin-top:3px;">Loading…</div>
+        <div style="font-size:8px;letter-spacing:.3em;text-transform:uppercase;color:rgba(255,255,255,.45);margin-bottom:4px;">Tomorrow</div>
+        <div id="foh-tm-count" style="font-family:'Playfair Display',serif;font-size:26px;color:rgba(255,255,255,.7);">—</div>
+        <div style="font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:rgba(255,255,255,.35);margin-top:2px;">covers booked</div>
+        <div id="foh-tn-sync" style="font-size:8px;color:rgba(255,255,255,.22);font-style:italic;margin-top:4px;">Loading…</div>
       </div>
     </div>
 
     <!-- 3 MODULE BOXES -->
-    <div style="flex:1;display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;padding:12px;background:#F5F0E8;min-height:0;">
+    <div style="height:160px;flex-shrink:0;display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;padding:12px;background:#F5F0E8;">
 
       <div onclick="fohTab('schedule')" style="background:#fff;border:1px solid rgba(107,31,42,0.12);border-top:2px solid #6B1F2A;padding:16px 14px;cursor:pointer;display:flex;flex-direction:column;">
         <div style="font-size:8px;letter-spacing:.24em;text-transform:uppercase;color:#A88930;font-weight:600;margin-bottom:6px;">Live</div>
@@ -2024,8 +2026,8 @@
 
 </div>
 
-<!-- FOH BOTTOM NAV -->
-<div id="foh-nav" style="display:none; position:fixed; bottom:0; left:0; right:0; background:#F8F4EC; border-top:1px solid rgba(107,31,42,0.18); z-index:200; box-shadow:0 -2px 12px rgba(44,24,16,0.08);">
+<!-- FOH BOTTOM NAV — hidden permanently, kept for JS compatibility -->
+<div id="foh-nav" style="display:none !important; position:fixed; bottom:0; left:0; right:0; background:#F8F4EC; border-top:1px solid rgba(107,31,42,0.18); z-index:200; box-shadow:0 -2px 12px rgba(44,24,16,0.08);">
   <div style="display:flex; max-width:600px; margin:0 auto;">
     <div class="foh-nav-btn active" id="fnav-home" onclick="fohTab('home')">
       <div class="foh-nav-label">Home</div>
@@ -4390,7 +4392,7 @@ async function renderFohHome(){
 
   // Update tonight day label
   const dayEl = document.getElementById('foh-tn-day');
-  if(dayEl) dayEl.textContent = fohDateLabel(today) + (todayEvent ? ' · ' + todayEvent : '');
+  if(dayEl) dayEl.textContent = fohDateLabel(today);
 
   // Fetch covers
   try{
