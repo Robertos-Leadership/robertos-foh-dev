@@ -413,7 +413,7 @@
   /* -- FOH HERO HEADER -- */
   .foh-hero {
     position: relative;
-    height: 42%;
+    height: 30%;
     display: flex;
     flex-direction: column;
     justify-content: flex-end;
@@ -431,9 +431,9 @@
     inset: 0;
     background: linear-gradient(
       180deg,
-      rgba(44,24,16,0.08) 0%,
-      rgba(44,24,16,0.18) 50%,
-      rgba(44,24,16,0.72) 100%
+      rgba(44,24,16,0.45) 0%,
+      rgba(44,24,16,0.55) 50%,
+      rgba(44,24,16,0.75) 100%
     );
   }
   .foh-hero-content {
@@ -447,14 +447,12 @@
     padding: 20px;
   }
   .foh-hero-logo {
-    width: min(240px, 58vw);
+    width: min(220px, 55vw);
     height: auto;
     display: block;
-    margin-bottom: 8px;
-    padding: 12px 22px 8px;
-    background: rgba(248,244,236,0.95);
-    border-bottom: 2px solid var(--gold);
-    opacity: 1;
+    margin-bottom: 6px;
+    filter: brightness(0) invert(1);
+    opacity: 0.95;
   }
   .foh-hero-sub {
     font-size: 9px;
@@ -1724,8 +1722,8 @@
   .fm-desc { font-size:11px; color:var(--text-light); line-height:1.35; margin-top:2px; }
   .fm-arrow { color:var(--vino); opacity:0.35; }
   /* A: 3-col */
-  .foh-mods-a { display:grid; grid-template-columns:repeat(3,1fr); gap:7px; padding:0 12px 10px; }
-  .foh-mod-a { background:#fff; border:1px solid rgba(107,31,42,0.1); border-top:2px solid var(--vino); padding:10px 9px 9px; cursor:pointer; display:flex; flex-direction:column; }
+  .foh-mods-a { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; padding:0 12px 12px; flex:1; }
+  .foh-mod-a { background:#fff; border:1px solid rgba(107,31,42,0.1); border-top:2px solid var(--vino); padding:0 10px; cursor:pointer; display:flex; flex-direction:column; justify-content:center; }
   .foh-mod-a.dim { opacity:0.33; pointer-events:none; border-top-color:#ddd; }
   .foh-mod-a .fm-name { font-size:13px; }
   .foh-mod-a .fm-arrow { font-size:13px; margin-top:6px; }
@@ -4338,58 +4336,22 @@ function fohDateLabel(short){
 }
 
 // ── HOME TAB ──
-let fohBoxStyle = localStorage.getItem('foh_box') || 'b';
-function fohSetBox(s){
-  fohBoxStyle=s;
-  try{localStorage.setItem('foh_box',s);}catch(e){}
-  document.querySelectorAll('.foh-opt-btn').forEach(b=>b.classList.toggle('active',b.dataset.s===s));
-  document.querySelectorAll('.foh-mods-a,.foh-mods-b,.foh-mods-c').forEach(el=>el.style.display='none');
-  const show = document.getElementById('foh-mods-'+s);
-  if(show) show.style.display = s==='c'?'flex':'grid';
-}
-function fohModsHTML(){
-  const mods=[
-    {tag:'Live',       name:'Schedule',        desc:"Team, shifts & attendance",    action:"fohTab('schedule')", dim:false},
-    {tag:'Live',       name:'Events',          desc:'Jazz Night, Listening Bar',    action:"fohTab('manager')",  dim:false},
-    {tag:'Coming',     name:'Operations',      desc:'Briefings & standards',        action:'',                   dim:true},
-  ];
-  const sa=fohBoxStyle==='a', sb=fohBoxStyle==='b', sc=fohBoxStyle==='c';
-  const a = '<div id="foh-mods-a" class="foh-mods-a" style="display:'+(sa?'grid':'none')+'">'
-    +mods.map(m=>'<div class="foh-mod-a'+(m.dim?' dim':'')+'" '+(m.action?'onclick="'+m.action+'"':'')+'>'
-      +'<div class="fm-tag'+(m.dim?' soon':'')+'">'+m.tag+'</div>'
-      +'<div class="fm-name">'+m.name+'</div>'
-      +'<div class="fm-desc">'+m.desc+'</div>'
-      +(!m.dim?'<div class="fm-arrow">›</div>':'')
-    +'</div>').join('')+'</div>';
-  const b = '<div id="foh-mods-b" class="foh-mods-b" style="display:'+(sb?'grid':'none')+'">'
-    +mods.map(m=>'<div class="foh-mod-b'+(m.dim?' dim':'')+'" '+(m.action?'onclick="'+m.action+'"':'')+'>'
-      +'<div><div class="fm-tag'+(m.dim?' soon':'')+'">'+m.tag+'</div>'
-      +'<div class="fm-name">'+m.name+'</div>'
-      +'<div class="fm-desc">'+m.desc+'</div></div>'
-      +(!m.dim?'<div class="fm-arrow">›</div>':'')
-    +'</div>').join('')+'</div>';
-  const c = '<div id="foh-mods-c" class="foh-mods-c" style="display:'+(sc?'flex':'none')+'">'
-    +mods.map(m=>'<div class="foh-mod-c'+(m.dim?' dim':'')+'" '+(m.action?'onclick="'+m.action+'"':'')+'>'
-      +'<div class="foh-mod-c-body"><div class="fm-tag'+(m.dim?' soon':'')+'">'+m.tag+'</div>'
-      +'<div class="fm-name">'+m.name+'</div>'
-      +'<div class="fm-desc">'+m.desc+'</div></div>'
-      +(!m.dim?'<div class="fm-arrow">›</div>':'')
-    +'</div>').join('')+'</div>';
-  return a+b+c;
-}
 async function renderFohHome(){
   const el = document.getElementById('foh-tab-content');
   const today = fohTodayShort();
   const tomorrow = fohTomorrowShort();
   const todayEvent = FOH_EVENTS[today]||'';
   const tomorrowEvent = FOH_EVENTS[tomorrow]||'';
+
   const now = new Date();
   const dateEl = document.getElementById('foh-date-display');
   if(dateEl) dateEl.textContent = now.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'});
+
   el.style.cssText='flex:1;max-width:600px;margin:0 auto;width:100%;overflow:hidden;display:flex;flex-direction:column;';
-  const sa=fohBoxStyle==='a', sb=fohBoxStyle==='b', sc=fohBoxStyle==='c';
+
   el.innerHTML=`
     <div style="flex:1;display:flex;flex-direction:column;overflow:hidden;">
+
       <div class="foh-tonight-card">
         <div style="flex:1">
           <div class="foh-tonight-label">Tonight</div>
@@ -4398,19 +4360,36 @@ async function renderFohHome(){
         </div>
         <div style="text-align:right">
           <div class="foh-tonight-day">${fohDateLabel(today)}${todayEvent?' · '+todayEvent:''}</div>
-          <div style="margin-top:4px"><span style="font-family:'Playfair Display',serif;font-size:24px;color:rgba(255,255,255,.75)" id="foh-tm-count">—</span> <span style="font-size:9px;color:rgba(255,255,255,.4);letter-spacing:.1em;text-transform:uppercase">tmrw</span></div>
+          <div style="margin-top:3px">
+            <span style="font-family:'Playfair Display',serif;font-size:22px;color:rgba(255,255,255,.75)" id="foh-tm-count">—</span>
+            <span style="font-size:9px;color:rgba(255,255,255,.4);letter-spacing:.1em;text-transform:uppercase;margin-left:3px">tmrw</span>
+          </div>
           <div class="foh-tonight-sync" id="foh-tn-sync">Loading…</div>
         </div>
       </div>
-      <div class="foh-opt-bar">
-        <button class="foh-opt-btn${sa?' active':''}" data-s="a" onclick="fohSetBox('a')">A · 3 col</button>
-        <button class="foh-opt-btn${sb?' active':''}" data-s="b" onclick="fohSetBox('b')">B · 2 col</button>
-        <button class="foh-opt-btn${sc?' active':''}" data-s="c" onclick="fohSetBox('c')">C · List</button>
+
+      <div style="flex:1;display:flex;flex-direction:column;padding:10px 12px 12px;gap:8px;background:var(--bg);">
+        <div class="foh-mod-a" onclick="fohTab('schedule')" style="flex:1">
+          <div class="fm-tag">Live</div>
+          <div class="fm-name" style="font-size:16px">Schedule</div>
+          <div class="fm-desc">Today's team, shifts &amp; attendance</div>
+          <div class="fm-arrow" style="font-size:14px;margin-top:6px">›</div>
+        </div>
+        <div class="foh-mod-a" onclick="fohTab('manager')" style="flex:1">
+          <div class="fm-tag">Live</div>
+          <div class="fm-name" style="font-size:16px">Events &amp; Reports</div>
+          <div class="fm-desc">Listening Bar, Jazz Night, planning</div>
+          <div class="fm-arrow" style="font-size:14px;margin-top:6px">›</div>
+        </div>
+        <div class="foh-mod-a dim" style="flex:1">
+          <div class="fm-tag soon">Coming soon</div>
+          <div class="fm-name" style="font-size:16px">Operations</div>
+          <div class="fm-desc">Briefings &amp; standards</div>
+        </div>
       </div>
-      <div style="flex:1;background:var(--bg);display:flex;flex-direction:column;justify-content:center;overflow:hidden;">
-        ${fohModsHTML()}
-      </div>
+
     </div>`;
+
   try{
     const t=localISO(new Date()), td=new Date(); td.setDate(td.getDate()+1); const tm=localISO(td);
     const {data,error}=await sbKitchen.from('covers').select('service_date,night_covers').in('service_date',[t,tm]);
@@ -4422,6 +4401,7 @@ async function renderFohHome(){
     document.getElementById('foh-tn-sync').textContent='Live · SevenRooms';
   }catch(e){const s=document.getElementById('foh-tn-sync');if(s)s.textContent='Could not load';}
 }
+
 
 // ── SCHEDULE TAB ──
 async function renderFohSchedule(){
