@@ -1940,7 +1940,7 @@ const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // Kitchen App Supabase — used only for public covers read
 const KITCHEN_URL = 'https://zrpglswalgjbtghudmhu.supabase.co';
-const KITCHEN_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpycGdsc3dhbGdqYnRnaHVkbWh1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDczMTI1MDIsImV4cCI6MjA2Mjg4ODUwMn0.D-RAl4RRwKpCpFYGPaFxhPsKBGMcS7MJkdQgjFKMlZ0';
+const KITCHEN_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpycGdsc3dhbGdqYnRnaHVkbWh1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA5MTIyMjQsImV4cCI6MjA5NjQ4ODIyNH0.pfABN-so4xINK7nHxXUlVeTO4g0h0l6ILHVwpoKrbds';
 const sbKitchen = supabase.createClient(KITCHEN_URL, KITCHEN_KEY);
 
 const TEAM = ['Francesco','Manuel','Alessandro','Nicole','Danilo','Alper','Katerina','Valentina'];
@@ -4258,7 +4258,7 @@ async function renderFohHome(){
     const tomorrowISO_ = localISO(tomorrowDate);
 
     const { data: coversData, error } = await sbKitchen.from('covers')
-      .select('service_date, booked, night_covers, here, upcoming')
+      .select('service_date, night_covers, day_covers')
       .in('service_date', [todayISO_, tomorrowISO_]);
 
     if(error) throw error;
@@ -4266,12 +4266,12 @@ async function renderFohHome(){
     const todayRow    = (coversData||[]).find(r => String(r.service_date).slice(0,10) === todayISO_);
     const tomorrowRow = (coversData||[]).find(r => String(r.service_date).slice(0,10) === tomorrowISO_);
 
-    // Tonight — prefer night_covers (SevenRooms confirmed), fallback to booked
+    // Tonight — use night_covers (SevenRooms confirmed count)
     const todayCovers = todayRow
-      ? (todayRow.night_covers ?? todayRow.booked ?? '—')
+      ? (todayRow.night_covers ?? '—')
       : '—';
     const tomorrowCovers = tomorrowRow
-      ? (tomorrowRow.night_covers ?? tomorrowRow.booked ?? '—')
+      ? (tomorrowRow.night_covers ?? '—')
       : '—';
 
     const todayEvent    = FOH_EVENTS[today]    || '';
