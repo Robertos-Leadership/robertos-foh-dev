@@ -4296,9 +4296,17 @@ function revMonthData(p){
 }
 function revAreaMTD(p){
   var map=revDailyMap(), dim=revDaysInMonth(p);
-  var o={restNet:0,restCov:0,lounNet:0,lounCov:0,totNet:0,totCov:0};
+  var o={restNet:0,restCov:0,lounNet:0,lounCov:0,totNet:0,totCov:0,rlNet:0,rlCov:0,rdNet:0,rdCov:0,llNet:0,llCov:0,ldNet:0,ldCov:0};
   for(var d=1; d<=dim; d++){ var ds=p+'-'+String(d).padStart(2,'0'); var row=map[ds];
-    if(row&&row.net_actual!=null){ o.restNet+=Number(row.rest_net||0); o.restCov+=Number(row.rest_covers_actual||0); o.lounNet+=Number(row.lounge_net||0); o.lounCov+=Number(row.lounge_covers_actual||0); o.totNet+=Number(row.net_actual||0); o.totCov+=(Number(row.rest_covers_actual||0)+Number(row.lounge_covers_actual||0)); } }
+    if(row&&row.net_actual!=null){
+      o.restNet+=Number(row.rest_net||0); o.restCov+=Number(row.rest_covers_actual||0);
+      o.lounNet+=Number(row.lounge_net||0); o.lounCov+=Number(row.lounge_covers_actual||0);
+      o.totNet+=Number(row.net_actual||0); o.totCov+=(Number(row.rest_covers_actual||0)+Number(row.lounge_covers_actual||0));
+      o.rlNet+=Number(row.rest_lunch_net||0); o.rlCov+=Number(row.rest_lunch_covers||0);
+      o.rdNet+=Number(row.rest_dinner_net||0); o.rdCov+=Number(row.rest_dinner_covers||0);
+      o.llNet+=Number(row.lounge_lunch_net||0); o.llCov+=Number(row.lounge_lunch_covers||0);
+      o.ldNet+=Number(row.lounge_dinner_net||0); o.ldCov+=Number(row.lounge_dinner_covers||0);
+    } }
   return o;
 }
 function revWindowSum(p, W){
@@ -4344,29 +4352,61 @@ function revStep(n){ var R=revInit(); revSetPeriod(revAddMonths(R.period,n)); }
 function revAddMonth(){ var R=revInit(); R.period=revAddMonths(revLatestPeriod(),1); renderMain(); }
 function revSetView(v){ revInit().view=v; renderMain(); }
 
-// ── Edit a day ──
+// ── Edit a day (Restaurant/Lounge x Lunch/Dinner) ──
+function revNum(id){ var el=document.getElementById(id); if(!el) return null; var v=el.value.trim(); if(v==='') return null; v=Number(v.replace(/[^0-9.\-]/g,'')); return isFinite(v)?v:null; }
 function revEditDay(ds){
-  var R=revInit(); var map=revDailyMap(); var row=map[ds]||{};
+  var map=revDailyMap(); var row=map[ds]||{};
   document.getElementById('rev-edit-date').value=ds;
   document.getElementById('rev-edit-title').textContent=new Date(ds+'T12:00:00').toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
   document.getElementById('rev-edit-budget').textContent=revMoney(revBudget(ds));
-  document.getElementById('rev-edit-net').value = row.net_actual!=null?row.net_actual:'';
-  document.getElementById('rev-edit-rc').value = row.rest_covers_actual!=null?row.rest_covers_actual:'';
-  document.getElementById('rev-edit-lc').value = row.lounge_covers_actual!=null?row.lounge_covers_actual:'';
-  document.getElementById('rev-edit-rn').value = row.rest_net!=null?row.rest_net:'';
-  document.getElementById('rev-edit-ln').value = row.lounge_net!=null?row.lounge_net:'';
+  function setv(id,v){ document.getElementById(id).value=(v!=null?v:''); }
+  var hasDaypart=(row.rest_lunch_net!=null||row.rest_dinner_net!=null||row.lounge_lunch_net!=null||row.lounge_dinner_net!=null||row.rest_dinner_covers!=null||row.lounge_dinner_covers!=null);
+  if(hasDaypart){
+    setv('rev-rl-net',row.rest_lunch_net); setv('rev-rl-cov',row.rest_lunch_covers);
+    setv('rev-rd-net',row.rest_dinner_net); setv('rev-rd-cov',row.rest_dinner_covers);
+    setv('rev-ll-net',row.lounge_lunch_net); setv('rev-ll-cov',row.lounge_lunch_covers);
+    setv('rev-ld-net',row.lounge_dinner_net); setv('rev-ld-cov',row.lounge_dinner_covers);
+  } else {
+    // legacy/seeded rows hold only area totals -> show under Dinner (lunch was closed)
+    setv('rev-rl-net',null); setv('rev-rl-cov',null); setv('rev-rd-net',row.rest_net); setv('rev-rd-cov',row.rest_covers_actual);
+    setv('rev-ll-net',null); setv('rev-ll-cov',null); setv('rev-ld-net',row.lounge_net); setv('rev-ld-cov',row.lounge_covers_actual);
+  }
+  revRecalc();
   document.getElementById('rev-edit-modal').style.display='flex';
 }
 function revCloseEdit(e){ if(e&&e.target!==document.getElementById('rev-edit-modal')) return; document.getElementById('rev-edit-modal').style.display='none'; }
-function revNum(id){ var v=document.getElementById(id).value.trim(); if(v==='') return null; v=Number(v.replace(/[^0-9.\-]/g,'')); return isFinite(v)?v:null; }
+function revRecalc(){
+  function avg(net,cov){ return (net!=null&&cov)?revMoney(net/cov).replace('AED ',''):'—'; }
+  var rl=revNum('rev-rl-net'),rlc=revNum('rev-rl-cov'),rd=revNum('rev-rd-net'),rdc=revNum('rev-rd-cov');
+  var ll=revNum('rev-ll-net'),llc=revNum('rev-ll-cov'),ld=revNum('rev-ld-net'),ldc=revNum('rev-ld-cov');
+  document.getElementById('rev-rl-avg').textContent=avg(rl,rlc);
+  document.getElementById('rev-rd-avg').textContent=avg(rd,rdc);
+  document.getElementById('rev-ll-avg').textContent=avg(ll,llc);
+  document.getElementById('rev-ld-avg').textContent=avg(ld,ldc);
+  var restNet=(rl||0)+(rd||0), lounNet=(ll||0)+(ld||0), tot=restNet+lounNet;
+  var restCov=(rlc||0)+(rdc||0), lounCov=(llc||0)+(ldc||0), totCov=restCov+lounCov;
+  var box=document.getElementById('rev-edit-totals');
+  if(box) box.innerHTML='<div><span>Restaurant</span><b>'+revMoney(restNet)+' · '+restCov+' cov · '+(tot?Math.round(restNet/tot*100):0)+'%</b></div>'
+    +'<div><span>Scala Lounge &amp; Bar</span><b>'+revMoney(lounNet)+' · '+lounCov+' cov · '+(tot?Math.round(lounNet/tot*100):0)+'%</b></div>'
+    +'<div class="rev-edit-tot-total"><span>Total</span><b>'+revMoney(tot)+' · '+totCov+' cov · avg '+(totCov?revMoney(tot/totCov).replace('AED ',''):'—')+'</b></div>';
+}
 async function revSaveDay(){
   var ds=document.getElementById('rev-edit-date').value;
-  var payload={ service_date:ds, net_actual:revNum('rev-edit-net'), rest_covers_actual:revNum('rev-edit-rc'), lounge_covers_actual:revNum('rev-edit-lc'), rest_net:revNum('rev-edit-rn'), lounge_net:revNum('rev-edit-ln'), updated_at:new Date().toISOString() };
+  var rl=revNum('rev-rl-net'),rlc=revNum('rev-rl-cov'),rd=revNum('rev-rd-net'),rdc=revNum('rev-rd-cov');
+  var ll=revNum('rev-ll-net'),llc=revNum('rev-ll-cov'),ld=revNum('rev-ld-net'),ldc=revNum('rev-ld-cov');
+  function sum(a,b){ return (a==null&&b==null)?null:((a||0)+(b||0)); }
+  var restNet=sum(rl,rd), restCov=sum(rlc,rdc), lounNet=sum(ll,ld), lounCov=sum(llc,ldc);
+  var net=(restNet==null&&lounNet==null)?null:((restNet||0)+(lounNet||0));
+  var payload={ service_date:ds,
+    rest_lunch_net:rl, rest_lunch_covers:rlc, rest_dinner_net:rd, rest_dinner_covers:rdc,
+    lounge_lunch_net:ll, lounge_lunch_covers:llc, lounge_dinner_net:ld, lounge_dinner_covers:ldc,
+    rest_net:restNet, rest_covers_actual:restCov, lounge_net:lounNet, lounge_covers_actual:lounCov,
+    net_actual:net, updated_at:new Date().toISOString() };
   var R=revInit(); var i=R.daily.findIndex(function(x){ return String(x.service_date).slice(0,10)===ds; });
   if(i>=0) R.daily[i]=Object.assign({},R.daily[i],payload); else R.daily.push(payload);
   document.getElementById('rev-edit-modal').style.display='none'; renderMain();
   var res=await sb.from('rev_daily').upsert(payload,{onConflict:'service_date'});
-  if(res.error){ console.error('rev save',res.error); alert('Could not save: '+res.error.message); }
+  if(res.error){ console.error('rev save',res.error); alert('Could not save: '+res.error.message+(res.error.code==='PGRST204'?'\n\nRun revenue-daypart-columns.sql in Supabase first.':'')); }
 }
 
 // ── AI report agent (mirrors Kitchen survey-assistant pattern) ──
@@ -4418,15 +4458,30 @@ function revRenderMonth(){
   h.push('<div class="rev-card"><div class="rev-k">Full-month forecast</div><div class="rev-v">'+revMoney(rv.forecast)+'</div><div class="rev-sub '+revPctClass(rv.vsBudgetPct)+'">'+revPct(rv.vsBudgetPct)+' vs budget</div></div>');
   h.push('<div class="rev-card"><div class="rev-k">Avg spend / cover</div><div class="rev-v">'+revMoney(rv.spendCover.cur)+'</div><div class="rev-sub '+revPctClass(rv.spendCover.chg)+'">'+revPct(rv.spendCover.chg)+' vs '+revMonthLabel(rv.prevPeriod).split(' ')[0]+'</div></div>');
   h.push('</div>');
-  // by area (MTD) — Restaurant vs Scala
+  // by area (MTD) — Restaurant vs Scala, with % share
   var area=revAreaMTD(p);
-  function arow(name,net,cov){ return '<tr><td class="rev-day">'+name+'</td><td>'+revMoney(net)+'</td><td>'+cov+'</td><td>'+(cov?revMoney(net/cov).replace('AED ',''):'—')+'</td></tr>'; }
-  h.push('<div class="rev-section-h">By area — '+revMonthLabel(p)+' (MTD)</div>');
-  h.push('<div class="rev-grid-wrap"><table class="rev-grid"><thead><tr><th>Area</th><th>Revenue</th><th>Covers</th><th>Avg / cover</th></tr></thead><tbody>');
+  var rPct=area.totNet?Math.round(area.restNet/area.totNet*100):0, lPct=area.totNet?(100-rPct):0;
+  function share(net){ return area.totNet?Math.round(net/area.totNet*100)+'%':'—'; }
+  function arow(name,net,cov){ return '<tr><td class="rev-day">'+name+'</td><td>'+revMoney(net)+'</td><td>'+share(net)+'</td><td>'+cov+'</td><td>'+(cov?revMoney(net/cov).replace('AED ',''):'—')+'</td></tr>'; }
+  h.push('<div class="rev-section-h">By area — '+revMonthLabel(p)+' (MTD) · Lounge vs Restaurant</div>');
+  if(area.totNet) h.push('<div class="rev-split"><div class="rev-split-r" style="width:'+rPct+'%">Restaurant '+rPct+'%</div><div class="rev-split-l" style="width:'+lPct+'%">Lounge '+lPct+'%</div></div>');
+  h.push('<div class="rev-grid-wrap"><table class="rev-grid"><thead><tr><th>Area</th><th>Revenue</th><th>Share</th><th>Covers</th><th>Avg / cover</th></tr></thead><tbody>');
   h.push(arow('Restaurant',area.restNet,area.restCov));
   h.push(arow('Scala Lounge &amp; Bar',area.lounNet,area.lounCov));
-  h.push('<tr class="rev-total"><td>Total venue</td><td>'+revMoney(area.totNet)+'</td><td>'+area.totCov+'</td><td>'+(area.totCov?revMoney(area.totNet/area.totCov).replace('AED ',''):'—')+'</td></tr>');
+  h.push('<tr class="rev-total"><td>Total venue</td><td>'+revMoney(area.totNet)+'</td><td>100%</td><td>'+area.totCov+'</td><td>'+(area.totCov?revMoney(area.totNet/area.totCov).replace('AED ',''):'—')+'</td></tr>');
   h.push('</tbody></table></div>');
+  // by area & daypart (only once daypart data is entered)
+  var anyDP=(area.rlNet+area.rdNet+area.llNet+area.ldNet+area.rlCov+area.rdCov+area.llCov+area.ldCov)>0;
+  if(anyDP){
+    function drow(name,net,cov){ return '<tr><td class="rev-day">'+name+'</td><td>'+revMoney(net)+'</td><td>'+cov+'</td><td>'+(cov?revMoney(net/cov).replace('AED ',''):'—')+'</td></tr>'; }
+    h.push('<div class="rev-section-h">By area &amp; daypart (MTD)</div>');
+    h.push('<div class="rev-grid-wrap"><table class="rev-grid"><thead><tr><th>Area · daypart</th><th>Revenue</th><th>Covers</th><th>Avg / cover</th></tr></thead><tbody>');
+    h.push(drow('Restaurant · Lunch',area.rlNet,area.rlCov));
+    h.push(drow('Restaurant · Dinner',area.rdNet,area.rdCov));
+    h.push(drow('Scala · Lunch',area.llNet,area.llCov));
+    h.push(drow('Scala · Dinner',area.ldNet,area.ldCov));
+    h.push('</tbody></table></div>');
+  }
   // month grid
   h.push('<div class="rev-section-h">Daily — '+revMonthLabel(p)+'</div>');
   h.push('<div class="rev-grid-wrap rev-grid-scroll"><table class="rev-grid"><thead><tr><th>Day</th><th>Net (actual)</th><th>Budget</th><th>vs Budget</th><th>Covers</th><th>Avg/cover</th></tr></thead><tbody>');
@@ -5761,20 +5816,32 @@ function fohSignOut(){
 
 <!-- Revenue: day edit modal -->
 <div id="rev-edit-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9000;align-items:center;justify-content:center" onclick="revCloseEdit(event)">
-  <div style="background:var(--cream);border-radius:8px;padding:24px;width:360px;max-width:94vw;box-shadow:0 8px 32px rgba(0,0,0,.25)">
+  <div style="background:var(--cream);border-radius:8px;padding:22px;width:560px;max-width:96vw;box-shadow:0 8px 32px rgba(0,0,0,.25)">
     <div id="rev-edit-title" style="font-family:var(--font-serif);font-size:16px;color:var(--vino);font-weight:700;margin-bottom:4px"></div>
-    <div style="font-size:12px;color:var(--text-light);margin-bottom:16px">Daily budget: <span id="rev-edit-budget"></span></div>
+    <div style="font-size:12px;color:var(--text-light);margin-bottom:14px">Daily budget: <span id="rev-edit-budget"></span> · enter revenue &amp; covers per area / daypart</div>
     <input type="hidden" id="rev-edit-date">
-    <div style="margin-bottom:12px"><label class="rev-lbl">Net revenue (AED, from Simphony DSR)</label><input id="rev-edit-net" type="number" inputmode="decimal" class="rev-inp" placeholder="0"></div>
-    <div style="display:flex;gap:10px;margin-bottom:12px">
-      <div style="flex:1"><label class="rev-lbl">Restaurant covers</label><input id="rev-edit-rc" type="number" inputmode="numeric" class="rev-inp" placeholder="0"></div>
-      <div style="flex:1"><label class="rev-lbl">Lounge covers</label><input id="rev-edit-lc" type="number" inputmode="numeric" class="rev-inp" placeholder="0"></div>
-    </div>
-    <div style="display:flex;gap:10px;margin-bottom:18px">
-      <div style="flex:1"><label class="rev-lbl">Restaurant net (opt.)</label><input id="rev-edit-rn" type="number" inputmode="decimal" class="rev-inp" placeholder=""></div>
-      <div style="flex:1"><label class="rev-lbl">Lounge net (opt.)</label><input id="rev-edit-ln" type="number" inputmode="decimal" class="rev-inp" placeholder=""></div>
-    </div>
-    <div style="display:flex;gap:10px">
+    <div class="rev-eg-scroll"><table class="rev-edit-grid">
+      <thead><tr><th></th><th colspan="3">Lunch</th><th colspan="3">Dinner</th></tr>
+        <tr><th></th><th>Revenue</th><th>Covers</th><th>Avg</th><th>Revenue</th><th>Covers</th><th>Avg</th></tr></thead>
+      <tbody>
+        <tr><td class="rev-eg-area">Restaurant</td>
+          <td><input id="rev-rl-net" class="rev-eg-inp" type="number" inputmode="decimal" oninput="revRecalc()"></td>
+          <td><input id="rev-rl-cov" class="rev-eg-inp" type="number" inputmode="numeric" oninput="revRecalc()"></td>
+          <td class="rev-eg-avg" id="rev-rl-avg">—</td>
+          <td><input id="rev-rd-net" class="rev-eg-inp" type="number" inputmode="decimal" oninput="revRecalc()"></td>
+          <td><input id="rev-rd-cov" class="rev-eg-inp" type="number" inputmode="numeric" oninput="revRecalc()"></td>
+          <td class="rev-eg-avg" id="rev-rd-avg">—</td></tr>
+        <tr><td class="rev-eg-area">Scala Lounge &amp; Bar</td>
+          <td><input id="rev-ll-net" class="rev-eg-inp" type="number" inputmode="decimal" oninput="revRecalc()"></td>
+          <td><input id="rev-ll-cov" class="rev-eg-inp" type="number" inputmode="numeric" oninput="revRecalc()"></td>
+          <td class="rev-eg-avg" id="rev-ll-avg">—</td>
+          <td><input id="rev-ld-net" class="rev-eg-inp" type="number" inputmode="decimal" oninput="revRecalc()"></td>
+          <td><input id="rev-ld-cov" class="rev-eg-inp" type="number" inputmode="numeric" oninput="revRecalc()"></td>
+          <td class="rev-eg-avg" id="rev-ld-avg">—</td></tr>
+      </tbody>
+    </table></div>
+    <div id="rev-edit-totals" class="rev-edit-totals"></div>
+    <div style="display:flex;gap:10px;margin-top:16px">
       <button onclick="revCloseEdit()" style="flex:1;padding:10px;background:transparent;border:1px solid var(--sabbia-dark);border-radius:4px;cursor:pointer;font-family:var(--font-sans);color:var(--ink)">Cancel</button>
       <button onclick="revSaveDay()" style="flex:1;padding:10px;background:var(--vino);border:none;border-radius:4px;cursor:pointer;font-family:var(--font-sans);color:var(--cream);font-weight:700">Save</button>
     </div>
@@ -5830,6 +5897,21 @@ function fohSignOut(){
   .rev-setup .rev-h{font-family:var(--font-serif);font-size:17px;color:var(--vino);margin-bottom:10px}
   .rev-lbl{display:block;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--vino-light,#8a4a52);font-family:var(--font-sans);margin-bottom:4px}
   .rev-inp{width:100%;box-sizing:border-box;padding:9px;border:1px solid var(--sabbia-dark);border-radius:4px;font-family:var(--font-sans);font-size:15px;background:var(--surface);color:var(--ink)}
+  .rev-eg-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;margin-bottom:10px}
+  .rev-edit-grid{border-collapse:collapse;font-family:var(--font-sans);font-size:12px}
+  .rev-edit-grid th{background:var(--vino);color:var(--cream);padding:5px 4px;font-size:10px;letter-spacing:.03em;text-transform:uppercase;text-align:center}
+  .rev-edit-grid td{padding:4px;text-align:center;border-bottom:1px solid var(--border)}
+  .rev-eg-area{text-align:left!important;font-weight:600;color:var(--ink);white-space:nowrap;padding-right:8px!important}
+  .rev-eg-inp{width:72px;padding:6px 5px;border:1px solid var(--sabbia-dark);border-radius:4px;font-family:var(--font-sans);font-size:13px;background:var(--surface);color:var(--ink);text-align:right}
+  .rev-eg-avg{color:var(--text-light);font-size:12px;min-width:46px}
+  .rev-edit-totals{font-size:12px;color:var(--ink)}
+  .rev-edit-totals>div{display:flex;justify-content:space-between;gap:10px;padding:5px 0;border-bottom:1px solid var(--border)}
+  .rev-edit-totals>div span{color:var(--text-secondary,#8B7355)}
+  .rev-edit-tot-total{border-bottom:none!important;color:var(--vino)}
+  .rev-edit-tot-total b{color:var(--vino)}
+  .rev-split{display:flex;height:26px;border-radius:5px;overflow:hidden;margin-bottom:12px;font-size:11px;font-weight:600}
+  .rev-split-r{background:var(--vino);color:#fff;display:flex;align-items:center;justify-content:center;min-width:0;white-space:nowrap;overflow:hidden}
+  .rev-split-l{background:var(--gold,#C9A84C);color:#5a4a14;display:flex;align-items:center;justify-content:center;min-width:0;white-space:nowrap;overflow:hidden}
 </style>
 
 </body>

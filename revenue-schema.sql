@@ -16,12 +16,17 @@ create table if not exists rev_rates (
 -- ── Daily actuals (one row per date — months & years live here, no per-month tables) ──
 create table if not exists rev_daily (
   service_date         date primary key,
-  net_actual           numeric,            -- AED, from Simphony DSR (manual)
-  rest_covers_actual   integer,
-  lounge_covers_actual integer,
-  rest_net             numeric,            -- venue net (restaurant)
-  lounge_net           numeric,            -- venue net (lounge)
-  forecast             numeric,            -- optional override; default = budget
+  net_actual           numeric,            -- AED total (rolled up from areas)
+  rest_covers_actual   integer,            -- restaurant covers (lunch+dinner)
+  lounge_covers_actual integer,            -- lounge covers (lunch+dinner)
+  rest_net             numeric,            -- restaurant net (lunch+dinner)
+  lounge_net           numeric,            -- lounge net (lunch+dinner)
+  -- daypart x area detail (entered in the closing report)
+  rest_lunch_net       numeric, rest_lunch_covers   integer,
+  rest_dinner_net      numeric, rest_dinner_covers  integer,
+  lounge_lunch_net     numeric, lounge_lunch_covers integer,
+  lounge_dinner_net    numeric, lounge_dinner_covers integer,
+  forecast             numeric,
   notes                text,
   created_at           timestamptz default now(),
   updated_at           timestamptz default now()
