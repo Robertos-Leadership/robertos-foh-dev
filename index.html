@@ -21,6 +21,7 @@
     --vino: #6B1F2A;
     --vino-dark: #4A1520;
     --vino-light: #8B3040;
+    --vino-mid: #5e0a10;
     --vino-dim: rgba(107,31,42,0.5);
     --gold: #C9A84C;
     --gold-light: #E4C97A;
@@ -35,6 +36,15 @@
     --border: rgba(107,31,42,0.12);
     --border-strong: rgba(107,31,42,0.3);
     --shadow: 0 2px 12px rgba(44,24,16,0.08);
+    /* Kitchen App CSS var aliases — used by schedule module */
+    --sabbia: #e8ddd0;
+    --sabbia-light: #f0ebe2;
+    --sabbia-dark: #d4c5b4;
+    --oliva: #4b5128;
+    --ink: #2C1810;
+    --cream: #f5ede0;
+    --font-serif: 'Playfair Display', Georgia, serif;
+    --font-sans: 'Inter', sans-serif;
   }
 
   * { margin:0; padding:0; box-sizing:border-box; }
@@ -4942,21 +4952,24 @@ function fohSubscribeSchedRealtime(){
 
 // ── Open schedule page ──
 async function openFohSchedule(){
-  var el = document.getElementById('foh-tab-content');
-  el.innerHTML = '<div style="text-align:center;padding:40px 0;color:var(--text-light);font-size:13px;font-style:italic">Loading schedule…</div>';
+  // Take over the full screen — hide FOH public, show schedule as its own page
+  document.getElementById('foh-public').style.display = 'none';
+  document.getElementById('foh-nav').style.display = 'none';
 
-  if(!fohSchedWeekStart) fohSchedWeekStart = getMonday(new Date());
-  await fohLoadSchedData();
-  await fohLoadAttendance();
-  fohSubscribeSchedRealtime();
-
-  // Render schedule full-width — break out of the padded tab container
-  document.getElementById('foh-tab-content').style.padding = '0';
-  document.getElementById('foh-tab-content').style.maxWidth = 'none';
-  document.getElementById('foh-public').style.paddingBottom = '72px';
-  el.innerHTML = `
-    <div id="foh-sched-module" style="margin:0;padding:0">
-      <div class="sch-toolbar" style="position:sticky;top:52px;z-index:40">
+  // Show or create the schedule container
+  var sched = document.getElementById('foh-sched-fullscreen');
+  if(!sched){
+    sched = document.createElement('div');
+    sched.id = 'foh-sched-fullscreen';
+    sched.style.cssText = 'display:flex;flex-direction:column;min-height:100vh;background:var(--sabbia)';
+    sched.innerHTML = `
+      <div class="app-header" style="background:var(--sabbia);padding:10px 18px 0;border-bottom:2px solid var(--vino);position:sticky;top:0;z-index:50">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding-bottom:10px">
+          <div style="font-family:var(--font-serif);font-size:15px;color:var(--vino);cursor:pointer" onclick="closeFohSchedule()">&#8592; Roberto's FOH</div>
+          <div style="font-size:11px;color:var(--vino-light);letter-spacing:1px">Schedule</div>
+        </div>
+      </div>
+      <div class="sch-toolbar">
         <div class="sch-nav">
           <button class="sch-nav-btn" onclick="fohSchedWeekOffset(-1)">&#8592;</button>
           <span id="foh-sch-week-label" class="sch-week-label"></span>
@@ -4966,7 +4979,7 @@ async function openFohSchedule(){
         <div class="sch-view-tabs">
           <button class="foh-sch-vtab sch-vtab active" id="foh-svt-week" onclick="fohSchedSetView('week')">Week</button>
           <button class="foh-sch-vtab sch-vtab" id="foh-svt-day" onclick="fohSchedSetView('day')">Today</button>
-          <button class="foh-sch-vtab sch-vtab" id="foh-svt-print" onclick="fohSchedPrint()">&#128438; Print</button>
+          <button class="foh-sch-vtab sch-vtab" onclick="fohSchedPrint()">&#128438; Print</button>
         </div>
         <div class="sch-toolbar-actions">
           <button class="sch-copy-btn" id="foh-sch-sync-btn" onclick="fohSchedForceSync()">Live</button>
@@ -4975,24 +4988,44 @@ async function openFohSchedule(){
           <button class="sch-lock-btn" id="foh-sch-lock-btn" onclick="fohSchedToggleLock()">&#128274; Locked</button>
         </div>
       </div>
-      <div id="foh-sch-week-view" style="overflow:auto;padding:0 0 80px">
-        <div id="foh-sch-grid-wrap" style="overflow-x:auto;-webkit-overflow-scrolling:touch;padding:0"></div>
+      <div id="foh-sch-week-view" style="flex:1;overflow:auto">
+        <div id="foh-sch-grid-wrap" style="overflow-x:auto;-webkit-overflow-scrolling:touch"></div>
       </div>
-      <div id="foh-sch-day-view" style="display:none;overflow:auto;padding:16px 16px 80px">
+      <div id="foh-sch-day-view" style="display:none;flex:1;overflow:auto;padding:16px">
         <div id="foh-sch-day-content"></div>
       </div>
-    </div>
-  `;
+      <div class="footer-bar" style="background:var(--cream);border-top:1px solid var(--sabbia-dark);padding:10px 18px;display:flex;align-items:center;justify-content:space-between">
+        <span style="font-size:11px;color:var(--vino-light);font-style:italic;font-family:var(--font-serif)">FOH Schedule</span>
+        <button onclick="closeFohSchedule()" style="background:transparent;border:none;color:var(--vino);font-size:12px;cursor:pointer;font-family:var(--font-sans);letter-spacing:1px;text-transform:uppercase">&#8592; Back to FOH</button>
+      </div>
+    `;
+    document.body.appendChild(sched);
+  } else {
+    sched.style.display = 'flex';
+  }
 
+  if(!fohSchedWeekStart) fohSchedWeekStart = getMonday(new Date());
+  await fohLoadSchedData();
+  await fohLoadAttendance();
+  fohSubscribeSchedRealtime();
   fohSchedUpdateLockBtn();
   fohRenderSchedView();
 
-  // Auto-refresh attendance every 5 min
   if(!window.fohAttTimer){
     window.fohAttTimer = setInterval(function(){
       fohLoadAttendance().then(function(){ fohRenderSchedView(); });
     }, 5*60*1000);
   }
+}
+
+function closeFohSchedule(){
+  var sched = document.getElementById('foh-sched-fullscreen');
+  if(sched) sched.style.display = 'none';
+  document.getElementById('foh-public').style.display = 'flex';
+  document.getElementById('foh-nav').style.display = 'flex';
+  // Re-activate schedule nav button
+  document.querySelectorAll('.foh-nav-btn').forEach(function(b){ b.classList.remove('active'); });
+  document.getElementById('fnav-schedule').classList.add('active');
 }
 
 // ── TAB SWITCHING ──
