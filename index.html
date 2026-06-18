@@ -1750,6 +1750,11 @@ const SUPABASE_URL = 'https://paoaivwtkzujmrgrfjuq.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBhb2Fpdnd0a3p1am1yZ3JmanVxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEwNzAxMzAsImV4cCI6MjA5NjY0NjEzMH0.VynG9PBeIaqRG2lkMEuzskkcB11EhR-UfO9eGYsaUxk';
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
+// Kitchen App Supabase — used only for public covers read
+const KITCHEN_URL = 'https://zrpglswalgjbtghudmhu.supabase.co';
+const KITCHEN_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpycGdsc3dhbGdqYnRnaHVkbWh1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDczMTI1MDIsImV4cCI6MjA2Mjg4ODUwMn0.D-RAl4RRwKpCpFYGPaFxhPsKBGMcS7MJkdQgjFKMlZ0';
+const sbKitchen = supabase.createClient(KITCHEN_URL, KITCHEN_KEY);
+
 const TEAM = ['Francesco','Manuel','Alessandro','Nicole','Danilo','Alper','Katerina','Valentina'];
 const CHAMPIONS = TEAM; // all team members can be champions
 const PRIORITIES = {
@@ -3982,7 +3987,7 @@ async function renderFohHome(){
     const tomorrowDate = new Date(); tomorrowDate.setDate(tomorrowDate.getDate()+1);
     const tomorrowISO_ = localISO(tomorrowDate);
 
-    const { data: coversData } = await sb.from('covers')
+    const { data: coversData } = await sbKitchen.from('covers')
       .select('date, total_booked, total_arrived')
       .in('date', [todayISO_, tomorrowISO_]);
 
