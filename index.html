@@ -4369,20 +4369,20 @@ async function renderFohHome(){
         </div>
       </div>
 
-      <div class="foh-mods-a">
-        <div class="foh-mod-a" onclick="fohTab('schedule')">
+      <div class="foh-mods-a" style="display:grid!important;grid-template-columns:repeat(3,1fr);gap:8px;padding:8px 12px 10px;">
+        <div class="foh-mod-a" style="min-height:80px" onclick="fohTab('schedule')">
           <div class="fm-tag">Live</div>
           <div class="fm-name">Schedule</div>
           <div class="fm-desc">Today's team, shifts &amp; attendance</div>
           <div class="fm-arrow">›</div>
         </div>
-        <div class="foh-mod-a" onclick="fohTab('manager')">
+        <div class="foh-mod-a" style="min-height:80px" onclick="fohTab('manager')">
           <div class="fm-tag">Live</div>
           <div class="fm-name">Events &amp; Reports</div>
           <div class="fm-desc">Listening Bar, Jazz Night, planning</div>
           <div class="fm-arrow">›</div>
         </div>
-        <div class="foh-mod-a dim">
+        <div class="foh-mod-a dim" style="min-height:80px">
           <div class="fm-tag soon">Coming soon</div>
           <div class="fm-name">Operations</div>
           <div class="fm-desc">Briefings &amp; standards</div>
