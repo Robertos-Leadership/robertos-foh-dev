@@ -410,124 +410,64 @@
     padding: 3px 8px;
   }
 
-  /* -- SPLASH LANDING -- */
-  #foh-splash {
-    position: fixed;
-    inset: 0;
-    z-index: 9999;
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    transition: opacity 0.5s ease;
-  }
-  /* Left panel — cream brand panel */
-  .splash-left {
+  /* -- FOH HERO HEADER -- */
+  .foh-hero {
+    position: relative;
+    height: clamp(220px, 42vw, 380px);
     display: flex;
     flex-direction: column;
-    align-items: flex-start;
-    justify-content: center;
-    padding: clamp(36px, 8vw, 96px) clamp(32px, 6vw, 80px);
-    background: #F8F4EC;
+    justify-content: flex-end;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+  .foh-hero-bg {
+    position: absolute;
+    inset: 0;
+    background:
+      url('robertos-interior.jpg') center 30%/cover;
+  }
+  .foh-hero-overlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      180deg,
+      rgba(44,24,16,0.08) 0%,
+      rgba(44,24,16,0.18) 50%,
+      rgba(44,24,16,0.72) 100%
+    );
+  }
+  .foh-hero-content {
     position: relative;
     z-index: 2;
+    padding: 0 20px 22px;
+    max-width: 600px;
+    margin: 0 auto;
+    width: 100%;
   }
-  .splash-left::after {
-    content: '';
-    position: absolute;
-    top: 0; right: -1px; bottom: 0;
-    width: 1px;
-    background: linear-gradient(180deg, transparent, var(--gold-dim), transparent);
-  }
-  /* Right panel — full photo */
-  .splash-right {
-    background:
-      linear-gradient(180deg, rgba(44,24,16,0.12) 0%, rgba(44,24,16,0.30) 100%),
-      url('https://cdn.prod.website-files.com/68b1adb67aae8a1c4f33bfa5/6978863119fac3dc920f9f63_Home%20Gallery%20Image%20-%20Dubai%20-%20Scala.jpg') center/cover;
-  }
-  #foh-splash.hiding {
-    opacity: 0;
-    pointer-events: none;
-  }
-  .splash-logo {
-    width: min(240px, 60vw);
+  .foh-hero-logo {
+    width: 130px;
     height: auto;
-    margin-bottom: 44px;
-  }
-  .splash-rule {
-    width: 48px;
-    height: 1px;
-    background: var(--gold);
-    margin: 0 0 28px;
-  }
-  .splash-eyebrow {
-    font-size: 9px;
-    font-weight: 600;
-    letter-spacing: 0.38em;
-    text-transform: uppercase;
-    color: var(--gold-dim);
-    margin-bottom: 14px;
-  }
-  .splash-title {
-    font-family: 'Playfair Display', serif;
-    font-size: clamp(36px, 4.5vw, 68px);
-    font-weight: 400;
-    font-style: italic;
-    color: var(--vino-dark);
-    letter-spacing: -0.01em;
-    line-height: 1;
+    display: block;
     margin-bottom: 10px;
+    filter: brightness(0) invert(1);
+    opacity: 0.95;
   }
-  .splash-sub {
-    font-size: 10px;
-    letter-spacing: 0.28em;
-    text-transform: uppercase;
-    color: var(--text-light);
-    margin-bottom: 48px;
-  }
-  .splash-enter {
-    background: var(--vino);
-    border: none;
-    color: #fff;
-    font-family: 'Inter', sans-serif;
-    font-size: 10px;
-    font-weight: 600;
-    letter-spacing: 0.32em;
-    text-transform: uppercase;
-    padding: 14px 40px;
-    cursor: pointer;
-    transition: background 0.2s;
-  }
-  .splash-enter:hover { background: var(--vino-dark); }
-  .splash-date {
-    position: absolute;
-    bottom: 28px;
-    left: 0;
-    right: 0;
-    padding: 0 clamp(32px, 6vw, 80px);
-    font-size: 10px;
-    letter-spacing: 0.18em;
-    text-transform: uppercase;
-    color: var(--text-light);
-    pointer-events: none;
-  }
-  .splash-difc {
-    position: absolute;
-    top: 28px;
-    right: 28px;
+  .foh-hero-sub {
     font-size: 9px;
-    letter-spacing: 0.3em;
+    letter-spacing: 0.34em;
     text-transform: uppercase;
-    color: rgba(44,24,16,0.28);
-    pointer-events: none;
+    color: rgba(255,255,255,0.65);
   }
-  /* Mobile: stack vertically, photo on top */
-  @media (max-width: 640px) {
-    #foh-splash { grid-template-columns: 1fr; grid-template-rows: 38vh 1fr; }
-    .splash-right { grid-row: 1; }
-    .splash-left { grid-row: 2; align-items: center; text-align: center; padding: 36px 28px 48px; }
-    .splash-left::after { display: none; }
-    .splash-logo { margin-bottom: 24px; }
-    .splash-rule { margin: 0 auto 20px; }
-    .splash-date { text-align: center; padding: 0 20px; }
+  .foh-hero-date {
+    position: absolute;
+    top: 16px;
+    right: 20px;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    color: rgba(255,255,255,0.55);
+    text-align: right;
+    z-index: 2;
+    line-height: 1.5;
   }
 
   /* -- APP SHELL -- */
@@ -1727,6 +1667,49 @@
   }
   .foh-quick-tile-sub { font-size:10px; color:rgba(64,2,7,0.45); margin-top:3px; font-style:italic; }
 
+  /* ── FOH MODULE CARDS ── */
+  .foh-module-grid { display:flex; flex-direction:column; gap:10px; }
+  .foh-module-card {
+    background: #fff;
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--vino);
+    padding: 18px 18px 16px;
+    cursor: pointer;
+    position: relative;
+    transition: border-color 0.15s, box-shadow 0.15s;
+    box-shadow: 0 1px 6px rgba(44,24,16,0.06);
+  }
+  .foh-module-card:active { background: var(--surface2); }
+  .foh-module-card-top { margin-bottom: 6px; }
+  .foh-module-tag {
+    display: inline-block;
+    font-size: 9px;
+    letter-spacing: 0.26em;
+    text-transform: uppercase;
+    color: var(--vino);
+    font-weight: 600;
+  }
+  .foh-module-name {
+    font-family: 'Playfair Display', serif;
+    font-size: 20px;
+    color: var(--vino-dark);
+    margin-bottom: 5px;
+  }
+  .foh-module-desc {
+    font-size: 12px;
+    color: var(--text-light);
+    line-height: 1.55;
+  }
+  .foh-module-arrow {
+    position: absolute;
+    right: 18px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--vino);
+    font-size: 18px;
+    opacity: 0.5;
+  }
+
   .foh-covers-loading { font-size:13px; color:rgba(255,255,255,0.4); font-style:italic; }
 
   /* ── FOH SCHEDULE ── */
@@ -1951,35 +1934,21 @@
 </div>
 
 <!-- FOH PUBLIC HOME -->
-<!-- SPLASH LANDING — every employee lands here first -->
-<div id="foh-splash">
-  <div class="splash-left">
-    <img class="splash-logo" src="https://cdn.prod.website-files.com/68b1adb67aae8a1c4f33bfa5/68d1e4ffcb7414691a2bf1a6_robertos_logo_burgundy_apostrophe_color.svg" alt="Roberto's">
-    <div class="splash-rule"></div>
-    <div class="splash-eyebrow">Roberto's DIFC</div>
-    <div class="splash-title">Front of House</div>
-    <div class="splash-sub">Team Portal</div>
-    <button class="splash-enter" onclick="splashEnter()">Enter</button>
-    <div class="splash-date" id="splash-date-label"></div>
-  </div>
-  <div class="splash-right"></div>
-</div>
-
 <div id="foh-public" style="display:none; flex-direction:column; min-height:100vh; background:var(--bg); padding-bottom:72px;">
 
-  <!-- header -->
-  <div style="background:var(--vino); padding:20px 20px 18px; position:sticky; top:0; z-index:50; box-shadow:0 2px 8px rgba(44,24,16,0.2);">
-    <div style="display:flex; align-items:center; justify-content:space-between; max-width:600px; margin:0 auto;">
-      <div>
-        <div style="font-family:'Playfair Display',serif; font-size:18px; color:#fff; letter-spacing:0.05em;">Roberto's</div>
-        <div style="font-size:9px; letter-spacing:0.3em; text-transform:uppercase; color:rgba(255,255,255,0.55); margin-top:2px;">Front of House</div>
-      </div>
-      <div id="foh-date-display" style="font-size:11px; color:rgba(255,255,255,0.7); letter-spacing:0.05em; text-align:right;"></div>
+  <!-- hero photo header -->
+  <div class="foh-hero">
+    <div class="foh-hero-bg"></div>
+    <div class="foh-hero-overlay"></div>
+    <div class="foh-hero-date" id="foh-date-display"></div>
+    <div class="foh-hero-content">
+      <img class="foh-hero-logo" src="https://cdn.prod.website-files.com/68b1adb67aae8a1c4f33bfa5/68d1e4ffcb7414691a2bf1a6_robertos_logo_burgundy_apostrophe_color.svg" alt="Roberto's">
+      <div class="foh-hero-sub">Front of House</div>
     </div>
   </div>
 
   <!-- main scroll area -->
-  <div id="foh-tab-content" style="flex:1; max-width:600px; margin:0 auto; width:100%; padding:20px 16px 0;"></div>
+  <div id="foh-tab-content" style="flex:1; max-width:600px; margin:0 auto; width:100%; padding:16px 16px 0;"></div>
 
 </div>
 
@@ -4340,52 +4309,61 @@ async function renderFohHome(){
   const el = document.getElementById('foh-tab-content');
   const today = fohTodayShort();
   const tomorrow = fohTomorrowShort();
+  const todayEvent = FOH_EVENTS[today] || '';
+  const tomorrowEvent = FOH_EVENTS[tomorrow] || '';
 
-  // Update date in header
+  // Update date in hero header
   const now = new Date();
-  document.getElementById('foh-date-display').textContent =
-    now.toLocaleDateString('en-GB',{weekday:'short', day:'numeric', month:'short', year:'numeric'});
+  const dateEl = document.getElementById('foh-date-display');
+  if(dateEl){
+    dateEl.innerHTML =
+      now.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'}).replace(',','<br>');
+  }
 
-  // Skeleton
   el.style.padding = '16px';
   el.style.maxWidth = '600px';
   el.innerHTML = `
     <div class="foh-home-wrap">
+
+      <!-- Tonight covers card -->
       <div class="foh-tonight-card">
-        <div class="foh-tonight-label">Tonight's Reservations</div>
-        <div class="foh-tonight-day" id="foh-tn-day">${fohDateLabel(today)}</div>
-        <div class="foh-tonight-count" id="foh-tn-count"><span style="font-size:28px;opacity:.4">—</span></div>
-        <div class="foh-tonight-unit">covers booked</div>
-        <div id="foh-tn-event"></div>
+        <div class="foh-tonight-label">Tonight</div>
+        <div class="foh-tonight-day" id="foh-tn-day">${fohDateLabel(today)}${todayEvent ? ' · <em>'+todayEvent+'</em>' : ''}</div>
+        <div style="display:flex;align-items:baseline;gap:10px;margin:8px 0 4px;">
+          <div class="foh-tonight-count" id="foh-tn-count"><span style="font-size:28px;opacity:.4">—</span></div>
+          <div class="foh-tonight-unit">covers booked</div>
+        </div>
+        <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:10px;">
+          <span style="font-size:22px;font-weight:600;color:rgba(255,255,255,0.7)" id="foh-tm-count">—</span>
+          <span style="font-size:11px;color:rgba(255,255,255,0.45)">tomorrow${tomorrowEvent ? ' · '+tomorrowEvent : ''}</span>
+        </div>
         <div class="foh-tonight-sync" id="foh-tn-sync">Loading from SevenRooms…</div>
       </div>
-      <div class="foh-tomorrow-card">
-        <div class="foh-tomorrow-left">
-          <div class="foh-tomorrow-label">Tomorrow</div>
-          <div class="foh-tomorrow-day">${fohDateLabel(tomorrow)}</div>
-          <div class="foh-tomorrow-event" id="foh-tm-event"></div>
+
+      <!-- Module cards -->
+      <div class="foh-module-grid">
+        <div class="foh-module-card" onclick="fohTab('schedule')">
+          <div class="foh-module-card-top">
+            <div class="foh-module-tag">Live</div>
+          </div>
+          <div class="foh-module-name">Schedule</div>
+          <div class="foh-module-desc">Today's team, shifts and clock-in status.</div>
+          <div class="foh-module-arrow">→</div>
         </div>
-        <div>
-          <div class="foh-tomorrow-count" id="foh-tm-count">—</div>
-          <div class="foh-tomorrow-unit">covers</div>
-        </div>
-      </div>
-      <div class="foh-quick-tiles">
-        <div class="foh-quick-tile" onclick="fohTab('schedule')">
-          <div class="foh-quick-tile-icon">📋</div>
-          <div class="foh-quick-tile-label">Schedule</div>
-          <div class="foh-quick-tile-sub">Today's team</div>
-        </div>
-        <div class="foh-quick-tile" onclick="fohTab('manager')">
-          <div class="foh-quick-tile-icon">🔐</div>
-          <div class="foh-quick-tile-label">Manager</div>
-          <div class="foh-quick-tile-sub">Events & reports</div>
+        <div class="foh-module-card" onclick="fohTab('manager')">
+          <div class="foh-module-card-top">
+            <div class="foh-module-tag">Manager</div>
+          </div>
+          <div class="foh-module-name">Events &amp; Reports</div>
+          <div class="foh-module-desc">Listening Bar, Jazz Night, weekly planning.</div>
+          <div class="foh-module-arrow">→</div>
         </div>
       </div>
+
     </div>
   `;
 
-  // Fetch live covers from Kitchen Supabase (SevenRooms data)
+  // Fetch live covers
   try {
     const todayISO_ = localISO(new Date());
     const tomorrowDate = new Date(); tomorrowDate.setDate(tomorrowDate.getDate()+1);
@@ -4400,27 +4378,12 @@ async function renderFohHome(){
     const todayRow    = (coversData||[]).find(r => String(r.service_date).slice(0,10) === todayISO_);
     const tomorrowRow = (coversData||[]).find(r => String(r.service_date).slice(0,10) === tomorrowISO_);
 
-    // Tonight — use night_covers (SevenRooms confirmed count)
-    const todayCovers = todayRow
-      ? (todayRow.night_covers ?? '—')
-      : '—';
-    const tomorrowCovers = tomorrowRow
-      ? (tomorrowRow.night_covers ?? '—')
-      : '—';
-
-    const todayEvent    = FOH_EVENTS[today]    || '';
-    const tomorrowEvent = FOH_EVENTS[tomorrow] || '';
+    const todayCovers    = todayRow    ? (todayRow.night_covers    ?? '—') : '—';
+    const tomorrowCovers = tomorrowRow ? (tomorrowRow.night_covers ?? '—') : '—';
 
     document.getElementById('foh-tn-count').textContent = todayCovers;
-    document.getElementById('foh-tn-sync').textContent = 'Live · SevenRooms · updated now';
-    if(todayEvent){
-      document.getElementById('foh-tn-event').innerHTML =
-        `<div class="foh-tonight-event">${todayEvent}</div>`;
-    }
     document.getElementById('foh-tm-count').textContent = tomorrowCovers;
-    if(tomorrowEvent){
-      document.getElementById('foh-tm-event').textContent = tomorrowEvent;
-    }
+    document.getElementById('foh-tn-sync').textContent = 'Live · SevenRooms';
 
   } catch(e) {
     const sync = document.getElementById('foh-tn-sync');
@@ -5465,8 +5428,6 @@ function fohTab(tab){
 }
 
 function showFohPublic(){
-  const splash = document.getElementById('foh-splash');
-  if(splash) splash.style.display = 'none';
   document.getElementById('foh-public').style.display = 'flex';
   document.getElementById('foh-nav').style.display = 'flex';
   document.getElementById('login').classList.remove('open');
@@ -5490,27 +5451,10 @@ function fohSignOut(){
   showFohPublic();
 }
 
-// -- SPLASH --
-function splashEnter(){
-  const splash = document.getElementById('foh-splash');
-  splash.classList.add('hiding');
-  setTimeout(function(){
-    splash.style.display = 'none';
-    showFohPublic();
-  }, 500);
-}
-
 // -- INIT --
 (async function init(){
-  // Set splash date label
   try{
-    const d = new Date();
-    const label = d.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
-    const el = document.getElementById('splash-date-label');
-    if(el) el.textContent = label;
-  }catch(e){}
-  // Splash stays visible — employee taps Enter to proceed
-  try{
+    showFohPublic();
     try{ localStorage.removeItem('rl_inapp'); }catch(e){}
     const { data } = await sb.auth.getSession();
     if(data && data.session){
@@ -5519,7 +5463,9 @@ function splashEnter(){
     sb.auth.onAuthStateChange((event)=>{
       if(event==='SIGNED_OUT') showFohPublic();
     });
-  }catch(e){}
+  }catch(e){
+    showFohPublic();
+  }
 })();
 </script>
 
