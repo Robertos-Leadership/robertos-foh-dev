@@ -447,12 +447,11 @@
     padding: 20px;
   }
   .foh-hero-logo {
-    width: min(220px, 55vw);
+    width: min(320px, 78vw);
     height: auto;
     display: block;
-    margin-bottom: 6px;
-    filter: brightness(0) invert(1);
-    opacity: 0.95;
+    margin-bottom: 0;
+    opacity: 1;
   }
   .foh-hero-sub {
     font-size: 9px;
@@ -1948,7 +1947,7 @@
 <!-- LOGIN -->
 <div id="login">
   <div class="login-panel">
-    <img class="login-brand" src="robertos-logo.jpg" alt="Roberto's">
+    <img class="login-brand" src="robertos-logo-white.svg" alt="Roberto's">
     <div class="login-kicker">Management Access</div>
     <div class="login-title">Manager</div>
     <div class="login-divider"></div>
@@ -1973,13 +1972,12 @@
     <div class="foh-hero-overlay"></div>
     <div class="foh-hero-date" id="foh-date-display"></div>
     <div class="foh-hero-content">
-      <img class="foh-hero-logo" src="robertos-logo.jpg" alt="Roberto's">
-      <div class="foh-hero-sub">Front of House</div>
+      <img class="foh-hero-logo" src="robertos-logo-white.svg" alt="Roberto's">
     </div>
   </div>
 
   <!-- main scroll area -->
-  <div id="foh-tab-content" style="flex:1; max-width:600px; margin:0 auto; width:100%; overflow:hidden; display:flex; flex-direction:column;"></div>
+  <div id="foh-tab-content" style="flex:1; width:100%; overflow:hidden; display:flex; flex-direction:column;"></div>
 
 </div>
 
@@ -2001,7 +1999,7 @@
 <!-- LANDING (manager post-login) -->
 <div id="landing" style="display:none;">
   <div class="landing-content">
-    <img class="landing-brand" src="robertos-logo.jpg" alt="Roberto's">
+    <img class="landing-brand" src="robertos-logo-white.svg" alt="Roberto's">
     <div class="landing-kicker">Management Module</div>
     <div class="landing-title"><span>Manager</span></div>
     <div class="landing-sub">Events planning, operational tools, and reporting for Roberto's DIFC.</div>
@@ -4347,7 +4345,7 @@ async function renderFohHome(){
   const dateEl = document.getElementById('foh-date-display');
   if(dateEl) dateEl.textContent = now.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'});
 
-  el.style.cssText='flex:1;max-width:600px;margin:0 auto;width:100%;overflow:hidden;display:flex;flex-direction:column;';
+  el.style.cssText='flex:1;width:100%;overflow:hidden;display:flex;flex-direction:column;';
 
   el.innerHTML=`
     <div style="flex:1;display:flex;flex-direction:column;overflow:hidden;">
