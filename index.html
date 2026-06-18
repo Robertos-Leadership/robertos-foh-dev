@@ -2064,10 +2064,11 @@
         <div class="module-name">Operations</div>
         <div class="module-desc">Daily briefings and service standards.</div>
       </div>
-      <div class="module-card coming-soon">
-        <div class="module-tag">Coming</div>
+      <div class="module-card" onclick="enterApp('revenue')">
+        <div class="module-tag">Live</div>
         <div class="module-name">Revenue</div>
-        <div class="module-desc">Covers, spend, and weekly performance.</div>
+        <div class="module-desc">Daily budget, covers, spend &amp; month-vs-month review.</div>
+        <div class="module-badge">Open</div>
       </div>
     </div>
     <div class="landing-signout">
@@ -2352,7 +2353,7 @@ function renderNav(){
   const eventTabs = state.events.slice().sort(eventSort).map(ev=>
     `<div class="nav-tab ${active===eventTab(ev)?'active':''}" data-tab="${eventTab(ev)}" onclick="switchTab('${eventTab(ev)}')">${ev.name}</div>`
   ).join('');
-  nav.innerHTML = `<div class="nav-tab ${active==='dashboard'?'active':''}" data-tab="dashboard" onclick="switchTab('dashboard')">Leaders</div>${eventTabs}`;
+  nav.innerHTML = `<div class="nav-tab ${active==='dashboard'?'active':''}" data-tab="dashboard" onclick="switchTab('dashboard')">Leaders</div>${eventTabs}<div class="nav-tab ${active==='revenue'?'active':''}" data-tab="revenue" onclick="switchTab('revenue')">Revenue</div>`;
 }
 function stageStats(tasks, stage){
   const stageTasks = tasks.filter(t=>getStage(t)===stage);
@@ -2385,7 +2386,8 @@ function enterApp(module){
     startRealtime();
     attachSyncListeners();
   }
-  switchTab(state.currentTab || 'dashboard');
+  loadRevenue();
+  switchTab(module==='revenue' ? 'revenue' : (state.currentTab || 'dashboard'));
 }
 function showLanding(){
   document.getElementById('landing').style.display = 'grid';
@@ -2489,6 +2491,9 @@ async function loadAll(){
 // -- RENDER MAIN --
 function renderMain(){
   const el = document.getElementById('main-content');
+  const sec = document.getElementById('topbar-section');
+  if(sec) sec.textContent = state.currentTab==='revenue' ? 'Revenue' : (state.currentTab==='dashboard' ? 'Leaders' : 'Events');
+  if(state.currentTab==='revenue'){ el.innerHTML = renderRevenue(); return; }
   if(state.events.length===0){ el.innerHTML='<div class="loading">Loading...</div>'; return; }
   if(state.currentTab==='dashboard') el.innerHTML = renderDashboard();
   else el.innerHTML = renderEventPage(state.events.find(e=>e.id===tabEventId(state.currentTab)));
@@ -4228,8 +4233,257 @@ function startApp(){
   restoreSession();
   lastLoad = Date.now();
   loadAll();
+  loadRevenue();
   startRealtime();
   attachSyncListeners();
+}
+
+// ══════════════════════════════════════════════
+//  REVENUE MODULE — native rebuild of Daily Budget.xlsx
+//  (Leader page · finance · authenticated-only)
+// ══════════════════════════════════════════════
+function revInit(){ if(!state.rev) state.rev={ rates:{}, daily:[], targets:{}, loaded:false, loading:false, period:null, view:'month', tablesMissing:false }; return state.rev; }
+async function loadRevenue(){
+  var R=revInit(); if(R.loading) return; R.loading=true;
+  try{
+    var res=await Promise.all([
+      sb.from('rev_rates').select('*'),
+      sb.from('rev_daily').select('*').order('service_date'),
+      sb.from('rev_targets').select('*')
+    ]);
+    R.tablesMissing = !!(res[0].error||res[1].error||res[2].error);
+    R.rates={}; (res[0].data||[]).forEach(function(r){ R.rates[r.weekday]=r; });
+    R.daily=res[1].data||[];
+    R.targets={}; (res[2].data||[]).forEach(function(t){ R.targets[t.period]=Number(t.monthly_target)||0; });
+    if(!R.period) R.period=revLatestPeriod();
+    R.loaded=true;
+  }catch(e){ R.tablesMissing=true; R.loaded=true; }
+  R.loading=false;
+  if(state.currentTab==='revenue') renderMain();
+}
+// helpers
+function revPeriodOf(d){ return String(d).slice(0,7); }
+function revLatestPeriod(){ var R=revInit(); var ps=R.daily.map(function(d){return revPeriodOf(d.service_date);}); if(ps.length) return ps.sort().slice(-1)[0]; var n=new Date(); return n.getFullYear()+'-'+String(n.getMonth()+1).padStart(2,'0'); }
+function revWeekday(ds){ return new Date(ds+'T12:00:00').toLocaleDateString('en-US',{weekday:'long'}); }
+function revDailyMap(){ var m={}; revInit().daily.forEach(function(d){ m[String(d.service_date).slice(0,10)]=d; }); return m; }
+function revBudget(ds){ var r=revInit().rates[revWeekday(ds)]; if(!r) return 0; return (Number(r.cover_target)||0)*(Number(r.avg_spend)||0); }
+function revDaysInMonth(p){ var a=p.split('-').map(Number); return new Date(a[0],a[1],0).getDate(); }
+function revAddMonths(p,n){ var a=p.split('-').map(Number); var d=new Date(a[0],a[1]-1,1); d.setMonth(d.getMonth()+n); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); }
+function revPrevPeriod(p){ return revAddMonths(p,-1); }
+function revMoney(n){ return 'AED '+Math.round(Number(n)||0).toLocaleString(); }
+function revPct(n){ if(n===''||n==null||!isFinite(n)) return '—'; return (n>=0?'+':'')+(n*100).toFixed(1)+'%'; }
+function revPctClass(n){ if(n===''||n==null||!isFinite(n)) return ''; return n>=0?'rev-pos':'rev-neg'; }
+function revMonthLabel(p){ var a=p.split('-').map(Number); return new Date(a[0],a[1]-1,1).toLocaleDateString('en-GB',{month:'long',year:'numeric'}); }
+function revYearOf(p){ return p.split('-')[0]; }
+function revChg(c,prev){ return prev? (c-prev)/prev : ''; }
+
+function revMonthData(p){
+  var R=revInit(), map=revDailyMap(), dim=revDaysInMonth(p), days=[];
+  var mtdNet=0, budgetTotal=0, coversAct=0, tradingDays=0, windowDay=0;
+  for(var d=1; d<=dim; d++){
+    var ds=p+'-'+String(d).padStart(2,'0'); var wd=revWeekday(ds); var closed=(wd==='Sunday');
+    var row=map[ds]||null; var budget=revBudget(ds);
+    var net=(row&&row.net_actual!=null)?Number(row.net_actual):null;
+    var rc=(row&&row.rest_covers_actual!=null)?Number(row.rest_covers_actual):null;
+    var lc=(row&&row.lounge_covers_actual!=null)?Number(row.lounge_covers_actual):null;
+    var tot=(rc!=null||lc!=null)?((rc||0)+(lc||0)):null;
+    if(!closed) budgetTotal+=budget;
+    if(net!=null){ mtdNet+=net; tradingDays++; windowDay=d; if(tot!=null) coversAct+=tot; }
+    days.push({d:d,date:ds,weekday:wd,closed:closed,budget:budget,net:net,restCov:rc,lounCov:lc,totalCov:tot,vsBudget:net!=null?net-budget:null,avgCover:(net!=null&&tot)?net/tot:null});
+  }
+  return {period:p,days:days,mtdNet:mtdNet,budgetTotal:budgetTotal,coversAct:coversAct,tradingDays:tradingDays,windowDay:windowDay,target:R.targets[p]||0};
+}
+function revWindowSum(p, W){
+  var map=revDailyMap(), dim=revDaysInMonth(p);
+  var o={net:0,covers:0,tdays:0,restNet:0,restCov:0,lounNet:0,lounCov:0};
+  for(var d=1; d<=Math.min(W,dim); d++){
+    var ds=p+'-'+String(d).padStart(2,'0'); var row=map[ds];
+    if(row&&row.net_actual!=null){ o.net+=Number(row.net_actual); o.tdays++; o.covers+=(Number(row.rest_covers_actual||0)+Number(row.lounge_covers_actual||0)); o.restNet+=Number(row.rest_net||0); o.restCov+=Number(row.rest_covers_actual||0); o.lounNet+=Number(row.lounge_net||0); o.lounCov+=Number(row.lounge_covers_actual||0); }
+  }
+  return o;
+}
+function revWeekdayAvgs(p){
+  var map=revDailyMap(), dim=revDaysInMonth(p), acc={};
+  for(var d=1; d<=dim; d++){ var ds=p+'-'+String(d).padStart(2,'0'); var row=map[ds]; if(row&&row.net_actual!=null){ var wd=revWeekday(ds); (acc[wd]=acc[wd]||[]).push(Number(row.net_actual)); } }
+  var out={}; Object.keys(acc).forEach(function(wd){ var a=acc[wd]; out[wd]=a.reduce(function(x,y){return x+y;},0)/a.length; }); return out;
+}
+function revReview(p){
+  var cur=revMonthData(p), W=cur.windowDay||0, prevP=revPrevPeriod(p);
+  var cW=revWindowSum(p,W), pW=revWindowSum(prevP,W);
+  var cAvg=revWeekdayAvgs(p), pAvg=revWeekdayAvgs(prevP);
+  var dim=revDaysInMonth(p), proj=0, remaining=0;
+  for(var d=W+1; d<=dim; d++){ var wd=revWeekday(p+'-'+String(d).padStart(2,'0')); if(wd==='Sunday') continue; proj+=(cAvg[wd]||0); remaining++; }
+  var forecast=cur.mtdNet+proj;
+  function ac(o){ return o.tdays?o.net/o.tdays:0; }
+  return {
+    period:p, prevPeriod:prevP, windowDay:W,
+    net:{cur:cW.net,prev:pW.net,chg:revChg(cW.net,pW.net)},
+    tradingDays:{cur:cW.tdays,prev:pW.tdays},
+    avgDay:{cur:ac(cW),prev:ac(pW),chg:revChg(ac(cW),ac(pW))},
+    covers:{cur:cW.covers,prev:pW.covers,chg:revChg(cW.covers,pW.covers)},
+    spendCover:{cur:cW.covers?cW.net/cW.covers:0,prev:pW.covers?pW.net/pW.covers:0,chg:revChg(cW.covers?cW.net/cW.covers:0,pW.covers?pW.net/pW.covers:0)},
+    venueRest:{cur:cW.restCov?cW.restNet/cW.restCov:0,prev:pW.restCov?pW.restNet/pW.restCov:0,chg:revChg(cW.restCov?cW.restNet/cW.restCov:0,pW.restCov?pW.restNet/pW.restCov:0)},
+    venueLoun:{cur:cW.lounCov?cW.lounNet/cW.lounCov:0,prev:pW.lounCov?pW.lounNet/pW.lounCov:0,chg:revChg(cW.lounCov?cW.lounNet/cW.lounCov:0,pW.lounCov?pW.lounNet/pW.lounCov:0)},
+    weekdays:['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'].map(function(wd){ return {wd:wd,cur:cAvg[wd]||0,prev:pAvg[wd]||0,chg:revChg(cAvg[wd]||0,pAvg[wd]||0)}; }),
+    mtd:cur.mtdNet, projected:proj, remaining:remaining, forecast:forecast,
+    target:cur.target, vsTarget:forecast-cur.target, vsTargetPct:cur.target?(forecast-cur.target)/cur.target:'',
+    budgetTotal:cur.budgetTotal, vsBudget:forecast-cur.budgetTotal, vsBudgetPct:cur.budgetTotal?(forecast-cur.budgetTotal)/cur.budgetTotal:''
+  };
+}
+
+// ── Navigation ──
+function revSetPeriod(p){ revInit().period=p; renderMain(); }
+function revStep(n){ var R=revInit(); revSetPeriod(revAddMonths(R.period,n)); }
+function revAddMonth(){ var R=revInit(); var next=revAddMonths(revLatestPeriod(),1); R.period=next; if(R.targets[next]==null){ // create target row (carry last month's, editable)
+    var prevT=R.targets[revPrevPeriod(next)]||0; R.targets[next]=prevT;
+    sb.from('rev_targets').upsert({period:next,monthly_target:prevT}).then(function(){});
+  } renderMain(); }
+function revSetView(v){ revInit().view=v; renderMain(); }
+function revEditTarget(){
+  var R=revInit(); var cur=R.targets[R.period]||0;
+  var v=prompt('Monthly target for '+revMonthLabel(R.period)+' (AED):', cur);
+  if(v===null) return; v=Number(String(v).replace(/[^0-9.]/g,'')); if(!isFinite(v)) return;
+  R.targets[R.period]=v;
+  sb.from('rev_targets').upsert({period:R.period,monthly_target:v}).then(function(res){ if(res.error) alert('Could not save target: '+res.error.message); renderMain(); });
+}
+
+// ── Edit a day ──
+function revEditDay(ds){
+  var R=revInit(); var map=revDailyMap(); var row=map[ds]||{};
+  document.getElementById('rev-edit-date').value=ds;
+  document.getElementById('rev-edit-title').textContent=new Date(ds+'T12:00:00').toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+  document.getElementById('rev-edit-budget').textContent=revMoney(revBudget(ds));
+  document.getElementById('rev-edit-net').value = row.net_actual!=null?row.net_actual:'';
+  document.getElementById('rev-edit-rc').value = row.rest_covers_actual!=null?row.rest_covers_actual:'';
+  document.getElementById('rev-edit-lc').value = row.lounge_covers_actual!=null?row.lounge_covers_actual:'';
+  document.getElementById('rev-edit-rn').value = row.rest_net!=null?row.rest_net:'';
+  document.getElementById('rev-edit-ln').value = row.lounge_net!=null?row.lounge_net:'';
+  document.getElementById('rev-edit-modal').style.display='flex';
+}
+function revCloseEdit(e){ if(e&&e.target!==document.getElementById('rev-edit-modal')) return; document.getElementById('rev-edit-modal').style.display='none'; }
+function revNum(id){ var v=document.getElementById(id).value.trim(); if(v==='') return null; v=Number(v.replace(/[^0-9.\-]/g,'')); return isFinite(v)?v:null; }
+async function revSaveDay(){
+  var ds=document.getElementById('rev-edit-date').value;
+  var payload={ service_date:ds, net_actual:revNum('rev-edit-net'), rest_covers_actual:revNum('rev-edit-rc'), lounge_covers_actual:revNum('rev-edit-lc'), rest_net:revNum('rev-edit-rn'), lounge_net:revNum('rev-edit-ln'), updated_at:new Date().toISOString() };
+  var R=revInit(); var i=R.daily.findIndex(function(x){ return String(x.service_date).slice(0,10)===ds; });
+  if(i>=0) R.daily[i]=Object.assign({},R.daily[i],payload); else R.daily.push(payload);
+  document.getElementById('rev-edit-modal').style.display='none'; renderMain();
+  var res=await sb.from('rev_daily').upsert(payload,{onConflict:'service_date'});
+  if(res.error){ console.error('rev save',res.error); alert('Could not save: '+res.error.message); }
+}
+
+// ── AI report agent (mirrors Kitchen survey-assistant pattern) ──
+var REV_AI_URL='https://paoaivwtkzujmrgrfjuq.supabase.co/functions/v1/revenue-assistant';
+function revBriefing(){
+  var rv=revReview(revInit().period); var m=revMonthData(revInit().period);
+  var L=[]; L.push('Roberto\'s DIFC revenue — '+revMonthLabel(rv.period)+' (through day '+rv.windowDay+').');
+  L.push('MTD net AED '+Math.round(rv.mtd).toLocaleString()+' over '+rv.tradingDays.cur+' trading days.');
+  L.push('Vs '+revMonthLabel(rv.prevPeriod)+' matched window: net '+revPct(rv.net.chg)+', covers '+revPct(rv.covers.chg)+', avg spend/cover '+revPct(rv.spendCover.chg)+'.');
+  L.push('Weekday avg net (this month): '+rv.weekdays.map(function(w){return w.wd.slice(0,3)+' '+Math.round(w.cur);}).join(', ')+'.');
+  L.push('Full-month forecast AED '+Math.round(rv.forecast).toLocaleString()+' vs target AED '+Math.round(rv.target).toLocaleString()+' ('+revPct(rv.vsTargetPct)+'), vs budget '+revPct(rv.vsBudgetPct)+'.');
+  L.push('Per-day net (entered): '+m.days.filter(function(d){return d.net!=null;}).map(function(d){return d.d+':'+Math.round(d.net);}).join(', ')+'.');
+  return L.join('\n');
+}
+async function revAiReport(){
+  var q=prompt('Ask the revenue agent (e.g. "summarise this month for the board", "why is Friday soft", "project the full month"):','Summarise this month vs last month for the board.');
+  if(q===null) return;
+  var box=document.getElementById('rev-ai-out'); if(box){ box.style.display='block'; box.textContent='Generating report…'; }
+  try{
+    var resp=await fetch(REV_AI_URL,{ method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+SUPABASE_KEY,'apikey':SUPABASE_KEY}, body:JSON.stringify({ action:'chat', model:'claude-sonnet-4-6', max_tokens:1100, system:'You are a precise F&B revenue analyst for Roberto\'s DIFC. Use ONLY the figures provided. Be concise, board-ready, AED, and call out risks. Do not invent numbers.', messages:[{role:'user', content:q+'\n\nDATA:\n'+revBriefing()}] }) });
+    var data=await resp.json();
+    if(!resp.ok) throw new Error(data.error||data.message||('HTTP '+resp.status));
+    var text=data.text||data.content||data.reply||(data.choices&&data.choices[0]&&data.choices[0].message&&data.choices[0].message.content)||JSON.stringify(data);
+    if(box) box.textContent=text;
+  }catch(err){ if(box) box.textContent='Report agent not available yet ('+(err.message||err)+'). Deploy the revenue-assistant Edge Function to enable AI reports.'; }
+}
+
+// ── Render ──
+function renderRevenue(){
+  var R=revInit();
+  if(!R.loaded){ if(!R.loading) loadRevenue(); return '<div class="loading">Loading revenue…</div>'; }
+  if(R.tablesMissing){ return '<div class="rev-wrap"><div class="rev-setup"><div class="rev-h">Revenue module — setup needed</div><p>The revenue tables aren\'t in the database yet. In the Supabase SQL Editor (project paoaivwtkzujmrgrfjuq) run <b>revenue-schema.sql</b> then <b>revenue-seed-history.sql</b>, then reopen this tab.</p></div></div>'; }
+  if(R.view==='year') return revRenderYear();
+  return revRenderMonth();
+}
+function revBar(pct){ var w=Math.max(0,Math.min(100,Math.round(pct))); return '<div class="rev-bar"><div class="rev-bar-fill" style="width:'+w+'%"></div></div>'; }
+function revRenderMonth(){
+  var R=revInit(), p=R.period, m=revMonthData(p), rv=revReview(p);
+  var toTarget = m.target? Math.round(m.mtdNet/m.target*100):0;
+  var h=[];
+  h.push('<div class="rev-wrap">');
+  // toolbar
+  h.push('<div class="rev-toolbar"><div class="rev-nav"><button class="rev-btn" onclick="revStep(-1)">&#8592;</button><span class="rev-period">'+revMonthLabel(p)+'</span><button class="rev-btn" onclick="revStep(1)">&#8594;</button><button class="rev-btn" onclick="revAddMonth()">+ Add month</button></div>'
+    +'<div class="rev-views"><button class="rev-vtab active" onclick="revSetView(\'month\')">Month</button><button class="rev-vtab" onclick="revSetView(\'year\')">Year</button><button class="rev-btn rev-ai-btn" onclick="revAiReport()">&#9733; AI report</button></div></div>');
+  // summary cards
+  h.push('<div class="rev-cards">');
+  h.push('<div class="rev-card"><div class="rev-k">MTD net sales</div><div class="rev-v">'+revMoney(m.mtdNet)+'</div><div class="rev-sub">'+m.tradingDays+' trading days</div></div>');
+  h.push('<div class="rev-card"><div class="rev-k">Month target</div><div class="rev-v">'+revMoney(m.target)+' <span class="rev-edit-link" onclick="revEditTarget()">edit</span></div>'+revBar(toTarget)+'<div class="rev-sub">'+toTarget+'% of target</div></div>');
+  h.push('<div class="rev-card"><div class="rev-k">Full-month forecast</div><div class="rev-v">'+revMoney(rv.forecast)+'</div><div class="rev-sub '+revPctClass(rv.vsTargetPct)+'">'+revPct(rv.vsTargetPct)+' vs target</div></div>');
+  h.push('<div class="rev-card"><div class="rev-k">Avg spend / cover</div><div class="rev-v">'+revMoney(rv.spendCover.cur)+'</div><div class="rev-sub '+revPctClass(rv.spendCover.chg)+'">'+revPct(rv.spendCover.chg)+' vs '+revMonthLabel(rv.prevPeriod).split(' ')[0]+'</div></div>');
+  h.push('</div>');
+  // month grid
+  h.push('<div class="rev-section-h">Daily — '+revMonthLabel(p)+'</div>');
+  h.push('<div class="rev-grid-wrap"><table class="rev-grid"><thead><tr><th>Day</th><th>Net (actual)</th><th>Budget</th><th>vs Budget</th><th>Covers</th><th>Avg/cover</th></tr></thead><tbody>');
+  m.days.forEach(function(d){
+    if(d.closed){ h.push('<tr class="rev-closed"><td>'+d.weekday.slice(0,3)+' '+d.d+'</td><td colspan="5">Sunday — closed</td></tr>'); return; }
+    var vsCls=d.vsBudget==null?'':(d.vsBudget>=0?'rev-pos':'rev-neg');
+    h.push('<tr onclick="revEditDay(\''+d.date+'\')">'
+      +'<td class="rev-day">'+d.weekday.slice(0,3)+' '+d.d+'</td>'
+      +'<td>'+(d.net!=null?revMoney(d.net):'<span class="rev-add">+ enter</span>')+'</td>'
+      +'<td class="rev-mut">'+revMoney(d.budget)+'</td>'
+      +'<td class="'+vsCls+'">'+(d.vsBudget!=null?(d.vsBudget>=0?'+':'')+revMoney(d.vsBudget).replace('AED ',''):'—')+'</td>'
+      +'<td>'+(d.totalCov!=null?d.totalCov:'—')+'</td>'
+      +'<td>'+(d.avgCover!=null?revMoney(d.avgCover).replace('AED ',''):'—')+'</td></tr>');
+  });
+  h.push('<tr class="rev-total"><td>MTD</td><td>'+revMoney(m.mtdNet)+'</td><td>'+revMoney(m.budgetTotal)+'</td><td colspan="3"></td></tr>');
+  h.push('</tbody></table></div>');
+  // Review
+  h.push('<div class="rev-section-h">Review — '+revMonthLabel(p)+' vs '+revMonthLabel(rv.prevPeriod)+' (matched window, through day '+rv.windowDay+')</div>');
+  function rrow(label,o,money){ return '<tr><td>'+label+'</td><td>'+(money?revMoney(o.prev):Math.round(o.prev).toLocaleString())+'</td><td>'+(money?revMoney(o.cur):Math.round(o.cur).toLocaleString())+'</td><td class="'+revPctClass(o.chg)+'">'+revPct(o.chg)+'</td></tr>'; }
+  h.push('<div class="rev-grid-wrap"><table class="rev-grid"><thead><tr><th>Metric</th><th>'+revMonthLabel(rv.prevPeriod).split(' ')[0]+'</th><th>'+revMonthLabel(p).split(' ')[0]+'</th><th>Change</th></tr></thead><tbody>');
+  h.push(rrow('Net sales',rv.net,true));
+  h.push(rrow('Avg net / day',rv.avgDay,true));
+  h.push(rrow('Covers',rv.covers,false));
+  h.push(rrow('Avg spend / cover',rv.spendCover,true));
+  h.push(rrow('Restaurant spend/cover',rv.venueRest,true));
+  h.push(rrow('Lounge spend/cover',rv.venueLoun,true));
+  h.push('</tbody></table></div>');
+  // weekday averages
+  h.push('<div class="rev-section-h">Avg net by weekday (apples-to-apples)</div>');
+  h.push('<div class="rev-grid-wrap"><table class="rev-grid"><thead><tr><th>Weekday</th><th>'+revMonthLabel(rv.prevPeriod).split(' ')[0]+' avg</th><th>'+revMonthLabel(p).split(' ')[0]+' avg</th><th>Change</th></tr></thead><tbody>');
+  rv.weekdays.forEach(function(w){ h.push('<tr><td>'+w.wd+'</td><td>'+revMoney(w.prev)+'</td><td>'+revMoney(w.cur)+'</td><td class="'+revPctClass(w.chg)+'">'+revPct(w.chg)+'</td></tr>'); });
+  h.push('</tbody></table></div>');
+  // projection
+  h.push('<div class="rev-section-h">Full-month projection</div>');
+  h.push('<div class="rev-proj">'
+    +'<div class="rev-proj-row"><span>Actual MTD</span><b>'+revMoney(rv.mtd)+'</b></div>'
+    +'<div class="rev-proj-row"><span>Projected — '+rv.remaining+' remaining days (this month\'s weekday run-rate)</span><b>'+revMoney(rv.projected)+'</b></div>'
+    +'<div class="rev-proj-row rev-proj-fore"><span>Forecast — full month</span><b>'+revMoney(rv.forecast)+'</b></div>'
+    +'<div class="rev-proj-row"><span>vs Target ('+revMoney(rv.target)+')</span><b class="'+revPctClass(rv.vsTargetPct)+'">'+revMoney(rv.vsTarget)+' · '+revPct(rv.vsTargetPct)+'</b></div>'
+    +'<div class="rev-proj-row"><span>vs Budget ('+revMoney(rv.budgetTotal)+')</span><b class="'+revPctClass(rv.vsBudgetPct)+'">'+revMoney(rv.vsBudget)+' · '+revPct(rv.vsBudgetPct)+'</b></div></div>');
+  h.push('<div id="rev-ai-out" class="rev-ai-out" style="display:none"></div>');
+  h.push('</div>');
+  return h.join('');
+}
+function revRenderYear(){
+  var R=revInit(), year=revYearOf(R.period); var h=[];
+  h.push('<div class="rev-wrap">');
+  h.push('<div class="rev-toolbar"><div class="rev-nav"><button class="rev-btn" onclick="revSetPeriod(\''+(parseInt(year)-1)+'-01\')">&#8592;</button><span class="rev-period">'+year+'</span><button class="rev-btn" onclick="revSetPeriod(\''+(parseInt(year)+1)+'-01\')">&#8594;</button></div>'
+    +'<div class="rev-views"><button class="rev-vtab" onclick="revSetView(\'month\')">Month</button><button class="rev-vtab active" onclick="revSetView(\'year\')">Year</button></div></div>');
+  var ytdNet=0, ytdTarget=0;
+  h.push('<div class="rev-section-h">'+year+' — month by month</div>');
+  h.push('<div class="rev-grid-wrap"><table class="rev-grid"><thead><tr><th>Month</th><th>Net sales</th><th>Target</th><th>vs Target</th><th>Trading days</th></tr></thead><tbody>');
+  for(var mo=1; mo<=12; mo++){
+    var p=year+'-'+String(mo).padStart(2,'0'); var m=revMonthData(p);
+    if(m.tradingDays===0 && !m.target) continue;
+    ytdNet+=m.mtdNet; ytdTarget+=m.target;
+    var vs=m.target?(m.mtdNet-m.target)/m.target:'';
+    h.push('<tr onclick="revSetView(\'month\');revSetPeriod(\''+p+'\')"><td class="rev-day">'+new Date(parseInt(year),mo-1,1).toLocaleDateString('en-GB',{month:'long'})+'</td><td>'+revMoney(m.mtdNet)+'</td><td class="rev-mut">'+revMoney(m.target)+'</td><td class="'+revPctClass(vs)+'">'+revPct(vs)+'</td><td>'+m.tradingDays+'</td></tr>');
+  }
+  var ytdVs=ytdTarget?(ytdNet-ytdTarget)/ytdTarget:'';
+  h.push('<tr class="rev-total"><td>YTD</td><td>'+revMoney(ytdNet)+'</td><td>'+revMoney(ytdTarget)+'</td><td class="'+revPctClass(ytdVs)+'">'+revPct(ytdVs)+'</td><td></td></tr>');
+  h.push('</tbody></table></div></div>');
+  return h.join('');
 }
 
 async function signIn(){
@@ -5496,6 +5750,76 @@ function fohSignOut(){
     </div>
   </div>
 </div>
+
+<!-- Revenue: day edit modal -->
+<div id="rev-edit-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9000;align-items:center;justify-content:center" onclick="revCloseEdit(event)">
+  <div style="background:var(--cream);border-radius:8px;padding:24px;width:360px;max-width:94vw;box-shadow:0 8px 32px rgba(0,0,0,.25)">
+    <div id="rev-edit-title" style="font-family:var(--font-serif);font-size:16px;color:var(--vino);font-weight:700;margin-bottom:4px"></div>
+    <div style="font-size:12px;color:var(--text-light);margin-bottom:16px">Daily budget: <span id="rev-edit-budget"></span></div>
+    <input type="hidden" id="rev-edit-date">
+    <div style="margin-bottom:12px"><label class="rev-lbl">Net revenue (AED, from Simphony DSR)</label><input id="rev-edit-net" type="number" inputmode="decimal" class="rev-inp" placeholder="0"></div>
+    <div style="display:flex;gap:10px;margin-bottom:12px">
+      <div style="flex:1"><label class="rev-lbl">Restaurant covers</label><input id="rev-edit-rc" type="number" inputmode="numeric" class="rev-inp" placeholder="0"></div>
+      <div style="flex:1"><label class="rev-lbl">Lounge covers</label><input id="rev-edit-lc" type="number" inputmode="numeric" class="rev-inp" placeholder="0"></div>
+    </div>
+    <div style="display:flex;gap:10px;margin-bottom:18px">
+      <div style="flex:1"><label class="rev-lbl">Restaurant net (opt.)</label><input id="rev-edit-rn" type="number" inputmode="decimal" class="rev-inp" placeholder=""></div>
+      <div style="flex:1"><label class="rev-lbl">Lounge net (opt.)</label><input id="rev-edit-ln" type="number" inputmode="decimal" class="rev-inp" placeholder=""></div>
+    </div>
+    <div style="display:flex;gap:10px">
+      <button onclick="revCloseEdit()" style="flex:1;padding:10px;background:transparent;border:1px solid var(--sabbia-dark);border-radius:4px;cursor:pointer;font-family:var(--font-sans);color:var(--ink)">Cancel</button>
+      <button onclick="revSaveDay()" style="flex:1;padding:10px;background:var(--vino);border:none;border-radius:4px;cursor:pointer;font-family:var(--font-sans);color:var(--cream);font-weight:700">Save</button>
+    </div>
+  </div>
+</div>
+
+<style>
+  .rev-wrap{max-width:980px;margin:0 auto;padding:8px 4px 60px}
+  .rev-toolbar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:18px}
+  .rev-nav{display:flex;align-items:center;gap:8px}
+  .rev-period{font-family:var(--font-serif);font-size:18px;color:var(--vino);min-width:150px;text-align:center}
+  .rev-btn{padding:6px 12px;border-radius:4px;border:1px solid rgba(107,31,42,.25);background:var(--surface);color:var(--vino);cursor:pointer;font-family:var(--font-sans);font-size:12px}
+  .rev-btn:hover{background:rgba(107,31,42,.06)}
+  .rev-ai-btn{background:rgba(201,168,76,.16);border-color:rgba(201,168,76,.5);color:#8a6d18}
+  .rev-views{display:flex;gap:6px;align-items:center}
+  .rev-vtab{padding:6px 12px;border-radius:4px;border:1px solid rgba(107,31,42,.18);background:transparent;color:var(--text-light);cursor:pointer;font-family:var(--font-sans);font-size:12px}
+  .rev-vtab.active{background:var(--vino);color:var(--cream);border-color:var(--vino)}
+  .rev-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:20px}
+  .rev-card{background:var(--surface);border:1px solid var(--border);border-top:2px solid var(--vino);border-radius:6px;padding:14px 16px}
+  .rev-k{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--text-light);margin-bottom:6px}
+  .rev-v{font-family:var(--font-serif);font-size:22px;color:var(--ink)}
+  .rev-sub{font-size:11px;color:var(--text-light);margin-top:4px}
+  .rev-edit-link{font-size:11px;color:var(--vino);cursor:pointer;text-decoration:underline;font-family:var(--font-sans)}
+  .rev-bar{height:6px;background:rgba(107,31,42,.1);border-radius:3px;margin-top:8px;overflow:hidden}
+  .rev-bar-fill{height:100%;background:var(--gold,#C9A84C)}
+  .rev-section-h{font-family:var(--font-serif);font-size:15px;color:var(--vino);margin:24px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--border)}
+  .rev-grid-wrap{overflow-x:auto}
+  .rev-grid{width:100%;border-collapse:collapse;font-family:var(--font-sans);font-size:13px}
+  .rev-grid th{background:var(--vino);color:var(--cream);padding:8px 10px;text-align:right;font-size:11px;letter-spacing:.04em;text-transform:uppercase;white-space:nowrap}
+  .rev-grid th:first-child{text-align:left}
+  .rev-grid td{padding:7px 10px;border-bottom:1px solid var(--border);text-align:right;white-space:nowrap}
+  .rev-grid td:first-child{text-align:left}
+  .rev-grid tbody tr{cursor:pointer}
+  .rev-grid tbody tr:hover{background:rgba(107,31,42,.04)}
+  .rev-day{font-weight:600;color:var(--ink)}
+  .rev-mut{color:var(--text-light)}
+  .rev-add{color:var(--vino);opacity:.55;font-size:12px}
+  .rev-closed td{color:var(--text-light);font-style:italic;background:rgba(0,0,0,.02);cursor:default}
+  .rev-closed:hover{background:rgba(0,0,0,.02)!important}
+  .rev-total td{font-weight:700;color:var(--vino);border-top:2px solid var(--vino);background:var(--sabbia-light,#faf7f1)}
+  .rev-pos{color:#2d7a4f;font-weight:600}
+  .rev-neg{color:#b3402f;font-weight:600}
+  .rev-proj{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:6px 16px}
+  .rev-proj-row{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:9px 0;border-bottom:1px solid var(--border);font-size:13px;color:var(--ink)}
+  .rev-proj-row:last-child{border-bottom:none}
+  .rev-proj-row span{color:var(--text-secondary,#8B7355)}
+  .rev-proj-fore b{font-family:var(--font-serif);font-size:18px;color:var(--vino)}
+  .rev-ai-out{margin-top:18px;background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--gold,#C9A84C);border-radius:6px;padding:16px 18px;white-space:pre-wrap;font-family:var(--font-sans);font-size:13px;line-height:1.6;color:var(--ink)}
+  .rev-setup{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:24px;max-width:560px;margin:20px auto;color:var(--ink)}
+  .rev-setup .rev-h{font-family:var(--font-serif);font-size:17px;color:var(--vino);margin-bottom:10px}
+  .rev-lbl{display:block;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--vino-light,#8a4a52);font-family:var(--font-sans);margin-bottom:4px}
+  .rev-inp{width:100%;box-sizing:border-box;padding:9px;border:1px solid var(--sabbia-dark);border-radius:4px;font-family:var(--font-sans);font-size:15px;background:var(--surface);color:var(--ink)}
+</style>
 
 </body>
 </html>
