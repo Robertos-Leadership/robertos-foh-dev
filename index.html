@@ -4340,55 +4340,56 @@ function fohDateLabel(short){
 async function renderFohHome(){
   const el = document.getElementById('foh-tab-content');
   const today = fohTodayShort();
-  const tomorrow = fohTomorrowShort();
   const todayEvent = FOH_EVENTS[today]||'';
+  const tomorrow = fohTomorrowShort();
   const tomorrowEvent = FOH_EVENTS[tomorrow]||'';
-
   const now = new Date();
   const dateEl = document.getElementById('foh-date-display');
   if(dateEl) dateEl.textContent = now.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'});
 
-  el.style.cssText='flex:1;width:100%;overflow:hidden;display:flex;flex-direction:column;';
+  el.setAttribute('style','flex:1;width:100%;display:flex;flex-direction:column;overflow:hidden;');
 
   el.innerHTML=`
     <div style="flex:1;display:flex;flex-direction:column;overflow:hidden;">
 
-      <div class="foh-tonight-card">
-        <div style="flex:1">
-          <div class="foh-tonight-label">Tonight</div>
-          <div class="foh-tonight-count" id="foh-tn-count">—</div>
-          <div class="foh-tonight-unit">covers booked</div>
+      <!-- TONIGHT STRIP -->
+      <div style="background:#6B1F2A;padding:12px 20px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">
+        <div>
+          <div style="font-size:8px;letter-spacing:.3em;text-transform:uppercase;color:rgba(255,255,255,.45);margin-bottom:4px;">Tonight</div>
+          <div id="foh-tn-count" style="font-family:'Playfair Display',serif;font-size:40px;line-height:1;color:#fff;">—</div>
+          <div style="font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:rgba(255,255,255,.45);margin-top:2px;">covers booked</div>
         </div>
-        <div style="text-align:right">
-          <div class="foh-tonight-day">${fohDateLabel(today)}${todayEvent?' · '+todayEvent:''}</div>
-          <div style="margin-top:3px">
-            <span style="font-family:'Playfair Display',serif;font-size:22px;color:rgba(255,255,255,.75)" id="foh-tm-count">—</span>
-            <span style="font-size:9px;color:rgba(255,255,255,.4);letter-spacing:.1em;text-transform:uppercase;margin-left:3px">tmrw</span>
-          </div>
-          <div class="foh-tonight-sync" id="foh-tn-sync">Loading…</div>
+        <div style="text-align:right;">
+          <div style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:rgba(255,255,255,.5);">${fohDateLabel(today)}${todayEvent?' · '+todayEvent:''}</div>
+          <div style="margin-top:4px;"><span id="foh-tm-count" style="font-family:'Playfair Display',serif;font-size:26px;color:rgba(255,255,255,.7);">—</span> <span style="font-size:9px;color:rgba(255,255,255,.35);letter-spacing:.1em;text-transform:uppercase;">tmrw${tomorrowEvent?' · '+tomorrowEvent:''}</span></div>
+          <div id="foh-tn-sync" style="font-size:8px;color:rgba(255,255,255,.28);font-style:italic;margin-top:3px;">Loading…</div>
         </div>
       </div>
 
-      <div class="foh-mods-a" style="display:grid!important;grid-template-columns:repeat(3,1fr);gap:8px;padding:8px 12px 10px;">
-        <div class="foh-mod-a" style="min-height:80px" onclick="fohTab('schedule')">
-          <div class="fm-tag">Live</div>
-          <div class="fm-name">Schedule</div>
-          <div class="fm-desc">Today's team, shifts &amp; attendance</div>
-          <div class="fm-arrow">›</div>
-        </div>
-        <div class="foh-mod-a" style="min-height:80px" onclick="fohTab('manager')">
-          <div class="fm-tag">Live</div>
-          <div class="fm-name">Events &amp; Reports</div>
-          <div class="fm-desc">Listening Bar, Jazz Night, planning</div>
-          <div class="fm-arrow">›</div>
-        </div>
-        <div class="foh-mod-a dim" style="min-height:80px">
-          <div class="fm-tag soon">Coming soon</div>
-          <div class="fm-name">Operations</div>
-          <div class="fm-desc">Briefings &amp; standards</div>
-        </div>
-      </div>
+      <!-- 3 MODULE BOXES SIDE BY SIDE -->
+      <div style="flex:1;display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;padding:12px;background:#F5F0E8;min-height:0;">
 
+        <div onclick="fohTab('schedule')" style="background:#fff;border-top:2px solid #6B1F2A;border:1px solid rgba(107,31,42,0.12);border-top:2px solid #6B1F2A;padding:16px 14px;cursor:pointer;display:flex;flex-direction:column;">
+          <div style="font-size:8px;letter-spacing:.24em;text-transform:uppercase;color:#A88930;font-weight:600;margin-bottom:6px;">Live</div>
+          <div style="font-family:'Playfair Display',serif;font-size:17px;color:#2C1810;margin-bottom:5px;">Schedule</div>
+          <div style="font-size:11px;color:#8B7355;line-height:1.4;flex:1;">Today's team, shifts &amp; attendance</div>
+          <div style="font-size:16px;color:#6B1F2A;opacity:.4;margin-top:8px;">›</div>
+        </div>
+
+        <div onclick="fohTab('manager')" style="background:#fff;border:1px solid rgba(107,31,42,0.12);border-top:2px solid #6B1F2A;padding:16px 14px;cursor:pointer;display:flex;flex-direction:column;">
+          <div style="font-size:8px;letter-spacing:.24em;text-transform:uppercase;color:#A88930;font-weight:600;margin-bottom:6px;">Live</div>
+          <div style="font-family:'Playfair Display',serif;font-size:17px;color:#2C1810;margin-bottom:5px;">Events &amp; Reports</div>
+          <div style="font-size:11px;color:#8B7355;line-height:1.4;flex:1;">Listening Bar, Jazz Night, planning</div>
+          <div style="font-size:16px;color:#6B1F2A;opacity:.4;margin-top:8px;">›</div>
+        </div>
+
+        <div style="background:#fff;border:1px solid rgba(107,31,42,0.08);border-top:2px solid #ccc;padding:16px 14px;opacity:.38;display:flex;flex-direction:column;">
+          <div style="font-size:8px;letter-spacing:.24em;text-transform:uppercase;color:#bbb;font-weight:600;margin-bottom:6px;">Coming soon</div>
+          <div style="font-family:'Playfair Display',serif;font-size:17px;color:#2C1810;margin-bottom:5px;">Operations</div>
+          <div style="font-size:11px;color:#8B7355;line-height:1.4;flex:1;">Briefings &amp; standards</div>
+        </div>
+
+      </div>
     </div>`;
 
   try{
