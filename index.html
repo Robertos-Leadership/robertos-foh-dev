@@ -4423,7 +4423,7 @@ function revRenderMonth(){
   h.push('</div>');
   // month grid
   h.push('<div class="rev-section-h">Daily — '+revMonthLabel(p)+'</div>');
-  h.push('<div class="rev-grid-wrap"><table class="rev-grid"><thead><tr><th>Day</th><th>Net (actual)</th><th>Budget</th><th>vs Budget</th><th>Covers</th><th>Avg/cover</th></tr></thead><tbody>');
+  h.push('<div class="rev-grid-wrap rev-grid-scroll"><table class="rev-grid"><thead><tr><th>Day</th><th>Net (actual)</th><th>Budget</th><th>vs Budget</th><th>Covers</th><th>Avg/cover</th></tr></thead><tbody>');
   m.days.forEach(function(d){
     if(d.closed){ h.push('<tr class="rev-closed"><td>'+d.weekday.slice(0,3)+' '+d.d+'</td><td colspan="5">Sunday — closed</td></tr>'); return; }
     var vsCls=d.vsBudget==null?'':(d.vsBudget>=0?'rev-pos':'rev-neg');
@@ -5794,8 +5794,9 @@ function fohSignOut(){
   .rev-bar-fill{height:100%;background:var(--gold,#C9A84C)}
   .rev-section-h{font-family:var(--font-serif);font-size:15px;color:var(--vino);margin:24px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--border)}
   .rev-grid-wrap{overflow-x:auto}
+  .rev-grid-scroll{max-height:62vh;overflow:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--border);border-radius:6px}
   .rev-grid{width:100%;border-collapse:collapse;font-family:var(--font-sans);font-size:13px}
-  .rev-grid th{background:var(--vino);color:var(--cream);padding:8px 10px;text-align:right;font-size:11px;letter-spacing:.04em;text-transform:uppercase;white-space:nowrap}
+  .rev-grid th{background:var(--vino);color:var(--cream);padding:8px 10px;text-align:right;font-size:11px;letter-spacing:.04em;text-transform:uppercase;white-space:nowrap;position:sticky;top:0;z-index:3}
   .rev-grid th:first-child{text-align:left}
   .rev-grid td{padding:7px 10px;border-bottom:1px solid var(--border);text-align:right;white-space:nowrap}
   .rev-grid td:first-child{text-align:left}
