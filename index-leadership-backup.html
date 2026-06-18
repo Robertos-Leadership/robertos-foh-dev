@@ -7,7 +7,7 @@
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 <link rel="manifest" href="site.webmanifest">
 <meta name="theme-color" content="#6B1F2A">
-<title>Roberto's Front of House</title>
+<title>Roberto's Leadership</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400;1,600&family=Inter:wght@300;400;500;600&display=swap');
@@ -1486,139 +1486,6 @@
     .week-bar { gap: 6px; }
     .week-bar .btn { padding: 8px 10px; font-size: 10px; letter-spacing: 0.1em; }
   }
-
-  /* ── FOH BOTTOM NAV ── */
-  .foh-nav-btn {
-    flex: 1; text-align: center;
-    padding: 10px 0 14px;
-    cursor: pointer;
-    transition: color 0.15s;
-  }
-  .foh-nav-icon { font-size: 20px; line-height: 1; }
-  .foh-nav-label {
-    font-size: 9px; letter-spacing: 0.18em;
-    text-transform: uppercase;
-    color: #bbb;
-    margin-top: 3px;
-    font-family: 'Inter', sans-serif;
-  }
-  .foh-nav-btn.active .foh-nav-label { color: var(--vino); }
-  .foh-nav-btn.active .foh-nav-icon { filter: none; }
-
-  /* ── FOH HOME ── */
-  .foh-covers-card {
-    background: var(--vino);
-    border-radius: 4px;
-    padding: 22px 22px 20px;
-    margin-bottom: 16px;
-    position: relative;
-    overflow: hidden;
-  }
-  .foh-covers-card::before {
-    content:'';
-    position: absolute; top:0; left:0; right:0; height:3px;
-    background: linear-gradient(90deg, var(--gold), var(--gold-light), transparent);
-  }
-  .foh-covers-label {
-    font-size: 9px; letter-spacing: 0.3em; text-transform: uppercase;
-    color: rgba(255,255,255,0.55); margin-bottom: 14px;
-  }
-  .foh-covers-row { display: flex; gap: 0; }
-  .foh-covers-col {
-    flex: 1; text-align: center;
-    border-right: 1px solid rgba(255,255,255,0.12);
-    padding: 0 12px;
-  }
-  .foh-covers-col:first-child { padding-left: 0; }
-  .foh-covers-col:last-child { border-right: none; }
-  .foh-covers-num {
-    font-family: 'Playfair Display', serif;
-    font-size: 42px; color: #fff; line-height: 1;
-  }
-  .foh-covers-day {
-    font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase;
-    color: rgba(255,255,255,0.6); margin-top: 6px;
-  }
-  .foh-covers-event {
-    font-size: 10px; color: var(--gold-light);
-    margin-top: 4px; font-style: italic;
-  }
-  .foh-covers-loading {
-    font-size: 13px; color: rgba(255,255,255,0.5);
-    text-align: center; padding: 16px 0;
-    font-style: italic;
-  }
-
-  /* ── FOH SCHEDULE ── */
-  .foh-schedule-header {
-    display: flex; gap: 6px; overflow-x: auto;
-    padding-bottom: 4px; margin-bottom: 16px;
-    scrollbar-width: none;
-  }
-  .foh-schedule-header::-webkit-scrollbar { display: none; }
-  .foh-day-chip {
-    flex-shrink: 0;
-    padding: 7px 14px; border-radius: 20px;
-    border: 1px solid rgba(107,31,42,0.2);
-    font-size: 11px; font-family: 'Inter', sans-serif;
-    color: var(--text-mid); cursor: pointer;
-    transition: all 0.15s; background: #fff;
-    white-space: nowrap;
-  }
-  .foh-day-chip.active {
-    background: var(--vino); color: #fff;
-    border-color: var(--vino);
-  }
-  .foh-day-chip.today {
-    border-color: var(--gold); color: var(--vino); font-weight: 600;
-  }
-  .foh-day-chip.today.active { background: var(--vino); color: #fff; }
-  .foh-section-card {
-    background: #fff; border: 1px solid rgba(107,31,42,0.1);
-    border-radius: 4px; margin-bottom: 12px;
-    overflow: hidden; box-shadow: 0 1px 4px rgba(44,24,16,0.05);
-  }
-  .foh-section-head {
-    background: var(--vino); padding: 8px 14px;
-    font-size: 9px; letter-spacing: 0.28em;
-    text-transform: uppercase; color: rgba(255,255,255,0.85);
-  }
-  .foh-staff-row {
-    display: flex; align-items: center;
-    padding: 11px 14px;
-    border-bottom: 1px solid rgba(107,31,42,0.06);
-    gap: 12px;
-  }
-  .foh-staff-row:last-child { border-bottom: none; }
-  .foh-staff-dot {
-    width: 8px; height: 8px; border-radius: 50%;
-    flex-shrink: 0;
-  }
-  .foh-staff-name {
-    font-size: 13px; color: var(--text); flex: 1;
-    font-family: 'Inter', sans-serif;
-  }
-  .foh-staff-role {
-    font-size: 10px; color: var(--text-light);
-    font-family: 'Inter', sans-serif;
-  }
-  .foh-shift-badge {
-    font-size: 11px; font-family: 'Inter', sans-serif;
-    font-weight: 500; padding: 3px 10px;
-    border-radius: 20px; white-space: nowrap;
-  }
-  .foh-shift-on { background: rgba(45,122,79,0.1); color: #2d7a4f; }
-  .foh-shift-off { background: rgba(139,115,85,0.08); color: #aaa; font-style: italic; }
-  .foh-shift-leave { background: rgba(212,135,10,0.1); color: var(--amber); }
-  .foh-event-banner {
-    background: linear-gradient(90deg, rgba(201,168,76,0.12), transparent);
-    border-left: 3px solid var(--gold);
-    padding: 8px 14px; margin-bottom: 16px;
-    font-size: 11px; color: var(--vino);
-    letter-spacing: 0.1em; text-transform: uppercase;
-    display: flex; align-items: center; gap: 8px;
-  }
-
 </style>
 </head>
 <body>
@@ -1627,8 +1494,8 @@
 <div id="login">
   <div class="login-panel">
     <img class="login-brand" src="https://cdn.prod.website-files.com/68b1adb67aae8a1c4f33bfa5/68d1e4ffcb7414691a2bf1a6_robertos_logo_burgundy_apostrophe_color.svg" alt="Roberto's">
-    <div class="login-kicker">Management Access</div>
-    <div class="login-title">Manager</div>
+    <div class="login-kicker">Dubai private workspace</div>
+    <div class="login-title">Leadership</div>
     <div class="login-divider"></div>
     <div class="login-form">
       <label class="login-label" for="login-email">Email</label>
@@ -1642,56 +1509,19 @@
   <div class="login-foot">Roberto's &middot; Dubai DIFC</div>
 </div>
 
-<!-- FOH PUBLIC HOME -->
-<div id="foh-public" style="display:none; flex-direction:column; min-height:100vh; background:var(--bg); padding-bottom:72px;">
-
-  <!-- header -->
-  <div style="background:var(--vino); padding:20px 20px 18px; position:sticky; top:0; z-index:50; box-shadow:0 2px 8px rgba(44,24,16,0.2);">
-    <div style="display:flex; align-items:center; justify-content:space-between; max-width:600px; margin:0 auto;">
-      <div>
-        <div style="font-family:'Playfair Display',serif; font-size:18px; color:#fff; letter-spacing:0.05em;">Roberto's</div>
-        <div style="font-size:9px; letter-spacing:0.3em; text-transform:uppercase; color:rgba(255,255,255,0.55); margin-top:2px;">Front of House</div>
-      </div>
-      <div id="foh-date-display" style="font-size:11px; color:rgba(255,255,255,0.7); letter-spacing:0.05em; text-align:right;"></div>
-    </div>
-  </div>
-
-  <!-- main scroll area -->
-  <div id="foh-tab-content" style="flex:1; max-width:600px; margin:0 auto; width:100%; padding:20px 16px 0;"></div>
-
-</div>
-
-<!-- FOH BOTTOM NAV -->
-<div id="foh-nav" style="display:none; position:fixed; bottom:0; left:0; right:0; background:#fff; border-top:1px solid rgba(107,31,42,0.12); z-index:200; box-shadow:0 -2px 12px rgba(44,24,16,0.1);">
-  <div style="display:flex; max-width:600px; margin:0 auto;">
-    <div class="foh-nav-btn active" id="fnav-home" onclick="fohTab('home')">
-      <div class="foh-nav-icon">&#127968;</div>
-      <div class="foh-nav-label">Home</div>
-    </div>
-    <div class="foh-nav-btn" id="fnav-schedule" onclick="fohTab('schedule')">
-      <div class="foh-nav-icon">&#128197;</div>
-      <div class="foh-nav-label">Schedule</div>
-    </div>
-    <div class="foh-nav-btn" id="fnav-manager" onclick="fohTab('manager')">
-      <div class="foh-nav-icon">&#128274;</div>
-      <div class="foh-nav-label">Manager</div>
-    </div>
-  </div>
-</div>
-
-<!-- LANDING (manager post-login) -->
-<div id="landing" style="display:none;">
+<!-- LANDING -->
+<div id="landing">
   <div class="landing-content">
     <img class="landing-brand" src="https://cdn.prod.website-files.com/68b1adb67aae8a1c4f33bfa5/68d1e4ffcb7414691a2bf1a6_robertos_logo_burgundy_apostrophe_color.svg" alt="Roberto's">
-    <div class="landing-kicker">Management Module</div>
-    <div class="landing-title"><span>Manager</span></div>
-    <div class="landing-sub">Events planning, operational tools, and reporting for Roberto's DIFC.</div>
+    <div class="landing-kicker">Dubai private workspace</div>
+    <div class="landing-title"><span>Leadership</span></div>
+    <div class="landing-sub">Weekly execution for Roberto's Dubai: events, standards, finance, and the decisions that keep Scala moving with intent.</div>
     <div class="landing-divider"></div>
     <div class="module-grid">
       <div class="module-card" onclick="enterApp('events')">
         <div class="module-tag">Live</div>
         <div class="module-name">Events</div>
-        <div class="module-desc">The Listening Bar, Jazz Tuesdays and weekly events.</div>
+        <div class="module-desc">The Listening Bar and Jazz Tuesdays.</div>
         <div class="module-badge">Open</div>
       </div>
       <div class="module-card coming-soon">
@@ -1705,26 +1535,22 @@
         <div class="module-desc">Covers, spend, and weekly performance.</div>
       </div>
     </div>
-    <div class="landing-signout">
-      <span onclick="openChangePassword()" style="cursor:pointer">Change password</span>
-      &nbsp;&middot;&nbsp;
-      <span onclick="fohSignOut()" style="cursor:pointer">Sign out</span>
-    </div>
+    <div class="landing-signout"><span onclick="openChangePassword()" style="cursor:pointer">Change password</span> &nbsp;&middot;&nbsp; <span onclick="signOut()" style="cursor:pointer">Sign out</span></div>
   </div>
 </div>
 
-<!-- APP (manager events) -->
-<div id="app" style="display:none;">
+<!-- APP -->
+<div id="app">
   <div class="topbar">
     <div class="topbar-left">
-      <div class="topbar-logo" onclick="showManagerLanding()">Roberto's</div>
+      <div class="topbar-logo" onclick="showLanding()">Roberto's</div>
       <div class="topbar-sep">|</div>
       <div class="topbar-section" id="topbar-section">Events</div>
     </div>
     <div style="display:flex;align-items:center">
       <div class="nav-tabs" id="nav-tabs"></div>
       <button class="topbar-signout" onclick="openChangePassword()">Password</button>
-      <button class="topbar-signout" onclick="fohSignOut()">Sign out</button>
+      <button class="topbar-signout" onclick="signOut()">Sign out</button>
     </div>
   </div>
   <div class="main" id="main-content"></div>
@@ -2008,8 +1834,6 @@ function enterApp(module){
 function showLanding(){
   document.getElementById('landing').style.display = 'grid';
   document.getElementById('app').style.display = 'none';
-  document.getElementById('foh-public').style.display = 'none';
-  document.getElementById('foh-nav').style.display = 'none';
   try{ localStorage.removeItem('rl_inapp'); }catch(e){}
 }
 function switchTab(tab){
@@ -3866,8 +3690,6 @@ async function signIn(){
   }
   errEl.textContent = '';
   document.getElementById('login-password').value = '';
-  document.getElementById('foh-public').style.display = 'none';
-  document.getElementById('foh-nav').style.display = 'none';
   startApp();
 }
 
@@ -3875,277 +3697,20 @@ async function signOut(){
   stopRealtime();
   try{ await sb.auth.signOut(); }catch(e){}
   try{ localStorage.removeItem('rl_inapp'); }catch(e){}
-  showFohPublic();
-}
-
-
-// ══════════════════════════════════════════════
-//  FOH PUBLIC LAYER
-// ══════════════════════════════════════════════
-
-const FOH_ROSTER = [
-  // Management
-  { name:'Manuel Petrosino',    role:'Beverage Manager',           section:'Management',    schedule:{ Mon:'IN', Tue:'IN', Wed:'IN', Thu:'IN', Fri:'IN', Sat:'IN', Sun:'OFF' } },
-  { name:'Jins Thomas',         role:'Asst. Restaurant Manager',   section:'Management',    schedule:{ Mon:'OFF', Tue:'5pm–3am', Wed:'5pm–3am', Thu:'5pm–3am', Fri:'5pm–3am', Sat:'5pm–3am', Sun:'OFF' } },
-  { name:'Katarina Vukotic',    role:'Customer Experience Mgr',    section:'Management',    schedule:{ Mon:'OFF', Tue:'3pm–1am', Wed:'3pm–1am', Thu:'3pm–1am', Fri:'3pm–1am', Sat:'3pm–1am', Sun:'OFF' } },
-  // Restaurant
-  { name:'Alessandro Viscardi', role:'Restaurant Supervisor',      section:'Restaurant',    schedule:{ Mon:'2pm–12am', Tue:'2pm–12am', Wed:'2pm–12am', Thu:'2pm–12am', Fri:'2pm–12am', Sat:'2pm–12am', Sun:'OFF' } },
-  { name:'Rida Maazouz',        role:'Restaurant Supervisor',      section:'Restaurant',    schedule:{ Mon:'5pm–3am', Tue:'OFF', Wed:'4pm–2am', Thu:'4pm–2am', Fri:'4pm–2am', Sat:'4pm–2am', Sun:'OFF' } },
-  // Head Waiter
-  { name:'Kamal Gurung',        role:'Head Waiter',                section:'Head Waiter',   schedule:{ Mon:'2pm–12am', Tue:'3pm–1am', Wed:'3pm–1am', Thu:'3pm–1am', Fri:'3pm–1am', Sat:'3pm–1am', Sun:'OFF' } },
-  { name:'Mohammed Ait Nacer',  role:'Head Waiter',                section:'Head Waiter',   schedule:{ Mon:'4pm–2am', Tue:'4pm–2am', Wed:'4pm–2am', Thu:'4pm–2am', Fri:'4pm–2am', Sat:'4pm–2am', Sun:'OFF' } },
-  { name:'Iliaz Ismailov',      role:'Head Waiter',                section:'Head Waiter',   schedule:{ Mon:'OFF', Tue:'4pm–2am', Wed:'4pm–2am', Thu:'4pm–2am', Fri:'4pm–2am', Sat:'4pm–2am', Sun:'OFF' } },
-  // Waiter/Waitress
-  { name:'Pasquale Compierchio',role:'Waiter',                     section:'Waiter/Waitress', schedule:{ Mon:'OFF', Tue:'3pm–1am', Wed:'3pm–1am', Thu:'3pm–1am', Fri:'3pm–1am', Sat:'3pm–1am', Sun:'OFF' } },
-  { name:'Than Htike Yadanar',  role:'Waitress',                   section:'Waiter/Waitress', schedule:{ Mon:'2pm–12am', Tue:'4pm–2am', Wed:'4pm–2am', Thu:'4pm–2am', Fri:'4pm–2am', Sat:'4pm–2am', Sun:'OFF' } },
-  { name:'Thein Gi Win',        role:'Waitress',                   section:'Waiter/Waitress', schedule:{ Mon:'4pm–2am', Tue:'OFF', Wed:'4pm–2am', Thu:'4pm–2am', Fri:'4pm–2am', Sat:'4pm–2am', Sun:'OFF' } },
-  // Runners
-  { name:'Purshottan Neupane',  role:'Head Runner',                section:'Runners',       schedule:{ Mon:'OFF', Tue:'3pm–1am', Wed:'3pm–1am', Thu:'3pm–1am', Fri:'3pm–1am', Sat:'3pm–1am', Sun:'OFF' } },
-  { name:'Santhosh Muthuswamy', role:'Runner',                     section:'Runners',       schedule:{ Mon:'3pm–1am', Tue:'OFF', Wed:'4pm–2am', Thu:'4pm–2am', Fri:'4pm–2am', Sat:'4pm–2am', Sun:'OFF' } },
-  { name:'Tulsiram Neupane',    role:'Runner',                     section:'Runners',       schedule:{ Mon:'4pm–2am', Tue:'4pm–2am', Wed:'4pm–2am', Thu:'4pm–2am', Fri:'4pm–2am', Sat:'4pm–2am', Sun:'OFF' } },
-  // Bar
-  { name:'Jad',                 role:'Asst. Bar Manager',          section:'Bar',           schedule:{ Mon:'OFF', Tue:'2pm–1am', Wed:'2pm–1am', Thu:'2pm–1am', Fri:'2pm–1am', Sat:'2pm–1am', Sun:'OFF' } },
-  { name:'J.K.',                role:'Bartender',                  section:'Bar',           schedule:{ Mon:'4pm–close', Tue:'5pm–3am', Wed:'5pm–3am', Thu:'5pm–3am', Fri:'5pm–3am', Sat:'5pm–3am', Sun:'OFF' } },
-  { name:'Robert Kisambu',      role:'Barista',                    section:'Bar',           schedule:{ Mon:'2pm–1am', Tue:'5pm–3am', Wed:'5pm–3am', Thu:'5pm–3am', Fri:'5pm–3am', Sat:'5pm–3am', Sun:'OFF' } },
-  { name:'Roberto Ramos',       role:'Barista',                    section:'Bar',           schedule:{ Mon:'3pm–1am', Tue:'OFF', Wed:'2pm–1am', Thu:'2pm–1am', Fri:'2pm–1am', Sat:'2pm–1am', Sun:'OFF' } },
-  { name:'Ricky',               role:'Barback',                    section:'Bar',           schedule:{ Mon:'4pm–close', Tue:'5pm–3am', Wed:'4pm–close', Thu:'4pm–close', Fri:'4pm–close', Sat:'4pm–close', Sun:'OFF' } },
-  { name:'Abishek',             role:'Asst. Head Sommelier',       section:'Bar',           schedule:{ Mon:'4pm–2am', Tue:'3pm–1am', Wed:'3pm–1am', Thu:'3pm–1am', Fri:'3pm–1am', Sat:'3pm–1am', Sun:'OFF' } },
-  { name:'Antonio',             role:'Senior Sommelier',           section:'Bar',           schedule:{ Mon:'OFF', Tue:'5pm–3am', Wed:'5pm–3am', Thu:'5pm–3am', Fri:'5pm–3am', Sat:'5pm–3am', Sun:'OFF' } },
-  // Hostess
-  { name:'Syrgayim Ermekbaeva', role:'Hostess',                    section:'Hostess Desk',  schedule:{ Mon:'5pm–2am', Tue:'OFF', Wed:'5pm–2am', Thu:'2pm–11pm', Fri:'2pm–11pm', Sat:'2pm–11pm', Sun:'OFF' } },
-  { name:'Nour Al Haj Hassan',  role:'Hostess',                    section:'Hostess Desk',  schedule:{ Mon:'2pm–11pm', Tue:'2pm–11pm', Wed:'2pm–11pm', Thu:'5pm–2am', Fri:'5pm–2am', Sat:'5pm–2am', Sun:'OFF' } },
-  // Security
-  { name:'Nir Bahadur Magar',   role:'Security',                   section:'Security',      schedule:{ Mon:'5pm–3am', Tue:'5pm–3am', Wed:'5pm–3am', Thu:'5pm–3am', Fri:'5pm–3am', Sat:'5pm–3am', Sun:'OFF' } },
-  // Housekeeping
-  { name:'Mohammad Hanif',      role:'Housekeeping',               section:'Housekeeping',  schedule:{ Mon:'9am–7pm', Tue:'9am–7pm', Wed:'9am–7pm', Thu:'9am–7pm', Fri:'9am–7pm', Sat:'9am–7pm', Sun:'OFF' } },
-  { name:'Bishnu Shrestha',     role:'Housekeeping',               section:'Housekeeping',  schedule:{ Mon:'OFF', Tue:'5pm–3am', Wed:'5pm–3am', Thu:'5pm–3am', Fri:'5pm–3am', Sat:'5pm–3am', Sun:'OFF' } },
-  { name:'Mary Njeri',          role:'Housekeeping',               section:'Housekeeping',  schedule:{ Mon:'5pm–3am', Tue:'3pm–1am', Wed:'3pm–1am', Thu:'3pm–1am', Fri:'LEAVE', Sat:'LEAVE', Sun:'OFF' } },
-  // Cashiers
-  { name:'Cho Zin',             role:'Cashier',                    section:'Cashiers',      schedule:{ Mon:'OFF', Tue:'3pm–1am', Wed:'3pm–1am', Thu:'3pm–1am', Fri:'3pm–1am', Sat:'3pm–1am', Sun:'OFF' } },
-  { name:'Roshan',              role:'Cashier',                    section:'Cashiers',      schedule:{ Mon:'5pm–3am', Tue:'5pm–3am', Wed:'5pm–3am', Thu:'5pm–3am', Fri:'5pm–3am', Sat:'5pm–3am', Sun:'OFF' } },
-];
-
-const FOH_EVENTS = {
-  Mon: 'Listening Bar',
-  Tue: 'Jazz Night',
-  Wed: 'Comedy Club',
-  Thu: 'Scala (Event)',
-  Fri: '',
-  Sat: 'El Septimo',
-  Sun: ''
-};
-
-const DAYS_SHORT = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-const DAYS_FULL  = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-
-let fohCurrentDay = null;
-
-function fohTodayShort(){
-  return DAYS_SHORT[new Date().getDay()];
-}
-function fohTomorrowShort(){
-  const d = new Date(); d.setDate(d.getDate()+1);
-  return DAYS_SHORT[d.getDay()];
-}
-function fohDateLabel(short){
-  const idx = DAYS_SHORT.indexOf(short);
-  return DAYS_FULL[idx] || short;
-}
-
-// ── HOME TAB ──
-async function renderFohHome(){
-  const el = document.getElementById('foh-tab-content');
-  const today = fohTodayShort();
-  const tomorrow = fohTomorrowShort();
-
-  // Date display
-  const now = new Date();
-  document.getElementById('foh-date-display').textContent =
-    now.toLocaleDateString('en-GB',{weekday:'short', day:'numeric', month:'short', year:'numeric'});
-
-  // Render skeleton first
-  el.innerHTML = `
-    <div class="foh-covers-card">
-      <div class="foh-covers-label">Reservations</div>
-      <div class="foh-covers-row" id="foh-covers-row">
-        <div class="foh-covers-loading">Loading covers…</div>
-      </div>
-    </div>
-    <div style="margin-top:8px; font-size:11px; color:var(--text-light); letter-spacing:0.05em; text-align:center; padding-bottom:20px;">
-      Tap <strong>Schedule</strong> below to see today's team on duty.
-    </div>
-  `;
-
-  // Fetch covers for today + tomorrow (anon, public)
-  try {
-    const todayISO_ = localISO(new Date());
-    const tomorrowDate = new Date(); tomorrowDate.setDate(tomorrowDate.getDate()+1);
-    const tomorrowISO_ = localISO(tomorrowDate);
-
-    const { data: coversData } = await sb.from('covers')
-      .select('date, total_booked, total_arrived')
-      .in('date', [todayISO_, tomorrowISO_]);
-
-    const todayRow    = (coversData||[]).find(r => String(r.date).slice(0,10) === todayISO_);
-    const tomorrowRow = (coversData||[]).find(r => String(r.date).slice(0,10) === tomorrowISO_);
-
-    const todayCovers    = todayRow    ? (todayRow.total_booked    || 0) : '—';
-    const tomorrowCovers = tomorrowRow ? (tomorrowRow.total_booked || 0) : '—';
-
-    const todayEvent    = FOH_EVENTS[today]    || '';
-    const tomorrowEvent = FOH_EVENTS[tomorrow] || '';
-
-    document.getElementById('foh-covers-row').innerHTML = `
-      <div class="foh-covers-col">
-        <div class="foh-covers-num">${todayCovers}</div>
-        <div class="foh-covers-day">Tonight · ${fohDateLabel(today)}</div>
-        ${todayEvent ? `<div class="foh-covers-event">${todayEvent}</div>` : ''}
-      </div>
-      <div class="foh-covers-col">
-        <div class="foh-covers-num">${tomorrowCovers}</div>
-        <div class="foh-covers-day">Tomorrow · ${fohDateLabel(tomorrow)}</div>
-        ${tomorrowEvent ? `<div class="foh-covers-event">${tomorrowEvent}</div>` : ''}
-      </div>
-    `;
-  } catch(e) {
-    document.getElementById('foh-covers-row').innerHTML =
-      '<div class="foh-covers-loading">Could not load covers</div>';
-  }
-}
-
-// ── SCHEDULE TAB ──
-function renderFohSchedule(){
-  const el = document.getElementById('foh-tab-content');
-  const todayShort = fohTodayShort();
-  if(!fohCurrentDay) fohCurrentDay = todayShort;
-
-  // Day chips
-  const chips = DAYS_SHORT.map(d => {
-    const isToday   = d === todayShort;
-    const isActive  = d === fohCurrentDay;
-    const isSun     = d === 'Sun';
-    return `<div class="foh-day-chip ${isActive?'active':''} ${isToday&&!isActive?'today':''}"
-      onclick="fohSelectDay('${d}')">${fohDateLabel(d).slice(0,3)}</div>`;
-  }).join('');
-
-  // Event banner
-  const eventName = FOH_EVENTS[fohCurrentDay] || '';
-  const banner = eventName
-    ? `<div class="foh-event-banner">&#127775; ${eventName}</div>`
-    : '';
-
-  // Group staff by section for selected day
-  const sections = {};
-  for(const s of FOH_ROSTER){
-    const shift = s.schedule[fohCurrentDay] || 'OFF';
-    if(!sections[s.section]) sections[s.section] = [];
-    sections[s.section].push({ ...s, shift });
-  }
-
-  let sectionsHtml = '';
-  for(const [sec, staff] of Object.entries(sections)){
-    const rows = staff.map(s => {
-      const isOff   = s.shift === 'OFF';
-      const isLeave = s.shift === 'LEAVE';
-      const dotColor = isOff ? '#ddd' : isLeave ? '#d4870a' : '#2d7a4f';
-      const badgeClass = isOff ? 'foh-shift-off' : isLeave ? 'foh-shift-leave' : 'foh-shift-on';
-      return `
-        <div class="foh-staff-row">
-          <div class="foh-staff-dot" style="background:${dotColor}"></div>
-          <div style="flex:1">
-            <div class="foh-staff-name">${s.name}</div>
-            <div class="foh-staff-role">${s.role}</div>
-          </div>
-          <div class="foh-shift-badge ${badgeClass}">${s.shift}</div>
-        </div>`;
-    }).join('');
-    sectionsHtml += `
-      <div class="foh-section-card">
-        <div class="foh-section-head">${sec}</div>
-        ${rows}
-      </div>`;
-  }
-
-  el.innerHTML = `
-    <div class="foh-schedule-header">${chips}</div>
-    ${banner}
-    ${sectionsHtml}
-  `;
-}
-
-function fohSelectDay(day){
-  fohCurrentDay = day;
-  renderFohSchedule();
-}
-
-// ── TAB SWITCHING ──
-function fohTab(tab){
-  // Update nav buttons
-  document.querySelectorAll('.foh-nav-btn').forEach(b => b.classList.remove('active'));
-  const btn = document.getElementById('fnav-'+tab);
-  if(btn) btn.classList.add('active');
-
-  if(tab === 'home'){
-    renderFohHome();
-  } else if(tab === 'schedule'){
-    renderFohSchedule();
-  } else if(tab === 'manager'){
-    // Check if already logged in
-    sb.auth.getSession().then(({ data }) => {
-      if(data && data.session){
-        showManagerLanding();
-      } else {
-        showLogin();
-      }
-    });
-  }
-}
-
-function showFohPublic(){
-  document.getElementById('foh-public').style.display = 'flex';
-  document.getElementById('foh-nav').style.display = 'flex';
-  document.getElementById('login').classList.remove('open');
-  document.getElementById('landing').style.display = 'none';
-  document.getElementById('app').style.display = 'none';
-  fohTab('home');
-}
-
-function showManagerLanding(){
-  document.getElementById('foh-public').style.display = 'none';
-  document.getElementById('foh-nav').style.display = 'none';
-  document.getElementById('landing').style.display = 'grid';
-  document.getElementById('app').style.display = 'none';
-  document.getElementById('login').classList.remove('open');
-}
-
-function fohSignOut(){
-  stopRealtime();
-  try{ sb.auth.signOut(); }catch(e){}
-  try{ localStorage.removeItem('rl_inapp'); }catch(e){}
-  showFohPublic();
+  showLogin();
 }
 
 // -- INIT --
 (async function init(){
   try{
-    // Always show public FOH app first
-    showFohPublic();
-    // If manager was in the management app, restore their session
     const { data } = await sb.auth.getSession();
-    if(data && data.session){
-      state.userEmail = data.session.user?.email || null;
-      if(localStorage.getItem('rl_inapp')==='1'){
-        // They were in the management app — restore it
-        document.getElementById('foh-public').style.display = 'none';
-        document.getElementById('foh-nav').style.display = 'none';
-        startApp();
-      }
-    }
+    if(data && data.session){ state.userEmail = data.session.user?.email || null; startApp(); }
+    else { showLogin(); }
     sb.auth.onAuthStateChange((event)=>{
-      if(event==='SIGNED_OUT') showFohPublic();
+      if(event==='SIGNED_OUT') showLogin();
     });
   }catch(e){
-    showFohPublic();
+    showLogin();
   }
 })();
 </script>
