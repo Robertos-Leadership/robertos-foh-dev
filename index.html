@@ -4293,6 +4293,13 @@ function revMonthData(p){
   }
   return {period:p,days:days,mtdNet:mtdNet,budgetTotal:budgetTotal,coversAct:coversAct,tradingDays:tradingDays,windowDay:windowDay,target:R.targets[p]||0};
 }
+function revAreaMTD(p){
+  var map=revDailyMap(), dim=revDaysInMonth(p);
+  var o={restNet:0,restCov:0,lounNet:0,lounCov:0,totNet:0,totCov:0};
+  for(var d=1; d<=dim; d++){ var ds=p+'-'+String(d).padStart(2,'0'); var row=map[ds];
+    if(row&&row.net_actual!=null){ o.restNet+=Number(row.rest_net||0); o.restCov+=Number(row.rest_covers_actual||0); o.lounNet+=Number(row.lounge_net||0); o.lounCov+=Number(row.lounge_covers_actual||0); o.totNet+=Number(row.net_actual||0); o.totCov+=(Number(row.rest_covers_actual||0)+Number(row.lounge_covers_actual||0)); } }
+  return o;
+}
 function revWindowSum(p, W){
   var map=revDailyMap(), dim=revDaysInMonth(p);
   var o={net:0,covers:0,tdays:0,restNet:0,restCov:0,lounNet:0,lounCov:0};
@@ -4421,6 +4428,15 @@ function revRenderMonth(){
   h.push('<div class="rev-card"><div class="rev-k">Full-month forecast</div><div class="rev-v">'+revMoney(rv.forecast)+'</div><div class="rev-sub '+revPctClass(rv.vsTargetPct)+'">'+revPct(rv.vsTargetPct)+' vs target</div></div>');
   h.push('<div class="rev-card"><div class="rev-k">Avg spend / cover</div><div class="rev-v">'+revMoney(rv.spendCover.cur)+'</div><div class="rev-sub '+revPctClass(rv.spendCover.chg)+'">'+revPct(rv.spendCover.chg)+' vs '+revMonthLabel(rv.prevPeriod).split(' ')[0]+'</div></div>');
   h.push('</div>');
+  // by area (MTD) — Restaurant vs Scala
+  var area=revAreaMTD(p);
+  function arow(name,net,cov){ return '<tr><td class="rev-day">'+name+'</td><td>'+revMoney(net)+'</td><td>'+cov+'</td><td>'+(cov?revMoney(net/cov).replace('AED ',''):'—')+'</td></tr>'; }
+  h.push('<div class="rev-section-h">By area — '+revMonthLabel(p)+' (MTD)</div>');
+  h.push('<div class="rev-grid-wrap"><table class="rev-grid"><thead><tr><th>Area</th><th>Revenue</th><th>Covers</th><th>Avg / cover</th></tr></thead><tbody>');
+  h.push(arow('Restaurant',area.restNet,area.restCov));
+  h.push(arow('Scala Lounge &amp; Bar',area.lounNet,area.lounCov));
+  h.push('<tr class="rev-total"><td>Total venue</td><td>'+revMoney(area.totNet)+'</td><td>'+area.totCov+'</td><td>'+(area.totCov?revMoney(area.totNet/area.totCov).replace('AED ',''):'—')+'</td></tr>');
+  h.push('</tbody></table></div>');
   // month grid
   h.push('<div class="rev-section-h">Daily — '+revMonthLabel(p)+'</div>');
   h.push('<div class="rev-grid-wrap rev-grid-scroll"><table class="rev-grid"><thead><tr><th>Day</th><th>Net (actual)</th><th>Budget</th><th>vs Budget</th><th>Covers</th><th>Avg/cover</th></tr></thead><tbody>');

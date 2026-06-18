@@ -96,6 +96,27 @@ day-of-month #, weekday (both derivable from service_date). Targets: monthly_tar
   (module boxes, event cards, schedule). No new palette. Same money formatting (`AED x,xxx`) and 1-decimal
   rounding conventions already used in the app.
 
+## Closing Report (Daily Snapshot) — TOMORROW's build
+Recreate "Roberto's DIFC Daily Snapshot June 2026.xlsx" (one tab per day) as an in-app daily
+closing report that becomes the PRIMARY daily entry and feeds the revenue model.
+
+Source layout (per day sheet): Revenue Centers = Restaurant | Scala Lounge & Bar | Total L&D | Total,
+each split Lunch/Dinner (lunch usually 0 = closed). Rows: Net Sales, Total Covers, Avg Spending,
+CC Tips, Cash Tips, Total Tips. Plus Comps (table/guest/amount/reason/manager + total + % of sales),
+Manager on Duty (AM/PM), shift logs Day(12-7)/Night(7-11)/Late(11-close) with feedback+challenges,
+private events/group bookings, Comments (Good/Bad bullets), support needed.
+
+**Schema:** new `closing_reports` (service_date PK) holding the rich fields — per-area×daypart nets/covers,
+tips (cc/cash), comps (jsonb), manager_am/pm, shift logs (jsonb), private_events, comments_good/bad (jsonb),
+support text, created_by, updated_at. RLS authenticated-only (finance/ops).
+**Rollup → rev_daily on save:** net_actual = Total net; rest_net = Restaurant net; lounge_net = Scala net;
+rest_covers_actual = Restaurant covers; lounge_covers_actual = Scala covers. So the revenue model updates
+automatically and the simple day-edit modal is replaced by the closing report as the entry point.
+
+**Surface per-area in the revenue model (the requested gap — data already exists):** add Restaurant vs
+Scala revenue / covers / avg-spend-per-cover (MTD cards + optional grid columns), not just whole-venue.
+(Avg spend/area = area_net / area_covers; we already store both.)
+
 ## AI report agent (optional capability — grounded, not hallucinated)
 Lets the manager ask for reports in plain language ("summarise June vs May for the board",
 "why is Friday down?", "project July at this run-rate", "export an investor one-pager").
