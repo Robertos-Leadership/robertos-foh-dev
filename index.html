@@ -2018,10 +2018,11 @@
         <div style="font-size:16px;color:#6B1F2A;opacity:.4;margin-top:8px;">›</div>
       </div>
 
-      <div style="background:#fff;border:1px solid rgba(107,31,42,0.08);border-top:2px solid #ccc;padding:16px 14px;opacity:.38;display:flex;flex-direction:column;">
-        <div style="font-size:8px;letter-spacing:.24em;text-transform:uppercase;color:#bbb;font-weight:600;margin-bottom:6px;">Coming soon</div>
-        <div style="font-family:'Playfair Display',serif;font-size:17px;color:#2C1810;margin-bottom:5px;">Operations</div>
-        <div style="font-size:11px;color:#8B7355;line-height:1.4;flex:1;">Briefings &amp; standards</div>
+      <div onclick="openChecklists()" style="background:#fff;border:1px solid rgba(107,31,42,0.12);border-top:2px solid #6B1F2A;padding:16px 14px;cursor:pointer;display:flex;flex-direction:column;">
+        <div style="font-size:8px;letter-spacing:.24em;text-transform:uppercase;color:#A88930;font-weight:600;margin-bottom:6px;">Live</div>
+        <div style="font-family:'Playfair Display',serif;font-size:17px;color:#2C1810;margin-bottom:5px;">Checklists</div>
+        <div style="font-size:11px;color:#8B7355;line-height:1.4;flex:1;">Opening &amp; closing &mdash; sign off by Employee&nbsp;ID</div>
+        <div style="font-size:16px;color:#6B1F2A;opacity:.4;margin-top:8px;">&rsaquo;</div>
       </div>
 
     </div>
@@ -6263,6 +6264,113 @@ function fohSignOut(){
   showFohPublic();
 }
 
+// ══════════════════════════════════════════════
+//  RESTAURANT CHECKLISTS — public (no login). Tick-through + Employee-ID sign-off.
+// ══════════════════════════════════════════════
+var CHK_ITEMS={
+  opening:[
+    'Check cleanliness & tidiness of the restaurant (update Maintenance for any malfunctions).',
+    'Turn ON all POS systems and printers and ensure they work correctly.',
+    'Check that the 86 list is updated in the MICROS system.',
+    'Ensure the main entrance door is open at 11 AM.',
+    'Check that all tablecloths are clean and properly aligned.',
+    'Verify that all table setups follow the restaurant standard.',
+    'Prepare the table allocation according to the reservations.',
+    'Iron all the tablecloths.',
+    'Organize stations with all condiments (olive oil, balsamic, chilli oil, tabasco, ice & lemon, salt & pepper, mayo, ketchup & mustard).',
+    'All menus (A la Carte, wine list, drinks) spotless; Business Lunch arranged.',
+    'Card machine and bill folders arranged by the cashier on duty.',
+    'Enough cutlery and plates arranged for service.',
+    'Enough tablecloths and napkins for the operation.',
+    'Check and adjust the setup in Cortina & Giardino (ashtrays, alignment).',
+    'Open the Pergola in the Terrazza and Cortina before service.',
+    'Lights in correct setup and music ON at the right volume.',
+    'Re-check opening checklist.'
+  ],
+  closing:[
+    'Place all Restaurant lamps on charge.',
+    'Return all lamp stands to the cabinet.',
+    'Place the Outdoor lamps on charge.',
+    'Ensure all service stations are clean, organized and fully stocked for next day.',
+    'Clean & sanitize side station.',
+    'Reset all tables to the standard setup.',
+    'Clean & wipe the Dono Dorato olive oil bottles; return to their position.',
+    'Water glasses tilted on the table.',
+    'Ice & lemon cleared and emptied for the following day.',
+    'Wipe all condiments (olive oil, balsamic vinegar, chili oil, tabasco).',
+    'Wiping and polishing duties done.',
+    'POS and printers turned off.',
+    'Close all umbrellas in Giardino.',
+    'Close all curtains before leaving.',
+    'Re-check closing checklist.'
+  ]
+};
+function chkInit(){ if(!state.checklist) state.checklist={date:null,type:'opening',row:null,verifiers:null,channel:null}; return state.checklist; }
+function chkEsc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function chkToday(){ var n=new Date(), d=new Date(n.getTime()+n.getTimezoneOffset()*60000+4*3600000); return {iso:d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'), hour:d.getHours()}; }
+async function openChecklists(){
+  var C=chkInit(); var t=chkToday(); C.date=t.iso; C.type=(t.hour>=16?'closing':'opening');
+  document.getElementById('chk-modal').style.display='flex';
+  await chkLoadVerifiers(); await chkLoad(); chkSubscribe();
+}
+async function chkLoadVerifiers(){
+  var C=chkInit(); if(C.verifiers) return;
+  try{ var res=await sb.from('foh_staff').select('name,role,section,emp_id').eq('active',true).in('section',['Management','Head Waiter']); C.verifiers=(res.data||[]).filter(function(s){return s.emp_id;}); }catch(e){ C.verifiers=[]; }
+}
+async function chkLoad(){
+  var C=chkInit();
+  try{ var res=await sb.from('foh_checklists').select('*').eq('check_date',C.date).eq('shift_type',C.type).eq('area','Restaurant').limit(1); C.row=(res.data&&res.data.length)?res.data[0]:null; }catch(e){ C.row=null; }
+  chkRender();
+}
+function chkSetType(t){ var C=chkInit(); if(C.type===t) return; C.type=t; chkLoad(); chkSubscribe(); }
+async function chkToggle(i){
+  var C=chkInit(); var checked=Object.assign({}, (C.row&&C.row.checked)||{});
+  if(checked[i]) delete checked[i]; else checked[i]=true;
+  if(!C.row) C.row={check_date:C.date, shift_type:C.type, area:'Restaurant', checked:checked}; else C.row.checked=checked;
+  chkRenderItems();
+  var res=await sb.from('foh_checklists').upsert({check_date:C.date, shift_type:C.type, area:'Restaurant', checked:checked, updated_at:new Date().toISOString()},{onConflict:'check_date,shift_type,area'});
+  if(res.error){ console.error('chk save',res.error); if(res.error.code==='PGRST205'||res.error.code==='PGRST204'){ alert('Run foh-checklists-schema.sql in Supabase first.'); } }
+}
+async function chkSign(){
+  var C=chkInit(); var inp=document.getElementById('chk-empid'); var raw=(inp?inp.value:'').trim();
+  var errEl=document.getElementById('chk-sign-err'); if(errEl) errEl.textContent='';
+  if(!raw){ if(errEl) errEl.textContent='Enter your Employee ID.'; return; }
+  await chkLoadVerifiers();
+  var ri=parseInt(raw,10);
+  var match=(C.verifiers||[]).filter(function(s){ return s.emp_id===raw || (!isNaN(ri) && parseInt(s.emp_id,10)===ri); })[0];
+  if(!match){ if(errEl) errEl.textContent='ID not recognised or not authorised to sign off.'; return; }
+  var payload={ check_date:C.date, shift_type:C.type, area:'Restaurant', checked:(C.row&&C.row.checked)||{}, verified_emp_id:match.emp_id, verified_name:match.name, verified_role:match.role, verified_at:new Date().toISOString(), updated_at:new Date().toISOString() };
+  var res=await sb.from('foh_checklists').upsert(payload,{onConflict:'check_date,shift_type,area'});
+  if(res.error){ if(errEl) errEl.textContent='Could not save: '+res.error.message; return; }
+  C.row=Object.assign({}, C.row||{}, payload); chkRender();
+}
+function chkSubscribe(){
+  var C=chkInit(); chkUnsub();
+  try{ C.channel=sb.channel('chk-'+C.date+'-'+C.type).on('postgres_changes',{event:'*',schema:'public',table:'foh_checklists',filter:'check_date=eq.'+C.date}, function(p){ var r=p.new; if(r && r.shift_type===C.type && r.area==='Restaurant'){ C.row=r; chkRender(); } }).subscribe(); }catch(e){}
+}
+function chkUnsub(){ var C=chkInit(); if(C.channel){ try{ sb.removeChannel(C.channel); }catch(e){} C.channel=null; } }
+function chkClose(){ chkUnsub(); document.getElementById('chk-modal').style.display='none'; }
+function chkRenderItems(){
+  var C=chkInit(), items=CHK_ITEMS[C.type], checked=(C.row&&C.row.checked)||{}, done=0;
+  var box=document.getElementById('chk-items'); if(!box) return;
+  box.innerHTML=items.map(function(it,i){ var on=!!checked[i]; if(on) done++; return '<label class="chk-item'+(on?' chk-on':'')+'"><input type="checkbox" '+(on?'checked':'')+' onchange="chkToggle('+i+')"><span class="chk-box"></span><span class="chk-txt">'+chkEsc(it)+'</span></label>'; }).join('');
+  var pe=document.getElementById('chk-progress'); if(pe) pe.textContent=done+' / '+items.length+' done';
+}
+function chkRender(){
+  var C=chkInit();
+  var de=document.getElementById('chk-date'); if(de) de.textContent=new Date(C.date+'T12:00:00').toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'});
+  var to=document.getElementById('chk-tab-open'), tc=document.getElementById('chk-tab-close');
+  if(to) to.className='chk-tab'+(C.type==='opening'?' active':''); if(tc) tc.className='chk-tab'+(C.type==='closing'?' active':'');
+  chkRenderItems();
+  var so=document.getElementById('chk-signoff'); if(!so) return;
+  if(C.row && C.row.verified_name){
+    so.innerHTML='<div class="chk-signed">&#10003; Verified by <b>'+chkEsc(C.row.verified_name)+'</b> ('+chkEsc(C.row.verified_role||'')+')<br><span>'+(C.row.verified_at?new Date(C.row.verified_at).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'')+'</span><div class="chk-resign" onclick="chkResign()">Re-sign</div></div>';
+  } else if(!document.getElementById('chk-empid')){
+    so.innerHTML='<div class="chk-sign-lbl">Manager on duty / Head Waiter — sign off</div><div class="chk-sign-row"><input id="chk-empid" inputmode="numeric" placeholder="Employee ID" class="chk-empid"><button class="chk-sign-btn" onclick="chkSign()">Sign off</button></div><div id="chk-sign-err" class="chk-sign-err"></div>';
+  }
+}
+function chkResign(){ var C=chkInit(); if(C.row){ C.row=Object.assign({},C.row,{verified_name:null}); } chkRender(); }
+
 // -- INIT --
 (async function init(){
   try{
@@ -6441,6 +6549,22 @@ function fohSignOut(){
       <button onclick="revCloseEdit()" style="flex:1;padding:10px;background:transparent;border:1px solid var(--sabbia-dark);border-radius:4px;cursor:pointer;font-family:var(--font-sans);color:var(--ink)">Cancel</button>
       <button onclick="revSaveDay()" style="flex:1;padding:10px;background:var(--vino);border:none;border-radius:4px;cursor:pointer;font-family:var(--font-sans);color:var(--cream);font-weight:700">Save</button>
     </div>
+  </div>
+</div>
+
+<div id="chk-modal" style="display:none;position:fixed;inset:0;background:rgba(40,5,8,.6);z-index:9300;align-items:flex-start;justify-content:center;overflow:auto;padding:20px 12px" onclick="if(event.target===this)chkClose()">
+  <div class="chk-win">
+    <div class="chk-head">
+      <div><div class="chk-title">Restaurant Checklist</div><div class="chk-date" id="chk-date"></div></div>
+      <button class="chk-x" onclick="chkClose()" title="Close">&times;</button>
+    </div>
+    <div class="chk-tabs">
+      <button id="chk-tab-open" class="chk-tab active" onclick="chkSetType('opening')">Opening</button>
+      <button id="chk-tab-close" class="chk-tab" onclick="chkSetType('closing')">Closing</button>
+      <span class="chk-progress" id="chk-progress"></span>
+    </div>
+    <div class="chk-body"><div id="chk-items"></div></div>
+    <div class="chk-foot"><div id="chk-signoff"></div></div>
   </div>
 </div>
 
@@ -6707,6 +6831,32 @@ function fohSignOut(){
   .ops-date{display:flex;align-items:center;gap:8px;font-size:12px;color:rgba(255,255,255,.8)}
   .ops-date input{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.3);color:var(--cream);border-radius:6px;padding:7px 9px;font-family:var(--font-sans);font-size:13px}
   .ops-btn-sec{background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.35);color:var(--cream);border-radius:6px;padding:7px 14px;cursor:pointer;font-family:var(--font-sans);font-size:13px}
+  .chk-win{background:#FBF7F0;width:560px;max-width:96vw;border-radius:10px;box-shadow:0 12px 48px rgba(0,0,0,.45);display:flex;flex-direction:column;max-height:92vh;overflow:hidden;margin:auto}
+  .chk-head{display:flex;align-items:flex-start;justify-content:space-between;padding:16px 20px;background:#6B1F2A;color:#FBF7F0}
+  .chk-title{font-family:'Playfair Display',serif;font-size:19px}
+  .chk-date{font-size:12px;color:#E8D9C7;margin-top:4px}
+  .chk-x{background:transparent;border:none;color:#FBF7F0;font-size:26px;line-height:1;cursor:pointer;padding:0 2px}
+  .chk-tabs{display:flex;align-items:center;gap:8px;padding:12px 20px;border-bottom:1px solid #E3D8C6;background:#F5F0E8}
+  .chk-tab{padding:7px 16px;border-radius:6px;border:1px solid rgba(107,31,42,.25);background:transparent;color:#6B1F2A;cursor:pointer;font-family:inherit;font-size:13px}
+  .chk-tab.active{background:#6B1F2A;color:#FBF7F0;border-color:#6B1F2A}
+  .chk-progress{margin-left:auto;font-size:12px;color:#8B7355}
+  .chk-body{overflow-y:auto;padding:6px 20px;background:#FBF7F0;-webkit-overflow-scrolling:touch}
+  .chk-item{display:flex;align-items:flex-start;gap:12px;padding:13px 4px;border-bottom:1px solid #EFE7DA;cursor:pointer;user-select:none}
+  .chk-item input{display:none}
+  .chk-box{flex-shrink:0;width:22px;height:22px;border:2px solid #C9A84C;border-radius:5px;margin-top:1px;position:relative}
+  .chk-on .chk-box{background:#6B1F2A;border-color:#6B1F2A}
+  .chk-on .chk-box:after{content:'\2713';color:#FBF7F0;position:absolute;top:-2px;left:3px;font-size:16px}
+  .chk-txt{font-size:14px;color:#2C1810;line-height:1.45}
+  .chk-on .chk-txt{color:#9c8a72;text-decoration:line-through}
+  .chk-foot{padding:14px 20px;border-top:1px solid #E3D8C6;background:#F5F0E8}
+  .chk-sign-lbl{font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:#6B1F2A;margin-bottom:8px;font-weight:600}
+  .chk-sign-row{display:flex;gap:8px}
+  .chk-empid{flex:1;padding:11px;border:1px solid #C9A84C;border-radius:8px;font-size:15px;background:#fff;color:#2C1810;font-family:inherit}
+  .chk-sign-btn{background:#6B1F2A;color:#FBF7F0;border:none;border-radius:8px;padding:11px 20px;font-weight:700;cursor:pointer;font-family:inherit}
+  .chk-sign-err{color:#b3402f;font-size:12px;margin-top:6px;min-height:14px}
+  .chk-signed{font-size:14px;color:#2d7a4f;font-weight:600}
+  .chk-signed span{color:#8B7355;font-weight:400;font-size:12px}
+  .chk-resign{color:#6B1F2A;font-size:12px;text-decoration:underline;cursor:pointer;margin-top:6px;font-weight:400;display:inline-block}
   .rev-setup{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:24px;max-width:560px;margin:20px auto;color:var(--ink)}
   .rev-setup .rev-h{font-family:var(--font-serif);font-size:17px;color:var(--vino);margin-bottom:10px}
   .rev-lbl{display:block;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--vino-light,#8a4a52);font-family:var(--font-sans);margin-bottom:4px}
