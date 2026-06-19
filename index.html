@@ -5815,8 +5815,16 @@ function fohRenderSchedDay(){
     var a = fohSchedAttendance[fohSchedAttKey(s.emp_id,today)];
     if(a && a.first_in && !a.last_out && !a.manual_out) clockedIn++;
   });
+  var todayEvs = fohSchedEvents[today] || [];
+  var evBanner = '<div onclick="fohSchedOpenEvents(\''+today+'\')" style="cursor:pointer;margin-bottom:12px;padding:10px 12px;background:var(--cream);border:1px solid var(--sabbia-dark);border-radius:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">'+
+    '<span style="font-size:9px;letter-spacing:1px;text-transform:uppercase;color:var(--vino-light);font-weight:700">Today\'s events</span>'+
+    (todayEvs.length
+      ? todayEvs.map(function(ev){ return '<span class="sch-event-chip" style="margin:0">'+fohEvEsc(ev.name)+'</span>'; }).join('')
+      : '<span style="font-size:12px;color:var(--sabbia-dark)">+ tap to add</span>')+
+    '</div>';
   var content = document.getElementById('foh-sch-day-content');
   if(content) content.innerHTML =
+    evBanner +
     '<div style="margin-bottom:12px;font-size:13px;color:var(--vino-light)">'+total+' staff on duty'+
     ' · <span style="color:#4a7c59;font-weight:600">'+clockedIn+' clocked in</span>'+
     (fohSchedLastSync?' · <span style="opacity:.55;font-size:12px">'+fohSchedLastSync+'</span>':'')+
