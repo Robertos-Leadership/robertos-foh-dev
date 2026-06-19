@@ -4242,7 +4242,7 @@ function startApp(){
 //  REVENUE MODULE — native rebuild of Daily Budget.xlsx
 //  (Leader page · finance · authenticated-only)
 // ══════════════════════════════════════════════
-function revInit(){ if(!state.rev) state.rev={ rates:{}, daily:[], targets:{}, loaded:false, loading:false, period:null, view:'month', tablesMissing:false }; return state.rev; }
+function revInit(){ if(!state.rev) state.rev={ rates:{}, daily:[], targets:{}, budgets:{}, loaded:false, loading:false, period:null, view:'month', tablesMissing:false }; return state.rev; }
 async function loadRevenue(){
   var R=revInit(); if(R.loading) return; R.loading=true;
   try{
@@ -4254,7 +4254,7 @@ async function loadRevenue(){
     R.tablesMissing = !!(res[0].error||res[1].error||res[2].error);
     R.rates={}; (res[0].data||[]).forEach(function(r){ R.rates[r.weekday]=r; });
     R.daily=res[1].data||[];
-    R.targets={}; (res[2].data||[]).forEach(function(t){ R.targets[t.period]=Number(t.monthly_target)||0; });
+    R.targets={}; R.budgets={}; (res[2].data||[]).forEach(function(t){ R.targets[t.period]=Number(t.monthly_target)||0; if(t.monthly_budget!=null) R.budgets[t.period]=Number(t.monthly_budget); });
     if(!R.period) R.period=revLatestPeriod();
     R.loaded=true;
   }catch(e){ R.tablesMissing=true; R.loaded=true; }
@@ -4266,8 +4266,12 @@ function revPeriodOf(d){ return String(d).slice(0,7); }
 function revLatestPeriod(){ var R=revInit(); var ps=R.daily.map(function(d){return revPeriodOf(d.service_date);}); if(ps.length) return ps.sort().slice(-1)[0]; var n=new Date(); return n.getFullYear()+'-'+String(n.getMonth()+1).padStart(2,'0'); }
 function revWeekday(ds){ return new Date(ds+'T12:00:00').toLocaleDateString('en-US',{weekday:'long'}); }
 function revDailyMap(){ var m={}; revInit().daily.forEach(function(d){ m[String(d.service_date).slice(0,10)]=d; }); return m; }
-function revRatesBudget(ds){ var r=revInit().rates[revWeekday(ds)]; if(!r) return 0; return (Number(r.cover_target)||0)*(Number(r.avg_spend)||0); }
-function revBudget(ds){ var row=revDailyMap()[ds]; if(row&&row.budget_override!=null) return Number(row.budget_override); return revRatesBudget(ds); }
+function revRatesBudget(ds){ var r=revInit().rates[revWeekday(ds)]; if(!r) return 0; return (Number(r.cover_target)||0)*(Number(r.avg_spend)||0); }   // weekday pattern weight = cover_target × avg_spend
+function revMonthlyBudget(p){ var R=revInit(); return (R.budgets&&R.budgets[p]!=null)?Number(R.budgets[p]):null; }
+function revPatternTotal(p){ var dim=revDaysInMonth(p), s=0; for(var d=1; d<=dim; d++){ s+=revRatesBudget(p+'-'+String(d).padStart(2,'0')); } return s; }
+// Auto daily budget: if a monthly budget is set, scale the weekday pattern to hit it exactly; else fall back to the rates pattern.
+function revAutoBudget(ds){ var p=revPeriodOf(ds); var B=revMonthlyBudget(p); if(B==null) return revRatesBudget(ds); var tot=revPatternTotal(p); if(!tot) return 0; return B*revRatesBudget(ds)/tot; }
+function revBudget(ds){ var row=revDailyMap()[ds]; if(row&&row.budget_override!=null) return Number(row.budget_override); return revAutoBudget(ds); }
 function revDaysInMonth(p){ var a=p.split('-').map(Number); return new Date(a[0],a[1],0).getDate(); }
 function revAddMonths(p,n){ var a=p.split('-').map(Number); var d=new Date(a[0],a[1]-1,1); d.setMonth(d.getMonth()+n); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); }
 function revPrevPeriod(p){ return revAddMonths(p,-1); }
@@ -4303,10 +4307,18 @@ function revAreaMTD(p){
       o.restNet+=Number(row.rest_net||0); o.restCov+=Number(row.rest_covers_actual||0);
       o.lounNet+=Number(row.lounge_net||0); o.lounCov+=Number(row.lounge_covers_actual||0);
       o.totNet+=Number(row.net_actual||0); o.totCov+=(Number(row.rest_covers_actual||0)+Number(row.lounge_covers_actual||0));
-      o.rlNet+=Number(row.rest_lunch_net||0); o.rlCov+=Number(row.rest_lunch_covers||0);
-      o.rdNet+=Number(row.rest_dinner_net||0); o.rdCov+=Number(row.rest_dinner_covers||0);
-      o.llNet+=Number(row.lounge_lunch_net||0); o.llCov+=Number(row.lounge_lunch_covers||0);
-      o.ldNet+=Number(row.lounge_dinner_net||0); o.ldCov+=Number(row.lounge_dinner_covers||0);
+      // Same convention as the day editor (revEditDay): if a day has no Lunch/Dinner split,
+      // treat its area totals as Dinner (lunch is closed) so the daypart MTD covers ALL traded days.
+      var hasDP=(row.rest_lunch_net!=null||row.rest_dinner_net!=null||row.lounge_lunch_net!=null||row.lounge_dinner_net!=null||row.rest_dinner_covers!=null||row.lounge_dinner_covers!=null);
+      if(hasDP){
+        o.rlNet+=Number(row.rest_lunch_net||0); o.rlCov+=Number(row.rest_lunch_covers||0);
+        o.rdNet+=Number(row.rest_dinner_net||0); o.rdCov+=Number(row.rest_dinner_covers||0);
+        o.llNet+=Number(row.lounge_lunch_net||0); o.llCov+=Number(row.lounge_lunch_covers||0);
+        o.ldNet+=Number(row.lounge_dinner_net||0); o.ldCov+=Number(row.lounge_dinner_covers||0);
+      } else {
+        o.rdNet+=Number(row.rest_net||0); o.rdCov+=Number(row.rest_covers_actual||0);
+        o.ldNet+=Number(row.lounge_net||0); o.ldCov+=Number(row.lounge_covers_actual||0);
+      }
     } }
   return o;
 }
@@ -4347,11 +4359,73 @@ function revReview(p){
   };
 }
 
+// ══════════════════════════════════════════════
+//  SCENARIO ENGINE — deterministic what-if math (the AI never computes; it only
+//  parameterises this and narrates the result). Mirrors revBudget() exactly,
+//  with a per-weekday multiplier on the rates pattern, so all budget modes
+//  (override / monthly-budget distribution / rates pattern) stay correct.
+// ══════════════════════════════════════════════
+function revScenarioBudget(p, mul){
+  var map=revDailyMap(), dim=revDaysInMonth(p), B=revMonthlyBudget(p);
+  function w(ds){ return revRatesBudget(ds)*mul(revWeekday(ds)); }   // scenario pattern weight
+  var totW=0,d,ds; for(d=1; d<=dim; d++){ totW+=w(p+'-'+String(d).padStart(2,'0')); }
+  var sum=0;
+  for(d=1; d<=dim; d++){
+    ds=p+'-'+String(d).padStart(2,'0'); var row=map[ds];
+    if(row&&row.budget_override!=null){ sum+=Number(row.budget_override); continue; }  // fixed manual day
+    if(B!=null){ sum += totW? B*w(ds)/totW : 0; continue; }                              // monthly-budget distribution
+    sum += w(ds);                                                                         // rates pattern
+  }
+  return sum;
+}
+// params: { metric:'avg_spend'|'covers', changePct:Number, scope:'all'|<Weekday>, period? }
+function revScenario(params){
+  var R=revInit(), p=(params&&params.period)||R.period;
+  var pct=Number(params&&params.changePct)||0, f=1+pct/100;
+  var scope=(params&&params.scope)||'all';
+  var metric=(params&&params.metric)||'avg_spend';
+  function mul(wd){ return (scope==='all'||scope===wd)?f:1; }
+  var baseBudget=revScenarioBudget(p, function(){return 1;});
+  var scenBudget=revScenarioBudget(p, mul);
+  var rv=revReview(p);
+  // Forecast: actuals already booked (MTD) are history and never change. The change
+  // re-rates only the REMAINING days' projected revenue (covers× or spend× both scale revenue linearly).
+  var projScen;
+  if(scope==='all'){ projScen=rv.projected*f; }
+  else {
+    var dim=revDaysInMonth(p), add=0, wAvg=(rv.weekdays.filter(function(x){return x.wd===scope;})[0]||{cur:0}).cur;
+    for(var d=rv.windowDay+1; d<=dim; d++){ if(revWeekday(p+'-'+String(d).padStart(2,'0'))===scope) add += wAvg*(f-1); }
+    projScen=rv.projected+add;
+  }
+  var scenForecast=rv.mtd+projScen;
+  var target=(R.targets&&R.targets[p])||0;   // monthly target (rev_targets) — the fixed benchmark
+  // ALL derived figures pre-computed here so the model never subtracts: gap to target (base & scenario), abs + %.
+  var gap={ target:target,
+    baseToTarget:rv.forecast-target, scenarioToTarget:scenForecast-target,
+    baseToTargetPct: target?(rv.forecast-target)/target:0, scenarioToTargetPct: target?(scenForecast-target)/target:0 };
+  return {
+    period:p, periodLabel:revMonthLabel(p), metric:metric, changePct:pct, scope:scope,
+    budget:{ base:baseBudget, scenario:scenBudget, deltaAbs:scenBudget-baseBudget, deltaPct: baseBudget?(scenBudget-baseBudget)/baseBudget:0 },
+    forecast:{ base:rv.forecast, scenario:scenForecast, deltaAbs:scenForecast-rv.forecast, deltaPct: rv.forecast?(scenForecast-rv.forecast)/rv.forecast:0,
+               mtd:rv.mtd, projectedBase:rv.projected, projectedScenario:projScen,
+               basis:'Booked actuals (MTD '+Math.round(rv.mtd)+') unchanged; only the '+(scope==='all'?'remaining-day':scope+' remaining-day')+' projection is re-rated.' },
+    gap:gap
+  };
+}
+
 // ── Navigation ──
 function revSetPeriod(p){ revInit().period=p; renderMain(); }
 function revStep(n){ var R=revInit(); revSetPeriod(revAddMonths(R.period,n)); }
 function revAddMonth(){ var R=revInit(); R.period=revAddMonths(revLatestPeriod(),1); renderMain(); }
 function revSetView(v){ revInit().view=v; renderMain(); }
+// Set the monthly budget for the current period (empty = clear → back to rates pattern). Distributes across days by weekday pattern.
+async function revSaveMonthlyBudget(){
+  var R=revInit(), p=R.period, v=revNum('rev-monthly-budget');
+  if(v!=null) R.budgets[p]=v; else delete R.budgets[p];
+  renderMain();
+  var res=await sb.from('rev_targets').upsert({period:p, monthly_budget:v},{onConflict:'period'});
+  if(res.error){ console.error('rev monthly budget',res.error); alert('Could not save monthly budget: '+res.error.message+(res.error.code==='PGRST204'?'\n\nRun revenue-monthly-budget.sql in Supabase first.':'')); }
+}
 
 // ── Edit a day (Restaurant/Lounge x Lunch/Dinner) ──
 function revNum(id){ var el=document.getElementById(id); if(!el) return null; var v=el.value.trim(); if(v==='') return null; v=Number(v.replace(/[^0-9.\-]/g,'')); return isFinite(v)?v:null; }
@@ -4359,8 +4433,8 @@ function revEditDay(ds){
   var map=revDailyMap(); var row=map[ds]||{};
   document.getElementById('rev-edit-date').value=ds;
   document.getElementById('rev-edit-title').textContent=new Date(ds+'T12:00:00').toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
-  var defB=revRatesBudget(ds);
-  document.getElementById('rev-edit-budget').value=(row.budget_override!=null?row.budget_override:(defB||''));
+  var defB=revAutoBudget(ds);
+  document.getElementById('rev-edit-budget').value=(row.budget_override!=null?row.budget_override:(defB?Math.round(defB):''));
   var defEl=document.getElementById('rev-edit-budget-def'); if(defEl) defEl.textContent='default '+revMoney(defB)+(defB===0?' (closed)':'');
   function setv(id,v){ document.getElementById(id).value=(v!=null?v:''); }
   var hasDaypart=(row.rest_lunch_net!=null||row.rest_dinner_net!=null||row.lounge_lunch_net!=null||row.lounge_dinner_net!=null||row.rest_dinner_covers!=null||row.lounge_dinner_covers!=null);
@@ -4374,6 +4448,7 @@ function revEditDay(ds){
     setv('rev-rl-net',null); setv('rev-rl-cov',null); setv('rev-rd-net',row.rest_net); setv('rev-rd-cov',row.rest_covers_actual);
     setv('rev-ll-net',null); setv('rev-ll-cov',null); setv('rev-ld-net',row.lounge_net); setv('rev-ld-cov',row.lounge_covers_actual);
   }
+  setv('rev-food-net',row.food_net); setv('rev-bev-net',row.bev_net); setv('rev-tob-net',row.tobacco_net);
   revRecalc();
   document.getElementById('rev-edit-modal').style.display='flex';
 }
@@ -4392,6 +4467,13 @@ function revRecalc(){
   if(box) box.innerHTML='<div><span>Restaurant</span><b>'+revMoney(restNet)+' · '+restCov+' cov · '+(tot?Math.round(restNet/tot*100):0)+'%</b></div>'
     +'<div><span>Scala Lounge &amp; Bar</span><b>'+revMoney(lounNet)+' · '+lounCov+' cov · '+(tot?Math.round(lounNet/tot*100):0)+'%</b></div>'
     +'<div class="rev-edit-tot-total"><span>Total</span><b>'+revMoney(tot)+' · '+totCov+' cov · avg '+(totCov?revMoney(tot/totCov).replace('AED ',''):'—')+'</b></div>';
+  // F&B split reconciliation hint
+  var fb=revNum('rev-food-net')||0, bv=revNum('rev-bev-net')||0, tb=revNum('rev-tob-net')||0, fbSum=fb+bv+tb;
+  var chk=document.getElementById('rev-fnb-check');
+  if(chk){
+    if(fbSum===0){ chk.style.color='var(--text-light)'; chk.textContent='Not entered — AI will estimate Food 48% / Bev 51% / Tobacco 1% of net.'; }
+    else { var diff=fbSum-tot; chk.style.color=''; chk.innerHTML='F&B total '+revMoney(fbSum)+' vs net '+revMoney(tot)+' · '+(Math.abs(diff)<1?'<b style="color:#2d7a4f">matches</b>':'<b style="color:#b3402f">off by '+revMoney(Math.abs(diff)).replace('AED ','')+'</b>'); }
+  }
 }
 async function revSaveDay(){
   var ds=document.getElementById('rev-edit-date').value;
@@ -4400,12 +4482,14 @@ async function revSaveDay(){
   function sum(a,b){ return (a==null&&b==null)?null:((a||0)+(b||0)); }
   var restNet=sum(rl,rd), restCov=sum(rlc,rdc), lounNet=sum(ll,ld), lounCov=sum(llc,ldc);
   var net=(restNet==null&&lounNet==null)?null:((restNet||0)+(lounNet||0));
-  var bIn=revNum('rev-edit-budget'), defB=revRatesBudget(ds);
-  var budgetOverride=(bIn==null||bIn===defB)?null:bIn;   // store only if changed from the rates default
+  var bIn=revNum('rev-edit-budget'), defB=revAutoBudget(ds);
+  var budgetOverride=(bIn==null||Math.abs(bIn-defB)<1)?null:bIn;   // store only if changed from the auto (distributed) default
+  var food=revNum('rev-food-net'), bev=revNum('rev-bev-net'), tob=revNum('rev-tob-net');
   var payload={ service_date:ds, budget_override:budgetOverride,
     rest_lunch_net:rl, rest_lunch_covers:rlc, rest_dinner_net:rd, rest_dinner_covers:rdc,
     lounge_lunch_net:ll, lounge_lunch_covers:llc, lounge_dinner_net:ld, lounge_dinner_covers:ldc,
     rest_net:restNet, rest_covers_actual:restCov, lounge_net:lounNet, lounge_covers_actual:lounCov,
+    food_net:food, bev_net:bev, tobacco_net:tob,
     net_actual:net, updated_at:new Date().toISOString() };
   var R=revInit(); var i=R.daily.findIndex(function(x){ return String(x.service_date).slice(0,10)===ds; });
   if(i>=0) R.daily[i]=Object.assign({},R.daily[i],payload); else R.daily.push(payload);
@@ -4416,27 +4500,98 @@ async function revSaveDay(){
 
 // ── AI report agent (mirrors Kitchen survey-assistant pattern) ──
 var REV_AI_URL='https://paoaivwtkzujmrgrfjuq.supabase.co/functions/v1/revenue-assistant';
+// Standard DSR sales mix — used to ESTIMATE F&B when a day's split hasn't been entered.
+var REV_FNB_MIX={food:0.48, bev:0.51, tob:0.01};
+function revFnbSplit(row){
+  var net=Number(row.net_actual)||0;
+  if(row.food_net!=null||row.bev_net!=null||row.tobacco_net!=null)
+    return {food:Number(row.food_net||0), bev:Number(row.bev_net||0), tob:Number(row.tobacco_net||0), est:false};
+  return {food:Math.round(net*REV_FNB_MIX.food), bev:Math.round(net*REV_FNB_MIX.bev), tob:Math.round(net*REV_FNB_MIX.tob), est:true};
+}
+// Comprehensive grounding: the FULL dataset (every entered day + F&B actual/estimate) plus
+// rates, budgets and the computed analysis — so the agent can answer about any day or metric.
 function revBriefing(){
-  var rv=revReview(revInit().period); var m=revMonthData(revInit().period);
-  var L=[]; L.push('Roberto\'s DIFC revenue — '+revMonthLabel(rv.period)+' (through day '+rv.windowDay+').');
-  L.push('MTD net AED '+Math.round(rv.mtd).toLocaleString()+' over '+rv.tradingDays.cur+' trading days.');
-  L.push('Vs '+revMonthLabel(rv.prevPeriod)+' matched window: net '+revPct(rv.net.chg)+', covers '+revPct(rv.covers.chg)+', avg spend/cover '+revPct(rv.spendCover.chg)+'.');
-  L.push('Weekday avg net (this month): '+rv.weekdays.map(function(w){return w.wd.slice(0,3)+' '+Math.round(w.cur);}).join(', ')+'.');
-  L.push('Full-month forecast AED '+Math.round(rv.forecast).toLocaleString()+' vs budget AED '+Math.round(rv.budgetTotal).toLocaleString()+' ('+revPct(rv.vsBudgetPct)+').');
-  L.push('Per-day net (entered): '+m.days.filter(function(d){return d.net!=null;}).map(function(d){return d.d+':'+Math.round(d.net);}).join(', ')+'.');
+  var R=revInit(), p=R.period, L=[];
+  var nowD=new Date(), tD=new Date(nowD.getTime()+nowD.getTimezoneOffset()*60000+4*3600000);
+  var todayStr=tD.getFullYear()+'-'+String(tD.getMonth()+1).padStart(2,'0')+'-'+String(tD.getDate()).padStart(2,'0');
+  L.push('ROBERTO\'S DIFC — REVENUE DATA (all figures AED). Currently viewing '+revMonthLabel(p)+'. Today (Dubai): '+todayStr+'.');
+  L.push('Venues: Restaurant and Scala Lounge & Bar. Lunch is normally closed (dinner only).');
+  L.push('F&B split: "actual" = entered from the DSR; "est" = estimated at Food '+(REV_FNB_MIX.food*100)+'% / Bev '+(REV_FNB_MIX.bev*100)+'% / Tobacco '+(REV_FNB_MIX.tob*100)+'% of net. Always label estimates as estimates.');
+  L.push('\nWEEKDAY RATES (daily budget pattern = cover_target × avg_spend):');
+  ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'].forEach(function(wd){ var r=R.rates[wd]; if(r) L.push('  '+wd+': avg_spend '+Number(r.avg_spend)+', cover_target '+Number(r.cover_target)+', daily budget '+(Number(r.cover_target)*Number(r.avg_spend))); });
+  L.push('\nMONTHLY TARGETS / BUDGETS:');
+  Object.keys(R.targets||{}).sort().forEach(function(per){ L.push('  '+per+': target '+Math.round(R.targets[per]||0)+((R.budgets&&R.budgets[per]!=null)?', monthly budget '+Math.round(R.budgets[per]):'')); });
+  L.push('\nDAILY ACTUALS (every entered day; ? = not split out):');
+  R.daily.slice().sort(function(a,b){return String(a.service_date).localeCompare(String(b.service_date));}).forEach(function(row){
+    if(row.net_actual==null) return;
+    var ds=String(row.service_date).slice(0,10), wd=revWeekday(ds), f=revFnbSplit(row);
+    var rc=(row.rest_covers_actual!=null?row.rest_covers_actual:'?'), lc=(row.lounge_covers_actual!=null?row.lounge_covers_actual:'?');
+    L.push('  '+ds+' ('+wd.slice(0,3)+'): net '+Math.round(row.net_actual)
+      +' | Restaurant '+Math.round(row.rest_net||0)+'/'+rc+'cov | Scala '+Math.round(row.lounge_net||0)+'/'+lc+'cov'
+      +' | F&B('+(f.est?'est':'actual')+') food '+f.food+' bev '+f.bev+' tob '+f.tob);
+  });
+  var rv=revReview(p), m=revMonthData(p);
+  L.push('\nANALYSIS — '+revMonthLabel(p)+' (through day '+rv.windowDay+'):');
+  L.push('  MTD net '+Math.round(rv.mtd)+' over '+rv.tradingDays.cur+' trading days; budget-to-date '+Math.round(m.budgetToDate)+'.');
+  L.push('  Vs '+revMonthLabel(rv.prevPeriod)+' matched window: net '+revPct(rv.net.chg)+', covers '+revPct(rv.covers.chg)+', avg spend/cover '+revPct(rv.spendCover.chg)+'.');
+  L.push('  Weekday avg net: '+rv.weekdays.map(function(w){return w.wd.slice(0,3)+' '+Math.round(w.cur);}).join(', ')+'.');
+  L.push('  Full-month forecast '+Math.round(rv.forecast)+' vs budget '+Math.round(rv.budgetTotal)+' ('+revPct(rv.vsBudgetPct)+').');
   return L.join('\n');
 }
+// The ONLY tool the analyst can call. It never does arithmetic itself — it parameterises
+// this, the app computes the exact result (revScenario), and the model narrates the figures.
+var REV_TOOL_SCENARIO={
+  name:'compute_scenario',
+  description:'Compute an EXACT what-if on the revenue model (budget + forecast). You MUST call this for ANY question about the impact of changing average spend or covers (e.g. "+2% avg spend → final budget", "Fridays +5% covers"). Never calculate yourself — call this and report only its exact numbers.',
+  input_schema:{ type:'object', properties:{
+    metric:{ type:'string', enum:['avg_spend','covers'], description:'Lever to change: avg_spend (spend per cover) or covers.' },
+    changePct:{ type:'number', description:'Percent change. 2 means +2%, -5 means -5%.' },
+    scope:{ type:'string', description:'"all" for every trading day, or a single weekday name (Monday..Saturday) to change only that weekday. Default "all".' },
+    period:{ type:'string', description:'Month as YYYY-MM. Default = the month currently being viewed.' }
+  }, required:['metric','changePct'] }
+};
+function revScenRound(r){ return {
+  period:r.periodLabel, metric:r.metric, changePct:r.changePct, scope:r.scope,
+  budget:{ base:Math.round(r.budget.base), scenario:Math.round(r.budget.scenario), change:Math.round(r.budget.deltaAbs), changePct:+(r.budget.deltaPct*100).toFixed(2) },
+  forecast:{ base:Math.round(r.forecast.base), scenario:Math.round(r.forecast.scenario), change:Math.round(r.forecast.deltaAbs), changePct:+(r.forecast.deltaPct*100).toFixed(2), note:r.forecast.basis },
+  gap_to_target:{ target:Math.round(r.gap.target), base:Math.round(r.gap.baseToTarget), scenario:Math.round(r.gap.scenarioToTarget), basePct:+(r.gap.baseToTargetPct*100).toFixed(2), scenarioPct:+(r.gap.scenarioToTargetPct*100).toFixed(2) }
+}; }
+function revScenarioCardHTML(r){
+  function chip(o){ return '<b class="'+revPctClass(o.deltaPct)+'">'+(o.deltaAbs>=0?'+':'−')+revMoney(Math.abs(o.deltaAbs)).replace('AED ','')+' ('+revPct(o.deltaPct)+')</b>'; }
+  var title=(r.metric==='avg_spend'?'Average spend':'Covers')+' '+(r.changePct>=0?'+':'')+r.changePct+'%'+(r.scope&&r.scope!=='all'?' · '+r.scope+' only':'')+' — '+r.periodLabel;
+  return '<div class="rev-scen-card"><div class="rev-scen-h">Scenario · '+title+'</div>'
+    +'<table class="rev-scen-tbl"><thead><tr><th></th><th>Now</th><th>Scenario</th><th>Change</th></tr></thead><tbody>'
+    +'<tr><td>Monthly budget</td><td>'+revMoney(r.budget.base)+'</td><td>'+revMoney(r.budget.scenario)+'</td><td>'+chip(r.budget)+'</td></tr>'
+    +'<tr><td>Full-month forecast</td><td>'+revMoney(r.forecast.base)+'</td><td>'+revMoney(r.forecast.scenario)+'</td><td>'+chip(r.forecast)+'</td></tr>'
+    +(r.gap.target?('<tr><td>Forecast vs target ('+revMoney(r.gap.target)+')</td><td class="'+(r.gap.baseToTarget>=0?'rev-pos':'rev-neg')+'">'+revMoney(r.gap.baseToTarget).replace('AED ','')+'</td><td class="'+(r.gap.scenarioToTarget>=0?'rev-pos':'rev-neg')+'">'+revMoney(r.gap.scenarioToTarget).replace('AED ','')+'</td><td>'+chip(r.forecast)+'</td></tr>'):'')
+    +'</tbody></table><div class="rev-scen-note">'+r.forecast.basis+'</div></div>';
+}
 async function revAiReport(){
-  var q=prompt('Ask the revenue agent (e.g. "summarise this month for the board", "why is Friday soft", "project the full month"):','Summarise this month vs last month for the board.');
+  var q=prompt('Ask the revenue analyst (e.g. "F&B split on 12 May", "if avg spend +2%, what\'s the final budget?", "Fridays +5% covers"):','If average spend increased 2%, what would the final budget and forecast look like?');
   if(q===null) return;
-  var box=document.getElementById('rev-ai-out'); if(box){ box.style.display='block'; box.textContent='Generating report…'; }
+  var box=document.getElementById('rev-ai-out'); if(box){ box.style.display='block'; box.textContent='Analysing…'; }
+  var SYS='You are a precise F&B revenue analyst for Roberto\'s DIFC. Use ONLY the figures in the DATA block or returned by the compute_scenario tool — never invent or calculate numbers yourself. For ANY what-if about changing average spend or covers you MUST call compute_scenario. The tool result already contains EVERY derived figure you need — budget/forecast deltas (absolute and %) and gap_to_target (base, scenario, and %). Quote those values verbatim; do NOT perform arithmetic of your own (no subtraction, no computing percentages). When F&B figures are marked "est", state they are estimates from the standard mix, not actuals. Be concise, board-ready, in AED; call out risks and notable swings.';
+  var messages=[{role:'user', content:q+'\n\nDATA:\n'+revBriefing()}], cardHTML='';
   try{
-    var resp=await fetch(REV_AI_URL,{ method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+SUPABASE_KEY,'apikey':SUPABASE_KEY}, body:JSON.stringify({ action:'chat', model:'claude-sonnet-4-6', max_tokens:1100, system:'You are a precise F&B revenue analyst for Roberto\'s DIFC. Use ONLY the figures provided. Be concise, board-ready, AED, and call out risks. Do not invent numbers.', messages:[{role:'user', content:q+'\n\nDATA:\n'+revBriefing()}] }) });
-    var data=await resp.json();
-    if(!resp.ok) throw new Error(data.error||data.message||('HTTP '+resp.status));
-    var text=data.text||data.content||data.reply||(data.choices&&data.choices[0]&&data.choices[0].message&&data.choices[0].message.content)||JSON.stringify(data);
-    if(box) box.textContent=text;
-  }catch(err){ if(box) box.textContent='Report agent not available yet ('+(err.message||err)+'). Deploy the revenue-assistant Edge Function to enable AI reports.'; }
+    for(var step=0; step<5; step++){
+      var resp=await fetch(REV_AI_URL,{ method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+SUPABASE_KEY,'apikey':SUPABASE_KEY}, body:JSON.stringify({ action:'chat', model:'claude-sonnet-4-6', max_tokens:1600, system:SYS, tools:[REV_TOOL_SCENARIO], messages:messages }) });
+      var data=await resp.json();
+      if(!resp.ok) throw new Error(data.error||('HTTP '+resp.status));
+      var content=data.content||[];
+      messages.push({role:'assistant', content:content});
+      var toolUses=content.filter(function(b){return b.type==='tool_use';});
+      if(data.stop_reason==='tool_use' && toolUses.length){
+        var results=toolUses.map(function(tu){ var r=revScenario(tu.input); cardHTML+=revScenarioCardHTML(r); return {id:tu.id, round:revScenRound(r)}; });
+        if(box) box.innerHTML=cardHTML+'<div class="rev-scen-think">Writing analysis…</div>';
+        messages.push({role:'user', content:results.map(function(x){ return {type:'tool_result', tool_use_id:x.id, content:JSON.stringify(x.round)}; })});
+        continue;
+      }
+      var text=content.filter(function(b){return b.type==='text';}).map(function(b){return b.text;}).join('\n').trim() || data.text || '';
+      if(box){ box.innerHTML=cardHTML+'<div class="rev-ai-text"></div>'; box.querySelector('.rev-ai-text').textContent=text; }
+      return;
+    }
+    if(box) box.innerHTML=cardHTML+'<div class="rev-scen-think">Reached the scenario step limit.</div>';
+  }catch(err){ if(box) box.textContent='Analyst not available yet ('+(err.message||err)+'). Make sure the revenue-assistant Edge Function is deployed with tool support (v2).'; }
 }
 
 // ── Render ──
@@ -4456,6 +4611,18 @@ function revRenderMonth(){
   // toolbar
   h.push('<div class="rev-toolbar"><div class="rev-nav"><button class="rev-btn" onclick="revStep(-1)">&#8592;</button><span class="rev-period">'+revMonthLabel(p)+'</span><button class="rev-btn" onclick="revStep(1)">&#8594;</button><button class="rev-btn" onclick="revAddMonth()">+ Add month</button></div>'
     +'<div class="rev-views"><button class="rev-vtab active" onclick="revSetView(\'month\')">Month</button><button class="rev-vtab" onclick="revSetView(\'year\')">Year</button><button class="rev-btn rev-ai-btn" onclick="revAiReport()">&#9733; AI report</button></div></div>');
+  // monthly budget — enter once, auto-distributes across days by weekday pattern (editable per day)
+  var mb=revMonthlyBudget(p), allocD=m.budgetTotal-(mb||0), onBudget=(mb!=null&&Math.abs(allocD)<1);
+  h.push('<div class="rev-budget-bar">'
+    +'<label class="rev-lbl" style="margin:0">Monthly budget</label>'
+    +'<input id="rev-monthly-budget" type="number" inputmode="decimal" class="rev-inp" style="width:150px" value="'+(mb!=null?mb:'')+'" placeholder="e.g. 2000000" onkeydown="if(event.key===\'Enter\')revSaveMonthlyBudget()">'
+    +'<button class="rev-btn" onclick="revSaveMonthlyBudget()">Set</button>'
+    +(mb!=null
+      ? (onBudget
+          ? '<span class="rev-alloc rev-pos">Allocated '+revMoney(m.budgetTotal)+' = budget &#10003;</span>'
+          : '<span class="rev-alloc">Allocated '+revMoney(m.budgetTotal)+' / budget '+revMoney(mb)+' <b>('+(allocD>=0?'+':'−')+revMoney(Math.abs(allocD)).replace('AED ','')+')</b></span>')
+      : '<span class="rev-alloc rev-mut">Distributes across days by weekday pattern. Leave empty to use the rates pattern.</span>')
+    +'</div>');
   // summary cards
   h.push('<div class="rev-cards">');
   h.push('<div class="rev-card"><div class="rev-k">MTD net sales</div><div class="rev-v">'+revMoney(m.mtdNet)+'</div><div class="rev-sub">'+m.tradingDays+' trading days</div></div>');
@@ -5851,6 +6018,15 @@ function fohSignOut(){
       </tbody>
     </table></div>
     <div id="rev-edit-totals" class="rev-edit-totals"></div>
+    <div class="rev-fnb">
+      <div class="rev-fnb-h">Sales split — Food / Beverage / Tobacco (AED, from DSR · optional)</div>
+      <div class="rev-fnb-row">
+        <label>Food<input id="rev-food-net" class="rev-eg-inp" type="number" inputmode="decimal" oninput="revRecalc()"></label>
+        <label>Beverage<input id="rev-bev-net" class="rev-eg-inp" type="number" inputmode="decimal" oninput="revRecalc()"></label>
+        <label>Tobacco<input id="rev-tob-net" class="rev-eg-inp" type="number" inputmode="decimal" oninput="revRecalc()"></label>
+      </div>
+      <div id="rev-fnb-check" class="rev-fnb-check"></div>
+    </div>
     <div style="display:flex;gap:10px;margin-top:16px">
       <button onclick="revCloseEdit()" style="flex:1;padding:10px;background:transparent;border:1px solid var(--sabbia-dark);border-radius:4px;cursor:pointer;font-family:var(--font-sans);color:var(--ink)">Cancel</button>
       <button onclick="revSaveDay()" style="flex:1;padding:10px;background:var(--vino);border:none;border-radius:4px;cursor:pointer;font-family:var(--font-sans);color:var(--cream);font-weight:700">Save</button>
@@ -5869,6 +6045,9 @@ function fohSignOut(){
   .rev-views{display:flex;gap:6px;align-items:center}
   .rev-vtab{padding:6px 12px;border-radius:4px;border:1px solid rgba(107,31,42,.18);background:transparent;color:var(--text-light);cursor:pointer;font-family:var(--font-sans);font-size:12px}
   .rev-vtab.active{background:var(--vino);color:var(--cream);border-color:var(--vino)}
+  .rev-budget-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--gold,#C9A84C);border-radius:6px;padding:10px 14px;margin-bottom:18px}
+  .rev-alloc{font-size:12px;color:var(--text-secondary,#8B7355)}
+  .rev-alloc b{font-weight:700}
   .rev-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:20px}
   .rev-card{background:var(--surface);border:1px solid var(--border);border-top:2px solid var(--vino);border-radius:6px;padding:14px 16px}
   .rev-k{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--text-light);margin-bottom:6px}
@@ -5902,7 +6081,17 @@ function fohSignOut(){
   .rev-proj-row:last-child{border-bottom:none}
   .rev-proj-row span{color:var(--text-secondary,#8B7355)}
   .rev-proj-fore b{font-family:var(--font-serif);font-size:18px;color:var(--vino)}
-  .rev-ai-out{margin-top:18px;background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--gold,#C9A84C);border-radius:6px;padding:16px 18px;white-space:pre-wrap;font-family:var(--font-sans);font-size:13px;line-height:1.6;color:var(--ink)}
+  .rev-ai-out{margin-top:18px;background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--gold,#C9A84C);border-radius:6px;padding:16px 18px;font-family:var(--font-sans);font-size:13px;line-height:1.6;color:var(--ink)}
+  .rev-ai-text{white-space:pre-wrap}
+  .rev-scen-card{border:1px solid var(--gold,#C9A84C);border-radius:6px;margin-bottom:14px;overflow:hidden}
+  .rev-scen-h{background:rgba(201,168,76,.16);color:#8a6d18;font-family:var(--font-serif);font-size:13px;font-weight:700;padding:8px 12px}
+  .rev-scen-tbl{width:100%;border-collapse:collapse;font-size:12px}
+  .rev-scen-tbl th{background:var(--vino);color:var(--cream);padding:6px 10px;text-align:right;font-size:10px;letter-spacing:.04em;text-transform:uppercase}
+  .rev-scen-tbl th:first-child{text-align:left}
+  .rev-scen-tbl td{padding:7px 10px;border-bottom:1px solid var(--border);text-align:right;white-space:nowrap}
+  .rev-scen-tbl td:first-child{text-align:left;font-weight:600;color:var(--ink)}
+  .rev-scen-note{font-size:11px;color:var(--text-light);padding:7px 12px;font-style:italic}
+  .rev-scen-think{color:var(--text-light);font-size:12px;margin-top:6px}
   .rev-setup{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:24px;max-width:560px;margin:20px auto;color:var(--ink)}
   .rev-setup .rev-h{font-family:var(--font-serif);font-size:17px;color:var(--vino);margin-bottom:10px}
   .rev-lbl{display:block;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--vino-light,#8a4a52);font-family:var(--font-sans);margin-bottom:4px}
@@ -5917,6 +6106,11 @@ function fohSignOut(){
   .rev-edit-totals{font-size:12px;color:var(--ink)}
   .rev-edit-totals>div{display:flex;justify-content:space-between;gap:10px;padding:5px 0;border-bottom:1px solid var(--border)}
   .rev-edit-totals>div span{color:var(--text-secondary,#8B7355)}
+  .rev-fnb{margin-top:14px;padding-top:12px;border-top:1px dashed var(--border)}
+  .rev-fnb-h{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--vino-light,#8a4a52);margin-bottom:8px}
+  .rev-fnb-row{display:flex;gap:10px;flex-wrap:wrap}
+  .rev-fnb-row label{display:flex;flex-direction:column;gap:3px;font-size:11px;color:var(--text-secondary,#8B7355)}
+  .rev-fnb-check{font-size:11px;color:var(--text-light);margin-top:7px;min-height:14px}
   .rev-edit-tot-total{border-bottom:none!important;color:var(--vino)}
   .rev-edit-tot-total b{color:var(--vino)}
   .rev-split{display:flex;height:26px;border-radius:5px;overflow:hidden;margin-bottom:12px;font-size:11px;font-weight:600}

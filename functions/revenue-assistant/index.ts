@@ -1,14 +1,14 @@
 // ════════════════════════════════════════════════════════════
 // revenue-assistant — Supabase Edge Function (Leadership Hub project)
-// AI report agent for the FOH Revenue module. Keeps the Anthropic key
-// server-side (never in the app/repo). Mirrors the Kitchen survey-assistant.
+// AI analyst for the FOH Revenue module. Keeps the Anthropic key server-side.
 //
 // Deploy:  supabase functions deploy revenue-assistant --project-ref paoaivwtkzujmrgrfjuq
 // Secret:  supabase secrets set ANTHROPIC_API_KEY=sk-ant-... --project-ref paoaivwtkzujmrgrfjuq
 //
-// The app calls it with the anon JWT (verify_jwt on = only valid keys reach it).
-// Body: { action:'chat', model, max_tokens, system, messages:[{role,content}] }
-// Returns: { text }
+// Body: { action:'chat', model, max_tokens, system, messages, tools? }
+// Returns: { text, content, stop_reason }  — content+stop_reason let the client
+// run a tool-use loop (the app computes scenarios deterministically; the model
+// only parameterises and narrates — it never does the arithmetic).
 // ════════════════════════════════════════════════════════════
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -32,14 +32,13 @@ Deno.serve(async (req) => {
     const messages = Array.isArray(body.messages) ? body.messages : [];
     if (!messages.length) return json({ error: "No messages provided" }, 400);
 
+    const payload: Record<string, unknown> = { model, max_tokens, system, messages };
+    if (Array.isArray(body.tools) && body.tools.length) payload.tools = body.tools;
+
     const r = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
-      headers: {
-        "x-api-key": key,
-        "anthropic-version": "2023-06-01",
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({ model, max_tokens, system, messages }),
+      headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+      body: JSON.stringify(payload),
     });
     const data = await r.json();
     if (!r.ok) return json({ error: data?.error?.message || ("Anthropic HTTP " + r.status) }, 502);
@@ -49,7 +48,8 @@ Deno.serve(async (req) => {
       .map((b: { text: string }) => b.text)
       .join("\n")
       .trim();
-    return json({ text });
+    // content + stop_reason are returned so the client can run the tool-use loop
+    return json({ text, content: data.content, stop_reason: data.stop_reason });
   } catch (e) {
     return json({ error: e instanceof Error ? e.message : String(e) }, 500);
   }
