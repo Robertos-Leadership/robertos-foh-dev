@@ -11,6 +11,47 @@
 <link rel="manifest" href="site.webmanifest">
 <meta name="theme-color" content="#6B1F2A">
 <title>Roberto's Front of House</title><!-- v=20250618g -->
+<script>
+/* ── Auto-update guard ───────────────────────────────────────────────
+   THE PROBLEM THIS SOLVES: an installed phone app (PWA) usually RESUMES
+   the old page from memory instead of re-downloading it. So a fix can be
+   live on the server for hours while the phone keeps showing old code.
+   (This app keeps all its code inside index.html, so we watch that file.)
+
+   HOW IT WORKS: GitHub stamps every file with an "ETag" that changes
+   automatically each time we deploy. Whenever the app opens or comes back
+   to the foreground, we ask the server (a tiny HEAD request, no download)
+   for index.html's current ETag. If it differs from the one we started
+   with, newer code is live → reload once. Nothing to bump by hand. */
+(function(){
+  var boot = null, reloading = false;
+  function tagOf(res){ return res.headers.get('ETag') || res.headers.get('Last-Modified') || ''; }
+  function busy(){
+    var el = document.activeElement;
+    return !!(el && /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName));   // don't nuke someone mid-typing
+  }
+  function check(){
+    if (reloading) return;
+    fetch('index.html?_=' + Date.now(), { method:'HEAD', cache:'no-store' })
+      .then(function(res){
+        var tag = tagOf(res);
+        if (!tag) return;
+        if (boot === null) { boot = tag; return; }       // first run: remember what we booted with
+        if (tag !== boot && !reloading && !busy()) {      // newer version is live → refresh
+          reloading = true;
+          location.reload();
+        }
+      })
+      .catch(function(){ /* offline — try again next time the app is opened */ });
+  }
+  check();
+  document.addEventListener('visibilitychange', function(){
+    if (document.visibilityState === 'visible') check();
+  });
+  window.addEventListener('focus', check);
+  window.addEventListener('pageshow', check);   // fires when iOS restores the app from its back/forward cache
+})();
+</script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400;1,600&family=Inter:wght@300;400;500;600&display=swap');
