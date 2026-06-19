@@ -4244,7 +4244,7 @@ function startApp(){
 //  REVENUE MODULE — native rebuild of Daily Budget.xlsx
 //  (Leader page · finance · authenticated-only)
 // ══════════════════════════════════════════════
-function revInit(){ if(!state.rev) state.rev={ rates:{}, daily:[], targets:{}, budgets:{}, loaded:false, loading:false, period:null, view:'month', tablesMissing:false }; return state.rev; }
+function revInit(){ if(!state.rev) state.rev={ rates:{}, daily:[], targets:{}, budgets:{}, proposals:{}, propSeq:0, loaded:false, loading:false, period:null, view:'month', tablesMissing:false }; return state.rev; }
 async function loadRevenue(){
   var R=revInit(); if(R.loading) return; R.loading=true;
   try{
@@ -4572,6 +4572,54 @@ function revScenarioCardHTML(r){
     +(r.gap.target?('<tr><td>Forecast vs target ('+revMoney(r.gap.target)+')</td><td class="'+(r.gap.baseToTarget>=0?'rev-pos':'rev-neg')+'">'+revMoney(r.gap.baseToTarget).replace('AED ','')+'</td><td class="'+(r.gap.scenarioToTarget>=0?'rev-pos':'rev-neg')+'">'+revMoney(r.gap.scenarioToTarget).replace('AED ','')+'</td><td>'+chip(r.forecast)+'</td></tr>'):'')
     +'</tbody></table><div class="rev-scen-note">'+r.forecast.basis+'</div></div>';
 }
+// ── Apply-on-approval: the AI PROPOSES a budget/rate change; the user approves; the app writes it. ──
+var REV_TOOL_PROPOSE={
+  name:'propose_change',
+  description:'Propose an EXACT change to the revenue config (monthly budget, a weekday average spend, or a weekday cover target) for the user to APPROVE before anything is written. Use when the user asks to set/change/apply such a value (e.g. "set July budget to 1.6M", "apply +2% avg spend to Friday", "raise Saturday cover target to 270"). Give the final ABSOLUTE value. You never apply it yourself — the app shows an Approve button; tell the user to review and approve.',
+  input_schema:{ type:'object', properties:{
+    action:{ type:'string', enum:['set_monthly_budget','set_avg_spend','set_cover_target'], description:'What to change.' },
+    period:{ type:'string', description:'For set_monthly_budget: month YYYY-MM (default the viewed month).' },
+    weekday:{ type:'string', description:'For set_avg_spend / set_cover_target: weekday name Monday..Sunday.' },
+    value:{ type:'number', description:'New ABSOLUTE value (AED for budget/avg_spend; cover count for cover_target).' },
+    reason:{ type:'string', description:'One short line explaining why, shown to the user.' }
+  }, required:['action','value'] }
+};
+function revProposalPreview(a){
+  var R=revInit();
+  if(a.action==='set_monthly_budget'){ var p=a.period||R.period, cur=revMonthlyBudget(p);
+    return { title:'Set monthly budget — '+revMonthLabel(p), rows:[['Monthly budget', cur!=null?revMoney(cur):'rates pattern', revMoney(a.value)]] }; }
+  if(a.action==='set_avg_spend'){ var r=R.rates[a.weekday]||{}, ct=Number(r.cover_target)||0;
+    return { title:'Set average spend — '+a.weekday, rows:[['Avg spend', revMoney(r.avg_spend||0), revMoney(a.value)], ['Daily budget ('+a.weekday+')', revMoney((Number(r.avg_spend)||0)*ct), revMoney(a.value*ct)]] }; }
+  if(a.action==='set_cover_target'){ var r2=R.rates[a.weekday]||{}, av=Number(r2.avg_spend)||0;
+    return { title:'Set cover target — '+a.weekday, rows:[['Cover target', String(r2.cover_target||0), String(a.value)], ['Daily budget ('+a.weekday+')', revMoney((Number(r2.cover_target)||0)*av), revMoney(a.value*av)]] }; }
+  return { title:'Change', rows:[] };
+}
+function revProposalCardHTML(id){
+  var pr=revInit().proposals[id]; if(!pr) return '';
+  var rows=pr.preview.rows.map(function(r){return '<tr><td>'+clEsc(r[0])+'</td><td>'+r[1]+'</td><td style="color:#9c8a72">&rarr;</td><td><b>'+r[2]+'</b></td></tr>';}).join('');
+  var foot;
+  if(pr.status==='applied') foot='<div class="rev-prop-done rev-pos">&#10003; Applied</div>';
+  else if(pr.status==='rejected') foot='<div class="rev-prop-done rev-mut">Dismissed</div>';
+  else if(pr.status==='applying') foot='<div class="rev-prop-done rev-mut">Applying…</div>';
+  else if(pr.status==='error') foot='<div class="rev-prop-done rev-neg">Failed: '+clEsc(pr.error||'')+'</div>';
+  else foot='<div class="rev-prop-actions"><button class="rev-prop-no" onclick="revReject(\''+id+'\')">Dismiss</button><button class="rev-prop-yes" onclick="revApprove(\''+id+'\')">Approve &amp; apply</button></div>';
+  return '<div class="rev-prop-card"><div class="rev-prop-h">&#9888;&#65039; Proposed change · '+clEsc(pr.preview.title)+'</div>'+(pr.action.reason?'<div class="rev-prop-reason">'+clEsc(pr.action.reason)+'</div>':'')+'<table class="rev-prop-tbl"><thead><tr><th></th><th>Now</th><th></th><th>Proposed</th></tr></thead><tbody>'+rows+'</tbody></table>'+foot+'</div>';
+}
+async function revApplyAction(a){
+  var R=revInit();
+  if(a.action==='set_monthly_budget'){ var p=a.period||R.period; var res=await sb.from('rev_targets').upsert({period:p, monthly_budget:a.value},{onConflict:'period'}); if(res.error) return res.error.message; R.budgets[p]=a.value; return null; }
+  if(a.action==='set_avg_spend'){ if(!R.rates[a.weekday]) return 'Unknown weekday'; var res2=await sb.from('rev_rates').update({avg_spend:a.value}).eq('weekday',a.weekday); if(res2.error) return res2.error.message; R.rates[a.weekday].avg_spend=a.value; return null; }
+  if(a.action==='set_cover_target'){ if(!R.rates[a.weekday]) return 'Unknown weekday'; var res3=await sb.from('rev_rates').update({cover_target:a.value}).eq('weekday',a.weekday); if(res3.error) return res3.error.message; R.rates[a.weekday].cover_target=a.value; return null; }
+  return 'Unknown action';
+}
+async function revApprove(id){
+  var pr=revInit().proposals[id]; if(!pr||pr.status!=='pending') return;
+  pr.status='applying'; revChatRender();
+  var err=await revApplyAction(pr.action);
+  if(err){ pr.status='error'; pr.error=err; } else { pr.status='applied'; if(state.currentTab==='revenue') renderMain(); }
+  revChatRender();
+}
+function revReject(id){ var pr=revInit().proposals[id]; if(pr&&pr.status==='pending'){ pr.status='rejected'; revChatRender(); } }
 async function revAiReport(){
   var q=prompt('Ask the revenue analyst (e.g. "F&B split on 12 May", "if avg spend +2%, what\'s the final budget?", "Fridays +5% covers"):','If average spend increased 2%, what would the final budget and forecast look like?');
   if(q===null) return;
@@ -4604,7 +4652,7 @@ async function revAiReport(){
 //  AI CHAT / REPORTS — full-screen module. Multi-turn, quick-report chips,
 //  same deterministic engine (the model never computes; it parameterises + narrates).
 // ══════════════════════════════════════════════
-var REV_CHAT_SYS='You are a precise F&B revenue analyst for Roberto\'s DIFC. Use ONLY the figures in the DATA block or returned by the compute_scenario tool — never invent or calculate numbers yourself. For ANY what-if about changing average spend or covers you MUST call compute_scenario; the tool result already contains every derived figure (deltas, gap_to_target, percentages) — quote them verbatim, do NOT do arithmetic. When F&B figures are marked "est", say they are estimates from the standard mix, not actuals. An OPERATIONS LOG (closing reports) may be provided — when asked about patterns/themes, mine it for recurring shift challenges, comps trends, and comment themes, and quantify how often each recurs. Be a clear, board-ready analyst: use short headings, tables and bullets; lead with the answer; call out risks and notable swings. Keep follow-ups in context.';
+var REV_CHAT_SYS='You are a precise F&B revenue analyst for Roberto\'s DIFC. Use ONLY the figures in the DATA block or returned by the compute_scenario tool — never invent or calculate numbers yourself. For ANY what-if about changing average spend or covers you MUST call compute_scenario; the tool result already contains every derived figure (deltas, gap_to_target, percentages) — quote them verbatim, do NOT do arithmetic. When F&B figures are marked "est", say they are estimates from the standard mix, not actuals. An OPERATIONS LOG (closing reports) may be provided — when asked about patterns/themes, mine it for recurring shift challenges, comps trends, and comment themes, and quantify how often each recurs. When the user asks to SET / CHANGE / APPLY a monthly budget, a weekday average spend, or a weekday cover target, call propose_change with the final value — NEVER claim it has been applied; the app shows the user an Approve button they must click. Be a clear, board-ready analyst: use short headings, tables and bullets; lead with the answer; call out risks and notable swings. Keep follow-ups in context.';
 function revChatInit(){ var R=revInit(); if(!R.chat) R.chat={thread:[], api:[], busy:false}; return R.chat; }
 function revChatOpen(){ revChatInit(); document.getElementById('rev-chat-modal').style.display='flex'; revChatRender(); var inp=document.getElementById('rev-chat-input'); if(inp) setTimeout(function(){inp.focus();},60); }
 function revChatClose(){ document.getElementById('rev-chat-modal').style.display='none'; }
@@ -4628,25 +4676,34 @@ async function revChatSend(text){
   c.busy=true; revChatRender();
   if(!revInit().closingsLoaded) await clLoadHistory();
   var SYS=REV_CHAT_SYS+'\n\nDATA:\n'+revBriefing();
-  var cardsHTML='';
+  var cardsHTML='', propIds=[];
   try{
     for(var step=0; step<6; step++){
-      var resp=await fetch(REV_AI_URL,{ method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+SUPABASE_KEY,'apikey':SUPABASE_KEY}, body:JSON.stringify({ action:'chat', model:'claude-sonnet-4-6', max_tokens:1800, system:SYS, tools:[REV_TOOL_SCENARIO], messages:c.api }) });
+      var resp=await fetch(REV_AI_URL,{ method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+SUPABASE_KEY,'apikey':SUPABASE_KEY}, body:JSON.stringify({ action:'chat', model:'claude-sonnet-4-6', max_tokens:1800, system:SYS, tools:[REV_TOOL_SCENARIO, REV_TOOL_PROPOSE], messages:c.api }) });
       var data=await resp.json();
       if(!resp.ok) throw new Error(data.error||('HTTP '+resp.status));
       var content=data.content||[];
       c.api.push({role:'assistant', content:content.length?content:[{type:'text',text:(data.text||'')}]});
       var toolUses=content.filter(function(b){return b.type==='tool_use';});
       if(data.stop_reason==='tool_use' && toolUses.length){
-        var results=toolUses.map(function(tu){ var r=revScenario(tu.input); cardsHTML+=revScenarioCardHTML(r); return {id:tu.id, round:revScenRound(r)}; });
-        c.api.push({role:'user', content:results.map(function(x){ return {type:'tool_result', tool_use_id:x.id, content:JSON.stringify(x.round)}; })});
+        var trs=toolUses.map(function(tu){
+          if(tu.name==='propose_change'){
+            var pid='p'+(++revInit().propSeq);
+            revInit().proposals[pid]={action:tu.input, preview:revProposalPreview(tu.input), status:'pending'};
+            propIds.push(pid);
+            return {type:'tool_result', tool_use_id:tu.id, content:JSON.stringify({status:'awaiting_user_approval', note:'A proposal card with an Approve button is now shown to the user. Ask them to review and approve to apply — do NOT claim it has been applied.', preview:revProposalPreview(tu.input)})};
+          }
+          var r=revScenario(tu.input); cardsHTML+=revScenarioCardHTML(r);
+          return {type:'tool_result', tool_use_id:tu.id, content:JSON.stringify(revScenRound(r))};
+        });
+        c.api.push({role:'user', content:trs});
         revChatRender(); continue;
       }
       var textOut=content.filter(function(b){return b.type==='text';}).map(function(b){return b.text;}).join('\n').trim() || data.text || '';
-      c.thread.push({role:'assistant', text:textOut, cards:cardsHTML}); c.busy=false; revChatRender(); return;
+      c.thread.push({role:'assistant', text:textOut, cards:cardsHTML, props:propIds}); c.busy=false; revChatRender(); return;
     }
-    c.thread.push({role:'assistant', text:'Reached the analysis step limit — try narrowing the question.', cards:cardsHTML}); c.busy=false; revChatRender();
-  }catch(err){ c.busy=false; c.thread.push({role:'assistant', text:'⚠️ Analyst unavailable: '+(err.message||err), cards:cardsHTML}); revChatRender(); }
+    c.thread.push({role:'assistant', text:'Reached the analysis step limit — try narrowing the question.', cards:cardsHTML, props:propIds}); c.busy=false; revChatRender();
+  }catch(err){ c.busy=false; c.thread.push({role:'assistant', text:'⚠️ Analyst unavailable: '+(err.message||err), cards:cardsHTML, props:propIds}); revChatRender(); }
 }
 // markdown-lite → HTML (headings, tables, bullets, bold/italic/code). Escapes first.
 function revMd(s){
@@ -4676,7 +4733,7 @@ function revChatRender(){
   if(!c.thread.length){ h+='<div class="rev-chat-empty"><div class="rev-chat-empty-t">Ask anything about your revenue</div><div class="rev-chat-empty-s">e.g. "compare June to May", "F&B split on 12 May", "Fridays +5% covers", "investor one-pager" — or tap a quick report below.</div></div>'; }
   c.thread.forEach(function(m){
     if(m.role==='user'){ h+='<div class="rev-chat-row rev-chat-u"><div class="rev-chat-bub rev-chat-ub">'+esc(m.text)+'</div></div>'; }
-    else { h+='<div class="rev-chat-row rev-chat-a"><div class="rev-chat-bub rev-chat-ab">'+(m.cards||'')+'<div class="rev-chat-md">'+revMd(m.text)+'</div></div></div>'; }
+    else { h+='<div class="rev-chat-row rev-chat-a"><div class="rev-chat-bub rev-chat-ab">'+(m.cards||'')+(m.props||[]).map(revProposalCardHTML).join('')+'<div class="rev-chat-md">'+revMd(m.text)+'</div></div></div>'; }
   });
   if(c.busy){ h+='<div class="rev-chat-row rev-chat-a"><div class="rev-chat-bub rev-chat-ab rev-chat-think"><span></span><span></span><span></span></div></div>'; }
   box.innerHTML=h; box.scrollTop=box.scrollHeight;
@@ -6557,6 +6614,16 @@ function fohSignOut(){
   .rev-scen-tbl td:first-child{text-align:left;font-weight:600;color:var(--ink)}
   .rev-scen-note{font-size:11px;color:var(--text-light);padding:7px 12px;font-style:italic}
   .rev-scen-think{color:var(--text-light);font-size:12px;margin-top:6px}
+  .rev-prop-card{border:1px solid var(--vino);border-radius:6px;margin-bottom:14px;overflow:hidden;background:var(--surface)}
+  .rev-prop-h{background:var(--vino);color:var(--cream);font-family:var(--font-serif);font-size:13px;font-weight:700;padding:8px 12px}
+  .rev-prop-reason{font-size:12px;color:var(--text-secondary,#8B7355);padding:8px 12px 0;font-style:italic}
+  .rev-prop-tbl{width:100%;border-collapse:collapse;font-size:12px;margin:8px 0}
+  .rev-prop-tbl th{color:var(--text-light);text-align:left;padding:4px 12px;font-size:10px;text-transform:uppercase}
+  .rev-prop-tbl td{padding:5px 12px;border-bottom:1px solid var(--border)}
+  .rev-prop-actions{display:flex;gap:8px;padding:10px 12px;justify-content:flex-end}
+  .rev-prop-no{background:transparent;border:1px solid var(--sabbia-dark);color:var(--ink);border-radius:6px;padding:7px 14px;cursor:pointer;font-family:var(--font-sans);font-size:13px}
+  .rev-prop-yes{background:var(--vino);border:none;color:var(--cream);border-radius:6px;padding:7px 16px;cursor:pointer;font-family:var(--font-sans);font-size:13px;font-weight:700}
+  .rev-prop-done{padding:9px 12px;font-size:13px;font-weight:700}
   .rev-chat-win{background:var(--cream);width:780px;max-width:96vw;height:88vh;border-radius:10px;display:flex;flex-direction:column;box-shadow:0 12px 48px rgba(0,0,0,.45);overflow:hidden}
   .rev-chat-head{display:flex;align-items:center;justify-content:space-between;padding:13px 18px;background:var(--vino);color:var(--cream)}
   .rev-chat-title{font-family:var(--font-serif);font-size:17px;font-weight:700}
