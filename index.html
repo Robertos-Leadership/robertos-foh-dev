@@ -2059,10 +2059,11 @@
         <div class="module-desc">The Listening Bar, Jazz Tuesdays and weekly events.</div>
         <div class="module-badge">Open</div>
       </div>
-      <div class="module-card coming-soon">
-        <div class="module-tag">Coming</div>
+      <div class="module-card" onclick="enterApp('operations')">
+        <div class="module-tag">Live</div>
         <div class="module-name">Operations</div>
-        <div class="module-desc">Daily briefings and service standards.</div>
+        <div class="module-desc">Daily closing report — revenue, tips, comps &amp; shift notes.</div>
+        <div class="module-badge">Open</div>
       </div>
       <div class="module-card" onclick="enterApp('revenue')">
         <div class="module-tag">Live</div>
@@ -2353,7 +2354,7 @@ function renderNav(){
   const eventTabs = state.events.slice().sort(eventSort).map(ev=>
     `<div class="nav-tab ${active===eventTab(ev)?'active':''}" data-tab="${eventTab(ev)}" onclick="switchTab('${eventTab(ev)}')">${ev.name}</div>`
   ).join('');
-  nav.innerHTML = `<div class="nav-tab ${active==='dashboard'?'active':''}" data-tab="dashboard" onclick="switchTab('dashboard')">Leaders</div>${eventTabs}<div class="nav-tab ${active==='revenue'?'active':''}" data-tab="revenue" onclick="switchTab('revenue')">Revenue</div>`;
+  nav.innerHTML = `<div class="nav-tab ${active==='dashboard'?'active':''}" data-tab="dashboard" onclick="switchTab('dashboard')">Leaders</div>${eventTabs}<div class="nav-tab ${active==='revenue'?'active':''}" data-tab="revenue" onclick="switchTab('revenue')">Revenue</div><div class="nav-tab ${active==='operations'?'active':''}" data-tab="operations" onclick="switchTab('operations')">Operations</div>`;
 }
 function stageStats(tasks, stage){
   const stageTasks = tasks.filter(t=>getStage(t)===stage);
@@ -2387,7 +2388,7 @@ function enterApp(module){
     attachSyncListeners();
   }
   loadRevenue();
-  switchTab(module==='revenue' ? 'revenue' : (state.currentTab || 'dashboard'));
+  switchTab((module==='revenue'||module==='operations') ? module : (state.currentTab || 'dashboard'));
 }
 function showLanding(){
   document.getElementById('landing').style.display = 'grid';
@@ -2492,8 +2493,9 @@ async function loadAll(){
 function renderMain(){
   const el = document.getElementById('main-content');
   const sec = document.getElementById('topbar-section');
-  if(sec) sec.textContent = state.currentTab==='revenue' ? 'Revenue' : (state.currentTab==='dashboard' ? 'Leaders' : 'Events');
+  if(sec) sec.textContent = state.currentTab==='revenue' ? 'Revenue' : (state.currentTab==='operations' ? 'Operations' : (state.currentTab==='dashboard' ? 'Leaders' : 'Events'));
   if(state.currentTab==='revenue'){ el.innerHTML = renderRevenue(); return; }
+  if(state.currentTab==='operations'){ el.innerHTML = renderOperations(); return; }
   if(state.events.length===0){ el.innerHTML='<div class="loading">Loading...</div>'; return; }
   if(state.currentTab==='dashboard') el.innerHTML = renderDashboard();
   else el.innerHTML = renderEventPage(state.events.find(e=>e.id===tabEventId(state.currentTab)));
@@ -4677,6 +4679,164 @@ function revChatRender(){
   box.innerHTML=h; box.scrollTop=box.scrollHeight;
 }
 
+// ══════════════════════════════════════════════
+//  CLOSING REPORT (Daily Snapshot) — primary daily entry; rolls revenue fields into rev_daily.
+// ══════════════════════════════════════════════
+function clInit(){ var R=revInit(); if(!R.closing) R.closing={date:null, comps:[], good:[], bad:[], loadedRow:null}; return R.closing; }
+function clToday(){ var n=new Date(), d=new Date(n.getTime()+n.getTimezoneOffset()*60000+4*3600000); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function clNum(id){ var el=document.getElementById(id); if(!el) return null; var v=String(el.value||'').trim(); if(v==='') return null; v=Number(v.replace(/[^0-9.\-]/g,'')); return isFinite(v)?v:null; }
+function clVal(id){ var el=document.getElementById(id); return el?String(el.value||'').trim():''; }
+function clEsc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+async function clOpen(ds){
+  var C=clInit(); ds=ds||clToday(); C.date=ds;
+  var row=null;
+  try{ var res=await sb.from('closing_reports').select('*').eq('service_date',ds).limit(1); if(!res.error && res.data && res.data.length) row=res.data[0]; }catch(e){}
+  C.loadedRow=row;
+  C.comps=(row&&Array.isArray(row.comps))?row.comps.slice():[];
+  C.good=(row&&Array.isArray(row.comments_good))?row.comments_good.slice():[];
+  C.bad=(row&&Array.isArray(row.comments_bad))?row.comments_bad.slice():[];
+  document.getElementById('cl-modal').style.display='flex';
+  clFill(row); clRenderComps(); clRenderComments(); clRecalc();
+}
+function clClose(){ document.getElementById('cl-modal').style.display='none'; }
+function clFill(row){
+  row=row||{}; function set(id,v){ var el=document.getElementById(id); if(el) el.value=(v!=null?v:''); }
+  set('cl-date',clInit().date);
+  set('cl-rl-net',row.rest_lunch_net); set('cl-rl-cov',row.rest_lunch_covers);
+  set('cl-rd-net',row.rest_dinner_net); set('cl-rd-cov',row.rest_dinner_covers);
+  set('cl-ll-net',row.lounge_lunch_net); set('cl-ll-cov',row.lounge_lunch_covers);
+  set('cl-ld-net',row.lounge_dinner_net); set('cl-ld-cov',row.lounge_dinner_covers);
+  set('cl-food',row.food_net); set('cl-bev',row.bev_net); set('cl-tob',row.tobacco_net);
+  set('cl-cc',row.cc_tips); set('cl-cash',row.cash_tips);
+  set('cl-mgr-am',row.manager_am); set('cl-mgr-pm',row.manager_pm);
+  var sh=row.shifts||{};
+  set('cl-day-fb',(sh.day||{}).feedback); set('cl-day-ch',(sh.day||{}).challenges);
+  set('cl-night-fb',(sh.night||{}).feedback); set('cl-night-ch',(sh.night||{}).challenges);
+  set('cl-late-fb',(sh.late||{}).feedback); set('cl-late-ch',(sh.late||{}).challenges);
+  set('cl-events',row.private_events); set('cl-support',row.support);
+}
+function clAvg(net,cov){ return (net!=null&&cov)?revMoney(net/cov).replace('AED ',''):'—'; }
+function clRecalc(){
+  var rl=clNum('cl-rl-net'),rlc=clNum('cl-rl-cov'),rd=clNum('cl-rd-net'),rdc=clNum('cl-rd-cov');
+  var ll=clNum('cl-ll-net'),llc=clNum('cl-ll-cov'),ld=clNum('cl-ld-net'),ldc=clNum('cl-ld-cov');
+  var g=function(id){return document.getElementById(id);};
+  if(g('cl-rl-avg')) g('cl-rl-avg').textContent=clAvg(rl,rlc);
+  if(g('cl-rd-avg')) g('cl-rd-avg').textContent=clAvg(rd,rdc);
+  if(g('cl-ll-avg')) g('cl-ll-avg').textContent=clAvg(ll,llc);
+  if(g('cl-ld-avg')) g('cl-ld-avg').textContent=clAvg(ld,ldc);
+  var restNet=(rl||0)+(rd||0), lounNet=(ll||0)+(ld||0), tot=restNet+lounNet;
+  var restCov=(rlc||0)+(rdc||0), lounCov=(llc||0)+(ldc||0), totCov=restCov+lounCov;
+  if(g('cl-tot')) g('cl-tot').innerHTML='<div><span>Restaurant</span><b>'+revMoney(restNet)+' · '+restCov+' cov</b></div>'
+    +'<div><span>Scala Lounge &amp; Bar</span><b>'+revMoney(lounNet)+' · '+lounCov+' cov</b></div>'
+    +'<div class="rev-edit-tot-total"><span>Total net</span><b>'+revMoney(tot)+' · '+totCov+' cov · avg '+(totCov?revMoney(tot/totCov).replace('AED ',''):'—')+'</b></div>';
+  var fb=(clNum('cl-food')||0)+(clNum('cl-bev')||0)+(clNum('cl-tob')||0);
+  if(g('cl-fnb-chk')) g('cl-fnb-chk').textContent= fb===0?'Optional — leave blank and the model estimates Food 48% / Bev 51% / Tobacco 1%.':('F&B '+revMoney(fb)+' vs net '+revMoney(tot)+(Math.abs(fb-tot)<1?'  ✓':''));
+  var tips=(clNum('cl-cc')||0)+(clNum('cl-cash')||0);
+  if(g('cl-tips-tot')) g('cl-tips-tot').textContent=revMoney(tips);
+  var ct=clInit().comps.reduce(function(s,c){return s+(Number(c.amount)||0);},0);
+  if(g('cl-comps-tot')) g('cl-comps-tot').innerHTML= clInit().comps.length?('Comps total <b>'+revMoney(ct)+'</b>'+(tot?' · '+(ct/tot*100).toFixed(1)+'% of net':'')):'';
+}
+function clAddComp(){ clInit().comps.push({table:'',guest:'',amount:'',reason:'',manager:''}); clRenderComps(); }
+function clRemoveComp(i){ clInit().comps.splice(i,1); clRenderComps(); clRecalc(); }
+function clCompField(i,f,v){ clInit().comps[i][f]=v; if(f==='amount') clRecalc(); }
+function clRenderComps(){
+  var C=clInit(), box=document.getElementById('cl-comps'); if(!box) return; var h='';
+  C.comps.forEach(function(c,i){
+    h+='<div class="cl-comp-row">'
+      +'<input placeholder="Table" value="'+clEsc(c.table)+'" oninput="clCompField('+i+',\'table\',this.value)">'
+      +'<input placeholder="Guest" value="'+clEsc(c.guest)+'" oninput="clCompField('+i+',\'guest\',this.value)">'
+      +'<input placeholder="AED" type="number" inputmode="decimal" value="'+clEsc(c.amount)+'" oninput="clCompField('+i+',\'amount\',this.value)">'
+      +'<input placeholder="Reason" value="'+clEsc(c.reason)+'" oninput="clCompField('+i+',\'reason\',this.value)">'
+      +'<input placeholder="Mgr" value="'+clEsc(c.manager)+'" oninput="clCompField('+i+',\'manager\',this.value)">'
+      +'<button class="cl-x" onclick="clRemoveComp('+i+')" title="Remove">&times;</button></div>';
+  });
+  box.innerHTML=h;
+}
+function clAddComment(type){ (type==='good'?clInit().good:clInit().bad).push(''); clRenderComments(); }
+function clRemoveComment(type,i){ (type==='good'?clInit().good:clInit().bad).splice(i,1); clRenderComments(); }
+function clCommentField(type,i,v){ (type==='good'?clInit().good:clInit().bad)[i]=v; }
+function clRenderComments(){
+  var C=clInit();
+  ['good','bad'].forEach(function(type){
+    var box=document.getElementById('cl-'+type); if(!box) return;
+    var arr=type==='good'?C.good:C.bad, h='';
+    arr.forEach(function(t,i){ h+='<div class="cl-bullet"><input placeholder="'+(type==='good'?'What went well…':'What didn’t…')+'" value="'+clEsc(t)+'" oninput="clCommentField(\''+type+'\','+i+',this.value)"><button class="cl-x" onclick="clRemoveComment(\''+type+'\','+i+')">&times;</button></div>'; });
+    box.innerHTML=h;
+  });
+}
+async function clSave(){
+  var C=clInit(), ds=clVal('cl-date')||C.date;
+  function sum(a,b){ return (a==null&&b==null)?null:((a||0)+(b||0)); }
+  var rl=clNum('cl-rl-net'),rlc=clNum('cl-rl-cov'),rd=clNum('cl-rd-net'),rdc=clNum('cl-rd-cov');
+  var ll=clNum('cl-ll-net'),llc=clNum('cl-ll-cov'),ld=clNum('cl-ld-net'),ldc=clNum('cl-ld-cov');
+  var food=clNum('cl-food'),bev=clNum('cl-bev'),tob=clNum('cl-tob');
+  var restNet=sum(rl,rd), restCov=sum(rlc,rdc), lounNet=sum(ll,ld), lounCov=sum(llc,ldc);
+  var net=(restNet==null&&lounNet==null)?null:((restNet||0)+(lounNet||0));
+  var shifts={ day:{feedback:clVal('cl-day-fb'),challenges:clVal('cl-day-ch')}, night:{feedback:clVal('cl-night-fb'),challenges:clVal('cl-night-ch')}, late:{feedback:clVal('cl-late-fb'),challenges:clVal('cl-late-ch')} };
+  var comps=C.comps.filter(function(c){return c.table||c.guest||c.amount||c.reason||c.manager;}).map(function(c){return {table:c.table,guest:c.guest,amount:(Number(c.amount)||0),reason:c.reason,manager:c.manager};});
+  var good=C.good.filter(function(t){return t&&t.trim();}), bad=C.bad.filter(function(t){return t&&t.trim();});
+  var crow={ service_date:ds,
+    rest_lunch_net:rl, rest_lunch_covers:rlc, rest_dinner_net:rd, rest_dinner_covers:rdc,
+    lounge_lunch_net:ll, lounge_lunch_covers:llc, lounge_dinner_net:ld, lounge_dinner_covers:ldc,
+    food_net:food, bev_net:bev, tobacco_net:tob, cc_tips:clNum('cl-cc'), cash_tips:clNum('cl-cash'),
+    manager_am:clVal('cl-mgr-am')||null, manager_pm:clVal('cl-mgr-pm')||null,
+    comps:comps, shifts:shifts, private_events:clVal('cl-events')||null,
+    comments_good:good, comments_bad:bad, support:clVal('cl-support')||null,
+    created_by:(state.userEmail||null), updated_at:new Date().toISOString() };
+  var btn=document.getElementById('cl-save'); if(btn){ btn.disabled=true; btn.textContent='Saving…'; }
+  var res=await sb.from('closing_reports').upsert(crow,{onConflict:'service_date'});
+  if(res.error){ if(btn){btn.disabled=false;btn.textContent='Save';} alert('Could not save closing report: '+res.error.message+(res.error.code==='PGRST204'?'\n\nRun closing-report-schema.sql in Supabase first.':'')); return; }
+  // ── Rollup into rev_daily (revenue fields only) ──
+  var revRow={ service_date:ds,
+    rest_lunch_net:rl, rest_lunch_covers:rlc, rest_dinner_net:rd, rest_dinner_covers:rdc,
+    lounge_lunch_net:ll, lounge_lunch_covers:llc, lounge_dinner_net:ld, lounge_dinner_covers:ldc,
+    rest_net:restNet, rest_covers_actual:restCov, lounge_net:lounNet, lounge_covers_actual:lounCov,
+    food_net:food, bev_net:bev, tobacco_net:tob, net_actual:net, updated_at:new Date().toISOString() };
+  var res2=await sb.from('rev_daily').upsert(revRow,{onConflict:'service_date'});
+  var R=revInit(); var idx=R.daily.findIndex(function(x){return String(x.service_date).slice(0,10)===ds;});
+  if(idx>=0) R.daily[idx]=Object.assign({},R.daily[idx],revRow); else R.daily.push(revRow);
+  if(btn){ btn.disabled=false; btn.textContent='Save'; }
+  clClose();
+  revInit().opsRecentLoaded=false;
+  if(state.currentTab==='revenue'||state.currentTab==='operations') renderMain();
+  alert('Closing report saved'+(res2.error?(' — but revenue rollup failed: '+res2.error.message):' · revenue updated.'));
+}
+
+// ── Operations page (hosts the Closing Report + recent-report history) ──
+function renderOperations(){
+  var today=clToday(), h=[];
+  h.push('<div class="ops-wrap">');
+  h.push('<div class="ops-hero"><div class="ops-hero-k">Operations</div><div class="ops-hero-t">Daily Closing Report</div>'
+    +'<div class="ops-hero-s">Capture the night at close — revenue, tips, comps and shift notes. It flows into Revenue automatically and feeds the Analyst for patterns.</div>'
+    +'<div class="ops-hero-actions"><button class="ops-btn-primary" onclick="clOpen()">&#128203; Start today’s report</button>'
+    +'<span class="ops-date">Another day <input type="date" id="ops-date" value="'+today+'"><button class="ops-btn-sec" onclick="clOpen(document.getElementById(\'ops-date\').value)">Open</button></span></div></div>');
+  h.push('<div class="rev-section-h">Recent closing reports</div><div id="ops-recent">'+opsRecentHTML()+'</div>');
+  h.push('</div>');
+  if(!revInit().opsRecentLoaded) opsLoadRecent();
+  return h.join('');
+}
+function opsRecentHTML(){
+  var R=revInit();
+  if(!R.opsRecent) return '<div class="rev-mut" style="padding:12px">Loading…</div>';
+  if(!R.opsRecent.length) return '<div class="rev-mut" style="padding:12px">No closing reports yet — start today’s above.</div>';
+  function fdate(ds){ return new Date(String(ds).slice(0,10)+'T12:00:00').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'}); }
+  var rows=R.opsRecent.map(function(r){
+    var net=Number(r.rest_lunch_net||0)+Number(r.rest_dinner_net||0)+Number(r.lounge_lunch_net||0)+Number(r.lounge_dinner_net||0);
+    var cov=Number(r.rest_lunch_covers||0)+Number(r.rest_dinner_covers||0)+Number(r.lounge_lunch_covers||0)+Number(r.lounge_dinner_covers||0);
+    var nc=((r.comments_good||[]).length)+((r.comments_bad||[]).length);
+    return '<tr onclick="clOpen(\''+String(r.service_date).slice(0,10)+'\')"><td class="rev-day">'+fdate(r.service_date)+'</td><td>'+revMoney(net)+'</td><td>'+cov+'</td><td>'+(r.manager_pm||r.manager_am||'—')+'</td><td>'+(nc?nc+' note'+(nc>1?'s':''):'—')+'</td></tr>';
+  }).join('');
+  return '<div class="rev-grid-wrap"><table class="rev-grid"><thead><tr><th>Date</th><th>Net</th><th>Covers</th><th>Manager</th><th>Notes</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+}
+async function opsLoadRecent(){
+  var R=revInit(); R.opsRecentLoaded=true;
+  try{
+    var res=await sb.from('closing_reports').select('service_date,rest_lunch_net,rest_dinner_net,lounge_lunch_net,lounge_dinner_net,rest_lunch_covers,rest_dinner_covers,lounge_lunch_covers,lounge_dinner_covers,manager_am,manager_pm,comments_good,comments_bad').order('service_date',{ascending:false}).limit(30);
+    R.opsRecent = res.error ? [] : (res.data||[]);
+  }catch(e){ R.opsRecent=[]; }
+  if(state.currentTab==='operations'){ var box=document.getElementById('ops-recent'); if(box) box.innerHTML=opsRecentHTML(); }
+}
+
 // ── Render ──
 function renderRevenue(){
   var R=revInit();
@@ -6117,6 +6277,91 @@ function fohSignOut(){
   </div>
 </div>
 
+<div id="cl-modal" style="display:none;position:fixed;inset:0;background:rgba(40,5,8,.6);z-index:9400;align-items:flex-start;justify-content:center;overflow:auto;padding:20px 12px" onclick="if(event.target===this)clClose()">
+  <div class="cl-win">
+    <div class="cl-head">
+      <div><div class="cl-title">Daily Closing Report</div><input id="cl-date" type="date" class="cl-date"></div>
+      <button class="rev-chat-x" onclick="clClose()" title="Close">&times;</button>
+    </div>
+    <div class="cl-body">
+      <div class="cl-sec-h">Revenue</div>
+      <div class="rev-eg-scroll"><table class="rev-edit-grid">
+        <thead><tr><th></th><th colspan="3">Lunch</th><th colspan="3">Dinner</th></tr>
+          <tr><th></th><th>Revenue</th><th>Covers</th><th>Avg</th><th>Revenue</th><th>Covers</th><th>Avg</th></tr></thead>
+        <tbody>
+          <tr><td class="rev-eg-area">Restaurant</td>
+            <td><input id="cl-rl-net" class="rev-eg-inp" type="number" inputmode="decimal" oninput="clRecalc()"></td>
+            <td><input id="cl-rl-cov" class="rev-eg-inp" type="number" inputmode="numeric" oninput="clRecalc()"></td>
+            <td class="rev-eg-avg" id="cl-rl-avg">—</td>
+            <td><input id="cl-rd-net" class="rev-eg-inp" type="number" inputmode="decimal" oninput="clRecalc()"></td>
+            <td><input id="cl-rd-cov" class="rev-eg-inp" type="number" inputmode="numeric" oninput="clRecalc()"></td>
+            <td class="rev-eg-avg" id="cl-rd-avg">—</td></tr>
+          <tr><td class="rev-eg-area">Scala Lounge &amp; Bar</td>
+            <td><input id="cl-ll-net" class="rev-eg-inp" type="number" inputmode="decimal" oninput="clRecalc()"></td>
+            <td><input id="cl-ll-cov" class="rev-eg-inp" type="number" inputmode="numeric" oninput="clRecalc()"></td>
+            <td class="rev-eg-avg" id="cl-ll-avg">—</td>
+            <td><input id="cl-ld-net" class="rev-eg-inp" type="number" inputmode="decimal" oninput="clRecalc()"></td>
+            <td><input id="cl-ld-cov" class="rev-eg-inp" type="number" inputmode="numeric" oninput="clRecalc()"></td>
+            <td class="rev-eg-avg" id="cl-ld-avg">—</td></tr>
+        </tbody></table></div>
+      <div id="cl-tot" class="rev-edit-totals"></div>
+
+      <div class="cl-sec-h">Sales split — Food / Beverage / Tobacco <span class="cl-opt">optional</span></div>
+      <div class="cl-row3">
+        <label>Food<input id="cl-food" class="cl-inp" type="number" inputmode="decimal" oninput="clRecalc()"></label>
+        <label>Beverage<input id="cl-bev" class="cl-inp" type="number" inputmode="decimal" oninput="clRecalc()"></label>
+        <label>Tobacco<input id="cl-tob" class="cl-inp" type="number" inputmode="decimal" oninput="clRecalc()"></label>
+      </div>
+      <div id="cl-fnb-chk" class="cl-note"></div>
+
+      <div class="cl-sec-h">Tips</div>
+      <div class="cl-row3">
+        <label>CC tips<input id="cl-cc" class="cl-inp" type="number" inputmode="decimal" oninput="clRecalc()"></label>
+        <label>Cash tips<input id="cl-cash" class="cl-inp" type="number" inputmode="decimal" oninput="clRecalc()"></label>
+        <div class="cl-tips-box">Total tips<b id="cl-tips-tot">AED 0</b></div>
+      </div>
+
+      <div class="cl-sec-h">Comps</div>
+      <div id="cl-comps"></div>
+      <button class="cl-add" onclick="clAddComp()">+ Add comp</button>
+      <div id="cl-comps-tot" class="cl-note"></div>
+
+      <div class="cl-sec-h">Manager on duty</div>
+      <div class="cl-row2">
+        <label>AM<input id="cl-mgr-am" class="cl-inp"></label>
+        <label>PM<input id="cl-mgr-pm" class="cl-inp"></label>
+      </div>
+
+      <div class="cl-sec-h">Shift logs</div>
+      <div class="cl-shift"><div class="cl-shift-t">Day · 12–7</div>
+        <textarea id="cl-day-fb" class="cl-ta" placeholder="Feedback / highlights"></textarea>
+        <textarea id="cl-day-ch" class="cl-ta" placeholder="Challenges"></textarea></div>
+      <div class="cl-shift"><div class="cl-shift-t">Night · 7–11</div>
+        <textarea id="cl-night-fb" class="cl-ta" placeholder="Feedback / highlights"></textarea>
+        <textarea id="cl-night-ch" class="cl-ta" placeholder="Challenges"></textarea></div>
+      <div class="cl-shift"><div class="cl-shift-t">Late · 11–close</div>
+        <textarea id="cl-late-fb" class="cl-ta" placeholder="Feedback / highlights"></textarea>
+        <textarea id="cl-late-ch" class="cl-ta" placeholder="Challenges"></textarea></div>
+
+      <div class="cl-sec-h">Private events / group bookings</div>
+      <textarea id="cl-events" class="cl-ta cl-ta-wide" placeholder="Private events, large groups, VIPs…"></textarea>
+
+      <div class="cl-sec-h">Comments</div>
+      <div class="cl-comments">
+        <div><div class="cl-c-lbl cl-good-lbl">What went well</div><div id="cl-good"></div><button class="cl-add" onclick="clAddComment('good')">+ Add</button></div>
+        <div><div class="cl-c-lbl cl-bad-lbl">What didn’t</div><div id="cl-bad"></div><button class="cl-add" onclick="clAddComment('bad')">+ Add</button></div>
+      </div>
+
+      <div class="cl-sec-h">Support needed</div>
+      <textarea id="cl-support" class="cl-ta cl-ta-wide" placeholder="Anything the team needs from management…"></textarea>
+    </div>
+    <div class="cl-foot">
+      <button class="cl-cancel" onclick="clClose()">Cancel</button>
+      <button id="cl-save" class="cl-save" onclick="clSave()">Save</button>
+    </div>
+  </div>
+</div>
+
 <div id="rev-chat-modal" style="display:none;position:fixed;inset:0;background:rgba(40,5,8,.6);z-index:9500;align-items:center;justify-content:center" onclick="if(event.target===this)revChatClose()">
   <div class="rev-chat-win">
     <div class="rev-chat-head">
@@ -6235,6 +6480,51 @@ function fohSignOut(){
   .rev-chat-md .rev-md-tbl th{background:var(--vino);color:var(--cream);padding:5px 8px;text-align:left;font-size:10px;letter-spacing:.03em;text-transform:uppercase}
   .rev-chat-md .rev-md-tbl td{padding:5px 8px;border-bottom:1px solid var(--border)}
   .rev-chat-md code{background:rgba(0,0,0,.05);padding:1px 4px;border-radius:3px;font-size:12px}
+  .cl-win{background:var(--cream);width:720px;max-width:96vw;border-radius:10px;box-shadow:0 12px 48px rgba(0,0,0,.45);display:flex;flex-direction:column;max-height:94vh;overflow:hidden;margin:auto}
+  .cl-head{display:flex;align-items:flex-start;justify-content:space-between;padding:14px 18px;background:var(--vino);color:var(--cream)}
+  .cl-title{font-family:var(--font-serif);font-size:18px;font-weight:700}
+  .cl-date{margin-top:6px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.3);color:var(--cream);border-radius:5px;padding:4px 8px;font-family:var(--font-sans);font-size:13px}
+  .cl-body{overflow-y:auto;padding:18px;background:var(--sabbia-light,#faf7f1)}
+  .cl-sec-h{font-family:var(--font-serif);font-size:14px;color:var(--vino);margin:18px 0 8px;padding-bottom:5px;border-bottom:1px solid var(--border);font-weight:700}
+  .cl-sec-h:first-child{margin-top:0}
+  .cl-opt{font-family:var(--font-sans);font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-light);font-weight:400;margin-left:6px}
+  .cl-row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+  .cl-row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .cl-row3 label,.cl-row2 label{display:flex;flex-direction:column;gap:4px;font-size:11px;color:var(--text-secondary,#8B7355)}
+  .cl-inp{padding:9px;border:1px solid var(--sabbia-dark);border-radius:6px;font-family:var(--font-sans);font-size:14px;background:var(--surface);color:var(--ink);width:100%;box-sizing:border-box}
+  .cl-note{font-size:11px;color:var(--text-light);margin-top:7px;min-height:14px}
+  .cl-tips-box{display:flex;flex-direction:column;justify-content:center;gap:4px;font-size:11px;color:var(--text-secondary,#8B7355)}
+  .cl-tips-box b{font-family:var(--font-serif);font-size:16px;color:var(--vino)}
+  .cl-comp-row{display:grid;grid-template-columns:.7fr 1fr .8fr 1.3fr .7fr auto;gap:6px;margin-bottom:6px}
+  .cl-comp-row input{padding:7px;border:1px solid var(--sabbia-dark);border-radius:5px;font-family:var(--font-sans);font-size:13px;background:var(--surface);color:var(--ink);width:100%;box-sizing:border-box}
+  .cl-x{background:transparent;border:none;color:#b3402f;font-size:18px;cursor:pointer;padding:0 4px;line-height:1}
+  .cl-add{background:rgba(107,31,42,.06);border:1px dashed rgba(107,31,42,.35);color:var(--vino);border-radius:6px;padding:6px 12px;font-size:12px;cursor:pointer;font-family:var(--font-sans);margin-top:4px}
+  .cl-shift{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:10px 12px;margin-bottom:8px}
+  .cl-shift-t{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--vino-light,#8a4a52);margin-bottom:6px;font-weight:600}
+  .cl-ta{width:100%;box-sizing:border-box;resize:vertical;min-height:42px;border:1px solid var(--sabbia-dark);border-radius:6px;padding:8px 10px;font-family:var(--font-sans);font-size:13px;background:var(--surface);color:var(--ink);margin-bottom:6px}
+  .cl-shift .cl-ta:last-child{margin-bottom:0}
+  .cl-ta-wide{min-height:54px}
+  .cl-comments{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .cl-c-lbl{font-size:11px;letter-spacing:.05em;text-transform:uppercase;font-weight:700;margin-bottom:6px}
+  .cl-good-lbl{color:#2d7a4f}
+  .cl-bad-lbl{color:#b3402f}
+  .cl-bullet{display:flex;gap:6px;margin-bottom:6px;align-items:center}
+  .cl-bullet input{flex:1;padding:7px 9px;border:1px solid var(--sabbia-dark);border-radius:5px;font-family:var(--font-sans);font-size:13px;background:var(--surface);color:var(--ink)}
+  .cl-foot{display:flex;gap:10px;padding:14px 18px;border-top:1px solid var(--border);background:var(--cream)}
+  .cl-cancel{flex:1;padding:11px;background:transparent;border:1px solid var(--sabbia-dark);border-radius:6px;cursor:pointer;font-family:var(--font-sans);color:var(--ink)}
+  .cl-save{flex:2;padding:11px;background:var(--vino);border:none;border-radius:6px;cursor:pointer;font-family:var(--font-sans);color:var(--cream);font-weight:700}
+  .cl-open-btn{background:var(--vino)!important;color:var(--cream)!important;border-color:var(--vino)!important;font-weight:700}
+  @media(max-width:560px){ .cl-comp-row{grid-template-columns:1fr 1fr} .cl-comments{grid-template-columns:1fr} .cl-row3{grid-template-columns:1fr} }
+  .ops-wrap{max-width:980px;margin:0 auto;padding:8px 4px 60px}
+  .ops-hero{background:var(--vino);color:var(--cream);border-radius:10px;padding:24px;margin-bottom:8px}
+  .ops-hero-k{font-size:10px;letter-spacing:.2em;text-transform:uppercase;opacity:.7;margin-bottom:8px}
+  .ops-hero-t{font-family:var(--font-serif);font-size:26px;margin-bottom:8px}
+  .ops-hero-s{font-size:13px;line-height:1.6;opacity:.9;max-width:560px}
+  .ops-hero-actions{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:18px}
+  .ops-btn-primary{background:var(--gold,#C9A84C);color:#3a2c08;border:none;border-radius:8px;padding:11px 20px;font-weight:700;font-size:14px;cursor:pointer;font-family:var(--font-sans)}
+  .ops-date{display:flex;align-items:center;gap:8px;font-size:12px;color:rgba(255,255,255,.8)}
+  .ops-date input{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.3);color:var(--cream);border-radius:6px;padding:7px 9px;font-family:var(--font-sans);font-size:13px}
+  .ops-btn-sec{background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.35);color:var(--cream);border-radius:6px;padding:7px 14px;cursor:pointer;font-family:var(--font-sans);font-size:13px}
   .rev-setup{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:24px;max-width:560px;margin:20px auto;color:var(--ink)}
   .rev-setup .rev-h{font-family:var(--font-serif);font-size:17px;color:var(--vino);margin-bottom:10px}
   .rev-lbl{display:block;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--vino-light,#8a4a52);font-family:var(--font-sans);margin-bottom:4px}
