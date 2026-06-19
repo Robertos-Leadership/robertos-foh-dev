@@ -50,6 +50,11 @@
   });
   window.addEventListener('focus', check);
   window.addEventListener('pageshow', check);   // fires when iOS restores the app from its back/forward cache
+  // Heartbeat for an always-on screen (e.g. a wall display): it never fires the
+  // focus / visibility / pageshow events above, so without a timer it would only
+  // check once at boot and stay stale all day. Poll every 5 min — check() only
+  // reloads when the server's ETag actually changed (new deploy) and never mid-typing.
+  setInterval(check, 5 * 60 * 1000);
 })();
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
