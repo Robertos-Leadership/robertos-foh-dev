@@ -5344,6 +5344,13 @@ const FOH_STATUS_META = {
   cat:     { label: 'CAT', bg: 'cat' },
 };
 
+// Status colours for PRINT — mirror the on-screen .sch-shift.<bg> backgrounds (print
+// can't read the CSS classes). Keep in sync with the .sch-shift.* rules in the stylesheet.
+const FOH_STATUS_PRINT_COLOR = {
+  off:'#7f1d1d', wo:'#1d4ed8', sl:'#d97706', al:'#047857',
+  ph:'#6d28d9', em:'#dc2626', tr:'#0f766e', cat:'#c2410c',
+};
+
 // Note: the former hardcoded FOH_ROSTER (and the renderFohSchedule day-chip
 // view that used it) were removed in the June 2026 cleanup. The live schedule
 // is the Supabase-backed module (openFohSchedule → foh_staff / foh_roster).
@@ -5660,7 +5667,7 @@ function fohRenderSchedWeek(){
             html+='<div class="sch-shift actual-absent">'+(ts&&te?ts+'<br>'+te:'')+'<span class="sch-actual-tag">no clock-in</span></div>';
           } else {
             if(ts&&te){ wHours+=calcHours(ts,te,ts2,te2); wDays++; }
-            var splitLabel = (ts2&&te2)?'<br><span style="opacity:.6;font-size:9px">'+ts2+'–'+te2+'</span>':'';
+            var splitLabel = (ts2&&te2)?'<br><span style="opacity:.8;font-size:11px">'+ts2+'–'+te2+'</span>':'';
             html+='<div class="sch-shift working">'+(ts&&te?ts+'<br>'+te+splitLabel:'<span style="color:#bbb;font-size:10px">+ add</span>')+'</div>';
           }
         } else {
@@ -6032,7 +6039,7 @@ function fohSchedPrint(){
     days[6].toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});
   var html='<div style="margin-bottom:8px"><h2 style="font-size:13px;color:#410207;margin:0 0 2px">Roberto\'s DIFC — FOH Roster: '+weekStr+'</h2>'+
     '<p style="font-size:9px;color:#666;margin:0">Printed: '+new Date().toLocaleString('en-GB')+'</p></div>';
-  html+='<table style="width:100%;border-collapse:collapse;font-size:9px"><thead><tr>'+
+  html+='<table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr>'+
     '<th style="background:#410207;color:#fff;padding:5px 4px;text-align:left;min-width:130px">Name</th>'+
     '<th style="background:#410207;color:#fff;padding:5px 4px;text-align:left">Role</th>';
   for(var di=0;di<days.length;di++) html+='<th style="background:#410207;color:#fff;padding:5px 4px">'+dayNames[di]+' '+days[di].toLocaleDateString('en-GB',{day:'numeric',month:'short'})+'</th>';
@@ -6055,7 +6062,8 @@ function fohSchedPrint(){
         } else {
           var meta=FOH_STATUS_META[row.status]||{label:row.status.toUpperCase()};
           if(row.status!=='off') wd++;
-          html+='<td style="padding:4px;text-align:center;border:1px solid #ccc;color:#999">'+meta.label+'</td>';
+          var pcol=FOH_STATUS_PRINT_COLOR[row.status]||'#777';
+          html+='<td style="padding:4px;text-align:center;border:1px solid #ccc;background:'+pcol+';color:#fff;font-weight:700">'+meta.label+'</td>';
         }
       });
       html+='<td style="padding:4px;text-align:center;font-weight:700;border:1px solid #ccc">'+(wh>0?(Math.round(wh*10)/10)+'h':'—')+'</td>'+
@@ -6063,7 +6071,7 @@ function fohSchedPrint(){
     });
   });
   html+='</tbody></table>';
-    var printDoc='<!doctype html><html><head><title>FOH Roster</title><style>@page{size:A4 landscape;margin:8mm}body{font-family:Arial,sans-serif;margin:0}</style></head><body>'+html+'</body></html>';
+    var printDoc='<!doctype html><html><head><title>FOH Roster</title><style>@page{size:A3 landscape;margin:8mm}body{font-family:Arial,sans-serif;margin:0}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}</style></head><body>'+html+'</body></html>';
   var w=window.open('','_blank');
 
   if(!w){ alert('Pop-up blocked — allow pop-ups and try again.'); return; }
