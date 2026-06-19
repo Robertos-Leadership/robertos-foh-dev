@@ -315,6 +315,26 @@
     height: auto;
     margin-bottom: 40px;
   }
+  .landing-home-btn {
+    position: absolute;
+    top: 20px;
+    left: 24px;
+    z-index: 5;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--vino);
+    font-weight: 700;
+    font-size: 13px;
+    letter-spacing: .02em;
+    background: rgba(255,255,255,0.85);
+    border: 1px solid rgba(107,31,42,0.3);
+    border-radius: 22px;
+    padding: 9px 18px;
+    box-shadow: 0 2px 8px rgba(44,24,16,0.08);
+  }
+  .landing-home-btn:hover { background: var(--vino); color: var(--cream); border-color: var(--vino); }
   .landing-kicker {
     color: var(--vino);
     font-size: 10px;
@@ -2047,6 +2067,7 @@
 
 <!-- LANDING (manager post-login) -->
 <div id="landing" style="display:none;">
+  <div onclick="showFohPublic()" class="landing-home-btn" title="Back to Home">&#8592; Home</div>
   <div class="landing-content">
     <img class="landing-brand" src="robertos-logo-burgundy.svg" alt="Roberto's">
     <div class="landing-kicker">Management Module</div>
@@ -2074,8 +2095,6 @@
       </div>
     </div>
     <div class="landing-signout">
-      <span onclick="showFohPublic()" style="cursor:pointer">&#8592; Back to FOH</span>
-      &nbsp;&middot;&nbsp;
       <span onclick="openChangePassword()" style="cursor:pointer">Change password</span>
       &nbsp;&middot;&nbsp;
       <span onclick="fohSignOut()" style="cursor:pointer">Sign out</span>
