@@ -6483,7 +6483,7 @@ var CHK_ITEMS={
     'Re-check closing checklist.'
   ]
 };
-function chkInit(){ if(!state.checklist) state.checklist={date:null,type:'opening',row:null,verifiers:null,channel:null}; return state.checklist; }
+function chkInit(){ if(!state.checklist) state.checklist={date:null,type:'opening',row:null,verifiers:null,channel:null,view:'checklist'}; return state.checklist; }
 function chkEsc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function chkToday(){ var n=new Date(), d=new Date(n.getTime()+n.getTimezoneOffset()*60000+4*3600000); return {iso:d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'), hour:d.getHours()}; }
 async function openChecklists(){
@@ -6500,7 +6500,7 @@ async function chkLoad(){
   try{ var res=await sb.from('foh_checklists').select('*').eq('check_date',C.date).eq('shift_type',C.type).eq('area','Restaurant').limit(1); C.row=(res.data&&res.data.length)?res.data[0]:null; }catch(e){ C.row=null; }
   chkRender();
 }
-function chkSetType(t){ var C=chkInit(); if(C.type===t) return; C.type=t; chkLoad(); chkSubscribe(); }
+function chkSetType(t){ var C=chkInit(); if(C.type===t && C.view!=='history') return; C.view='checklist'; C.type=t; chkExitHistoryUI(); chkLoad(); chkSubscribe(); }
 async function chkToggle(i){
   var C=chkInit();
   var hadRow=!!C.row;
@@ -6535,7 +6535,7 @@ async function chkSign(){
 }
 function chkSubscribe(){
   var C=chkInit(); chkUnsub();
-  try{ C.channel=sb.channel('chk-'+C.date+'-'+C.type).on('postgres_changes',{event:'*',schema:'public',table:'foh_checklists',filter:'check_date=eq.'+C.date}, function(p){ var r=p.new; if(r && r.shift_type===C.type && r.area==='Restaurant'){ C.row=r; chkRender(); } }).subscribe(); }catch(e){}
+  try{ C.channel=sb.channel('chk-'+C.date+'-'+C.type).on('postgres_changes',{event:'*',schema:'public',table:'foh_checklists',filter:'check_date=eq.'+C.date}, function(p){ var r=p.new; if(r && r.shift_type===C.type && r.area==='Restaurant'){ C.row=r; if(C.view!=='history') chkRender(); } }).subscribe(); }catch(e){}
 }
 function chkUnsub(){ var C=chkInit(); if(C.channel){ try{ sb.removeChannel(C.channel); }catch(e){} C.channel=null; } }
 function chkClose(){ chkUnsub(); document.getElementById('chk-modal').style.display='none'; }
@@ -6547,6 +6547,7 @@ function chkRenderItems(){
 }
 function chkRender(){
   var C=chkInit();
+  C.view='checklist'; chkExitHistoryUI();
   var de=document.getElementById('chk-date'); if(de) de.textContent=new Date(C.date+'T12:00:00').toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'});
   var to=document.getElementById('chk-tab-open'), tc=document.getElementById('chk-tab-close');
   if(to) to.className='chk-tab'+(C.type==='opening'?' active':''); if(tc) tc.className='chk-tab'+(C.type==='closing'?' active':'');
@@ -6559,6 +6560,48 @@ function chkRender(){
   }
 }
 function chkResign(){ var C=chkInit(); if(C.row){ C.row=Object.assign({},C.row,{verified_name:null}); } chkRender(); }
+// --- Checklist history (read-only track record of the last 14 nights) ---
+function chkExitHistoryUI(){
+  var ib=document.getElementById('chk-items'); if(ib) ib.style.display='';
+  var hb=document.getElementById('chk-history'); if(hb) hb.style.display='none';
+  var fb=document.getElementById('chk-foot'); if(fb) fb.style.display='';
+  var th=document.getElementById('chk-tab-hist'); if(th) th.className='chk-tab';
+}
+function chkDateMinus(iso,n){ var p=iso.split('-'); var d=new Date(+p[0], +p[1]-1, +p[2]-n); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function chkHistDateLabel(iso){ var p=iso.split('-'); var d=new Date(+p[0], +p[1]-1, +p[2]); return d.toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'}); }
+function chkHistTime(ts){ try{ return new Date(ts).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}); }catch(e){ return ''; } }
+function chkCountDone(row){ var c=(row&&row.checked)||{}, n=0; for(var k in c){ if(c[k]) n++; } return n; }
+function chkHistCell(label,row,total){
+  if(!row){ return '<div class="chk-h-cell chk-h-missing"><span class="chk-h-shift">'+label+'</span><span class="chk-h-prog">&mdash;</span><span class="chk-h-stat">Not started</span></div>'; }
+  var done=chkCountDone(row), complete=done>=total, signed=!!row.verified_name;
+  var cls=signed?'chk-h-signed':(complete?'chk-h-done':'chk-h-partial');
+  var stat=signed?('&#10003; '+chkEsc(row.verified_name)+(row.verified_at?' &middot; '+chkHistTime(row.verified_at):'')):(complete?'Done &middot; not signed off':'Not signed off');
+  return '<div class="chk-h-cell '+cls+'"><span class="chk-h-shift">'+label+'</span><span class="chk-h-prog">'+done+'/'+total+'</span><span class="chk-h-stat">'+stat+'</span></div>';
+}
+function chkRenderHistory(rows,todayISO){
+  var byDate={};
+  (rows||[]).forEach(function(r){ var d=String(r.check_date).slice(0,10); if(!byDate[d]) byDate[d]={}; byDate[d][r.shift_type]=r; });
+  var openTot=CHK_ITEMS.opening.length, closeTot=CHK_ITEMS.closing.length, out=[];
+  for(var i=0;i<14;i++){
+    var d=chkDateMinus(todayISO,i), day=byDate[d]||{};
+    out.push('<div class="chk-h-day"><div class="chk-h-date">'+chkHistDateLabel(d)+(i===0?' <span class="chk-h-today">Today</span>':'')+'</div>'+chkHistCell('Opening',day.opening,openTot)+chkHistCell('Closing',day.closing,closeTot)+'</div>');
+  }
+  document.getElementById('chk-history').innerHTML=out.join('');
+}
+async function chkShowHistory(){
+  var C=chkInit(); C.view='history';
+  var to=document.getElementById('chk-tab-open'), tc=document.getElementById('chk-tab-close'), th=document.getElementById('chk-tab-hist');
+  if(to) to.className='chk-tab'; if(tc) tc.className='chk-tab'; if(th) th.className='chk-tab active';
+  var ib=document.getElementById('chk-items'); if(ib) ib.style.display='none';
+  var fb=document.getElementById('chk-foot'); if(fb) fb.style.display='none';
+  var pe=document.getElementById('chk-progress'); if(pe) pe.textContent='';
+  var de=document.getElementById('chk-date'); if(de) de.textContent='Last 14 nights';
+  var box=document.getElementById('chk-history'); if(!box) return; box.style.display=''; box.innerHTML='<div class="chk-h-msg">Loading last 14 nights&hellip;</div>';
+  var t=chkToday(), fromISO=chkDateMinus(t.iso,13), res;
+  try{ res=await sb.from('foh_checklists').select('check_date,shift_type,checked,verified_name,verified_at').eq('area','Restaurant').gte('check_date',fromISO).lte('check_date',t.iso).order('check_date',{ascending:false}); }catch(e){ res={error:e}; }
+  if(!res||res.error){ box.innerHTML='<div class="chk-h-msg">Couldn&rsquo;t load history &mdash; check the connection and tap History again.</div>'; return; }
+  chkRenderHistory(res.data,t.iso);
+}
 
 // -- INIT --
 (async function init(){
@@ -6770,10 +6813,11 @@ function chkResign(){ var C=chkInit(); if(C.row){ C.row=Object.assign({},C.row,{
     <div class="chk-tabs">
       <button id="chk-tab-open" class="chk-tab active" onclick="chkSetType('opening')">Opening</button>
       <button id="chk-tab-close" class="chk-tab" onclick="chkSetType('closing')">Closing</button>
+      <button id="chk-tab-hist" class="chk-tab" onclick="chkShowHistory()">History</button>
       <span class="chk-progress" id="chk-progress"></span>
     </div>
-    <div class="chk-body"><div id="chk-items"></div></div>
-    <div class="chk-foot"><div id="chk-signoff"></div></div>
+    <div class="chk-body"><div id="chk-items"></div><div id="chk-history" style="display:none"></div></div>
+    <div class="chk-foot" id="chk-foot"><div id="chk-signoff"></div></div>
   </div>
 </div>
 
@@ -7066,6 +7110,21 @@ function chkResign(){ var C=chkInit(); if(C.row){ C.row=Object.assign({},C.row,{
   .chk-signed{font-size:14px;color:#2d7a4f;font-weight:600}
   .chk-signed span{color:#8B7355;font-weight:400;font-size:12px}
   .chk-resign{color:#6B1F2A;font-size:12px;text-decoration:underline;cursor:pointer;margin-top:6px;font-weight:400;display:inline-block}
+  .chk-h-day{padding:10px 2px;border-bottom:1px solid #EFE7DA}
+  .chk-h-date{font-size:13px;font-weight:700;color:#6B1F2A;margin-bottom:4px}
+  .chk-h-today{font-size:10px;font-weight:700;background:#C9A84C;color:#3D0F15;border-radius:4px;padding:1px 6px;margin-left:6px;text-transform:uppercase;letter-spacing:.04em}
+  .chk-h-cell{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:7px;margin-top:5px;font-size:13px;border:1px solid #E3D8C6;background:#fff}
+  .chk-h-shift{width:62px;flex-shrink:0;font-weight:600;color:#2C1810}
+  .chk-h-prog{width:46px;flex-shrink:0;font-variant-numeric:tabular-nums;color:#6B1F2A;font-weight:600}
+  .chk-h-stat{flex:1;color:#8B7355;font-size:12px}
+  .chk-h-signed{border-color:rgba(45,122,79,.5);background:rgba(45,122,79,.08)}
+  .chk-h-signed .chk-h-stat{color:#2d7a4f;font-weight:600}
+  .chk-h-done{border-color:rgba(201,168,76,.6);background:rgba(201,168,76,.12)}
+  .chk-h-partial{border-color:rgba(179,64,47,.4);background:rgba(179,64,47,.07)}
+  .chk-h-partial .chk-h-stat{color:#b3402f;font-weight:600}
+  .chk-h-missing{border-style:dashed;border-color:rgba(179,64,47,.45);background:rgba(179,64,47,.05)}
+  .chk-h-missing .chk-h-stat,.chk-h-missing .chk-h-prog{color:#b3402f}
+  .chk-h-msg{padding:24px 8px;text-align:center;color:#8B7355;font-size:13px}
   .rev-setup{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:24px;max-width:560px;margin:20px auto;color:var(--ink)}
   .rev-setup .rev-h{font-family:var(--font-serif);font-size:17px;color:var(--vino);margin-bottom:10px}
   .rev-lbl{display:block;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--vino-light,#8a4a52);font-family:var(--font-sans);margin-bottom:4px}
