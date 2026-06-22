@@ -6485,7 +6485,17 @@ var CHK_ITEMS={
 };
 function chkInit(){ if(!state.checklist) state.checklist={date:null,type:'opening',row:null,verifiers:null,channel:null,view:'checklist'}; return state.checklist; }
 function chkEsc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-function chkToday(){ var n=new Date(), d=new Date(n.getTime()+n.getTimezoneOffset()*60000+4*3600000); return {iso:d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'), hour:d.getHours()}; }
+// Operational night, matching the closing report (foh-closing.js clToday): service runs
+// past midnight, so a closing signed before 6 AM Dubai belongs to the PREVIOUS calendar
+// day (the night that just ended) — not the next day, when we may be closed. The date
+// (iso) uses the 6 h rollback; the hour (for the Opening/Closing default tab) stays the
+// real Dubai hour so the tab still flips to Closing in the evening as before.
+function chkToday(){
+  var n=new Date();
+  var dubai=new Date(n.getTime()+n.getTimezoneOffset()*60000+4*3600000);
+  var biz=new Date(dubai.getTime()-6*3600000);
+  return {iso:biz.getFullYear()+'-'+String(biz.getMonth()+1).padStart(2,'0')+'-'+String(biz.getDate()).padStart(2,'0'), hour:dubai.getHours()};
+}
 async function openChecklists(){
   var C=chkInit(); var t=chkToday(); C.date=t.iso; C.type=(t.hour>=16?'closing':'opening');
   document.getElementById('chk-modal').style.display='flex';
@@ -6554,7 +6564,7 @@ function chkRender(){
   chkRenderItems();
   var so=document.getElementById('chk-signoff'); if(!so) return;
   if(C.row && C.row.verified_name){
-    so.innerHTML='<div class="chk-signed">&#10003; Verified by <b>'+chkEsc(C.row.verified_name)+'</b> ('+chkEsc(C.row.verified_role||'')+')<br><span>'+(C.row.verified_at?new Date(C.row.verified_at).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'')+'</span><div class="chk-resign" onclick="chkResign()">Re-sign</div></div>';
+    so.innerHTML='<div class="chk-signed">&#10003; Verified by <b>'+chkEsc(C.row.verified_name)+'</b> ('+chkEsc(C.row.verified_role||'')+(C.row.verified_emp_id?' &middot; ID '+chkEsc(C.row.verified_emp_id):'')+')<br><span>'+(C.row.verified_at?new Date(C.row.verified_at).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'')+'</span><div class="chk-resign" onclick="chkResign()">Re-sign</div></div>';
   } else if(!document.getElementById('chk-empid')){
     so.innerHTML='<div class="chk-sign-lbl">Manager on duty / Head Waiter — sign off</div><div class="chk-sign-row"><input id="chk-empid" inputmode="numeric" placeholder="Employee ID" class="chk-empid"><button class="chk-sign-btn" onclick="chkSign()">Sign off</button></div><div id="chk-sign-err" class="chk-sign-err"></div>';
   }
@@ -6570,12 +6580,15 @@ function chkExitHistoryUI(){
 function chkDateMinus(iso,n){ var p=iso.split('-'); var d=new Date(+p[0], +p[1]-1, +p[2]-n); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 function chkHistDateLabel(iso){ var p=iso.split('-'); var d=new Date(+p[0], +p[1]-1, +p[2]); return d.toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'}); }
 function chkHistTime(ts){ try{ return new Date(ts).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}); }catch(e){ return ''; } }
+// Full date+time of the sign-off, so a closing signed in the early hours (after midnight)
+// is plainly visible against the operational night it belongs to.
+function chkSignStamp(ts){ try{ return new Date(ts).toLocaleString('en-GB',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}); }catch(e){ return ''; } }
 function chkCountDone(row){ var c=(row&&row.checked)||{}, n=0; for(var k in c){ if(c[k]) n++; } return n; }
 function chkHistCell(label,row,total){
   if(!row){ return '<div class="chk-h-cell chk-h-missing"><span class="chk-h-shift">'+label+'</span><span class="chk-h-prog">&mdash;</span><span class="chk-h-stat">Not started</span></div>'; }
   var done=chkCountDone(row), complete=done>=total, signed=!!row.verified_name;
   var cls=signed?'chk-h-signed':(complete?'chk-h-done':'chk-h-partial');
-  var stat=signed?('&#10003; '+chkEsc(row.verified_name)+(row.verified_at?' &middot; '+chkHistTime(row.verified_at):'')):(complete?'Done &middot; not signed off':'Not signed off');
+  var stat=signed?('&#10003; '+chkEsc(row.verified_name)+(row.verified_emp_id?' &middot; ID '+chkEsc(row.verified_emp_id):'')+(row.verified_at?'<br><span class="chk-h-when">Signed '+chkSignStamp(row.verified_at)+'</span>':'')):(complete?'Done &middot; not signed off':'Not signed off');
   return '<div class="chk-h-cell '+cls+'"><span class="chk-h-shift">'+label+'</span><span class="chk-h-prog">'+done+'/'+total+'</span><span class="chk-h-stat">'+stat+'</span></div>';
 }
 function chkRenderHistory(rows,todayISO){
@@ -6598,7 +6611,7 @@ async function chkShowHistory(){
   var de=document.getElementById('chk-date'); if(de) de.textContent='Last 14 nights';
   var box=document.getElementById('chk-history'); if(!box) return; box.style.display=''; box.innerHTML='<div class="chk-h-msg">Loading last 14 nights&hellip;</div>';
   var t=chkToday(), fromISO=chkDateMinus(t.iso,13), res;
-  try{ res=await sb.from('foh_checklists').select('check_date,shift_type,checked,verified_name,verified_at').eq('area','Restaurant').gte('check_date',fromISO).lte('check_date',t.iso).order('check_date',{ascending:false}); }catch(e){ res={error:e}; }
+  try{ res=await sb.from('foh_checklists').select('check_date,shift_type,checked,verified_name,verified_emp_id,verified_at').eq('area','Restaurant').gte('check_date',fromISO).lte('check_date',t.iso).order('check_date',{ascending:false}); }catch(e){ res={error:e}; }
   if(!res||res.error){ box.innerHTML='<div class="chk-h-msg">Couldn&rsquo;t load history &mdash; check the connection and tap History again.</div>'; return; }
   chkRenderHistory(res.data,t.iso);
 }
@@ -7124,6 +7137,8 @@ async function chkShowHistory(){
   .chk-h-partial .chk-h-stat{color:#b3402f;font-weight:600}
   .chk-h-missing{border-style:dashed;border-color:rgba(179,64,47,.45);background:rgba(179,64,47,.05)}
   .chk-h-missing .chk-h-stat,.chk-h-missing .chk-h-prog{color:#b3402f}
+  .chk-h-when{display:inline-block;margin-top:2px;color:#8B7355;font-weight:400;font-size:11px}
+  .chk-h-signed .chk-h-when{color:#5a7d63}
   .chk-h-msg{padding:24px 8px;text-align:center;color:#8B7355;font-size:13px}
   .rev-setup{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:24px;max-width:560px;margin:20px auto;color:var(--ink)}
   .rev-setup .rev-h{font-family:var(--font-serif);font-size:17px;color:var(--vino);margin-bottom:10px}
