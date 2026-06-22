@@ -8,7 +8,11 @@
 //  CLOSING REPORT (Daily Snapshot) — primary daily entry; rolls revenue fields into rev_daily.
 // ══════════════════════════════════════════════
 function clInit(){ var R=revInit(); if(!R.closing) R.closing={date:null, comps:[], good:[], bad:[], loadedRow:null}; return R.closing; }
-function clToday(){ var n=new Date(), d=new Date(n.getTime()+n.getTimezoneOffset()*60000+4*3600000); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+// Business date for the closing report. Service runs past midnight and managers submit
+// between 2–4 AM, so a report saved before 6 AM Dubai belongs to the PREVIOUS calendar day
+// (the night that just ended). Shift Dubai time back 6 h, then take the date. The date field
+// in the modal stays editable, so a manager can still override it for an unusual case.
+function clToday(){ var n=new Date(), d=new Date(n.getTime()+n.getTimezoneOffset()*60000+4*3600000-6*3600000); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 function clNum(id){ var el=document.getElementById(id); if(!el) return null; var v=String(el.value||'').trim(); if(v==='') return null; v=Number(v.replace(/[^0-9.\-]/g,'')); return isFinite(v)?v:null; }
 function clVal(id){ var el=document.getElementById(id); return el?String(el.value||'').trim():''; }
 function clEsc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
