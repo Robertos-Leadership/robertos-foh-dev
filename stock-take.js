@@ -25,6 +25,12 @@ var STOCK_DEPTS = [{ key:'beverage', label:'Beverage' }, { key:'tobacco', label:
 var STOCK_EMAIL_TO = 'ahtwe@robertos.ae';
 var STOCK_EMAIL_CC = ['amohamed@robertos.ae','mpetrosino@robertos.ae','jballout@robertos.ae'];
 
+// Super-user passcodes — grant stock-take access on their own, NOT linked to any
+// employee/roster record (so the holder never appears on the FOH schedule). Used
+// by Francesco + shared with the cost controller as an admin code. Beta: security
+// deferred, so this lives client-side. Counts are attributed to this label.
+var STOCK_SUPER = { '1212': 'Stock Take Admin' };
+
 // ── state ──
 var stDept    = 'beverage';  // current list (beverage | tobacco)
 var stSheet   = null;        // { month, status, ... }
@@ -104,6 +110,8 @@ async function stSignIn(){
   var inp = document.getElementById('st-empid');
   var id = inp ? (inp.value||'').trim() : '';
   if(!id){ if(inp) inp.focus(); return; }
+  // super-user passcode (e.g. 1212) — access without any staff/roster record
+  if(STOCK_SUPER[id]){ stUser = { emp_id:id, name:STOCK_SUPER[id] }; stRender(); return; }
   var res = await sb.from('foh_staff').select('id,name,emp_id').eq('emp_id', id).eq('active', true).limit(1);
   var staff = res.data && res.data[0];
   if(!staff){
