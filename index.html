@@ -5047,7 +5047,8 @@ const FOH_SEND_SUPER = { '1212': 'Admin', '0000': 'Cost Controller' };
 // Admin → Who can sign); if none are configured it falls back to all active staff.
 // "I'm someone else" opens an on-brand keypad to enter an Employee ID / super-user
 // code (1212/0000). Resolves to {emp_id,name} or null. actionKey e.g. 'closing_report'.
-function fohPickPerson(actionLabel, actionKey){
+function fohPickPerson(actionLabel, actionKey, opts){
+  opts=opts||{};
   return new Promise(function(resolve){
     var done=false, people=[], code='';
     function onKey(e){ if(e.key==='Escape') finish(null); }
@@ -5094,26 +5095,29 @@ function fohPickPerson(actionLabel, actionKey){
       pad+='<button id="fpk-bk" style="padding:13px 0;font-size:20px;color:#8a7a62;border:0.5px solid #e4dccd;border-radius:9px;background:#fff;cursor:pointer;">⌫</button>';
       pad+=k('0');
       pad+='<button id="fpk-ok" style="padding:13px 0;font-size:18px;color:#fff;background:#6B1F2A;border:0.5px solid #6B1F2A;border-radius:9px;cursor:pointer;">✓</button>';
-      b.innerHTML='<div style="font-family:Georgia,serif;color:#6B1F2A;font-size:19px;">Enter your employee ID</div>'
-        +'<div style="font-size:12.5px;color:#8a7a62;margin:2px 0 12px;">Your ID or manager code, to '+admEsc(actionLabel)+'.</div>'
+      var ktitle=opts.title||'Enter your employee ID';
+      b.innerHTML='<div style="font-family:Georgia,serif;color:#6B1F2A;font-size:19px;">'+admEsc(ktitle)+'</div>'
+        +'<div style="font-size:12.5px;color:#8a7a62;margin:2px 0 12px;">'+(opts.superOnly?'Manager / super-user code, to ':'Your ID or manager code, to ')+admEsc(actionLabel)+'.</div>'
         +'<div style="display:flex;gap:7px;justify-content:center;margin-bottom:12px;">'+cells+'</div>'
         +'<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;">'+pad+'</div>'
         +'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:14px;border-top:0.5px solid #ece3d3;padding-top:12px;">'
-          +'<button id="fpk-back" style="font-size:13px;color:#6B1F2A;background:none;border:none;cursor:pointer;padding:0;">← Back to names</button>'
+          +(opts.codeOnly?'<span></span>':'<button id="fpk-back" style="font-size:13px;color:#6B1F2A;background:none;border:none;cursor:pointer;padding:0;">← Back to names</button>')
           +'<button id="fpk-cancel2" class="btn btn-sm">Cancel</button></div>';
       var ks=b.querySelectorAll('.fpk-k'); for(var j=0;j<ks.length;j++){ ks[j].onclick=function(){ if(code.length<6){ code+=this.getAttribute('data-d'); showKeypad(); } }; }
       document.getElementById('fpk-bk').onclick=function(){ code=code.slice(0,-1); showKeypad(); };
       document.getElementById('fpk-ok').onclick=submitCode;
-      document.getElementById('fpk-back').onclick=function(){ showNames(''); };
+      var bk2=document.getElementById('fpk-back'); if(bk2) bk2.onclick=function(){ showNames(''); };
       document.getElementById('fpk-cancel2').onclick=function(){ finish(null); };
     }
     function submitCode(){
       var id=(code||'').trim(); if(!id) return;
       if(FOH_SEND_SUPER[id]){ finish({emp_id:id,name:FOH_SEND_SUPER[id]}); return; }
+      if(opts.superOnly){ alert('That isn’t a manager / super-user code.'); code=''; showKeypad(); return; }
       sb.from('foh_staff').select('name,emp_id').eq('emp_id',id).eq('active',true).limit(1).then(function(r){
         var s=r.data&&r.data[0]; if(s) finish({emp_id:id,name:s.name}); else { alert('ID "'+id+'" was not found. Try again or tap Cancel.'); code=''; showKeypad(); }
       });
     }
+    if(opts.codeOnly){ showKeypad(); return; }   // skip names, go straight to the keypad
     Promise.all([
       sb.from('foh_staff').select('id,name,emp_id,role,section').eq('active',true),
       actionKey ? sb.from('app_config').select('value').eq('key','signers').limit(1) : Promise.resolve({data:null})
@@ -5128,8 +5132,8 @@ function fohPickPerson(actionLabel, actionKey){
     });
   });
 }
-async function fohRequireStaffId(actionLabel, actionKey){
-  if(typeof fohPickPerson==='function') return await fohPickPerson(actionLabel, actionKey);
+async function fohRequireStaffId(actionLabel, actionKey, opts){
+  if(typeof fohPickPerson==='function') return await fohPickPerson(actionLabel, actionKey, opts);
   // Fallback: typed Employee ID (kept in case the picker fails to load).
   var id = (prompt('Enter your Employee ID to '+actionLabel+'.\n\nThis is recorded.')||'').trim();
   if(!id) return null;
@@ -6576,7 +6580,7 @@ async function chkShowHistory(){
 })();
 </script>
 <script src="foh-revenue.js?v=2026-06-25.7"></script>
-<script src="foh-closing.js?v=2026-06-25.3"></script>
+<script src="foh-closing.js?v=2026-06-25.4"></script>
 <script src="foh-ops.js?v=2026-06-25.2"></script>
 <script src="stock-take.js?v=2026-06-25.4"></script>
 
@@ -6860,6 +6864,7 @@ async function chkShowHistory(){
       <textarea id="cl-support" class="cl-ta cl-ta-wide" placeholder="Anything the team needs from management…"></textarea>
     </div>
     <div class="cl-foot">
+      <button id="cl-delete" class="cl-del" style="display:none" onclick="clDeleteReport()">Delete</button>
       <button class="cl-cancel" onclick="clClose()">Cancel</button>
       <button id="cl-save" class="cl-save-only" onclick="clSave(false)">Save</button>
       <button id="cl-save-email" class="cl-save" onclick="clSave(true)">Save &amp; Email</button>
@@ -7044,6 +7049,7 @@ async function chkShowHistory(){
   .cl-cancel{flex:1;padding:11px;background:transparent;border:1px solid var(--sabbia-dark);border-radius:6px;cursor:pointer;font-family:var(--font-sans);color:var(--ink)}
   .cl-save{flex:2;padding:11px;background:var(--vino);border:none;border-radius:6px;cursor:pointer;font-family:var(--font-sans);color:var(--cream);font-weight:700}
   .cl-save-only{flex:1;padding:11px;background:transparent;border:1px solid var(--vino);border-radius:6px;cursor:pointer;font-family:var(--font-sans);color:var(--vino);font-weight:700}
+  .cl-del{flex:1;padding:11px;background:transparent;border:1px solid #b3402f;border-radius:6px;cursor:pointer;font-family:var(--font-sans);color:#b3402f;font-weight:700}
   .cl-open-btn{background:var(--vino)!important;color:var(--cream)!important;border-color:var(--vino)!important;font-weight:700}
   @media(max-width:560px){ .cl-comp-row{grid-template-columns:1fr 1fr} .cl-comments{grid-template-columns:1fr} .cl-row3{grid-template-columns:1fr} }
   .ops-wrap{max-width:980px;margin:0 auto;padding:8px 4px 60px}

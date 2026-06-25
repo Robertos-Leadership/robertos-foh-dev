@@ -56,6 +56,7 @@ async function clOpen(ds){
     }
   }catch(e){}
   document.getElementById('cl-modal').style.display='flex';
+  var delBtn=document.getElementById('cl-delete'); if(delBtn) delBtn.style.display = row ? '' : 'none';   // only deletable once saved
   clFill(row); clRenderComps(); clRenderComments();
   // Auto-fill manager on duty for a NEW report (never overwrite a saved one)
   if(!row && C.onDuty.length){
@@ -69,6 +70,24 @@ async function clOpen(ds){
   clRecalc();
 }
 function clClose(){ document.getElementById('cl-modal').style.display='none'; }
+// Delete a saved closing report (super-user only, e.g. 1212). Removes the report
+// AND its revenue rollup in rev_daily for that date — both keyed by service_date.
+async function clDeleteReport(){
+  var C=clInit(); var ds=C.date;
+  if(!ds || !C.loadedRow){ alert('There’s no saved report for this date to delete.'); return; }
+  var who = await fohRequireStaffId('delete the closing report for '+ds, null, { codeOnly:true, superOnly:true, title:'Manager code to delete' });
+  if(!who) return;
+  if(!confirm('Delete the closing report for '+ds+'?\n\nThis also removes that day’s revenue from the month. This cannot be undone.')) return;
+  var r1=await sb.from('closing_reports').delete().eq('service_date',ds);
+  if(r1.error){ alert('Could not delete the report: '+r1.error.message); return; }
+  var r2=await sb.from('rev_daily').delete().eq('service_date',ds);
+  if(r2.error){ alert('Report deleted, but its revenue row for '+ds+' could not be removed:\n'+r2.error.message+'\nClear it in Revenue if needed.'); }
+  if(typeof fohLogSend==='function') fohLogSend(who, 'closing_report_delete', ds);
+  C.loadedRow=null; clClose();
+  try{ if(typeof loadRevenue==='function') loadRevenue(); }catch(e){}
+  try{ if(typeof renderMain==='function') renderMain(); }catch(e){}
+  alert('The closing report for '+ds+' has been removed.');
+}
 function clFill(row){
   row=row||{}; function set(id,v){ var el=document.getElementById(id); if(el) el.value=(v!=null?v:''); }
   set('cl-date',clInit().date);
