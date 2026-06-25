@@ -2557,9 +2557,18 @@ var ADMIN_MODULES=[{k:'events',n:'Events'},{k:'operations',n:'Closing Report'},{
 var ADMIN_NOTIFY=[{k:'closing_report',n:'Closing-report email'}];
 function admEsc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 function loadAdminUsers(){
-  sb.from('app_users').select('*').order('name').then(function(r){
-    state.adminUsers = r.error ? [] : (r.data||[]);
-    state.adminLoaded = true;
+  // The Admin "control centre" reads BOTH databases: app_users + foh_staff from this
+  // (FOH) project, and the kitchen staff list from the kitchen project via sbKitchen.
+  // Read-only — nothing is written or moved; the two apps keep working as-is.
+  Promise.all([
+    sb.from('app_users').select('*').order('name'),
+    sb.from('foh_staff').select('name,emp_id,role,section,active').eq('active',true),
+    sbKitchen.from('staff').select('name,emp_id,designation,station_key,active').eq('active',true)
+  ]).then(function(res){
+    state.adminUsers   = res[0].error ? [] : (res[0].data||[]);
+    state.adminFoh     = res[1].error ? [] : (res[1].data||[]);
+    state.adminKitchen = res[2].error ? [] : (res[2].data||[]);
+    state.adminLoaded  = true;
     if(state.currentTab==='admin') renderMain();
   });
 }
@@ -2609,8 +2618,41 @@ async function adminDeleteUser(email){
 }
 function adminRefresh(){ state.adminLoaded=false; loadAdminUsers(); }
 function adminOpenSupabase(){ window.open(SUPA_USERS_URL,'_blank','noopener'); }
-function renderAdmin(){
-  if(!state.adminLoaded){ loadAdminUsers(); return '<div class="loading">Loading users…</div>'; }
+var ADM_CSS='.adm-wrap{max-width:760px;margin:0 auto;padding:18px 16px 90px;}'
+  +'.adm-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:6px;}'
+  +'.adm-head h2{font-family:Georgia,serif;color:#400207;margin:0;font-size:22px;}'
+  +'.adm-note{font-size:13px;color:#6b5a44;line-height:1.5;margin:6px 0 14px;}'
+  +'.adm-add{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;}'
+  +'.adm-add input{flex:1;min-width:160px;padding:9px 11px;border:1px solid #d8cbb6;border-radius:8px;font-size:14px;}'
+  +'.adm-row{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:12px 0;border-bottom:1px solid #e8ddc9;}'
+  +'.adm-who b{display:block;color:#2c1810;font-size:15px;}.adm-who span{font-size:12px;color:#9c8a72;}'
+  +'.adm-ticks{display:flex;gap:14px;flex-wrap:wrap;}'
+  +'.adm-tick{font-size:13px;color:#4a3b2a;display:flex;align-items:center;gap:5px;cursor:pointer;white-space:nowrap;}'
+  +'.adm-tick.adm-admin{color:#8a1f2a;font-weight:bold;}'
+  +'.adm-sep{flex-basis:100%;height:0;}'
+  +'.adm-emails-lbl{font-size:12px;color:#9c8a72;text-transform:uppercase;letter-spacing:.04em;align-self:center;}'
+  +'.adm-tick.adm-notif{color:#2d6a4f;}'
+  +'.adm-del{margin-left:10px;font-size:11px;color:#b3402f;background:none;border:1px solid #e3c9c4;border-radius:6px;padding:2px 8px;cursor:pointer;}'
+  +'.adm-del:hover{background:#f7ecea;}'
+  +'.adm-toggle{display:flex;gap:6px;margin:2px 0 16px;}'
+  +'.adm-toggle button{font-size:13px;padding:7px 15px;border:1px solid #d8cbb6;background:#fff;border-radius:20px;cursor:pointer;color:#6b5a44;}'
+  +'.adm-toggle button.on{background:#400207;color:#fff;border-color:#400207;}'
+  +'.ppl-sum{font-size:13px;color:#6b5a44;line-height:1.5;margin:2px 0 6px;}'
+  +'.ppl-grp{margin:18px 0 2px;font-family:Georgia,serif;color:#400207;font-size:16px;font-weight:bold;border-bottom:1px solid #e8ddc9;padding-bottom:5px;}'
+  +'.ppl-grp span{color:#9c8a72;font-weight:normal;font-size:12.5px;}'
+  +'.ppl-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 2px;border-bottom:1px solid #f1e9da;}'
+  +'.ppl-name{font-weight:bold;color:#2c1810;font-size:14px;min-width:160px;}'
+  +'.ppl-code{font-size:12px;color:#6b5a44;font-family:ui-monospace,Menlo,monospace;min-width:60px;}'
+  +'.ppl-role{font-size:12.5px;color:#6b5a44;flex:1;min-width:120px;}'
+  +'.ppl-badge{font-size:10.5px;padding:2px 8px;border-radius:10px;white-space:nowrap;}'
+  +'.ppl-login{background:#eadfcd;color:#6b4a2e;}.ppl-admin{background:#400207;color:#fff;}'
+  +'.ppl-empty{color:#9c8a72;font-size:13px;padding:8px 2px;}';
+
+function admNorm(s){ return String(s==null?'':s).trim().toLowerCase(); }
+function adminSetView(v){ state.adminView=v; if(state.currentTab==='admin') renderMain(); }
+
+// Existing "Users & Access" controls (manage logins + per-module access). Unchanged behaviour.
+function adminAccessInner(){
   var rows=(state.adminUsers||[]).map(function(u){
     var ticks=ADMIN_MODULES.map(function(m){
       var on=(u.modules||[]).indexOf(m.k)!==-1;
@@ -2623,29 +2665,65 @@ function renderAdmin(){
     }).join('');
     return '<div class="adm-row"><div class="adm-who"><b>'+admEsc(u.name||u.email)+'</b><span>'+admEsc(u.email)+'</span><button class="adm-del" onclick="adminDeleteUser(\''+admEsc(u.email)+'\')">Remove</button></div><div class="adm-ticks">'+ticks+adm+'<span class="adm-sep"></span><span class="adm-emails-lbl">Emails:</span>'+notif+'</div></div>';
   }).join('');
-  return '<style>'
-    +'.adm-wrap{max-width:760px;margin:0 auto;padding:18px 16px 90px;}'
-    +'.adm-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:6px;}'
-    +'.adm-head h2{font-family:Georgia,serif;color:#400207;margin:0;font-size:22px;}'
-    +'.adm-note{font-size:13px;color:#6b5a44;line-height:1.5;margin:6px 0 14px;}'
-    +'.adm-add{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;}'
-    +'.adm-add input{flex:1;min-width:160px;padding:9px 11px;border:1px solid #d8cbb6;border-radius:8px;font-size:14px;}'
-    +'.adm-row{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:12px 0;border-bottom:1px solid #e8ddc9;}'
-    +'.adm-who b{display:block;color:#2c1810;font-size:15px;}.adm-who span{font-size:12px;color:#9c8a72;}'
-    +'.adm-ticks{display:flex;gap:14px;flex-wrap:wrap;}'
-    +'.adm-tick{font-size:13px;color:#4a3b2a;display:flex;align-items:center;gap:5px;cursor:pointer;white-space:nowrap;}'
-    +'.adm-tick.adm-admin{color:#8a1f2a;font-weight:bold;}'
-    +'.adm-sep{flex-basis:100%;height:0;}'
-    +'.adm-emails-lbl{font-size:12px;color:#9c8a72;text-transform:uppercase;letter-spacing:.04em;align-self:center;}'
-    +'.adm-tick.adm-notif{color:#2d6a4f;}'
-    +'.adm-del{margin-left:10px;font-size:11px;color:#b3402f;background:none;border:1px solid #e3c9c4;border-radius:6px;padding:2px 8px;cursor:pointer;}'
-    +'.adm-del:hover{background:#f7ecea;}'
-    +'</style>'
-    +'<div class="adm-wrap">'
-    +'<div class="adm-head"><h2>Users &amp; Access</h2><div style="display:flex;gap:8px;"><button class="btn btn-sm" onclick="adminRefresh()">Refresh</button><button class="btn btn-gold" onclick="adminOpenSupabase()">+ Add login</button></div></div>'
-    +'<div class="adm-note">Tick a box to give or remove a module for that person — it saves instantly. <b>To add someone new:</b> tap “+ Add login”, create their email + password on the page that opens (turn ON “Auto Confirm User”), then add their email below.</div>'
+  return '<div class="adm-note">Tick a box to give or remove a module for that person — it saves instantly. <b>To add someone new:</b> tap “+ Add login”, create their email + password on the page that opens (turn ON “Auto Confirm User”), then add their email below.</div>'
     +'<div class="adm-add"><input id="adm-new-email" placeholder="new email (name@robertos.ae)"><input id="adm-new-name" placeholder="full name"><button class="btn btn-sm btn-gold" onclick="adminAddUser()">Add to list</button></div>'
-    +'<div class="adm-list">'+(rows||'<div class="adm-note">No users yet.</div>')+'</div></div>';
+    +'<div class="adm-list">'+(rows||'<div class="adm-note">No users yet.</div>')+'</div>';
+}
+
+// NEW — the "control centre": everyone who touches either app, in one place.
+// Reads kitchen staff (sbKitchen) + FOH staff (sb) + logins (app_users), merges by name,
+// and groups by where they work. Read-only overview; codes blank where unknown is fine.
+function adminPeopleInner(){
+  var users=state.adminUsers||[];
+  var byName={}; users.forEach(function(u){ if(u.name) byName[admNorm(u.name)]=u; });
+  var matched={};
+  // Link a staff record to its login by name. Staff names are sometimes first-name-only
+  // ("Jad") while logins use the full name ("Jad Ballout"), so also match when the staff
+  // name is the leading whole-word part of a login name. (Proper fix later = store the link.)
+  function admMatch(nm){
+    var s=admNorm(nm); if(!s) return null;
+    if(byName[s]) return byName[s];
+    for(var k in byName){ if(k.indexOf(s+' ')===0) return byName[k]; }
+    return null;
+  }
+  function row(p){
+    var login=admMatch(p.name);
+    if(login) matched[login.email]=true;
+    var code=(p.emp_id&&String(p.emp_id).trim())?admEsc(String(p.emp_id)):'—';
+    var role=admEsc(p.role||p.designation||'');
+    var badge=login?(login.is_admin?'<span class="ppl-badge ppl-admin">Admin login</span>':'<span class="ppl-badge ppl-login">login</span>'):'';
+    return '<div class="ppl-row"><span class="ppl-name">'+admEsc(p.name||'')+'</span><span class="ppl-code">'+code+'</span><span class="ppl-role">'+role+'</span>'+badge+'</div>';
+  }
+  function byNameSort(a,b){ return (a.name||'').localeCompare(b.name||''); }
+  var kit=(state.adminKitchen||[]).slice().sort(byNameSort);
+  var foh=(state.adminFoh||[]).slice().sort(byNameSort);
+  var kitHtml=kit.map(row).join('');   // run first so `matched` is populated…
+  var fohHtml=foh.map(row).join('');   // …before we compute the office leftovers
+  var office=users.filter(function(u){ return !matched[u.email]; }).sort(function(a,b){ return (a.name||a.email).localeCompare(b.name||b.email); });
+  var offHtml=office.map(function(u){
+    var badge=u.is_admin?'<span class="ppl-badge ppl-admin">Admin login</span>':'<span class="ppl-badge ppl-login">login</span>';
+    return '<div class="ppl-row"><span class="ppl-name">'+admEsc(u.name||u.email)+'</span><span class="ppl-code">—</span><span class="ppl-role">'+admEsc(u.email)+'</span>'+badge+'</div>';
+  }).join('');
+  var total=kit.length+foh.length+office.length;
+  function grp(t,n,sub){ return '<div class="ppl-grp">'+t+' <span>· '+n+(sub?' · '+sub:'')+'</span></div>'; }
+  function emp(){ return '<div class="ppl-empty">None.</div>'; }
+  return '<div class="ppl-sum">Everyone who touches either app — <b>'+total+' people</b> across both. A code is shown where we have it; blank is fine (office &amp; freelance). “login” = has an app account.</div>'
+    +grp('Kitchen',kit.length,'separate database')+(kitHtml||emp())
+    +grp('FOH',foh.length,'')+(fohHtml||emp())
+    +grp('Office / HQ',office.length,'logins, no clock-in')+(offHtml||emp());
+}
+
+function renderAdmin(){
+  if(!state.adminLoaded){ loadAdminUsers(); return '<div class="loading">Loading…</div>'; }
+  var view=(state.adminView==='access')?'access':'people';
+  var inner=(view==='access')?adminAccessInner():adminPeopleInner();
+  var addBtn=(view==='access')?'<button class="btn btn-gold" onclick="adminOpenSupabase()">+ Add login</button>':'';
+  return '<style>'+ADM_CSS+'</style>'
+    +'<div class="adm-wrap">'
+    +'<div class="adm-head"><h2>'+(view==='access'?'Users &amp; Access':'People — both apps')+'</h2><div style="display:flex;gap:8px;"><button class="btn btn-sm" onclick="adminRefresh()">Refresh</button>'+addBtn+'</div></div>'
+    +'<div class="adm-toggle"><button class="'+(view==='people'?'on':'')+'" onclick="adminSetView(\'people\')">People (both apps)</button><button class="'+(view==='access'?'on':'')+'" onclick="adminSetView(\'access\')">Users &amp; Access</button></div>'
+    +inner
+    +'</div>';
 }
 function enterApp(module){
   if(fohBlocked(module)){ showManagerLanding(); return; }   // access gate
