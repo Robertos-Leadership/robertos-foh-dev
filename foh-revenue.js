@@ -433,7 +433,8 @@ function revChatChip(type){
     whatif:'What happens to the budget and forecast for '+ml+' if average spend rises 2%? Does it close the gap to target?',
     day:'Give me the full breakdown — net, Restaurant vs Scala, daypart, covers, average spend and F&B — for the most recent trading day.',
     gap:'How far is '+ml+' from the target, and what uplift in the remaining days would be needed to close the gap?',
-    patterns:'Looking across the closing reports (the OPERATIONS LOG), what recurring patterns, issues and themes come up — in shift challenges, comps, and the good/bad comments? Summarise the top themes, how often each appears, and any link to weak nights.'
+    patterns:'Looking across the closing reports (the OPERATIONS LOG), what recurring patterns, issues and themes come up — in shift challenges, comps, and the good/bad comments? Summarise the top themes, how often each appears, and any link to weak nights.',
+    dashboard:'Build me a visual dashboard for '+ml+'. Include the charts [[chart:net-vs-budget]], [[chart:mtd-cumulative]], [[chart:venue-split]] and [[chart:weekday]] (each on its own line), and under each give a one-line read of what it shows. Finish with the headline: forecast vs budget and the gap to target.'
   }[type];
   if(q) revChatSend(q);
 }
@@ -499,7 +500,7 @@ function revChatRender(){
   var c=revChatInit(), box=document.getElementById('rev-chat-thread'); if(!box) return;
   function esc(t){ return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
   var h='';
-  if(!c.thread.length){ h+='<div class="rev-chat-empty"><div class="rev-chat-empty-t">Ask anything about your revenue</div><div class="rev-chat-empty-s">e.g. "compare June to May", "F&B split on 12 May", "Fridays +5% covers", "investor one-pager" — or tap a quick report below.</div></div>'; }
+  if(!c.thread.length){ h+='<div class="rev-chat-empty"><div class="rev-chat-empty-t">Ask anything about your revenue</div><div class="rev-chat-empty-s">e.g. "compare June to May", "show me a visual dashboard", "chart net vs budget", "Fridays +5% covers" — answers can include charts, and any answer exports to PDF. Or tap a quick report below.</div></div>'; }
   c.thread.forEach(function(m){
     if(m.role==='user'){ h+='<div class="rev-chat-row rev-chat-u"><div class="rev-chat-bub rev-chat-ub">'+esc(m.text)+'</div></div>'; }
     else { h+='<div class="rev-chat-row rev-chat-a"><div class="rev-chat-bub rev-chat-ab">'+(m.cards||'')+(m.props||[]).map(revProposalCardHTML).join('')+'<div class="rev-chat-md">'+revMd(m.text)+'</div></div></div>'; }
