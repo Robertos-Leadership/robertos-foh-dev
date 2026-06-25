@@ -267,7 +267,7 @@ async function clSave(andEmail){
   // new plain Save (no saved row yet) stays frictionless.
   var clIsEdit = !!C.loadedRow, clActor = null;
   if((andEmail || clIsEdit) && typeof fohRequireStaffId === 'function'){
-    clActor = await fohRequireStaffId(andEmail ? 'email the closing report to the team' : ('edit the saved closing report for '+ds));
+    clActor = await fohRequireStaffId(andEmail ? 'email the closing report to the team' : ('edit the saved closing report for '+ds), 'closing_report');
     if(!clActor) return;
     if(andEmail) clSendWho = clActor;
   }
