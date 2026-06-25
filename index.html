@@ -2675,33 +2675,42 @@ var ADM_CSS='.adm-wrap{max-width:760px;margin:0 auto;padding:18px 16px 90px;}'
   +'.pm-field input,.pm-field select{width:100%;padding:10px 12px;border:1px solid #d8cbb6;border-radius:9px;font-size:15px;box-sizing:border-box;background:#fff;}'
   +'.pm-field input:focus,.pm-field select:focus{outline:none;border-color:#6B1F2A;}'
   +'.pm-hint{font-size:12px;color:#8a7a62;line-height:1.5;margin-top:4px;}'
-  +'.pm-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:18px;}';
+  +'.pm-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:18px;}'
+  /* control-centre grid (frame with space, not boxes) */
+  +'.px-bar{margin:10px 0 8px;}'
+  +'.px-bulk{display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:#f3ead8;border-radius:11px;padding:9px 13px;margin:4px 0 12px;font-size:13px;color:#5a4a36;}'
+  +'.px-bulk b{color:#6B1F2A;}'
+  +'.px-mini{font-size:11.5px;padding:5px 11px;border-radius:7px;border:1px solid #d8cbb6;background:#fff;color:#5a4a36;cursor:pointer;margin-right:6px;}'
+  +'.px-mini:hover{border-color:#6B1F2A;color:#6B1F2A;}'
+  +'.px-mini-red{border-color:#e3c9c4;color:#b3402f;}.px-mini-red:hover{background:#f7ecea;}'
+  +'.px-tablewrap{overflow-x:auto;margin-top:4px;}'
+  +'.px-tbl{width:100%;border-collapse:collapse;font-size:13.5px;}'
+  +'.px-tbl th{position:sticky;top:0;background:#fbf7f0;text-align:left;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:#9c8a72;padding:9px 10px;cursor:pointer;border-bottom:1px solid #e8ddc9;white-space:nowrap;user-select:none;z-index:2;}'
+  +'.px-tbl th.sorted{color:#6B1F2A;}'
+  +'.px-tbl th.px-selcol{cursor:default;}'
+  +'.px-tbl td{padding:7px 10px;border-bottom:1px solid #f1e9da;vertical-align:middle;}'
+  +'.px-selcol{width:34px;text-align:center;}'
+  +'.px-row:hover{background:#faf6ee;}'
+  +'.px-row.sel{background:#f3ead8;}'
+  +'.px-cell{display:block;min-height:20px;border-radius:6px;padding:3px 6px;margin:-3px -6px;cursor:text;outline:none;color:#5a4a36;}'
+  +'.px-cell:focus{box-shadow:inset 0 0 0 2px #C9A84C;background:#fff;}'
+  +'.px-cell[data-col="name"]{font-weight:600;color:#2c1810;}'
+  +'.px-cell.miss{color:#b3402f;}'
+  +'.px-input{width:100%;box-sizing:border-box;border:1px solid #C9A84C;border-radius:6px;padding:3px 6px;font:inherit;color:#2c1810;}'
+  +'.px-input:focus{outline:none;}'
+  +'.px-where{font-size:10.5px;color:#7a6a52;background:#f0e8da;padding:2px 8px;border-radius:9px;white-space:nowrap;}'
+  +'.px-badge{font-size:10px;padding:1px 7px;border-radius:9px;margin-left:6px;white-space:nowrap;}'
+  +'.px-login{background:#eadfcd;color:#6b4a2e;}.px-admin{background:#6B1F2A;color:#fff;}'
+  +'.px-chev{background:none;border:none;cursor:pointer;color:#b29f86;font-size:14px;padding:3px 7px;display:inline-block;transition:transform .12s,color .12s;}'
+  +'.px-chev:hover{color:#6B1F2A;}'
+  +'.px-chev.open{color:#6B1F2A;transform:rotate(90deg);}'
+  +'.px-detail{background:#faf6ef;border-left:3px solid #C9A84C;padding:13px 15px;margin:3px 0;border-radius:0 9px 9px 0;}'
+  +'.px-dsec{margin-bottom:11px;}.px-dsec:last-child{margin-bottom:0;}'
+  +'.px-dlbl{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:#9c8a72;margin-bottom:6px;}'
+  +'.px-dhint{font-size:12.5px;color:#7a6a52;margin-bottom:8px;line-height:1.5;}'
+  +'.px-toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);background:#400207;color:#fff;padding:10px 18px;border-radius:11px;font-size:13px;z-index:100002;box-shadow:0 8px 30px rgba(40,2,7,.35);}';
 
 function admNorm(s){ return String(s==null?'':s).trim().toLowerCase(); }
-function adminSetView(v){ state.adminView=v; if(state.currentTab==='admin') renderMain(); }
-
-// Existing "Users & Access" controls (manage logins + per-module access). Unchanged behaviour.
-function adminAccessInner(){
-  var rows=(state.adminUsers||[]).map(function(u){
-    var ticks=ADMIN_MODULES.map(function(m){
-      var on=(u.modules||[]).indexOf(m.k)!==-1;
-      return '<label class="adm-tick"><input type="checkbox" '+(on?'checked':'')+' onchange="adminToggle(\''+admEsc(u.email)+'\',\''+m.k+'\')"> '+m.n+'</label>';
-    }).join('');
-    var adm='<label class="adm-tick adm-admin"><input type="checkbox" '+(u.is_admin?'checked':'')+' onchange="adminToggleAdmin(\''+admEsc(u.email)+'\')"> Admin</label>';
-    var notif=ADMIN_NOTIFY.map(function(nt){
-      var on=(u.notify||[]).indexOf(nt.k)!==-1;
-      return '<label class="adm-tick adm-notif"><input type="checkbox" '+(on?'checked':'')+' onchange="adminToggleNotify(\''+admEsc(u.email)+'\',\''+nt.k+'\')"> '+nt.n+'</label>';
-    }).join('');
-    return '<div class="adm-row"><div class="adm-who"><b>'+admEsc(u.name||u.email)+'</b><span>'+admEsc(u.email)+'</span><button class="adm-del" onclick="adminDeleteUser(\''+admEsc(u.email)+'\')">Remove</button></div><div class="adm-ticks">'+ticks+adm+'<span class="adm-sep"></span><span class="adm-emails-lbl">Emails:</span>'+notif+'</div></div>';
-  }).join('');
-  return '<div class="adm-note">Tick a box to give or remove a module for that person — it saves instantly. <b>To add someone new:</b> tap “+ Add login”, create their email + password on the page that opens (turn ON “Auto Confirm User”), then add their email below.</div>'
-    +'<div class="adm-add"><input id="adm-new-email" placeholder="new email (name@robertos.ae)"><input id="adm-new-name" placeholder="full name"><button class="btn btn-sm btn-gold" onclick="adminAddUser()">Add to list</button></div>'
-    +'<div class="adm-list">'+(rows||'<div class="adm-note">No users yet.</div>')+'</div>';
-}
-
-// NEW — the "control centre": everyone who touches either app, in one place.
-// Reads kitchen staff (sbKitchen) + FOH staff (sb) + logins (app_users), merges by name,
-// and groups by where they work. Read-only overview; codes blank where unknown is fine.
 // Build ONE unified people list from kitchen staff + FOH staff + office logins.
 // Each entry: {src:'kitchen'|'foh'|'office', id, name, emp_id, role, where, section, login}.
 // Used by the render, the search/filter, the emp_id collision check, and edit lookups.
@@ -2721,60 +2730,25 @@ function admBuildPeople(){
     out.push({src:'office',id:u.email,name:u.name||u.email,emp_id:'',role:'',section:'',where:'Office',email:u.email,login:u}); });
   return out;
 }
-function admPersonRowHTML(p){
-  var code=p.emp_id?admEsc(p.emp_id):'—';
-  var badge=p.login?(p.login.is_admin?'<span class="ppl-badge ppl-admin">admin</span>':'<span class="ppl-badge ppl-login">login</span>'):'';
-  var roleOrEmail=p.src==='office'?admEsc(p.email||''):admEsc(p.role);
-  var acts=(p.src==='office')
-    ? '<button class="ppl-edit" onclick="adminSetView(\'access\')">Access</button>'
-    : '<button class="ppl-edit" onclick="admEditOpen(\''+p.src+'\',\''+admEsc(String(p.id))+'\')">Edit</button><button class="ppl-del" onclick="admRemove(\''+p.src+'\',\''+admEsc(String(p.id))+'\')">Remove</button>';
-  var hay=admNorm(p.name+' '+p.emp_id+' '+p.role+' '+p.where);
-  return '<div class="ppl-row" data-src="'+p.src+'" data-where="'+p.where+'" data-code="'+(p.emp_id?'1':'0')+'" data-login="'+(p.login?'1':'0')+'" data-hay="'+admEsc(hay)+'">'
-    +'<span class="ppl-name">'+admEsc(p.name)+'</span>'
-    +'<span class="ppl-code'+(p.emp_id?'':' miss')+'">'+code+'</span>'
-    +'<span class="ppl-role">'+roleOrEmail+'</span>'
-    +'<span class="ppl-where">'+p.where+'</span>'
-    +badge
-    +'<span class="ppl-act">'+acts+'</span>'
-    +'</div>';
-}
-function adminPeopleInner(){
-  var people=admBuildPeople();
-  var miss=people.filter(function(p){ return !p.emp_id && p.src!=='office'; }).length;
-  var where=state.adminWhere||'all';
-  var chips=[['all','All · '+people.length],['Kitchen','Kitchen'],['FOH','FOH'],['Office','Office / HQ'],['missing','Missing code · '+miss],['login','Has login']];
-  var chipHTML=chips.map(function(c){ return '<button class="ppl-chip'+(where===c[0]?' on':'')+'" data-w="'+c[0]+'" onclick="admSetWhere(\''+c[0]+'\')">'+admEsc(c[1])+'</button>'; }).join('');
-  var rows=people.slice().sort(function(a,b){ return (a.where).localeCompare(b.where)||a.name.localeCompare(b.name); }).map(admPersonRowHTML).join('');
-  var q=admEsc(state.adminQuery||'');
-  return '<div class="ppl-sum">Everyone who touches either app — <b>'+people.length+' people</b> across both. Tap <b>Edit</b> to set someone’s employee ID (it writes straight to the app), or add / remove people. A code is optional — blank is fine for office &amp; freelance.</div>'
-    +'<div class="ppl-tools"><input id="ppl-search" class="ppl-search" placeholder="Search name, code or role…" value="'+q+'" oninput="admApplyFilter()"><button class="btn btn-gold" onclick="admAddOpen()">+ Add person</button></div>'
-    +'<div class="ppl-chips">'+chipHTML+'</div>'
-    +'<div class="ppl-listhead"><span id="ppl-count">'+people.length+' shown</span></div>'
-    +'<div id="ppl-list">'+rows+'</div>';
-}
-// ── search + filter (DOM-level, keeps the typed query and avoids a full re-render) ──
-function admSetWhere(w){
-  state.adminWhere=w;
-  var chips=document.querySelectorAll('.ppl-chip');
-  for(var i=0;i<chips.length;i++){ chips[i].classList.toggle('on', chips[i].getAttribute('data-w')===w); }
-  admApplyFilter();
-}
+// ── search + filter ──
+function admSetWhere(w){ state.adminWhere=w; renderMain(); admAfterRender(function(){ try{admApplyFilter();}catch(e){} }); }
+// Text search runs at the DOM level so typing keeps focus and never triggers a
+// full re-render. The Where chips filter at render time (admGrid) so sort + count stay correct.
 function admApplyFilter(){
   var inp=document.getElementById('ppl-search');
   if(inp) state.adminQuery=inp.value;
   var q=admNorm(inp?inp.value:(state.adminQuery||''));
-  var where=state.adminWhere||'all';
-  var rows=document.querySelectorAll('#ppl-list .ppl-row'); var vis=0;
+  var rows=document.querySelectorAll('#px-body .px-row'); var vis=0;
   for(var i=0;i<rows.length;i++){ var r=rows[i];
-    var w=r.getAttribute('data-where'), src=r.getAttribute('data-src'), hasCode=r.getAttribute('data-code')==='1', hasLogin=r.getAttribute('data-login')==='1', hay=r.getAttribute('data-hay')||'';
-    var okW = where==='all' || (where==='missing'?(!hasCode&&src!=='office'):(where==='login'?hasLogin:w===where));
-    var okQ = !q || hay.indexOf(q)!==-1;
-    var show=okW&&okQ; r.style.display=show?'':'none'; if(show) vis++;
+    var hay=r.getAttribute('data-hay')||'';
+    var show=!q||hay.indexOf(q)!==-1; r.style.display=show?'':'none';
+    var det=r.nextElementSibling;   // an expanded person's detail row sits right after it
+    if(det&&det.classList&&det.classList.contains('px-detailrow')) det.style.display=show?'':'none';
+    if(show) vis++;
   }
   var c=document.getElementById('ppl-count'); if(c) c.textContent=vis+' shown';
 }
-// ── edit / add / remove (writes back to foh_staff via sb, kitchen staff via sbKitchen) ──
-var admEdit=null;
+// ── add / remove people + shared modal helpers (writes back to foh_staff via sb, kitchen staff via sbKitchen) ──
 function admVal(id){ var e=document.getElementById(id); return e?(e.value||''):''; }
 function admModalClose(){ var o=document.getElementById('pm-ovl'); if(o) o.remove(); }
 function admModalOpen(title,body,actions){
@@ -2793,32 +2767,7 @@ function admCodeClash(code,src,id){
   if(!code) return null;
   return admBuildPeople().find(function(p){ return p.emp_id && admNorm(p.emp_id)===admNorm(code) && !(p.src===src && String(p.id)===String(id)); });
 }
-function admEditOpen(src,id){
-  var rec=admStaffRec(src,id); if(!rec) return;
-  admEdit={src:src,id:id};
-  var role=rec.role||rec.designation||'';
-  admModalOpen('Edit person',
-    admFieldText('pm-name','Full name',rec.name||'')
-    +admFieldText('pm-code','Employee ID',rec.emp_id?String(rec.emp_id):'','Blank = no code (fine for office / freelance). Saving a code writes it straight to the '+(src==='kitchen'?'Kitchen':'FOH')+' app.')
-    +admFieldText('pm-role','Role',role),
-    '<button class="btn btn-sm" onclick="admModalClose()">Cancel</button><button id="pm-save" class="btn btn-gold" onclick="admEditSave()">Save</button>');
-}
-async function admEditSave(){
-  if(!admEdit) return;
-  var src=admEdit.src, id=admEdit.id;
-  var name=admVal('pm-name').trim(), code=admVal('pm-code').trim(), role=admVal('pm-role').trim();
-  if(!name){ alert('Name can’t be empty.'); return; }
-  var clash=admCodeClash(code,src,id);
-  if(clash){ alert('Employee ID '+code+' already belongs to '+clash.name+' ('+clash.where+').\n\nEach code must belong to one person — give this person a different code, or clear '+clash.name+'’s first.'); return; }
-  var btn=document.getElementById('pm-save'); if(btn){ btn.disabled=true; btn.textContent='Saving…'; }
-  var client=src==='foh'?sb:sbKitchen, table=src==='foh'?'foh_staff':'staff';
-  var payload=src==='foh'?{name:name,emp_id:code||null,role:role}:{name:name,emp_id:code||null,designation:role};
-  var res=await client.from(table).update(payload).eq('id',id);
-  if(res.error){ alert('Could not save: '+res.error.message); if(btn){ btn.disabled=false; btn.textContent='Save'; } return; }
-  admModalClose(); adminRefresh();
-}
 function admAddOpen(){
-  admEdit=null;
   admModalOpen('Add person',
     admFieldSelect('pm-where','Where do they work',[['foh','FOH (floor)'],['kitchen','Kitchen']])
     +admFieldText('pm-name','Full name','')
@@ -2849,31 +2798,16 @@ async function admRemove(src,id){
   adminRefresh();
 }
 
+// ONE control centre — the People grid is the hub; access + signing live inside each
+// person's expand panel (admDetailHTML). No more separate toggled screens.
 function renderAdmin(){
   if(!state.adminLoaded){ loadAdminUsers(); return '<div class="loading">Loading…</div>'; }
-  var view=state.adminView; if(view!=='access'&&view!=='signers') view='people';
-  var inner = view==='access'?adminAccessInner() : (view==='signers'?adminSignersInner() : adminPeopleInner());
-  var titles={people:'People — both apps',access:'Users &amp; Access',signers:'Who can sign'};
-  var addBtn=(view==='access')?'<button class="btn btn-gold" onclick="adminOpenSupabase()">+ Add login</button>':'';
-  return '<style>'+ADM_CSS+'</style>'
-    +'<div class="adm-wrap">'
-    +'<div class="adm-head"><h2>'+titles[view]+'</h2><div style="display:flex;gap:8px;"><button class="btn btn-sm" onclick="adminRefresh()">Refresh</button>'+addBtn+'</div></div>'
-    +'<div class="adm-toggle"><button class="'+(view==='people'?'on':'')+'" onclick="adminSetView(\'people\')">People</button><button class="'+(view==='signers'?'on':'')+'" onclick="adminSetView(\'signers\')">Who can sign</button><button class="'+(view==='access'?'on':'')+'" onclick="adminSetView(\'access\')">Users &amp; Access</button></div>'
-    +inner
-    +'</div>';
+  if(!state.adminSort) state.adminSort={col:'where',dir:1};
+  state.adminSel=state.adminSel||{};
+  return '<style>'+ADM_CSS+'</style>'+admGrid();
 }
-// "Who can sign" — per-action authorized signers; the picker shows only these as quick taps.
-function adminSignersInner(){
-  var ACTS=[['closing_report','Closing report'],['roster','Roster to HR']];
-  var s=state.adminSigners||{};
-  function rankSec(sec){ var x=(sec||'').toLowerCase(); if(x.indexOf('manage')!==-1) return 0; if(x.indexOf('head')!==-1) return 1; return 2; }
-  var staff=(state.adminFoh||[]).slice().sort(function(a,b){ return rankSec(a.section)-rankSec(b.section)||(a.name||'').localeCompare(b.name||''); });
-  var rows=staff.map(function(p){
-    var ticks=ACTS.map(function(a){ var on=(s[a[0]]||[]).indexOf(p.id)!==-1; return '<label class="adm-tick"><input type="checkbox" '+(on?'checked':'')+' onchange="admSignerToggle(\''+a[0]+'\',\''+admEsc(String(p.id))+'\')"> '+a[1]+'</label>'; }).join('');
-    return '<div class="adm-row"><div class="adm-who"><b>'+admEsc(p.name||'')+'</b><span>'+admEsc(p.role||'')+'</span></div><div class="adm-ticks">'+ticks+'</div></div>';
-  }).join('');
-  return '<div class="adm-note">Tick who can <b>tap-sign</b> each action — their name shows as a quick tap on that screen. Everyone else taps “I’m someone else” and enters their ID on the keypad. Saves instantly. <i>(If nobody is ticked for an action, the screen falls back to showing all staff.)</i></div>'+(rows||'<div class="adm-note">No FOH staff found.</div>');
-}
+// "Who can sign" — per-action authorized signers, now edited inline in each FOH
+// person's detail panel (admDetailHTML). Saved to app_config via admSaveSigners.
 async function admSaveSigners(){
   var res=await sb.from('app_config').upsert({key:'signers',value:state.adminSigners||{},updated_at:new Date().toISOString()},{onConflict:'key'});
   if(res.error) alert('Could not save: '+res.error.message+'\n\n(If this is the first time, run the app_config table SQL once.)');
@@ -2883,6 +2817,290 @@ function admSignerToggle(action,id){
   var arr=s[action]||(s[action]=[]);
   var i=arr.indexOf(id); if(i===-1) arr.push(id); else arr.splice(i,1);
   renderMain(); admSaveSigners();
+}
+
+/* ===================================================================
+   CONTROL CENTRE — Excel-style People grid (the single hub).
+   Reuses the existing data (admBuildPeople), the collision guard
+   (admCodeClash), the write clients (sb / sbKitchen), signers
+   (app_config via admSignerToggle) and logins (app_users). Nothing
+   about write-back or the guard changes — this is presentation + power tools.
+   =================================================================== */
+function admKey(p){ return p.src+'|'+p.id; }
+function admByKey(key){ var a=admBuildPeople(); for(var i=0;i<a.length;i++){ if(admKey(a[i])===key) return a[i]; } return null; }
+function admAfterRender(fn){ setTimeout(fn,0); }
+function admToast(msg){ var t=document.createElement('div'); t.className='px-toast'; t.textContent=msg; document.body.appendChild(t); setTimeout(function(){ if(t&&t.parentNode) t.parentNode.removeChild(t); },2200); }
+function admClip(txt){ try{ if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(txt); return; } }catch(e){}
+  var ta=document.createElement('textarea'); ta.value=txt; ta.style.position='fixed'; ta.style.opacity='0'; document.body.appendChild(ta); ta.focus(); ta.select(); try{ document.execCommand('copy'); }catch(e){} ta.remove(); }
+
+function admSortVal(p,col){ if(col==='name') return admNorm(p.name); if(col==='code') return p.emp_id?admNorm(p.emp_id):'~~~~'; if(col==='role') return admNorm(p.role||p.email||''); return admNorm(p.where); }
+
+// ── the grid ──
+function admGrid(){
+  var people=admBuildPeople();
+  var miss=people.filter(function(p){ return !p.emp_id&&p.src!=='office'; }).length;
+  var logins=people.filter(function(p){ return !!p.login; }).length;
+  var where=state.adminWhere||'all';
+  var chipsDef=[['all','All · '+people.length],['Kitchen','Kitchen'],['FOH','FOH'],['Office','Office / HQ'],['missing','Missing code · '+miss],['login','Has login · '+logins]];
+  var chipHTML=chipsDef.map(function(c){ return '<button class="ppl-chip'+(where===c[0]?' on':'')+'" data-w="'+c[0]+'" onclick="admSetWhere(\''+c[0]+'\')">'+admEsc(c[1])+'</button>'; }).join('');
+  var list=people.filter(function(p){ if(where==='all') return true; if(where==='missing') return !p.emp_id&&p.src!=='office'; if(where==='login') return !!p.login; return p.where===where; });
+  var s=state.adminSort||{col:'where',dir:1};
+  list.sort(function(a,b){ var v=admSortVal(a,s.col).localeCompare(admSortVal(b,s.col)); if(v===0&&s.col!=='name') v=admNorm(a.name).localeCompare(admNorm(b.name)); return v*s.dir; });
+  var body=list.map(admRowHTML2).join('');
+  function th(col,lbl){ var on=s.col===col; var ar=on?(s.dir>0?' ▲':' ▼'):''; return '<th class="'+(on?'sorted':'')+'" onclick="admSort(\''+col+'\')">'+admEsc(lbl)+ar+'</th>'; }
+  var selN=Object.keys(state.adminSel||{}).length;
+  var bulk= selN ? '<div class="px-bulk"><b>'+selN+' selected</b><button class="px-mini" onclick="admCopySelection()">Copy</button><button class="px-mini px-mini-red" onclick="admBulkRemove()">Remove selected</button><button class="px-mini" onclick="admClearSel()">Clear</button></div>' : '';
+  return '<div class="adm-wrap">'
+    +'<div class="adm-head"><h2>People — control centre</h2><div style="display:flex;gap:8px;flex-wrap:wrap;"><button class="btn btn-sm" onclick="adminRefresh()">Refresh</button><button class="btn btn-sm" onclick="admPasteOpen()">Paste codes</button><button class="btn btn-sm" onclick="admAddLoginOpen(\'\')">+ Add login</button><button class="btn btn-gold" onclick="admAddOpen()">+ Add person</button></div></div>'
+    +'<div class="ppl-sum">Everyone who touches either app, in one place — <b>'+people.length+' people</b>. Click a cell to edit (Enter saves · Tab across · arrows move — like Excel). Tick rows for bulk Copy / Remove. Tap a row’s ▸ to set that person’s app access &amp; signing.</div>'
+    +'<div class="px-bar"><input id="ppl-search" class="ppl-search" placeholder="Search name, code or role…" value="'+admEsc(state.adminQuery||'')+'" oninput="admApplyFilter()"></div>'
+    +'<div class="ppl-chips">'+chipHTML+'</div>'
+    +bulk
+    +'<div class="px-tablewrap"><table class="px-tbl"><thead><tr><th class="px-selcol"><input type="checkbox" class="px-selall" onclick="admSelectAll(this)" title="Select all"></th>'
+    +th('name','Name')+th('code','Code')+th('role','Role / email')+th('where','Where')+'<th></th></tr></thead>'
+    +'<tbody id="px-body">'+(body||'<tr><td colspan="6" class="ppl-empty">No people found.</td></tr>')+'</tbody></table></div>'
+    +'<div class="ppl-listhead"><span id="ppl-count">'+list.length+' shown</span></div>'
+    +'</div>';
+}
+function admRowHTML2(p){
+  var key=admKey(p), off=p.src==='office';
+  var sel=!!(state.adminSel&&state.adminSel[key]);
+  var open=state.adminExpanded===key;
+  var codeTxt=p.emp_id?admEsc(p.emp_id):'—';
+  var roleTxt=off?admEsc(p.email||''):admEsc(p.role||'');
+  var badge=p.login?(p.login.is_admin?'<span class="px-badge px-admin">admin</span>':'<span class="px-badge px-login">login</span>'):'';
+  var hay=admNorm(p.name+' '+(p.emp_id||'')+' '+(p.role||'')+' '+(p.email||'')+' '+p.where);
+  function cell(col,txt,editable,cls){
+    if(editable) return '<td><span class="px-cell'+(cls?' '+cls:'')+'" tabindex="0" data-key="'+admEsc(key)+'" data-col="'+col+'" data-editable="1">'+txt+'</span></td>';
+    return '<td><span'+(cls?' class="'+cls+'"':'')+'>'+txt+'</span></td>';
+  }
+  var tr='<tr class="px-row'+(sel?' sel':'')+'" data-key="'+admEsc(key)+'" data-where="'+admEsc(p.where)+'" data-src="'+p.src+'" data-hay="'+admEsc(hay)+'">'
+    +'<td class="px-selcol"><input type="checkbox" class="px-sel" data-key="'+admEsc(key)+'" '+(sel?'checked':'')+' onclick="admToggleSel(this,event)"></td>'
+    +cell('name',admEsc(p.name),true)
+    +cell('code',codeTxt,!off,(p.emp_id?'':'miss'))
+    +cell('role',roleTxt,!off)
+    +'<td><span class="px-where">'+admEsc(p.where)+'</span>'+badge+'</td>'
+    +'<td style="text-align:right;"><button class="px-chev'+(open?' open':'')+'" onclick="admToggleExpand(\''+admEsc(key)+'\')" title="Access &amp; signing">▸</button></td>'
+    +'</tr>';
+  if(open) tr+='<tr class="px-detailrow"><td colspan="6">'+admDetailHTML(p)+'</td></tr>';
+  return tr;
+}
+// per-person detail: app access (logins) + who-can-sign (FOH staff) + remove
+function admDetailHTML(p){
+  var parts=[];
+  if(p.login){
+    var email=p.login.email;
+    var mods=ADMIN_MODULES.map(function(m){ var on=(p.login.modules||[]).indexOf(m.k)!==-1; return '<label class="adm-tick"><input type="checkbox" '+(on?'checked':'')+' onchange="adminToggle(\''+admEsc(email)+'\',\''+m.k+'\')"> '+m.n+'</label>'; }).join('');
+    var adm='<label class="adm-tick adm-admin"><input type="checkbox" '+(p.login.is_admin?'checked':'')+' onchange="adminToggleAdmin(\''+admEsc(email)+'\')"> Admin</label>';
+    var notif=ADMIN_NOTIFY.map(function(nt){ var on=(p.login.notify||[]).indexOf(nt.k)!==-1; return '<label class="adm-tick adm-notif"><input type="checkbox" '+(on?'checked':'')+' onchange="adminToggleNotify(\''+admEsc(email)+'\',\''+nt.k+'\')"> '+nt.n+'</label>'; }).join('');
+    parts.push('<div class="px-dsec"><div class="px-dlbl">App access — '+admEsc(email)+'</div><div class="adm-ticks">'+mods+adm+'</div><div class="adm-ticks" style="margin-top:7px;"><span class="adm-emails-lbl">Emails:</span>'+notif+'</div><div style="margin-top:9px;"><button class="px-mini px-mini-red" onclick="adminDeleteUser(\''+admEsc(email)+'\')">Remove login</button></div></div>');
+  }
+  if(p.src==='foh'){
+    var sg=state.adminSigners||{}; var ACTS=[['closing_report','Closing report'],['roster','Roster to HR']];
+    var ticks=ACTS.map(function(a){ var on=(sg[a[0]]||[]).indexOf(p.id)!==-1; return '<label class="adm-tick"><input type="checkbox" '+(on?'checked':'')+' onchange="admSignerToggle(\''+a[0]+'\',\''+admEsc(String(p.id))+'\')"> '+a[1]+'</label>'; }).join('');
+    parts.push('<div class="px-dsec"><div class="px-dlbl">Can tap-sign</div><div class="adm-ticks">'+ticks+'</div></div>');
+  }
+  if(!p.login && p.src!=='office'){
+    parts.push('<div class="px-dsec"><div class="px-dlbl">App login</div><div class="px-dhint">No login — this person doesn’t sign in to the manager area. Add one only if they need access.</div><button class="px-mini" onclick="admAddLoginOpen(\''+admEsc(admKey(p))+'\')">+ Add a login for '+admEsc(p.name)+'</button></div>');
+  }
+  if(p.src!=='office'){
+    parts.push('<div class="px-dsec"><button class="px-mini px-mini-red" onclick="admRemove(\''+p.src+'\',\''+admEsc(String(p.id))+'\')">Remove from '+(p.src==='kitchen'?'Kitchen':'FOH')+' staff</button></div>');
+  }
+  return '<div class="px-detail">'+(parts.join('')||'<div class="px-dhint">Nothing to configure for this person.</div>')+'</div>';
+}
+function admToggleExpand(key){ state.adminExpanded=(state.adminExpanded===key?null:key); renderMain(); admAfterRender(function(){ try{admApplyFilter();}catch(e){} }); }
+function admSort(col){ var s=state.adminSort||(state.adminSort={col:'where',dir:1}); if(s.col===col) s.dir=-s.dir; else { s.col=col; s.dir=1; } renderMain(); admAfterRender(function(){ try{admApplyFilter();}catch(e){} }); }
+
+// ── multi-select + bulk actions ──
+function admToggleSel(cb,ev){
+  state.adminSel=state.adminSel||{};
+  var key=cb.getAttribute('data-key');
+  if(ev&&ev.shiftKey&&state._admLastSel){
+    var rows=Array.prototype.slice.call(document.querySelectorAll('#px-body .px-row')).filter(function(r){ return r.style.display!=='none'; });
+    var keys=rows.map(function(r){ return r.getAttribute('data-key'); });
+    var a=keys.indexOf(state._admLastSel), b=keys.indexOf(key);
+    if(a>-1&&b>-1){ var lo=Math.min(a,b), hi=Math.max(a,b); for(var i=lo;i<=hi;i++) state.adminSel[keys[i]]=true; }
+  } else { if(cb.checked) state.adminSel[key]=true; else delete state.adminSel[key]; }
+  state._admLastSel=key;
+  renderMain(); admAfterRender(function(){ try{admApplyFilter();}catch(e){} });
+}
+function admSelectAll(cb){
+  state.adminSel=state.adminSel||{};
+  var rows=document.querySelectorAll('#px-body .px-row');
+  for(var i=0;i<rows.length;i++){ var r=rows[i]; if(r.style.display==='none') continue; var k=r.getAttribute('data-key'); if(cb.checked) state.adminSel[k]=true; else delete state.adminSel[k]; }
+  renderMain(); admAfterRender(function(){ try{admApplyFilter();}catch(e){} });
+}
+function admClearSel(){ state.adminSel={}; renderMain(); admAfterRender(function(){ try{admApplyFilter();}catch(e){} }); }
+async function admBulkRemove(){
+  var keys=Object.keys(state.adminSel||{}); if(!keys.length) return;
+  if(!confirm('Remove '+keys.length+' selected '+(keys.length===1?'person':'people')+'?\n\nStaff are deactivated (their records are kept); logins are deleted. You can re-add later.')) return;
+  var people=admBuildPeople(), byKey={}; people.forEach(function(p){ byKey[admKey(p)]=p; });
+  for(var i=0;i<keys.length;i++){ var p=byKey[keys[i]]; if(!p) continue;
+    if(p.src==='office'){ await sb.from('app_users').delete().eq('email',p.id); }
+    else { var client=p.src==='foh'?sb:sbKitchen, table=p.src==='foh'?'foh_staff':'staff'; await client.from(table).update({active:false}).eq('id',p.id); }
+  }
+  state.adminSel={}; adminRefresh();
+}
+function admCopySelection(){
+  var people=admBuildPeople(), sel=state.adminSel||{};
+  var chosen=people.filter(function(p){ return sel[admKey(p)]; });
+  var txt;
+  if(chosen.length){ txt='Name\tEmployee ID\tRole\tWhere\n'+chosen.map(function(p){ return [p.name,(p.emp_id||''),(p.role||p.email||''),p.where].join('\t'); }).join('\n'); }
+  else { var c=document.activeElement; if(c&&c.classList&&c.classList.contains('px-cell')){ txt=c.textContent==='—'?'':c.textContent; } else { admToast('Tick some rows first, then Copy.'); return; } }
+  admClip(txt); admToast(chosen.length?('Copied '+chosen.length+' '+(chosen.length===1?'person':'people')):'Copied cell');
+}
+
+// ── inline cell editing + keyboard navigation (Excel feel) ──
+function admVisibleCells(){ return Array.prototype.slice.call(document.querySelectorAll('#px-body .px-cell[data-editable="1"]')).filter(function(c){ var r=c.closest?c.closest('.px-row'):null; return r&&r.style.display!=='none'; }); }
+function admMoveFromCell(cell,dir){
+  var cells=admVisibleCells(), idx=cells.indexOf(cell); if(idx<0) return;
+  var col=cell.getAttribute('data-col'), t=null;
+  if(dir==='right') t=cells[idx+1]; else if(dir==='left') t=cells[idx-1];
+  else { var same=cells.filter(function(c){ return c.getAttribute('data-col')===col; }); var j=same.indexOf(cell); t=dir==='down'?same[j+1]:same[j-1]; }
+  if(t) t.focus();
+}
+function admFocusKeyCol(key,col,move){
+  var cell=document.querySelector('#px-body .px-cell[data-key="'+key.replace(/"/g,'')+'"][data-col="'+col+'"]');
+  if(!cell) return;
+  if(move&&move!=='self') admMoveFromCell(cell,move); else cell.focus();
+}
+function admBeginEdit(cell,seed){
+  if(!cell||cell.getAttribute('data-editing')==='1'||cell.getAttribute('data-editable')!=='1') return;
+  var cur=cell.textContent; if(cur==='—') cur='';
+  var key=cell.getAttribute('data-key'), col=cell.getAttribute('data-col');
+  cell.setAttribute('data-editing','1');
+  var inp=document.createElement('input'); inp.className='px-input'; inp.value=(seed!=null?seed:cur);
+  cell.textContent=''; cell.appendChild(inp); inp.focus();
+  if(seed==null){ try{ inp.select(); }catch(e){} } else { try{ inp.setSelectionRange(seed.length,seed.length); }catch(e){} }
+  var done=false;
+  function finish(commit,move){
+    if(done) return; done=true; cell.removeAttribute('data-editing');
+    var v=inp.value;
+    if(commit && v.trim()!==cur.trim()){ admInlineSave(key,col,v,move); }
+    else { cell.textContent=cur||(col==='code'?'—':''); cell.focus(); if(move&&move!=='self') admMoveFromCell(cell,move); }
+  }
+  inp.addEventListener('keydown',function(e){
+    if(e.key==='Enter'){ e.preventDefault(); finish(true,'down'); }
+    else if(e.key==='Escape'){ e.preventDefault(); finish(false,'self'); }
+    else if(e.key==='Tab'){ e.preventDefault(); finish(true,e.shiftKey?'left':'right'); }
+    e.stopPropagation();
+  });
+  inp.addEventListener('blur',function(){ finish(true,null); });
+}
+// writes back: foh_staff via sb, kitchen staff via sbKitchen, office name via app_users.
+// mutates the cached record so the next render shows the new value before adminRefresh.
+function admWrite(p,col,val){
+  if(p.src==='office'){
+    if(col!=='name') return Promise.resolve(false);
+    var u=adminFind(p.id); if(!u) return Promise.resolve(false);
+    return adminSave({email:u.email,name:val,modules:u.modules,is_admin:u.is_admin,notify:u.notify||[]}).then(function(ok){ if(ok) u.name=val; return ok; });
+  }
+  var client=p.src==='foh'?sb:sbKitchen, table=p.src==='foh'?'foh_staff':'staff', payload={};
+  if(col==='name') payload.name=val; else if(col==='code') payload.emp_id=val||null; else if(col==='role') payload[p.src==='foh'?'role':'designation']=val;
+  return client.from(table).update(payload).eq('id',p.id).then(function(res){
+    if(res.error){ alert('Could not save: '+res.error.message); return false; }
+    var rec=admStaffRec(p.src,p.id);
+    if(rec){ if(col==='name') rec.name=val; else if(col==='code') rec.emp_id=val||null; else if(col==='role'){ if(p.src==='foh') rec.role=val; else rec.designation=val; } }
+    return true;
+  });
+}
+function admInlineSave(key,col,val,move){
+  var p=admByKey(key); if(!p) return;
+  val=(val||'').trim();
+  if(col==='code'){
+    var clash=admCodeClash(val,p.src,p.id);
+    if(clash){ alert('Employee ID '+val+' already belongs to '+clash.name+' ('+clash.where+').\n\nEach code must belong to one person — give this person a different code, or clear '+clash.name+'’s first.'); renderMain(); admAfterRender(function(){ admFocusKeyCol(key,col,'self'); }); return; }
+  }
+  admWrite(p,col,val).then(function(ok){ renderMain(); admAfterRender(function(){ try{admApplyFilter();}catch(e){} admFocusKeyCol(key,col, ok?move:'self'); }); });
+}
+// one delegated key handler for the whole grid (bound once)
+function admGridKey(e){
+  if(state.currentTab!=='admin') return;
+  var cell=document.activeElement;
+  if(!cell||!cell.classList||!cell.classList.contains('px-cell')) return;
+  if(cell.getAttribute('data-editing')==='1') return;
+  var k=e.key;
+  if(k==='ArrowRight'){ e.preventDefault(); admMoveFromCell(cell,'right'); }
+  else if(k==='ArrowLeft'){ e.preventDefault(); admMoveFromCell(cell,'left'); }
+  else if(k==='ArrowDown'){ e.preventDefault(); admMoveFromCell(cell,'down'); }
+  else if(k==='ArrowUp'){ e.preventDefault(); admMoveFromCell(cell,'up'); }
+  else if(k==='Enter'||k==='F2'){ e.preventDefault(); if(cell.getAttribute('data-editable')==='1') admBeginEdit(cell,null); }
+  else if((e.ctrlKey||e.metaKey)&&(k==='c'||k==='C')){ e.preventDefault(); admCopySelection(); }
+  else if(k&&k.length===1&&!e.ctrlKey&&!e.metaKey&&!e.altKey&&cell.getAttribute('data-editable')==='1'){ admBeginEdit(cell,k); }
+}
+if(typeof document!=='undefined' && typeof window!=='undefined' && !window.__admKeyBound){ document.addEventListener('keydown',admGridKey,true); window.__admKeyBound=true; }
+
+// ── add a login (the old "Users & Access" add-flow, now a modal) ──
+function admAddLoginOpen(key){
+  var nm=''; if(key){ var p=admByKey(key); if(p) nm=p.name; }
+  admModalOpen('Add a login',
+    '<div class="pm-hint" style="margin-bottom:6px;">First create the email + password in Supabase (turn ON “Auto Confirm User”), then add the email here so it appears in the list. New logins start with every module — untick what they shouldn’t see.</div>'
+    +'<div style="margin:6px 0 12px;"><button class="px-mini" onclick="adminOpenSupabase()">Open Supabase to create the password ↗</button></div>'
+    +admFieldText('pm-login-email','Email','','name@robertos.ae')
+    +admFieldText('pm-login-name','Full name',nm),
+    '<button class="btn btn-sm" onclick="admModalClose()">Cancel</button><button id="pm-save" class="btn btn-gold" onclick="admAddLoginSave()">Add to list</button>');
+}
+async function admAddLoginSave(){
+  var em=(admVal('pm-login-email')||'').trim().toLowerCase();
+  var nm=(admVal('pm-login-name')||'').trim();
+  if(!em){ alert('Type the email first.'); return; }
+  if(adminFind(em)){ alert('That email is already in the list.'); return; }
+  var u={email:em,name:nm||em,modules:['events','operations','revenue','stocktake'],is_admin:false,notify:[]};
+  var btn=document.getElementById('pm-save'); if(btn){ btn.disabled=true; btn.textContent='Adding…'; }
+  var ok=await adminSave(u);
+  if(!ok){ if(btn){ btn.disabled=false; btn.textContent='Add to list'; } return; }
+  state.adminUsers=state.adminUsers||[]; state.adminUsers.push(u);
+  admModalClose(); renderMain();
+}
+
+// ── paste a column of employee IDs from Excel (Name [tab] Code) ──
+function admPasteOpen(){
+  admModalOpen('Paste employee IDs from Excel',
+    '<div class="pm-hint" style="margin-bottom:8px;">Copy two columns from Excel — <b>Name</b> then <b>Employee ID</b> — and paste below. Each name is matched to a person and the code filled in. Clashing codes and unknown names are skipped.</div>'
+    +'<textarea id="pm-paste" style="width:100%;height:150px;box-sizing:border-box;border:1px solid #d8cbb6;border-radius:9px;padding:10px;font:13px ui-monospace,Menlo,monospace;" placeholder="Jad Ballout&#9;100161&#10;Aung Htwe&#9;100200"></textarea>'
+    +'<div id="pm-paste-preview"></div>',
+    '<button class="btn btn-sm" onclick="admModalClose()">Cancel</button><button class="btn btn-gold" onclick="admPastePreview()">Preview</button>');
+}
+function admPastePreview(){
+  var raw=(admVal('pm-paste')||'').split(/\r?\n/);
+  var people=admBuildPeople();
+  function findP(nm){ var s=admNorm(nm); if(!s) return null;
+    var ex=people.filter(function(p){ return admNorm(p.name)===s; }); if(ex.length===1) return ex[0]; if(ex.length>1) return {ambig:true};
+    var pre=people.filter(function(p){ var n=admNorm(p.name); return n.indexOf(s+' ')===0 || s.indexOf(n+' ')===0; }); if(pre.length===1) return pre[0]; if(pre.length>1) return {ambig:true};
+    return null; }
+  var plan=[];
+  raw.forEach(function(line){ if(!line.trim()) return; var parts=line.split('\t'); if(parts.length<2) parts=line.split(/\s{2,}|,/);
+    var nm=(parts[0]||'').trim(), code=(parts[1]||'').trim(); if(!nm) return;
+    var p=findP(nm);
+    if(!p){ plan.push({nm:nm,code:code,status:'unmatched'}); return; }
+    if(p.ambig){ plan.push({nm:nm,code:code,status:'ambig'}); return; }
+    if(p.src==='office'){ plan.push({nm:nm,code:code,status:'office'}); return; }
+    if(!code){ plan.push({nm:nm,code:'',person:p,status:'blank'}); return; }
+    if(admNorm(p.emp_id)===admNorm(code)){ plan.push({nm:nm,code:code,person:p,status:'same'}); return; }
+    var clash=admCodeClash(code,p.src,p.id); if(clash){ plan.push({nm:nm,code:code,person:p,status:'clash',clash:clash}); return; }
+    plan.push({nm:nm,code:code,person:p,status:'set'});
+  });
+  state.admPastePlan=plan;
+  var setN=plan.filter(function(x){ return x.status==='set'; }).length;
+  var ICON={set:'✓ will set',unmatched:'? no match',ambig:'? more than one match',office:'– office (no code field)',blank:'– blank, skipped',same:'– already set',clash:'✗ code clash'};
+  var rowsHTML=plan.map(function(x){
+    var note=ICON[x.status]||x.status; if(x.status==='clash') note='✗ '+x.code+' already on '+x.clash.name;
+    var col=x.status==='set'?'#2d6a4f':(x.status==='clash'||x.status==='unmatched'||x.status==='ambig'?'#b3402f':'#9c8a72');
+    return '<div style="display:flex;justify-content:space-between;gap:10px;font-size:12.5px;padding:3px 0;border-bottom:1px solid #f1e9da;"><span>'+admEsc(x.nm)+(x.code?' · '+admEsc(x.code):'')+'</span><span style="color:'+col+';white-space:nowrap;">'+admEsc(note)+'</span></div>';
+  }).join('');
+  document.getElementById('pm-paste-preview').innerHTML='<div class="pm-hint" style="margin:10px 0 4px;"><b>'+setN+'</b> code'+(setN===1?'':'s')+' will be filled in'+(plan.length-setN>0?(' · '+(plan.length-setN)+' skipped'):'')+'.</div><div style="max-height:160px;overflow:auto;margin-bottom:6px;">'+rowsHTML+'</div>'+(setN?'<div style="text-align:right;"><button class="btn btn-gold" onclick="admPasteApply()">Fill '+setN+' code'+(setN===1?'':'s')+'</button></div>':'');
+}
+function admPasteApply(){
+  var plan=(state.admPastePlan||[]).filter(function(x){ return x.status==='set'; });
+  if(!plan.length){ admModalClose(); return; }
+  (async function(){
+    var ok=0;
+    for(var i=0;i<plan.length;i++){ var x=plan[i];
+      var c=admCodeClash(x.code,x.person.src,x.person.id); if(c) continue;   // re-check live (cache updates as we go)
+      var done=await admWrite(x.person,'code',x.code); if(done) ok++;
+    }
+    admModalClose(); adminRefresh(); admToast('Filled '+ok+' code'+(ok===1?'':'s'));
+  })();
 }
 function enterApp(module){
   if(fohBlocked(module)){ showManagerLanding(); return; }   // access gate
