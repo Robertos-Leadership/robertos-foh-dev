@@ -2562,14 +2562,14 @@ function loadAdminUsers(){
   // Read-only — nothing is written or moved; the two apps keep working as-is.
   Promise.all([
     sb.from('app_users').select('*').order('name'),
-    sb.from('foh_staff').select('name,emp_id,role,section,active').eq('active',true),
-    sbKitchen.from('staff').select('name,emp_id,designation,station_key,active').eq('active',true)
+    sb.from('foh_staff').select('id,name,emp_id,role,section,active,sort_order').eq('active',true),
+    sbKitchen.from('staff').select('id,name,emp_id,designation,station_key,active,sort_order').eq('active',true)
   ]).then(function(res){
     state.adminUsers   = res[0].error ? [] : (res[0].data||[]);
     state.adminFoh     = res[1].error ? [] : (res[1].data||[]);
     state.adminKitchen = res[2].error ? [] : (res[2].data||[]);
     state.adminLoaded  = true;
-    if(state.currentTab==='admin') renderMain();
+    if(state.currentTab==='admin'){ renderMain(); if((state.adminView||'people')!=='access') setTimeout(function(){ try{admApplyFilter();}catch(e){} },0); }
   });
 }
 function adminFind(email){ return (state.adminUsers||[]).find(function(u){return u.email===email;}); }
@@ -2645,8 +2645,35 @@ var ADM_CSS='.adm-wrap{max-width:760px;margin:0 auto;padding:18px 16px 90px;}'
   +'.ppl-code{font-size:12px;color:#6b5a44;font-family:ui-monospace,Menlo,monospace;min-width:60px;}'
   +'.ppl-role{font-size:12.5px;color:#6b5a44;flex:1;min-width:120px;}'
   +'.ppl-badge{font-size:10.5px;padding:2px 8px;border-radius:10px;white-space:nowrap;}'
-  +'.ppl-login{background:#eadfcd;color:#6b4a2e;}.ppl-admin{background:#400207;color:#fff;}'
-  +'.ppl-empty{color:#9c8a72;font-size:13px;padding:8px 2px;}';
+  +'.ppl-login{background:#eadfcd;color:#6b4a2e;}.ppl-admin{background:#6B1F2A;color:#fff;}'
+  +'.ppl-empty{color:#9c8a72;font-size:13px;padding:14px 2px;}'
+  +'.ppl-tools{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:10px 0 10px;}'
+  +'.ppl-search{flex:1;min-width:180px;padding:10px 13px;border:1px solid #d8cbb6;border-radius:9px;font-size:14px;background:#fff;}'
+  +'.ppl-search:focus{outline:none;border-color:#6B1F2A;}'
+  +'.ppl-chips{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:8px;}'
+  +'.ppl-chip{font-size:12.5px;padding:6px 13px;border-radius:16px;border:1px solid #d8cbb6;background:#fff;color:#6b5a44;cursor:pointer;white-space:nowrap;}'
+  +'.ppl-chip.on{background:#6B1F2A;color:#fff;border-color:#6B1F2A;}'
+  +'.ppl-listhead{font-size:11.5px;color:#9c8a72;text-transform:uppercase;letter-spacing:.05em;margin:6px 2px 2px;}'
+  +'.ppl-row{display:flex;align-items:center;gap:8px 12px;flex-wrap:wrap;padding:10px 4px;border-bottom:1px solid #f1e9da;}'
+  +'.ppl-row:hover{background:#faf5ec;}'
+  +'.ppl-name{font-weight:600;color:#2c1810;font-size:14.5px;flex:1;min-width:140px;}'
+  +'.ppl-code{font-size:12px;color:#6b5a44;font-family:ui-monospace,Menlo,monospace;min-width:62px;}'
+  +'.ppl-code.miss{color:#b3402f;}'
+  +'.ppl-role{font-size:12.5px;color:#6b5a44;min-width:110px;flex:1;}'
+  +'.ppl-where{font-size:10.5px;color:#7a6a52;background:#f0e8da;padding:2px 8px;border-radius:9px;white-space:nowrap;}'
+  +'.ppl-act{display:flex;gap:6px;margin-left:auto;}'
+  +'.ppl-edit,.ppl-del{font-size:11.5px;padding:4px 10px;border-radius:7px;cursor:pointer;border:1px solid #d8cbb6;background:#fff;color:#5a4a36;}'
+  +'.ppl-edit:hover{border-color:#6B1F2A;color:#6B1F2A;}'
+  +'.ppl-del{border-color:#e3c9c4;color:#b3402f;}.ppl-del:hover{background:#f7ecea;}'
+  +'.pm-ovl{position:fixed;inset:0;background:rgba(40,2,7,.45);z-index:100000;display:flex;align-items:center;justify-content:center;padding:16px;}'
+  +'.pm-box{background:#fff;border-radius:14px;max-width:440px;width:100%;padding:22px 22px 18px;box-shadow:0 14px 50px rgba(40,2,7,.3);max-height:90vh;overflow:auto;}'
+  +'.pm-box h3{font-family:Georgia,serif;color:#6B1F2A;margin:0 0 8px;font-size:20px;}'
+  +'.pm-field{margin:12px 0;}'
+  +'.pm-field label{display:block;font-size:11.5px;color:#9c8a72;text-transform:uppercase;letter-spacing:.04em;margin-bottom:5px;}'
+  +'.pm-field input,.pm-field select{width:100%;padding:10px 12px;border:1px solid #d8cbb6;border-radius:9px;font-size:15px;box-sizing:border-box;background:#fff;}'
+  +'.pm-field input:focus,.pm-field select:focus{outline:none;border-color:#6B1F2A;}'
+  +'.pm-hint{font-size:12px;color:#8a7a62;line-height:1.5;margin-top:4px;}'
+  +'.pm-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:18px;}';
 
 function admNorm(s){ return String(s==null?'':s).trim().toLowerCase(); }
 function adminSetView(v){ state.adminView=v; if(state.currentTab==='admin') renderMain(); }
@@ -2673,44 +2700,151 @@ function adminAccessInner(){
 // NEW — the "control centre": everyone who touches either app, in one place.
 // Reads kitchen staff (sbKitchen) + FOH staff (sb) + logins (app_users), merges by name,
 // and groups by where they work. Read-only overview; codes blank where unknown is fine.
-function adminPeopleInner(){
+// Build ONE unified people list from kitchen staff + FOH staff + office logins.
+// Each entry: {src:'kitchen'|'foh'|'office', id, name, emp_id, role, where, section, login}.
+// Used by the render, the search/filter, the emp_id collision check, and edit lookups.
+function admBuildPeople(){
   var users=state.adminUsers||[];
   var byName={}; users.forEach(function(u){ if(u.name) byName[admNorm(u.name)]=u; });
   var matched={};
   // Link a staff record to its login by name. Staff names are sometimes first-name-only
-  // ("Jad") while logins use the full name ("Jad Ballout"), so also match when the staff
-  // name is the leading whole-word part of a login name. (Proper fix later = store the link.)
-  function admMatch(nm){
-    var s=admNorm(nm); if(!s) return null;
-    if(byName[s]) return byName[s];
-    for(var k in byName){ if(k.indexOf(s+' ')===0) return byName[k]; }
-    return null;
+  // ("Jad") while logins use the full name ("Jad Ballout"), so also match a leading-word prefix.
+  function match(nm){ var s=admNorm(nm); if(!s) return null; if(byName[s]) return byName[s]; for(var k in byName){ if(k.indexOf(s+' ')===0) return byName[k]; } return null; }
+  var out=[];
+  (state.adminKitchen||[]).forEach(function(p){ var lg=match(p.name); if(lg) matched[lg.email]=true;
+    out.push({src:'kitchen',id:p.id,name:p.name||'',emp_id:p.emp_id?String(p.emp_id):'',role:p.designation||'',section:p.station_key||'',where:'Kitchen',login:lg}); });
+  (state.adminFoh||[]).forEach(function(p){ var lg=match(p.name); if(lg) matched[lg.email]=true;
+    out.push({src:'foh',id:p.id,name:p.name||'',emp_id:p.emp_id?String(p.emp_id):'',role:p.role||'',section:p.section||'',where:'FOH',login:lg}); });
+  users.filter(function(u){ return !matched[u.email]; }).forEach(function(u){
+    out.push({src:'office',id:u.email,name:u.name||u.email,emp_id:'',role:'',section:'',where:'Office',email:u.email,login:u}); });
+  return out;
+}
+function admPersonRowHTML(p){
+  var code=p.emp_id?admEsc(p.emp_id):'—';
+  var badge=p.login?(p.login.is_admin?'<span class="ppl-badge ppl-admin">admin</span>':'<span class="ppl-badge ppl-login">login</span>'):'';
+  var roleOrEmail=p.src==='office'?admEsc(p.email||''):admEsc(p.role);
+  var acts=(p.src==='office')
+    ? '<button class="ppl-edit" onclick="adminSetView(\'access\')">Access</button>'
+    : '<button class="ppl-edit" onclick="admEditOpen(\''+p.src+'\',\''+admEsc(String(p.id))+'\')">Edit</button><button class="ppl-del" onclick="admRemove(\''+p.src+'\',\''+admEsc(String(p.id))+'\')">Remove</button>';
+  var hay=admNorm(p.name+' '+p.emp_id+' '+p.role+' '+p.where);
+  return '<div class="ppl-row" data-src="'+p.src+'" data-where="'+p.where+'" data-code="'+(p.emp_id?'1':'0')+'" data-login="'+(p.login?'1':'0')+'" data-hay="'+admEsc(hay)+'">'
+    +'<span class="ppl-name">'+admEsc(p.name)+'</span>'
+    +'<span class="ppl-code'+(p.emp_id?'':' miss')+'">'+code+'</span>'
+    +'<span class="ppl-role">'+roleOrEmail+'</span>'
+    +'<span class="ppl-where">'+p.where+'</span>'
+    +badge
+    +'<span class="ppl-act">'+acts+'</span>'
+    +'</div>';
+}
+function adminPeopleInner(){
+  var people=admBuildPeople();
+  var miss=people.filter(function(p){ return !p.emp_id && p.src!=='office'; }).length;
+  var where=state.adminWhere||'all';
+  var chips=[['all','All · '+people.length],['Kitchen','Kitchen'],['FOH','FOH'],['Office','Office / HQ'],['missing','Missing code · '+miss],['login','Has login']];
+  var chipHTML=chips.map(function(c){ return '<button class="ppl-chip'+(where===c[0]?' on':'')+'" data-w="'+c[0]+'" onclick="admSetWhere(\''+c[0]+'\')">'+admEsc(c[1])+'</button>'; }).join('');
+  var rows=people.slice().sort(function(a,b){ return (a.where).localeCompare(b.where)||a.name.localeCompare(b.name); }).map(admPersonRowHTML).join('');
+  var q=admEsc(state.adminQuery||'');
+  return '<div class="ppl-sum">Everyone who touches either app — <b>'+people.length+' people</b> across both. Tap <b>Edit</b> to set someone’s employee ID (it writes straight to the app), or add / remove people. A code is optional — blank is fine for office &amp; freelance.</div>'
+    +'<div class="ppl-tools"><input id="ppl-search" class="ppl-search" placeholder="Search name, code or role…" value="'+q+'" oninput="admApplyFilter()"><button class="btn btn-gold" onclick="admAddOpen()">+ Add person</button></div>'
+    +'<div class="ppl-chips">'+chipHTML+'</div>'
+    +'<div class="ppl-listhead"><span id="ppl-count">'+people.length+' shown</span></div>'
+    +'<div id="ppl-list">'+rows+'</div>';
+}
+// ── search + filter (DOM-level, keeps the typed query and avoids a full re-render) ──
+function admSetWhere(w){
+  state.adminWhere=w;
+  var chips=document.querySelectorAll('.ppl-chip');
+  for(var i=0;i<chips.length;i++){ chips[i].classList.toggle('on', chips[i].getAttribute('data-w')===w); }
+  admApplyFilter();
+}
+function admApplyFilter(){
+  var inp=document.getElementById('ppl-search');
+  if(inp) state.adminQuery=inp.value;
+  var q=admNorm(inp?inp.value:(state.adminQuery||''));
+  var where=state.adminWhere||'all';
+  var rows=document.querySelectorAll('#ppl-list .ppl-row'); var vis=0;
+  for(var i=0;i<rows.length;i++){ var r=rows[i];
+    var w=r.getAttribute('data-where'), src=r.getAttribute('data-src'), hasCode=r.getAttribute('data-code')==='1', hasLogin=r.getAttribute('data-login')==='1', hay=r.getAttribute('data-hay')||'';
+    var okW = where==='all' || (where==='missing'?(!hasCode&&src!=='office'):(where==='login'?hasLogin:w===where));
+    var okQ = !q || hay.indexOf(q)!==-1;
+    var show=okW&&okQ; r.style.display=show?'':'none'; if(show) vis++;
   }
-  function row(p){
-    var login=admMatch(p.name);
-    if(login) matched[login.email]=true;
-    var code=(p.emp_id&&String(p.emp_id).trim())?admEsc(String(p.emp_id)):'—';
-    var role=admEsc(p.role||p.designation||'');
-    var badge=login?(login.is_admin?'<span class="ppl-badge ppl-admin">Admin login</span>':'<span class="ppl-badge ppl-login">login</span>'):'';
-    return '<div class="ppl-row"><span class="ppl-name">'+admEsc(p.name||'')+'</span><span class="ppl-code">'+code+'</span><span class="ppl-role">'+role+'</span>'+badge+'</div>';
-  }
-  function byNameSort(a,b){ return (a.name||'').localeCompare(b.name||''); }
-  var kit=(state.adminKitchen||[]).slice().sort(byNameSort);
-  var foh=(state.adminFoh||[]).slice().sort(byNameSort);
-  var kitHtml=kit.map(row).join('');   // run first so `matched` is populated…
-  var fohHtml=foh.map(row).join('');   // …before we compute the office leftovers
-  var office=users.filter(function(u){ return !matched[u.email]; }).sort(function(a,b){ return (a.name||a.email).localeCompare(b.name||b.email); });
-  var offHtml=office.map(function(u){
-    var badge=u.is_admin?'<span class="ppl-badge ppl-admin">Admin login</span>':'<span class="ppl-badge ppl-login">login</span>';
-    return '<div class="ppl-row"><span class="ppl-name">'+admEsc(u.name||u.email)+'</span><span class="ppl-code">—</span><span class="ppl-role">'+admEsc(u.email)+'</span>'+badge+'</div>';
-  }).join('');
-  var total=kit.length+foh.length+office.length;
-  function grp(t,n,sub){ return '<div class="ppl-grp">'+t+' <span>· '+n+(sub?' · '+sub:'')+'</span></div>'; }
-  function emp(){ return '<div class="ppl-empty">None.</div>'; }
-  return '<div class="ppl-sum">Everyone who touches either app — <b>'+total+' people</b> across both. A code is shown where we have it; blank is fine (office &amp; freelance). “login” = has an app account.</div>'
-    +grp('Kitchen',kit.length,'separate database')+(kitHtml||emp())
-    +grp('FOH',foh.length,'')+(fohHtml||emp())
-    +grp('Office / HQ',office.length,'logins, no clock-in')+(offHtml||emp());
+  var c=document.getElementById('ppl-count'); if(c) c.textContent=vis+' shown';
+}
+// ── edit / add / remove (writes back to foh_staff via sb, kitchen staff via sbKitchen) ──
+var admEdit=null;
+function admVal(id){ var e=document.getElementById(id); return e?(e.value||''):''; }
+function admModalClose(){ var o=document.getElementById('pm-ovl'); if(o) o.remove(); }
+function admModalOpen(title,body,actions){
+  admModalClose();
+  var o=document.createElement('div'); o.id='pm-ovl'; o.className='pm-ovl';
+  o.onclick=function(e){ if(e.target===o) admModalClose(); };
+  o.innerHTML='<div class="pm-box"><h3>'+admEsc(title)+'</h3>'+body+'<div class="pm-actions">'+actions+'</div></div>';
+  document.body.appendChild(o);
+  var f=o.querySelector('input,select'); if(f){ try{ f.focus(); }catch(e){} }
+}
+function admFieldText(id,label,val,hint){ return '<div class="pm-field"><label>'+admEsc(label)+'</label><input id="'+id+'" type="text" value="'+admEsc(val||'')+'">'+(hint?'<div class="pm-hint">'+hint+'</div>':'')+'</div>'; }
+function admFieldSelect(id,label,opts){ return '<div class="pm-field"><label>'+admEsc(label)+'</label><select id="'+id+'">'+opts.map(function(o){ return '<option value="'+admEsc(o[0])+'">'+admEsc(o[1])+'</option>'; }).join('')+'</select></div>'; }
+function admStaffRec(src,id){ var arr=src==='foh'?(state.adminFoh||[]):(state.adminKitchen||[]); return arr.find(function(p){ return String(p.id)===String(id); }); }
+// returns the person already using a code (other than the one being edited), or null
+function admCodeClash(code,src,id){
+  if(!code) return null;
+  return admBuildPeople().find(function(p){ return p.emp_id && admNorm(p.emp_id)===admNorm(code) && !(p.src===src && String(p.id)===String(id)); });
+}
+function admEditOpen(src,id){
+  var rec=admStaffRec(src,id); if(!rec) return;
+  admEdit={src:src,id:id};
+  var role=rec.role||rec.designation||'';
+  admModalOpen('Edit person',
+    admFieldText('pm-name','Full name',rec.name||'')
+    +admFieldText('pm-code','Employee ID',rec.emp_id?String(rec.emp_id):'','Blank = no code (fine for office / freelance). Saving a code writes it straight to the '+(src==='kitchen'?'Kitchen':'FOH')+' app.')
+    +admFieldText('pm-role','Role',role),
+    '<button class="btn btn-sm" onclick="admModalClose()">Cancel</button><button id="pm-save" class="btn btn-gold" onclick="admEditSave()">Save</button>');
+}
+async function admEditSave(){
+  if(!admEdit) return;
+  var src=admEdit.src, id=admEdit.id;
+  var name=admVal('pm-name').trim(), code=admVal('pm-code').trim(), role=admVal('pm-role').trim();
+  if(!name){ alert('Name can’t be empty.'); return; }
+  var clash=admCodeClash(code,src,id);
+  if(clash){ alert('Employee ID '+code+' already belongs to '+clash.name+' ('+clash.where+').\n\nEach code must belong to one person — give this person a different code, or clear '+clash.name+'’s first.'); return; }
+  var btn=document.getElementById('pm-save'); if(btn){ btn.disabled=true; btn.textContent='Saving…'; }
+  var client=src==='foh'?sb:sbKitchen, table=src==='foh'?'foh_staff':'staff';
+  var payload=src==='foh'?{name:name,emp_id:code||null,role:role}:{name:name,emp_id:code||null,designation:role};
+  var res=await client.from(table).update(payload).eq('id',id);
+  if(res.error){ alert('Could not save: '+res.error.message); if(btn){ btn.disabled=false; btn.textContent='Save'; } return; }
+  admModalClose(); adminRefresh();
+}
+function admAddOpen(){
+  admEdit=null;
+  admModalOpen('Add person',
+    admFieldSelect('pm-where','Where do they work',[['foh','FOH (floor)'],['kitchen','Kitchen']])
+    +admFieldText('pm-name','Full name','')
+    +admFieldText('pm-code','Employee ID','','Optional — leave blank if they don’t have one yet.')
+    +admFieldText('pm-role','Role','')
+    +admFieldText('pm-section','Section / station','','e.g. Bar, Waiter, pasta, pass — optional.'),
+    '<button class="btn btn-sm" onclick="admModalClose()">Cancel</button><button id="pm-save" class="btn btn-gold" onclick="admAddSave()">Add person</button>');
+}
+async function admAddSave(){
+  var where=admVal('pm-where'), name=admVal('pm-name').trim(), code=admVal('pm-code').trim(), role=admVal('pm-role').trim(), section=admVal('pm-section').trim();
+  if(!name){ alert('Name can’t be empty.'); return; }
+  var clash=admCodeClash(code,null,null);
+  if(clash){ alert('Employee ID '+code+' already belongs to '+clash.name+' ('+clash.where+'). Use a different code or leave it blank.'); return; }
+  var btn=document.getElementById('pm-save'); if(btn){ btn.disabled=true; btn.textContent='Adding…'; }
+  var client,table,payload;
+  if(where==='foh'){ client=sb; table='foh_staff'; payload={name:name,emp_id:code||null,role:role,section:section||'Unassigned',active:true}; }
+  else { client=sbKitchen; table='staff'; payload={name:name,emp_id:code||null,designation:role,station_key:section||'main',active:true}; }
+  var res=await client.from(table).insert(payload);
+  if(res.error){ alert('Could not add: '+res.error.message); if(btn){ btn.disabled=false; btn.textContent='Add person'; } return; }
+  admModalClose(); adminRefresh();
+}
+async function admRemove(src,id){
+  var rec=admStaffRec(src,id); if(!rec) return;
+  if(!confirm('Remove '+(rec.name||'this person')+' from the '+(src==='kitchen'?'Kitchen':'FOH')+' staff list?\n\nThey stop appearing in rosters and lists. Their past records are kept, and you can re-add them later.')) return;
+  var client=src==='foh'?sb:sbKitchen, table=src==='foh'?'foh_staff':'staff';
+  var res=await client.from(table).update({active:false}).eq('id',id);
+  if(res.error){ alert('Could not remove: '+res.error.message); return; }
+  adminRefresh();
 }
 
 function renderAdmin(){
