@@ -259,17 +259,23 @@ async function clSave(andEmail){
     var anyShiftNote=['day','night','late'].some(function(k){ return (shifts[k].feedback||'').trim() || (shifts[k].challenges||'').trim(); });
     var hasAny = net!=null || clVal('cl-mgr-am') || clVal('cl-mgr-pm') || good.length || bad.length || comps.length || clVal('cl-events') || clVal('cl-support') || anyShiftNote;
     if(!hasAny){ alert('Nothing to email — this closing report is empty.\n\nAdd revenue, a manager, or notes before using Save & Email.'); return; }
-    // Traceable send: require a validated Employee ID before emailing the team.
-    if(typeof fohRequireStaffId === 'function'){
-      clSendWho = await fohRequireStaffId('email the closing report to the team');
-      if(!clSendWho) return;
-    }
+  }
+  // Traceable: require a validated Employee ID to EMAIL the team OR to EDIT an
+  // already-saved report, so changing a past report is never anonymous. A brand-
+  // new plain Save (no saved row yet) stays frictionless.
+  var clIsEdit = !!C.loadedRow, clActor = null;
+  if((andEmail || clIsEdit) && typeof fohRequireStaffId === 'function'){
+    clActor = await fohRequireStaffId(andEmail ? 'email the closing report to the team' : ('edit the saved closing report for '+ds));
+    if(!clActor) return;
+    if(andEmail) clSendWho = clActor;
   }
   var btns=[document.getElementById('cl-save'),document.getElementById('cl-save-email')];
   function setBusy(t){ btns.forEach(function(b){ if(b){ b.disabled=!!t; } }); var se=document.getElementById('cl-save-email'); if(se) se.textContent=t?(andEmail?'Saving & emailing…':'Saving…'):'Save & Email'; }
   setBusy(true);
   var res=await sb.from('closing_reports').upsert(crow,{onConflict:'service_date'});
   if(res.error){ setBusy(false); alert('Could not save closing report: '+res.error.message+(res.error.code==='PGRST204'?'\n\nRun closing-report-schema.sql in Supabase first.':'')); return; }
+  if(clIsEdit && clActor && typeof fohLogSend==='function') fohLogSend(clActor, 'closing_report_edit', ds);
+  C.loadedRow = crow;   // once saved, further saves this session count as traced edits
   // ── Rollup into rev_daily (revenue fields only) ──
   var revRow={ service_date:ds,
     rest_lunch_net:rl, rest_lunch_covers:rlc, rest_dinner_net:rd, rest_dinner_covers:rdc,
