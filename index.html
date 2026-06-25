@@ -28,7 +28,9 @@
   function tagOf(res){ return res.headers.get('ETag') || res.headers.get('Last-Modified') || ''; }
   function busy(){
     var el = document.activeElement;
-    return !!(el && /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName));   // don't nuke someone mid-typing
+    if (el && /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)) return true;   // don't nuke someone mid-typing
+    if (window.__schedEditing && window.__schedEditing()) return true;     // don't nuke a mid-edit schedule
+    return false;
   }
   function check(){
     if (reloading) return;
@@ -88,9 +90,12 @@ if ('serviceWorker' in navigator) {
   }).catch(function(){ /* SW unsupported / blocked — app still works online */ });
 
   var swRefreshing = false;
-  navigator.serviceWorker.addEventListener('controllerchange', function(){
-    if (!swRefreshing) { swRefreshing = true; location.reload(); }
-  });
+  function swReload(){
+    if (swRefreshing) return;
+    if (window.__schedEditing && window.__schedEditing()) { setTimeout(swReload, 5000); return; } // wait out a schedule edit
+    swRefreshing = true; location.reload();
+  }
+  navigator.serviceWorker.addEventListener('controllerchange', swReload);
 }
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -4774,6 +4779,24 @@ let fohSchedPasteMode    = false;  // while true, tapping a cell pastes instead 
 let fohSchedLockTimer    = null;
 let fohSchedPendingAction= null;
 const FOH_ATT_START      = '2026-06-13';
+
+// Auto-update guard hook: the ETag watcher and the service-worker reload (top of
+// this file) must NOT reload the whole page while a manager is editing the
+// schedule. Editing happens by tapping cells/buttons/native prompts, so the
+// focus-based busy() check misses it and a mid-edit deploy would wipe the work.
+// Expose an "editing now" signal: unlocked for edits, paste mode armed, or a
+// schedule modal open. The reload is deferred until this returns false.
+window.__schedEditing = function(){
+  try{
+    if(fohSchedUnlocked || fohSchedPasteMode) return true;
+    var ids = ['foh-sch-pin-modal','foh-sch-modal','foh-sch-ev-modal'];
+    for(var i=0;i<ids.length;i++){
+      var m = document.getElementById(ids[i]);
+      if(m && m.style.display !== 'none' && m.offsetParent !== null) return true;
+    }
+  }catch(e){}
+  return false;
+};
 
 // ── Helpers (reuse same date utils already in file) ──
 function fohSchedRosterKey(sid, date){ return sid + '|' + date; }
