@@ -47,8 +47,9 @@ async function opsLoadRecent(){
   var R=revInit(); R.opsRecentLoaded=true;
   try{
     var res=await sb.from('closing_reports').select('service_date,rest_lunch_net,rest_dinner_net,lounge_lunch_net,lounge_dinner_net,rest_lunch_covers,rest_dinner_covers,lounge_lunch_covers,lounge_dinner_covers,manager_am,manager_pm,comments_good,comments_bad').order('service_date',{ascending:false}).limit(30);
-    R.opsRecent = res.error ? [] : (res.data||[]);
-  }catch(e){ R.opsRecent=[]; }
+    if(res.error){ R.opsRecent=[]; if(typeof toast==='function') toast('Could not load recent reports — check connection.', true); }
+    else { R.opsRecent=(res.data||[]); }
+  }catch(e){ R.opsRecent=[]; if(typeof toast==='function') toast('Could not load recent reports — check connection.', true); }
   if(state.currentTab==='operations'){ var box=document.getElementById('ops-recent'); if(box) box.innerHTML=opsRecentHTML(); }
 }
 

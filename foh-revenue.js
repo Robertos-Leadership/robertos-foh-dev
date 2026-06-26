@@ -213,6 +213,7 @@ async function revSaveMonthlyBudget(){
     console.error('rev monthly budget',res.error);
     alert('Could not save monthly budget — NOT stored (reverted on screen): '+res.error.message+(res.error.code==='PGRST204'?'\n\nRun revenue-monthly-budget.sql in Supabase first.':''));
   }
+  else { if(typeof toast==='function') toast('Saved ✓'); }
 }
 
 // ── Edit a day (Restaurant/Lounge x Lunch/Dinner) ──
@@ -292,6 +293,7 @@ async function revSaveDay(){
     console.error('rev save',res.error);
     alert('Could not save — the figure was NOT stored (reverted on screen): '+res.error.message+(res.error.code==='PGRST204'?'\n\nRun revenue-daypart-columns.sql in Supabase first.':''));
   }
+  else { if(typeof toast==='function') toast('Saved ✓'); }
 }
 
 // ── AI report agent (mirrors Kitchen survey-assistant pattern) ──
@@ -890,6 +892,7 @@ async function revFcSaveTarget(){
   renderMain();
   var res=await sb.from('rev_targets').upsert({period:p, monthly_target:v},{onConflict:'period'});
   if(res.error){ if(had) R.targets[p]=prev; else delete R.targets[p]; renderMain(); console.error('rev target',res.error); alert('Could not save target — NOT stored (reverted on screen): '+res.error.message); }
+  else { if(typeof toast==='function') toast('Saved ✓'); }
 }
 function revRenderForecast(){
   var R=revInit(), p=revFcPeriod(), sp=revFcSeasonVal(), fc=revForecastData(p,sp);

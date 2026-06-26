@@ -100,6 +100,8 @@ async function stLoadSheet(){
   var res = await sb.from('stock_take_sheets').select('*')
     .eq('venue_id',STOCK_VENUE).eq('dept',stDept)
     .order('month',{ascending:false}).limit(1);
+  if(res.error && typeof toast==='function')
+    toast('Could not load the stock-take month — check connection and reopen.', true);
   stSheet = (res.data && res.data[0]) || null;
   stMonth = stSheet ? stSheet.month : null;
 }
