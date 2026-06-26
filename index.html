@@ -1998,6 +1998,8 @@ if ('serviceWorker' in navigator) {
   .sch-shift.working{background:#f0ebe3;color:var(--ink);border:1px solid var(--sabbia-dark)}
   .sch-emp-id{display:block;font-size:9px;color:#b9ab9c;cursor:pointer;margin-top:2px;letter-spacing:1.2px;font-weight:500}
   .sch-emp-id:hover{color:var(--vino)}
+  .sch-end-tag{display:inline-block;font-size:9px;color:#9a3412;background:#ffedd5;border-radius:3px;padding:1px 5px;margin-left:6px;letter-spacing:.5px;font-weight:700;text-transform:uppercase;vertical-align:middle}
+  .sch-td-name.sch-finishing{opacity:.72}
   .sch-shift.actual{background:#e8f0e9;color:#2f5233;border:1px solid #a9c9b0;font-weight:600}
   .sch-shift.actual-live{background:#eaf2ec;color:#1f5130;border:1px dashed #8fbf9e;font-weight:700}
   .sch-shift.actual-open-flag{background:#fbe9e7;color:#a8342a;border:1px solid #e8a89f;font-weight:600;cursor:pointer}
@@ -2101,7 +2103,7 @@ if ('serviceWorker' in navigator) {
     <div class="foh-hero-content">
       <img class="foh-hero-logo" src="robertos-logo-white.svg" alt="Roberto's">
     </div>
-    <div id="foh-build" style="position:absolute;bottom:6px;right:10px;font-size:9px;letter-spacing:.08em;color:rgba(255,255,255,.4);z-index:3;font-variant-numeric:tabular-nums;">build 2026-06-26.3-dev</div>
+    <div id="foh-build" style="position:absolute;bottom:6px;right:10px;font-size:9px;letter-spacing:.08em;color:rgba(255,255,255,.4);z-index:3;font-variant-numeric:tabular-nums;">build 2026-06-26.4-dev</div>
   </div>
 
   <!-- main scroll area -->
@@ -5623,7 +5625,12 @@ async function fohLoadSchedData(){
     sb.from('foh_roster').select('*').gte('work_date', weekFrom).lte('work_date', weekEnd).limit(5000),
     sb.from('foh_events').select('*').gte('event_date', weekFrom).lte('event_date', weekEnd).limit(2000)
   ]);
-  fohSchedStaff = (res[0].data || []).filter(function(s){ return s.in_schedule!==false; });   // Admin "show in schedule" toggle (foh_staff.in_schedule); null/absent = shown
+  var wkStartStr = formatDate(fohSchedWeekStart);
+  fohSchedStaff = (res[0].data || []).filter(function(s){
+    if(s.in_schedule===false) return false;                                  // Admin "show in schedule" toggle (foh_staff.in_schedule); null/absent = shown
+    if(s.end_date && String(s.end_date).slice(0,10) < wkStartStr) return false; // leaver: shown through their last week, then auto-hidden from later weeks
+    return true;
+  });
   fohSchedRoster = {};
   (res[1].data || []).forEach(function(r){
     fohSchedRoster[fohSchedRosterKey(r.staff_id, String(r.work_date).slice(0,10))] = r;
@@ -5792,10 +5799,11 @@ function fohRenderSchedWeek(){
       var sid = staff.id;
       var wHours=0, wDays=0;
       html += '<tr>';
-      html += '<td class="sch-td-name" style="cursor:pointer" onclick="fohSchedEditEmpId(event,\''+sid+'\')" title="Tap to set employee ID">' +
-        '<span class="sch-del-btn" onclick="fohSchedConfirmDelete(event,\''+sid+'\')">×</span>' +
+      html += '<td class="sch-td-name'+(staff.end_date?' sch-finishing':'')+'" style="cursor:pointer" onclick="fohSchedEditEmpId(event,\''+sid+'\')" title="Tap to set employee ID">' +
+        '<span class="sch-del-btn" onclick="fohSchedOpenStaffMenu(event,\''+sid+'\')" title="Leaver / remove">×</span>' +
         staff.name +
-        (staff.emp_id ? '<span class="sch-emp-id">'+staff.emp_id+'</span>' : '') + '</td>';
+        (staff.emp_id ? '<span class="sch-emp-id">'+staff.emp_id+'</span>' : '') +
+        (staff.end_date ? '<span class="sch-end-tag">leaving '+fohSchedEndShort(staff.end_date)+'</span>' : '') + '</td>';
       html += '<td class="sch-td-role" onclick="fohSchedEditRole(event,\''+sid+'\')" style="cursor:pointer">' +
         staff.role + ' <span style="opacity:.3;font-size:10px">✎</span></td>';
 
@@ -6243,17 +6251,70 @@ function fohSchedCloseShift(event, staffId, dateStr){
     .then(function(res){ if(res.error){ console.error('Override clock-out error:',res.error); alert('Could not save the clock-out: '+res.error.message); } });
 }
 
-// ── Delete staff ──
-function fohSchedConfirmDelete(event, staffId){
+// ── Leaver / remove staff ──
+// Short "5 Jun" label for an end_date.
+function fohSchedEndShort(d){
+  if(!d) return '';
+  var dt=new Date(String(d).slice(0,10)+'T12:00:00');
+  return dt.toLocaleDateString('en-GB',{day:'numeric',month:'short'});
+}
+// True when a staff member's last day falls inside the given week (for HR notes on print/Excel).
+function fohSchedEndInDays(staff, days){
+  if(!staff.end_date) return false;
+  var ed=String(staff.end_date).slice(0,10);
+  return ed>=formatDate(days[0]) && ed<=formatDate(days[6]);
+}
+var fohSchedMenuStaffId=null;
+function fohSchedOpenStaffMenu(event, staffId){
   event.stopPropagation();
-  if(!fohSchedGuard(null)) return;
+  if(!fohSchedGuard(function(){ fohSchedOpenStaffMenu(event,staffId); })) return;
   var staff=fohSchedStaff.find(function(s){ return s.id===staffId; });
   if(!staff) return;
-  if(!confirm('Remove '+staff.name+' from roster? This cannot be undone.')) return;
+  fohSchedMenuStaffId=staffId;
+  document.getElementById('foh-sch-staff-name').textContent=staff.name;
+  // Default the date to this person's last day if set, else the end of the week being viewed.
+  document.getElementById('foh-sch-finish-date').value=staff.end_date?String(staff.end_date).slice(0,10):formatDate(addDays(fohSchedWeekStart,6));
+  document.getElementById('foh-sch-finish-clear').style.display=staff.end_date?'block':'none';
+  document.getElementById('foh-sch-staff-modal').style.display='flex';
+}
+function fohSchedCloseStaffMenu(){
+  document.getElementById('foh-sch-staff-modal').style.display='none';
+  fohSchedMenuStaffId=null;
+}
+async function fohSchedSaveFinish(){
+  var staffId=fohSchedMenuStaffId; if(!staffId) return;
+  var d=document.getElementById('foh-sch-finish-date').value;
+  if(!d){ alert('Please choose a last working day.'); return; }
+  fohSchedCloseStaffMenu();
+  var staff=fohSchedStaff.find(function(s){ return s.id===staffId; });
+  if(staff) staff.end_date=d;
+  fohRenderSchedWeek();
+  var res=await sb.from('foh_staff').update({end_date:d}).eq('id',staffId);
+  if(res.error){
+    console.error('Finish error:',res.error);
+    if(/end_date/.test(res.error.message||'')) alert('To use “mark as finishing”, run this once in the FOH Supabase:\n\nalter table foh_staff add column if not exists end_date date;\nnotify pgrst,\'reload schema\';');
+    fohLoadSchedData().then(fohRenderSchedWeek);
+  }
+}
+async function fohSchedClearFinish(){
+  var staffId=fohSchedMenuStaffId; if(!staffId) return;
+  fohSchedCloseStaffMenu();
+  var staff=fohSchedStaff.find(function(s){ return s.id===staffId; });
+  if(staff) staff.end_date=null;
+  fohRenderSchedWeek();
+  var res=await sb.from('foh_staff').update({end_date:null}).eq('id',staffId);
+  if(res.error){ console.error('Clear finish error:',res.error); fohLoadSchedData().then(fohRenderSchedWeek); }
+}
+async function fohSchedRemoveNow(){
+  var staffId=fohSchedMenuStaffId; if(!staffId) return;
+  var staff=fohSchedStaff.find(function(s){ return s.id===staffId; });
+  if(!staff) return;
+  if(!confirm('Remove '+staff.name+' from the roster now? Their past shifts are kept, but they stop appearing in every week.')) return;
+  fohSchedCloseStaffMenu();
   fohSchedStaff=fohSchedStaff.filter(function(s){ return s.id!==staffId; });
   fohRenderSchedWeek();
   sb.from('foh_staff').update({active:false}).eq('id',staffId)
-    .then(function(res){ if(res.error){ console.error('Delete error:',res.error); fohLoadSchedData().then(fohRenderSchedWeek); } });
+    .then(function(res){ if(res.error){ console.error('Remove error:',res.error); fohLoadSchedData().then(fohRenderSchedWeek); } });
 }
 
 // ── Add staff ──
@@ -6402,7 +6463,7 @@ function fohSchedPrint(){
     html+='<tr><td colspan="11" style="background:'+secColor+';color:#2f2a28;font-weight:800;font-size:13px;letter-spacing:1px;text-transform:uppercase;border:1px solid #d8cbb8;padding:3px 8px">'+sec.label+'</td></tr>';
     stStaff.forEach(function(staff){
       var wh=0, wd=0;
-      html+='<tr><td style="font-size:14px;font-weight:700;border:1px solid #ccc;border-left:5px solid '+secColor+'">'+staff.name+'</td>'+
+      html+='<tr><td style="font-size:14px;font-weight:700;border:1px solid #ccc;border-left:5px solid '+secColor+'">'+staff.name+(fohSchedEndInDays(staff,days)?' <span style="font-size:11px;font-weight:700;color:#9a3412">(last day '+fohSchedEndShort(staff.end_date)+')</span>':'')+'</td>'+
         '<td style="font-size:12px;color:#1a1a1a;font-weight:700;border:1px solid #ccc">'+staff.role+'</td>';
       days.forEach(function(d){
         var ds=formatDate(d);
@@ -6667,7 +6728,7 @@ async function fohSchedSendToHR(){
       };
 
       stStaff.forEach(function(staff){
-        var rowData = [staff.name, staff.role];
+        var rowData = [staff.name + (fohSchedEndInDays(staff,days) ? '  (last day '+fohSchedEndShort(staff.end_date)+')' : ''), staff.role];
         var wHours=0, wDays=0;
         var cellStatuses=[];
         for(var dj=0;dj<days.length;dj++){
@@ -6713,11 +6774,20 @@ async function fohSchedSendToHR(){
 
     if(btn) btn.textContent = '📧 Sending...';
 
+    // Re-send detection: if this exact week was already emailed to HR, flag it as an
+    // update so the email says "discard the previous roster, this is the latest version".
+    var isUpdate=false;
+    try {
+      var prior=await sb.from('reset_log').select('id')
+        .eq('app','foh').eq('action','roster_send').eq('scope',weekStr).limit(1);
+      isUpdate=!!(prior && prior.data && prior.data.length);
+    } catch(e){ console.warn('[roster] re-send check failed', e); }
+
     // Use Kitchen App edge function (same Resend setup, same recipients for now)
     var emailRes = await fetch('https://zrpglswalgjbtghudmhu.supabase.co/functions/v1/send-roster', {
       method:'POST',
       headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+KITCHEN_KEY },
-      body:JSON.stringify({ weekStr:weekStr, fileName:fileName, xlsxBase64:xlsxBase64, source:'FOH', sentBy:rosterWho.name })
+      body:JSON.stringify({ weekStr:weekStr, fileName:fileName, xlsxBase64:xlsxBase64, source:'FOH', sentBy:rosterWho.name, update:isUpdate })
     });
 
     var emailData = await emailRes.json();
@@ -7145,6 +7215,21 @@ async function chkShowHistory(){
       <button onclick="fohSchedCancelDup()" style="flex:1;padding:10px;background:transparent;border:1px solid var(--sabbia-dark);border-radius:4px;cursor:pointer;font-family:var(--font-sans);color:var(--ink)">Cancel</button>
       <button onclick="fohSchedConfirmDuplicate()" style="flex:1;padding:10px;background:var(--vino);border:none;border-radius:4px;cursor:pointer;font-family:var(--font-sans);color:var(--cream);font-weight:700">Duplicate</button>
     </div>
+  </div>
+</div>
+
+<!-- Schedule: leaver / remove staff menu -->
+<div id="foh-sch-staff-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9000;align-items:center;justify-content:center" onclick="if(event.target===this)fohSchedCloseStaffMenu()">
+  <div style="background:var(--cream);border-radius:8px;padding:24px;width:340px;max-width:92vw;box-shadow:0 8px 32px rgba(0,0,0,.25)">
+    <div style="font-family:var(--font-serif);font-size:16px;color:var(--vino);margin-bottom:4px;font-weight:700"><span id="foh-sch-staff-name"></span></div>
+    <div style="font-size:12px;color:var(--vino-light);margin-bottom:16px;line-height:1.45">When someone is leaving, set their last working day. They keep their shifts through that day, then drop off future weeks automatically — no need to delete them.</div>
+    <label style="font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--vino-light);font-family:var(--font-sans)">Last working day</label>
+    <input id="foh-sch-finish-date" type="date" style="width:100%;box-sizing:border-box;margin-top:4px;padding:8px;border:1px solid var(--sabbia-dark);border-radius:4px;font-family:var(--font-sans);background:var(--sabbia-light);color:var(--ink);font-size:14px">
+    <button onclick="fohSchedSaveFinish()" style="width:100%;margin-top:12px;padding:10px;background:var(--vino);border:none;border-radius:4px;cursor:pointer;font-family:var(--font-sans);color:var(--cream);font-weight:700">Mark as finishing</button>
+    <button id="foh-sch-finish-clear" onclick="fohSchedClearFinish()" style="display:none;width:100%;margin-top:8px;padding:9px;background:transparent;border:1px solid var(--sabbia-dark);border-radius:4px;cursor:pointer;font-family:var(--font-sans);color:var(--ink)">Clear last day (keep on roster)</button>
+    <div style="border-top:1px solid var(--sabbia-dark);margin:16px 0 12px"></div>
+    <button onclick="fohSchedRemoveNow()" style="width:100%;padding:9px;background:transparent;border:1px solid #b91c1c;border-radius:4px;cursor:pointer;font-family:var(--font-sans);color:#b91c1c;font-weight:600">Remove from roster now</button>
+    <button onclick="fohSchedCloseStaffMenu()" style="width:100%;margin-top:8px;padding:9px;background:transparent;border:none;cursor:pointer;font-family:var(--font-sans);color:var(--vino-light)">Cancel</button>
   </div>
 </div>
 
