@@ -29,7 +29,10 @@ var STOCK_EMAIL_CC = ['amohamed@robertos.ae','mpetrosino@robertos.ae','jballout@
 // employee/roster record (so the holder never appears on the FOH schedule). Used
 // by Francesco + shared with the cost controller as an admin code. Beta: security
 // deferred, so this lives client-side. Counts are attributed to this label.
-var STOCK_SUPER = { '1212': 'Stock Take Admin', '0000': 'Cost Controller' };
+var STOCK_SUPER = { '1212': 'Stock Take Admin', '0000': 'Cost Controller', '2468': 'Stock Take Supervisor' };
+// Destructive actions (Clear all counts, Upload/replace the month's list) are
+// limited to these admin codes so a regular counter can't wipe a live count.
+function stIsSuper(){ return !!(stUser && STOCK_SUPER[stUser.emp_id]); }
 
 // Previous-month reference (the grey "Last month: …" line + last-month closing
 // total) is BUILT but hidden for now. Flip to true to switch it back on — planned
@@ -219,14 +222,23 @@ function stSignOut(){ stUser = null; stRender(); }
 async function stSetQty(itemId, value){
   if(!stUser) return;
   var prev = stCounts[itemId] ? Object.assign({}, stCounts[itemId]) : null;
-  var qty = value === '' ? null : Number(value);
   var it = stItems.find(function(x){ return x.id===itemId; });
   var unit = it ? stItemUnit(it) : null;
+  // normalise: trim + accept a decimal comma ("4,5" -> "4.5"). Only a BLANK box
+  // clears the count; garbage (letters, "4,5,6", negatives) is rejected WITHOUT
+  // touching the saved number — never silently delete a real count.
+  var raw = (value==null?'':String(value)).trim().replace(',', '.');
   var res;
-  if(qty===null || isNaN(qty) || qty < 0){
+  if(raw === ''){
     delete stCounts[itemId];
     res = await sb.from('stock_take_counts').delete().eq('item_id', itemId);
   } else {
+    var qty = Number(raw);
+    if(isNaN(qty) || qty < 0){
+      toast('"'+value+'" is not a valid number — count left unchanged.', true);
+      stUpdateRowUI(itemId);   // put the saved value back in the box
+      return res || {};
+    }
     stCounts[itemId] = { qty:qty, unit:unit, counted_by:stUser.emp_id, counted_by_name:stUser.name };
     var row = { item_id:itemId, venue_id:STOCK_VENUE, dept:stDept, month:stMonth,
                 qty:qty, unit:unit, counted_by:stUser.emp_id, counted_by_name:stUser.name,
@@ -250,8 +262,9 @@ async function stSetQty(itemId, value){
 async function stAddQty(itemId, value){
   if(!stUser) return;
   var addBox = document.getElementById('st-add-'+itemId);
-  var delta = Number(value);
-  if(value==='' || isNaN(delta) || delta===0){ if(addBox) addBox.value=''; return; }
+  var raw = (value==null?'':String(value)).trim().replace(',', '.');   // accept "2,5"
+  var delta = Number(raw);
+  if(raw==='' || isNaN(delta) || delta===0){ if(addBox) addBox.value=''; return; }
   var it = stItems.find(function(x){ return x.id===itemId; });
   var unit = it ? stItemUnit(it) : null;
   var prev = stCounts[itemId] ? Object.assign({}, stCounts[itemId]) : null;
@@ -367,9 +380,11 @@ function stRender(){
       '<div class="st-title">'+stEsc(stDeptLabel())+' Stock Take</div>'+
       '<div class="st-sub">No month loaded yet</div>'+
       stGateHtml()+
-      (stUser
+      (stIsSuper()
         ? '<div style="padding:14px"><button class="st-btn" style="flex:none" onclick="stShowUpload()">Upload this month\'s list (.xls)</button></div>'
-        : '<div class="st-nodata">Enter your employee ID, then upload this month\'s list from the cost controller.</div>');
+        : stUser
+          ? '<div class="st-nodata">No list for this month yet — ask the cost controller or an admin (code 1212 / 0000 / 2468) to upload it.</div>'
+          : '<div class="st-nodata">Enter your employee ID, then ask an admin to upload this month\'s list.</div>');
     return;
   }
   var monLabel = new Date(stMonth+'-01T12:00:00').toLocaleDateString('en-GB',{month:'long',year:'numeric'});
@@ -391,7 +406,7 @@ function stRender(){
       '<input class="st-input" id="st-search" placeholder="Search items…" value="'+stEsc(stSearch)+'" oninput="stOnSearch(this.value)" style="flex:1;min-width:140px">'+
       '<select class="st-select" id="st-cat" onchange="stOnCat(this.value)">'+cats+'</select>'+
       '<label class="st-onlycount"><input type="checkbox" id="st-onlycount" '+(stOnlyCounted?'checked':'')+' onchange="stToggleOnlyCounted(this.checked)"> Counted only</label>'+
-      (stUser?'<button class="st-btn" style="flex:none" onclick="stShowUpload()">Upload month</button>':'')+
+      (stIsSuper()?'<button class="st-btn" style="flex:none" onclick="stShowUpload()">Upload month</button>':'')+
     '</div>'+
     '<div class="st-catbar"><span id="st-catlabel">'+(stCatFilter?stEsc(stCatFilter):'All categories')+'</span>'+
       '<span class="st-muted">category total <b id="st-catsub">'+stMoney(stCategoryTotal())+'</b></span></div>'+
@@ -399,8 +414,9 @@ function stRender(){
         '<button class="st-btn" onclick="stReviewSend()">Email to Aung</button>'+
         '<button class="st-btn" onclick="stExportExcel()">Download Excel</button>'+
         '<button class="st-btn" onclick="stPrint()">Print</button>'+
-        '<button class="st-btn danger" onclick="stClearAllCounts()">Clear all counts</button>'+
+        (stIsSuper()?'<button class="st-btn danger" onclick="stClearAllCounts()">Clear all counts</button>':'')+
       '</div>' : '')+
+    (stUser?'<div style="padding:4px 14px 0;font-size:12px;color:#8a7a55;line-height:1.4">Type the <b>total</b> you counted in the white box. Use the green <b>+ add</b> box to add onto a count someone already started (e.g. a second person or the store-room).</div>':'')+
     '<div id="st-rows"></div>'+
     '<button class="st-addbtn" onclick="stShowAdd()">+ Add missing item</button>';
 
@@ -492,6 +508,7 @@ async function stSetDept(dept){
 // wipe EVERY quantity entered for this dept+month (all counters) — confirmed first
 async function stClearAllCounts(){
   if(!stUser){ toast('Enter your employee ID first.', true); return; }
+  if(!stIsSuper()){ toast('Only an admin code (1212 / 0000 / 2468) can clear all counts.', true); return; }
   if(!stCountedCount()){ toast('Nothing counted yet.'); return; }
   if(!confirm('Clear ALL counts for '+stDeptLabel()+' — '+stMonth+'?\n\nThis erases every quantity entered this month — by everyone — and cannot be undone. The item list stays.')) return;
   var res=await sb.from('stock_take_counts').delete().eq('venue_id',STOCK_VENUE).eq('dept',stDept).eq('month',stMonth);
@@ -678,6 +695,7 @@ function stGuessMonth(rows){
 }
 function stShowUpload(){
   if(!stUser){ toast('Enter your employee ID first.', true); return; }
+  if(!stIsSuper()){ toast('Only an admin code (1212 / 0000 / 2468) can upload/replace the month\'s list.', true); return; }
   var old=document.getElementById('st-up-modal'); if(old) old.remove();
   var box=document.createElement('div');
   box.id='st-up-modal'; box.className='st-modal';
