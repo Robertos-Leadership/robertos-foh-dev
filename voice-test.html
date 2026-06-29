@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Stock Take — Voice Test (sandbox)</title>
+<style>
+  :root{--vino:#410207;--cream:#f5ede0;--gold:#c9a84c;--sabbia:#e8ddc9;--muted:#8a7a55;}
+  *{box-sizing:border-box}
+  body{font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;margin:0;background:#faf6ef;color:#2a1a10}
+  .wrap{max-width:680px;margin:0 auto;padding:16px 16px 80px}
+  .banner{background:#fff7e6;border:1px solid #f0d9a0;color:#7a5a00;border-radius:10px;padding:10px 12px;font-size:13px;margin-bottom:14px;line-height:1.45}
+  h1{font-family:Georgia,serif;color:var(--vino);font-size:22px;margin:6px 0 2px}
+  .sub{color:var(--muted);font-size:12px;margin-bottom:14px}
+  .mic{width:100%;height:56px;border:none;border-radius:12px;background:var(--vino);color:var(--cream);font-size:17px;font-weight:600;cursor:pointer;margin-bottom:10px}
+  .mic:active{opacity:.9}
+  .typerow{display:flex;gap:8px;margin-bottom:8px}
+  .typerow input{flex:1;height:44px;border:1px solid var(--gold);border-radius:10px;padding:0 12px;font-size:15px}
+  .typerow button{height:44px;border:1px solid var(--gold);background:#fff;color:var(--vino);border-radius:10px;padding:0 14px;font-weight:600;cursor:pointer}
+  .hint{font-size:12px;color:var(--muted);margin-bottom:16px;line-height:1.5}
+  .hint b{color:var(--vino)}
+  .counted{margin-top:8px;border-top:1px solid var(--sabbia);padding-top:10px}
+  .counted h2{font-size:13px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin:0 0 8px}
+  .crow{display:flex;justify-content:space-between;padding:7px 2px;border-bottom:1px solid #eee5d4;font-size:14px}
+  .crow b{color:var(--vino)}
+  .empty{color:var(--muted);font-size:13px;font-style:italic}
+  .clearbtn{margin-top:10px;height:38px;border:1px solid #d98a8a;color:#7a1218;background:#fff;border-radius:9px;padding:0 14px;font-weight:600;cursor:pointer}
+  /* modal */
+  .modal{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:99;padding:16px}
+  .box{background:#fff;border-radius:14px;padding:18px;width:100%;max-width:380px}
+  .box h3{margin:0 0 4px;color:var(--vino)}
+  .box .heard{font-size:12px;color:var(--muted);margin-bottom:12px}
+  .box label{font-size:12px;color:var(--muted);display:block;margin-bottom:4px}
+  .box select,.box input{width:100%;height:42px;border:1px solid var(--gold);border-radius:10px;padding:0 10px;font-size:15px;margin-bottom:12px}
+  .row{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
+  .row button{height:42px;border-radius:10px;padding:0 16px;font-weight:600;cursor:pointer;border:1px solid var(--gold);background:#fff;color:var(--vino)}
+  .row .add{background:var(--vino);color:var(--cream);border-color:var(--vino)}
+  .listening{text-align:center}
+  .listening .big{font-size:46px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="banner">🧪 <b>TEST SANDBOX.</b> This page uses <b>sample items</b> and saves only on this screen — it is <b>not connected to any database</b>. Press Add as much as you like; nothing reaches the real stock take. Voice works in <b>Chrome</b> (laptop or Android). On iPhone the mic button won't appear — type a phrase instead.</div>
+
+  <h1>Voice count — try it</h1>
+  <div class="sub">Say or type the item and how many, e.g. "Grey Goose four".</div>
+
+  <button class="mic" id="micBtn">🎤 Count by voice</button>
+
+  <div class="typerow">
+    <input id="typed" placeholder='or type: "macallan twelve three"' inputmode="text">
+    <button id="typedGo">Test</button>
+  </div>
+  <div class="hint">Try: <b>"grey goose four"</b> · <b>"hennessy two"</b> · <b>"bombay sapphire six"</b> · <b>"macallan twelve three"</b> · <b>"corona twenty four"</b> · <b>"juice orange four point five"</b></div>
+
+  <div class="counted">
+    <h2>Counted on this test page</h2>
+    <div id="countedList"><div class="empty">Nothing yet — try the mic or type a phrase.</div></div>
+    <button class="clearbtn" id="clearBtn" style="display:none">Clear test list</button>
+  </div>
+</div>
+
+<script>
+// ── sample item list (real names, sample only) ────────────────────────────
+var TEST_NAMES = [
+"Amaro Lucano 70Cl -99830001","Aperol 70Cl -108206","Branca Menta 70Cl -15284","Campari 1Ltr -0613",
+"Jagermeister 70Cl -91310002","Birra Moretti Beer (24x33 Cl) -9835","Corona Beer Bot (24x35.5Cl) -90170039",
+"Heineken Beer Bot (24x33Cl) -6768-11","Hennessy Paradis 70Cl -82316D","Armand De Brignac Brut Champ 75Cl -35499",
+"Bollinger Rose Champ 75Cl -95470009","Beefeater Gin Pink NRF 75Cl -27051","Bloom Gin 70Cl -25167",
+"Bombay Sapphire 75Cl -5840","Hendricks Gin 70Cl -90580115","Hendricks Orbium 70Cl -90580100",
+"Grey Goose 1.5Ltr -85026","Grey Goose 75Cl -7838","Beluga Gold 70Cl -91090200",
+"Macallan 12YO Double Cask 70Cl -20807","Macallan 12YO Sherry Cask 70Cl -11529","Macallan 15YO Double Cask 70Cl -28730",
+"Macallan 18YO Double Cask 70Cl -30004","Amaretto Di Sarono 70Cl -0631","Amaro Montenegro 1Ltr -32724",
+"Nonino Grappa Moscato 70Cl -96400027","1800 Silver 75Cl -96260013","Altos Reposado 70Cl -15758",
+"Astral Tequila Blanco 75Cl -90730530","Angostura 1919 8YO 70Cl -109966","Bombay Sapphire 75Cl -5840",
+"Da Luca Prosecco DOC S/W 75Cl -95160021","Conte Fosco Brut S/W 75Cl -98680025","Casillero del Diablo Rose 75Cl -20286",
+"Coke Bottle (24x290Ml)","Coconut Water Can (24x250ml) -MoonBird","Juice Apple (12x1Ltr) -Lacnor",
+"Juice Cranberry (12x1Ltr) -Ocean Spray","Juice Orange (12x1Ltr) -Lacnor","Juice Lemon Fresh (1.5 Ltr)",
+"Milk Full Cream 2 Ltr","NA Peroni Nastro Azzurro 0.0% (24x33Cl) -101770","NA Tanqueray Alcohol Free Spirit 70Cl -101803",
+"Harvey Bristol Cream 75Cl -0460","Grahams Late Bottled Vintage Port 75Cl -1299212","Bombay Sapphire 75Cl -5840",
+"Syrup Almond Mixer 1 Ltr","Syrup Agave Nectar Real 500ml","Cinnamon Stick 1Kg","Clove Whole 1Kg",
+"Olive Oil Extra Virgin 500ml -Dono Dorato Oil","Liquid Egg White 1Kg","Apple Green -S.Africa",
+"Grapefruit Pink -S.Africa","Figs -Holland","Basil in Pot -GCC","Rosemary Loose Cyprus",
+"Puree Passion Fruit -Boiron","Cherry Amarena 2.75Kg -Brover","Martini Bianco Vermouth 1Ltr -14443",
+"Martini Extra Dry Vermouth 1Ltr -14445","Martini Fiero 75Cl -30122","Dolin Vermouth Rouge 75Cl -99210007",
+"Lillet Blanc 75Cl -13049","Fernet Branca 75Cl -172112","Frangelico 75Cl -9630","Cynar 1Ltr -108216"
+];
+var stItems = TEST_NAMES.map(function(n,i){ return { id:'t'+i, name:n }; });
+var stCounts = {};   // id -> qty  (test only)
+
+// ── voice parser + matcher (copied from the app's stock-take.js) ──────────
+var ST_ONES={zero:0,one:1,two:2,three:3,four:4,five:5,six:6,seven:7,eight:8,nine:9,ten:10,eleven:11,twelve:12,thirteen:13,fourteen:14,fifteen:15,sixteen:16,seventeen:17,eighteen:18,nineteen:19};
+var ST_TENS={twenty:20,thirty:30,forty:40,fifty:50,sixty:60,seventy:70,eighty:80,ninety:90};
+var ST_UNITS={bottles:1,bottle:1,btl:1,each:1,kg:1,kilo:1,kilos:1,piece:1,pieces:1,pcs:1,pc:1,unit:1,units:1,case:1,cases:1,box:1,boxes:1,can:1,cans:1,gram:1,grams:1,litre:1,litres:1,liter:1,liters:1,ltr:1,glass:1,glasses:1};
+function stIsNumWord(t){ return (t in ST_ONES)||(t in ST_TENS)||t==='point'||/^\d+(\.\d+)?$/.test(t); }
+function stIntWords(tokens){
+  if(!tokens.length) return null;
+  if(tokens.length===1 && /^\d+$/.test(tokens[0])) return parseInt(tokens[0],10);
+  var total=0, any=false;
+  for(var k=0;k<tokens.length;k++){ var w=tokens[k];
+    if(w in ST_TENS){ total+=ST_TENS[w]; any=true; }
+    else if(w in ST_ONES){ total+=ST_ONES[w]; any=true; }
+    else if(/^\d+$/.test(w)){ total+=parseInt(w,10); any=true; }
+    else if(w==='a'||w==='an'){}
+    else return null;
+  }
+  return any?total:null;
+}
+function stPhraseToNumber(tokens){
+  if(!tokens||!tokens.length) return null;
+  var pIdx=tokens.indexOf('point');
+  if(pIdx>=0){
+    var iv=stIntWords(tokens.slice(0,pIdx));
+    var dec=tokens.slice(pIdx+1).map(function(x){ return (x in ST_ONES)?ST_ONES[x]:(/^\d$/.test(x)?+x:null); });
+    if(dec.some(function(x){return x===null;})) return null;
+    return (iv||0)+(dec.length?parseFloat('0.'+dec.join('')):0);
+  }
+  if(tokens.length===1 && /^\d+(\.\d+)?$/.test(tokens[0])) return parseFloat(tokens[0]);
+  return stIntWords(tokens);
+}
+function stVoiceExtract(transcript){
+  var s=(transcript||'').toLowerCase();
+  s=s.replace(/\band a half\b/g,' point five').replace(/\band a quarter\b/g,' point two five').replace(/\band three quarters\b/g,' point seven five').replace(/\bhalf\b/g,' point five');
+  s=s.replace(/[,]/g,' ');
+  var toks=s.split(/\s+/).filter(Boolean).filter(function(t){return !ST_UNITS[t];});
+  var qty=null,name='';
+  var st=toks.length; while(st>0 && stIsNumWord(toks[st-1])) st--;
+  var run=toks.slice(st);
+  if(run.length){
+    var hasPoint=run.indexOf('point')>=0||run.some(function(x){return /\d\.\d/.test(x);});
+    var tensOnes=run.length===2&&(run[0] in ST_TENS)&&(run[1] in ST_ONES);
+    if(run.length===1||hasPoint||tensOnes){ qty=stPhraseToNumber(run); name=toks.slice(0,st).join(' '); }
+    else { qty=stPhraseToNumber([run[run.length-1]]); name=toks.slice(0,toks.length-1).join(' '); }
+  } else {
+    var ls=0; while(ls<toks.length && stIsNumWord(toks[ls])) ls++;
+    if(ls>0 && ls<toks.length){ qty=stPhraseToNumber(toks.slice(0,ls)); name=toks.slice(ls).join(' '); }
+    else name=toks.join(' ');
+  }
+  return {qty:qty,name:name.trim()};
+}
+function stVoiceNorm(s){ return String(s||'').toLowerCase().replace(/\s+-\s*\w+\s*$/,'').replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim(); }
+function stVoiceMatch(query){
+  var q=stVoiceNorm(query); if(!q) return [];
+  var qt=q.split(' ').filter(function(t){return t.length>1;}); if(!qt.length) qt=[q];
+  var scored=[];
+  stItems.forEach(function(it){
+    var n=stVoiceNorm(it.name); if(!n) return;
+    var hit=0; qt.forEach(function(t){ if(n.indexOf(t)>=0) hit++; });
+    var score=hit/qt.length;
+    if(n.indexOf(q)>=0) score+=0.5;
+    if(n.split(' ')[0]===qt[0]) score+=0.15;
+    if(score>=0.5) scored.push({it:it,score:score});
+  });
+  scored.sort(function(a,b){return b.score-a.score;});
+  return scored.slice(0,4).map(function(x){return x.it;});
+}
+
+// ── UI ────────────────────────────────────────────────────────────────────
+var rec=null, cands=[];
+function supported(){ return ('SpeechRecognition' in window)||('webkitSpeechRecognition' in window); }
+if(!supported()){ document.getElementById('micBtn').textContent='🎤 Voice not available on this device — type below'; document.getElementById('micBtn').style.opacity=.6; }
+
+document.getElementById('micBtn').onclick=function(){
+  if(!supported()){ alert('Voice needs Chrome (laptop or Android). On iPhone, type a phrase in the box instead.'); return; }
+  var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  try{ if(rec) rec.abort(); }catch(e){}
+  showListening();
+  rec=new SR(); rec.lang='en-GB'; rec.interimResults=false; rec.maxAlternatives=1;
+  rec.onresult=function(e){ var t=((e.results[0]&&e.results[0][0]&&e.results[0][0].transcript)||'').trim(); handle(t); };
+  rec.onerror=function(e){ closeListening(); if(e.error==='not-allowed'||e.error==='service-not-allowed') alert('Allow microphone access to use voice.'); else if(e.error==='no-speech') alert('Didn\'t catch that — tap the mic and try again.'); };
+  rec.onend=function(){ closeListening(); };
+  try{ rec.start(); }catch(err){ closeListening(); alert('Could not start voice — try again.'); }
+};
+document.getElementById('typedGo').onclick=function(){ var v=document.getElementById('typed').value.trim(); if(v) handle(v); };
+document.getElementById('typed').addEventListener('keydown',function(e){ if(e.key==='Enter'){ var v=this.value.trim(); if(v) handle(v); } });
+document.getElementById('clearBtn').onclick=function(){ stCounts={}; renderCounted(); };
+
+function handle(transcript){
+  closeListening();
+  var ex=stVoiceExtract(transcript);
+  cands=stVoiceMatch(ex.name);
+  showConfirm(transcript, ex.qty, cands);
+}
+function showListening(){
+  closeListening();
+  var b=document.createElement('div'); b.id='listenModal'; b.className='modal';
+  b.innerHTML='<div class="box listening"><div class="big">🎤</div><div style="font-weight:700;color:#410207;margin:8px 0 4px">Listening…</div><div style="font-size:12px;color:#8a7a55;margin-bottom:14px">Say the item and how many<br>e.g. "Grey Goose four"</div><div class="row" style="justify-content:center"><button onclick="closeListening()">Cancel</button></div></div>';
+  document.body.appendChild(b);
+}
+function closeListening(){ var m=document.getElementById('listenModal'); if(m) m.remove(); try{ if(rec) rec.abort(); }catch(e){} }
+function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function showConfirm(heard, qty, list){
+  var old=document.getElementById('confModal'); if(old) old.remove();
+  var opts=list.length ? list.map(function(it,i){ var c=stCounts[it.id]; var now=(c!=null)?(' — now '+c):''; return '<option value="'+i+'">'+esc(it.name)+now+'</option>'; }).join('') : '<option value="-1">No match found</option>';
+  var qv=(qty==null||isNaN(qty))?'':qty;
+  var b=document.createElement('div'); b.id='confModal'; b.className='modal';
+  b.innerHTML='<div class="box"><h3>Check before saving</h3><div class="heard">Heard: "'+esc(heard)+'"</div>'+
+    '<label>Item</label><select id="cItem">'+opts+'</select>'+
+    '<label>Add this many</label><input id="cQty" inputmode="decimal" value="'+qv+'" placeholder="how many">'+
+    '<div class="row"><button onclick="document.getElementById(\'confModal\').remove()">Cancel</button>'+
+    '<button onclick="micFromConfirm()">🎤 Try again</button>'+
+    '<button class="add" onclick="doAdd()">Add</button></div></div>';
+  document.body.appendChild(b);
+}
+function micFromConfirm(){ var m=document.getElementById('confModal'); if(m) m.remove(); document.getElementById('micBtn').click(); }
+function doAdd(){
+  var sel=document.getElementById('cItem'); var i=parseInt(sel.value,10);
+  if(isNaN(i)||i<0||!cands[i]){ alert('No item picked.'); return; }
+  var qty=parseFloat((document.getElementById('cQty').value||'').trim().replace(',','.'));
+  if(isNaN(qty)||qty<=0){ alert('Enter how many to add.'); return; }
+  var it=cands[i];
+  stCounts[it.id]=(stCounts[it.id]||0)+qty;       // +add (test only, in memory)
+  var m=document.getElementById('confModal'); if(m) m.remove();
+  renderCounted();
+}
+function renderCounted(){
+  var el=document.getElementById('countedList');
+  var ids=Object.keys(stCounts).filter(function(k){return stCounts[k]>0;});
+  document.getElementById('clearBtn').style.display = ids.length?'inline-block':'none';
+  if(!ids.length){ el.innerHTML='<div class="empty">Nothing yet — try the mic or type a phrase.</div>'; return; }
+  el.innerHTML=ids.map(function(id){ var it=stItems.find(function(x){return x.id===id;}); return '<div class="crow"><span>'+esc(it.name)+'</span><b>'+stCounts[id]+'</b></div>'; }).join('');
+}
+</script>
+</body>
+</html>
