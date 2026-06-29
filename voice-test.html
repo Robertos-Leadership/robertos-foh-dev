@@ -157,21 +157,39 @@ function stVoiceMatch(query){
 }
 
 // ── UI ────────────────────────────────────────────────────────────────────
-var rec=null, cands=[];
+var rec=null, cands=[], vFinal='', vInterim='', vDone=false, vMode='full';
 function supported(){ return ('SpeechRecognition' in window)||('webkitSpeechRecognition' in window); }
 if(!supported()){ document.getElementById('micBtn').textContent='🎤 Voice not available on this device — type below'; document.getElementById('micBtn').style.opacity=.6; }
 
-document.getElementById('micBtn').onclick=function(){
+document.getElementById('micBtn').onclick=startVoice;
+function startVoice(mode){
   if(!supported()){ alert('Voice needs Chrome (laptop or Android). On iPhone, type a phrase in the box instead.'); return; }
   var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  vMode = (mode==='qty') ? 'qty' : 'full';
+  if(vMode!=='qty'){ var oc=document.getElementById('confModal'); if(oc) oc.remove(); }  // qty mode keeps the confirm card
   try{ if(rec) rec.abort(); }catch(e){}
-  showListening();
-  rec=new SR(); rec.lang='en-GB'; rec.interimResults=false; rec.maxAlternatives=1;
-  rec.onresult=function(e){ var t=((e.results[0]&&e.results[0][0]&&e.results[0][0].transcript)||'').trim(); handle(t); };
-  rec.onerror=function(e){ closeListening(); if(e.error==='not-allowed'||e.error==='service-not-allowed') alert('Allow microphone access to use voice.'); else if(e.error==='no-speech') alert('Didn\'t catch that — tap the mic and try again.'); };
-  rec.onend=function(){ closeListening(); };
+  vFinal=''; vInterim=''; vDone=false;
+  showListening(vMode);
+  // continuous + interim: keep listening (no rush), show live text, act only on Done
+  rec=new SR(); rec.lang='en-GB'; rec.continuous=true; rec.interimResults=true; rec.maxAlternatives=1;
+  rec.onresult=function(e){
+    vFinal=''; vInterim='';
+    for(var i=0;i<e.results.length;i++){ var r=e.results[i]; if(r.isFinal) vFinal+=r[0].transcript+' '; else vInterim+=r[0].transcript; }
+    var el=document.getElementById('listenText'); if(el) el.textContent=(vFinal+vInterim).trim()||'…';
+  };
+  rec.onerror=function(e){ if(e.error==='aborted') return; vDone=true; closeListening(); if(e.error==='not-allowed'||e.error==='service-not-allowed') alert('Allow microphone access to use voice.'); else if(e.error==='no-speech') alert('Didn\'t catch anything — tap the mic and try again.'); };
+  rec.onend=function(){ if(vDone) return; vDone=true; closeListening(); var t=(vFinal+' '+vInterim).trim(); if(t) voiceRoute(t); };
   try{ rec.start(); }catch(err){ closeListening(); alert('Could not start voice — try again.'); }
-};
+}
+function voiceStop(){ if(vDone) return; vDone=true; var t=(vFinal+' '+vInterim).trim(); try{ if(rec) rec.stop(); }catch(e){} closeListening(); if(t) voiceRoute(t); else alert('Didn\'t catch anything — tap the mic and try again.'); }
+function voiceRoute(t){ if(vMode==='qty') fillQty(t); else handle(t); }
+function fillQty(transcript){
+  var ex=stVoiceExtract(transcript); var q=ex.qty;
+  if(q==null){ var n=parseFloat(String(transcript).replace(/[^0-9.]/g,'')); if(!isNaN(n)) q=n; }
+  if(q==null||isNaN(q)){ alert('Didn\'t catch a number — say just the quantity, e.g. "twenty four".'); return; }
+  var box=document.getElementById('cQty'); if(box) box.value=q;
+}
+function voiceCancelListen(){ vDone=true; try{ if(rec) rec.abort(); }catch(e){} closeListening(); }
 document.getElementById('typedGo').onclick=function(){ var v=document.getElementById('typed').value.trim(); if(v) handle(v); };
 document.getElementById('typed').addEventListener('keydown',function(e){ if(e.key==='Enter'){ var v=this.value.trim(); if(v) handle(v); } });
 document.getElementById('clearBtn').onclick=function(){ stCounts={}; renderCounted(); };
@@ -182,13 +200,19 @@ function handle(transcript){
   cands=stVoiceMatch(ex.name);
   showConfirm(transcript, ex.qty, cands);
 }
-function showListening(){
-  closeListening();
+function showListening(mode){
+  var old=document.getElementById('listenModal'); if(old) old.remove();
+  var sub=(mode==='qty')?'Say just the quantity, e.g. "twenty four", then tap <b>Done</b>.':'Say the item and how many, then tap <b>Done</b>.';
   var b=document.createElement('div'); b.id='listenModal'; b.className='modal';
-  b.innerHTML='<div class="box listening"><div class="big">🎤</div><div style="font-weight:700;color:#410207;margin:8px 0 4px">Listening…</div><div style="font-size:12px;color:#8a7a55;margin-bottom:14px">Say the item and how many<br>e.g. "Grey Goose four"</div><div class="row" style="justify-content:center"><button onclick="closeListening()">Cancel</button></div></div>';
+  b.innerHTML='<div class="box listening"><div class="big">🎤</div>'+
+    '<div style="font-weight:700;color:#410207;margin:8px 0 4px">Listening… take your time</div>'+
+    '<div style="font-size:12px;color:#8a7a55;margin-bottom:8px">'+sub+'</div>'+
+    '<div id="listenText" style="min-height:22px;font-size:15px;color:#2a1a10;background:#f7f1e6;border-radius:8px;padding:8px;margin-bottom:12px">…</div>'+
+    '<div class="row" style="justify-content:center"><button onclick="voiceCancelListen()">Cancel</button>'+
+    '<button class="add" onclick="voiceStop()">Done</button></div></div>';
   document.body.appendChild(b);
 }
-function closeListening(){ var m=document.getElementById('listenModal'); if(m) m.remove(); try{ if(rec) rec.abort(); }catch(e){} }
+function closeListening(){ var m=document.getElementById('listenModal'); if(m) m.remove(); }
 function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function showConfirm(heard, qty, list){
   var old=document.getElementById('confModal'); if(old) old.remove();
@@ -197,7 +221,8 @@ function showConfirm(heard, qty, list){
   var b=document.createElement('div'); b.id='confModal'; b.className='modal';
   b.innerHTML='<div class="box"><h3>Check before saving</h3><div class="heard">Heard: "'+esc(heard)+'"</div>'+
     '<label>Item</label><select id="cItem">'+opts+'</select>'+
-    '<label>Add this many</label><input id="cQty" inputmode="decimal" value="'+qv+'" placeholder="how many">'+
+    '<label>Add this many</label><div style="display:flex;gap:8px;margin-bottom:12px"><input id="cQty" inputmode="decimal" value="'+qv+'" placeholder="how many" style="flex:1;margin-bottom:0">'+
+    '<button onclick="startVoice(\'qty\')" style="flex:none;border:1px solid var(--gold);background:#fff;color:var(--vino);border-radius:10px;padding:0 12px;font-weight:600;cursor:pointer">🎤 Say number</button></div>'+
     '<div class="row"><button onclick="document.getElementById(\'confModal\').remove()">Cancel</button>'+
     '<button onclick="micFromConfirm()">🎤 Try again</button>'+
     '<button class="add" onclick="doAdd()">Add</button></div></div>';

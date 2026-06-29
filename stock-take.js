@@ -891,33 +891,53 @@ function stVoiceMatch(query){
   return scored.slice(0,4).map(function(x){ return x.it; });
 }
 
-var stRec=null;
+var stRec=null, stVFinal='', stVInterim='', stVDone=false, stVoiceMode='full';
 var stVoiceCands=[];
-function stVoiceStart(){
+// mode 'full' = item + quantity in one go; mode 'qty' = just the number, into the
+// already-open confirm card (so you can say the product first, then the quantity).
+function stVoiceStart(mode){
   if(!stUser){ toast('Enter your employee ID first.', true); return; }
   var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
   if(!SR){ toast('Voice needs Android Chrome. On iPhone, tap a box and use the keyboard mic.', true); return; }
-  var old=document.getElementById('st-voice-modal'); if(old) old.remove();
+  stVoiceMode = (mode==='qty') ? 'qty' : 'full';
+  if(stVoiceMode!=='qty'){ var old=document.getElementById('st-voice-modal'); if(old) old.remove(); }  // qty mode keeps the confirm card open
   try{ if(stRec) stRec.abort(); }catch(e){}
-  stVoiceShowListening();
-  stRec=new SR(); stRec.lang='en-GB'; stRec.interimResults=false; stRec.maxAlternatives=1;
-  stRec.onresult=function(e){ var t=((e.results[0]&&e.results[0][0]&&e.results[0][0].transcript)||'').trim(); stVoiceHandle(t); };
-  stRec.onerror=function(e){ stVoiceCloseListening();
+  stVFinal=''; stVInterim=''; stVDone=false;
+  stVoiceShowListening(stVoiceMode);
+  // continuous + interim: don't rush the speaker; show live text; act only on Done
+  stRec=new SR(); stRec.lang='en-GB'; stRec.continuous=true; stRec.interimResults=true; stRec.maxAlternatives=1;
+  stRec.onresult=function(e){
+    stVFinal=''; stVInterim='';
+    for(var i=0;i<e.results.length;i++){ var r=e.results[i]; if(r.isFinal) stVFinal+=r[0].transcript+' '; else stVInterim+=r[0].transcript; }
+    var el=document.getElementById('st-listen-text'); if(el) el.textContent=(stVFinal+stVInterim).trim()||'…';
+  };
+  stRec.onerror=function(e){ if(e.error==='aborted') return; stVDone=true; stVoiceCloseListening();
     if(e.error==='not-allowed'||e.error==='service-not-allowed') toast('Allow microphone access to use voice.', true);
-    else if(e.error==='no-speech') toast('Didn\'t catch that — tap 🎤 and try again.', true);
+    else if(e.error==='no-speech') toast('Didn\'t catch anything — tap 🎤 and try again.', true);
     else toast('Voice error: '+e.error, true); };
-  stRec.onend=function(){ stVoiceCloseListening(); };
+  stRec.onend=function(){ if(stVDone) return; stVDone=true; stVoiceCloseListening(); var t=(stVFinal+' '+stVInterim).trim(); if(t) stVoiceRoute(t); };
   try{ stRec.start(); }catch(err){ stVoiceCloseListening(); toast('Could not start voice — try again.', true); }
 }
-function stVoiceCancel(){ try{ if(stRec) stRec.abort(); }catch(e){} stVoiceCloseListening(); }
-function stVoiceShowListening(){
+function stVoiceStop(){ if(stVDone) return; stVDone=true; var t=(stVFinal+' '+stVInterim).trim(); try{ if(stRec) stRec.stop(); }catch(e){} stVoiceCloseListening(); if(t) stVoiceRoute(t); else toast('Didn\'t catch anything — tap 🎤 and try again.', true); }
+function stVoiceRoute(t){ if(stVoiceMode==='qty') stVoiceFillQty(t); else stVoiceHandle(t); }
+function stVoiceFillQty(transcript){
+  var ex=stVoiceExtract(transcript); var q=ex.qty;
+  if(q==null){ var n=parseFloat(String(transcript).replace(/[^0-9.]/g,'')); if(!isNaN(n)) q=n; }
+  if(q==null || isNaN(q)){ toast('Didn\'t catch a number — say just the quantity, e.g. "twenty four".', true); return; }
+  var box=document.getElementById('st-voice-qty'); if(box) box.value=q;
+}
+function stVoiceCancel(){ stVDone=true; try{ if(stRec) stRec.abort(); }catch(e){} stVoiceCloseListening(); }
+function stVoiceShowListening(mode){
   var old=document.getElementById('st-listen-modal'); if(old) old.remove();
+  var sub = (mode==='qty') ? 'Say just the quantity, e.g. "twenty four", then tap <b>Done</b>.' : 'Say the item and how many, then tap <b>Done</b>.';
   var b=document.createElement('div'); b.id='st-listen-modal'; b.className='st-modal';
   b.innerHTML='<div class="st-modal-box" style="text-align:center" onclick="event.stopPropagation()">'+
     '<div style="font-size:42px;line-height:1">🎤</div>'+
-    '<div style="font-weight:700;color:#410207;margin:8px 0 4px">Listening…</div>'+
-    '<div style="font-size:12px;color:#8a7a55;margin-bottom:14px">Say the item and how many<br>e.g. "Grey Goose four"</div>'+
-    '<button class="st-btn" style="flex:none" onclick="stVoiceCancel()">Cancel</button></div>';
+    '<div style="font-weight:700;color:#410207;margin:8px 0 4px">Listening… take your time</div>'+
+    '<div style="font-size:12px;color:#8a7a55;margin-bottom:8px">'+sub+'</div>'+
+    '<div id="st-listen-text" style="min-height:22px;font-size:15px;color:#2a1a10;background:#f7f1e6;border-radius:8px;padding:8px;margin-bottom:12px">…</div>'+
+    '<div style="display:flex;gap:8px;justify-content:center"><button class="st-btn" style="flex:none" onclick="stVoiceCancel()">Cancel</button>'+
+    '<button class="st-btn" style="flex:none;background:#410207;color:#f5ede0" onclick="stVoiceStop()">Done</button></div></div>';
   document.body.appendChild(b);
 }
 function stVoiceCloseListening(){ var m=document.getElementById('st-listen-modal'); if(m) m.remove(); }
@@ -941,7 +961,8 @@ function stVoiceShowConfirm(heard, qty, cands){
     '<label style="font-size:12px;color:#8a7a55">Item</label>'+
     '<select id="st-voice-item" class="st-select" style="width:100%;height:40px;margin:4px 0 12px">'+opts+'</select>'+
     '<label style="font-size:12px;color:#8a7a55">Add this many</label>'+
-    '<input id="st-voice-qty" class="st-input" inputmode="decimal" value="'+qv+'" placeholder="how many" style="width:100%;height:40px;margin:4px 0 14px">'+
+    '<div style="display:flex;gap:8px;margin:4px 0 14px"><input id="st-voice-qty" class="st-input" inputmode="decimal" value="'+qv+'" placeholder="how many" style="flex:1;height:40px">'+
+      '<button class="st-btn" style="flex:none" onclick="stVoiceStart(\'qty\')">🎤 Say number</button></div>'+
     '<div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">'+
       '<button class="st-btn" style="flex:none" onclick="document.getElementById(\'st-voice-modal\').remove()">Cancel</button>'+
       '<button class="st-btn" style="flex:none" onclick="stVoiceStart()">🎤 Try again</button>'+
