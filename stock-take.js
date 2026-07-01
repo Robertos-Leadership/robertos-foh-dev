@@ -51,7 +51,7 @@ var stItems   = [];          // [{id,item_group,code,name,unit,price,units,is_ad
 var stCounts  = {};          // item_id -> { qty, unit, counted_by, counted_by_name }
 var stUser    = null;        // { emp_id, name }  (null until signed in; persists across dept switch)
 var stSearch  = '';
-var stCatFilter = '';
+var stCatFilters = [];       // [] = all categories, else list of item_group names to show
 var stCountFilter = '';      // '' | 'counted' | 'uncounted' — which items to show
 var stSortBy = '';           // '' | 'value' — highest value first, to spot mis-entries fast
 var stUnitSel = {};          // item_id -> chosen unit (for 2-unit items)
@@ -308,7 +308,7 @@ async function stAddQty(itemId, value){
 function stFilteredItems(){
   var q = stSearch.toLowerCase();
   var out = stItems.filter(function(it){
-    if(stCatFilter && it.item_group !== stCatFilter) return false;
+    if(stCatFilters.length && stCatFilters.indexOf(it.item_group||'Other')===-1) return false;
     var c=stCounts[it.id], counted = !!(c && c.qty!=null);
     if(stCountFilter==='counted' && !counted) return false;
     if(stCountFilter==='uncounted' && counted) return false;
@@ -322,7 +322,13 @@ function stCats(){ return Array.from(new Set(stItems.map(function(i){ return i.i
 function stLineValue(it){ var c = stCounts[it.id]; if(!c||c.qty==null) return 0; return stItemPrice(it)*Number(c.qty); }
 function stGrandTotal(){ var t=0; stItems.forEach(function(it){ t+=stLineValue(it); }); return t; }
 function stCountedCount(){ var n=0; stItems.forEach(function(it){ var c=stCounts[it.id]; if(c&&c.qty!=null) n++; }); return n; }
-function stCategoryTotal(){ var t=0; stItems.forEach(function(it){ if(!stCatFilter||it.item_group===stCatFilter) t+=stLineValue(it); }); return t; }
+function stCategoryTotal(){ var t=0; stItems.forEach(function(it){ if(!stCatFilters.length||stCatFilters.indexOf(it.item_group||'Other')>-1) t+=stLineValue(it); }); return t; }
+// label for the category bar: "All categories" · a single name · "N categories"
+function stCatLabelText(){
+  if(!stCatFilters.length) return 'All categories';
+  if(stCatFilters.length===1) return stCatFilters[0];
+  return stCatFilters.length+' categories';
+}
 // once the cost controller finalizes a month, it's locked — no more entering/adjusting/clearing counts
 function stIsLocked(){ return !!(stSheet && stSheet.locked); }
 
@@ -408,9 +414,6 @@ function stRender(){
     return;
   }
   var monLabel = new Date(stMonth+'-01T12:00:00').toLocaleDateString('en-GB',{month:'long',year:'numeric'});
-  var cats = ['<option value="">All categories</option>'].concat(stCats().map(function(c){
-    return '<option value="'+stEsc(c)+'"'+(c===stCatFilter?' selected':'')+'>'+stEsc(c)+'</option>';
-  })).join('');
 
   root.innerHTML =
     deptBar +
@@ -425,7 +428,7 @@ function stRender(){
     (stPrevTotal>0 ? '<div class="st-prevtotal">Last month ('+stEsc(stPrevLabel)+') closing value: <b>'+stMoney(stPrevTotal)+'</b> · shown per item below for reference</div>' : '')+
     '<div class="st-toolbar">'+
       '<input class="st-input" id="st-search" placeholder="Search items…" value="'+stEsc(stSearch)+'" oninput="stOnSearch(this.value)" style="flex:1;min-width:140px">'+
-      '<select class="st-select" id="st-cat" onchange="stOnCat(this.value)">'+cats+'</select>'+
+      '<button class="st-select" id="st-cat-btn" onclick="stShowCatFilter()" style="text-align:left;cursor:pointer">'+stEsc(stCatLabelText())+' ▾</button>'+
       '<select class="st-select" id="st-countfilter" onchange="stOnCountFilter(this.value)">'+
         '<option value=""'+(stCountFilter===''?' selected':'')+'>All items</option>'+
         '<option value="counted"'+(stCountFilter==='counted'?' selected':'')+'>Counted only</option>'+
@@ -437,7 +440,7 @@ function stRender(){
       '</select>'+
       (stIsSuper()?'<button class="st-btn" style="flex:none" onclick="stShowUpload()">Upload month</button>':'')+
     '</div>'+
-    '<div class="st-catbar"><span id="st-catlabel">'+(stCatFilter?stEsc(stCatFilter):'All categories')+'</span>'+
+    '<div class="st-catbar"><span id="st-catlabel">'+stEsc(stCatLabelText())+'</span>'+
       '<span class="st-muted">category total <b id="st-catsub">'+stMoney(stCategoryTotal())+'</b></span></div>'+
     (stUser? '<div class="st-actions">'+
         '<button class="st-btn" onclick="stReviewSend()">Email to Aung</button>'+
@@ -526,13 +529,49 @@ function stRenderTotals(){
   var g=document.getElementById('st-grand'); if(g) g.textContent = stMoney(stGrandTotal());
   var n=document.getElementById('st-counted'); if(n) n.textContent = stCountedCount();
   var s=document.getElementById('st-catsub'); if(s) s.textContent = stMoney(stCategoryTotal());
-  var l=document.getElementById('st-catlabel'); if(l) l.textContent = stCatFilter||'All categories';
+  var l=document.getElementById('st-catlabel'); if(l) l.textContent = stCatLabelText();
+  var b=document.getElementById('st-cat-btn'); if(b) b.textContent = stCatLabelText()+' ▾';
 }
 
 // ── toolbar handlers ──
 var stSearchTimer=null;
 function stOnSearch(v){ stSearch=v; clearTimeout(stSearchTimer); stSearchTimer=setTimeout(stRenderRows,120); }
-function stOnCat(v){ stCatFilter=v; stRenderRows(); stRenderTotals(); }
+// ── category filter: pick as many categories as you like (checkbox popup) ──
+function stShowCatFilter(){
+  var old=document.getElementById('st-catf-modal'); if(old) old.remove();
+  var cats = stCats();
+  var box=document.createElement('div');
+  box.id='st-catf-modal';
+  box.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:9999';
+  var rows = cats.map(function(c){
+    var checked = stCatFilters.indexOf(c)>-1 ? ' checked' : '';
+    return '<label style="display:flex;align-items:center;gap:8px;padding:7px 4px;font-size:14px;color:#2a1a10">'+
+      '<input type="checkbox" class="st-catf-box" value="'+stEsc(c)+'"'+checked+'> '+stEsc(c)+'</label>';
+  }).join('');
+  box.innerHTML='<div style="background:#fff;border-radius:12px;padding:18px;width:90%;max-width:340px;max-height:80vh;display:flex;flex-direction:column" onclick="event.stopPropagation()">'+
+    '<div style="font-weight:700;color:#410207;margin-bottom:10px">Filter by category</div>'+
+    '<div style="overflow-y:auto;flex:1;border-top:1px solid #eee2cf;border-bottom:1px solid #eee2cf">'+rows+'</div>'+
+    '<div style="display:flex;gap:8px;justify-content:space-between;margin-top:12px">'+
+      '<button class="st-btn" onclick="stCatFilterSetAll(this)">Clear (show all)</button>'+
+      '<div style="display:flex;gap:8px">'+
+        '<button class="st-btn" onclick="document.getElementById(\'st-catf-modal\').remove()">Cancel</button>'+
+        '<button class="st-btn" onclick="stApplyCatFilter(this)">Apply</button>'+
+      '</div>'+
+    '</div></div>';
+  box.addEventListener('click', function(){ box.remove(); });
+  document.body.appendChild(box);
+}
+function stCatFilterSetAll(btn){
+  var box = btn.closest('#st-catf-modal');
+  box.querySelectorAll('.st-catf-box').forEach(function(cb){ cb.checked=false; });
+}
+function stApplyCatFilter(btn){
+  var box = btn.closest('#st-catf-modal');
+  var checked = Array.prototype.slice.call(box.querySelectorAll('.st-catf-box:checked')).map(function(cb){ return cb.value; });
+  stCatFilters = checked;
+  box.remove();
+  stRenderRows(); stRenderTotals();
+}
 function stOnCountFilter(v){ stCountFilter=v; stRenderRows(); }
 function stOnSort(v){ stSortBy=v; stRenderRows(); }
 function stFocusRow(itemId, on){ var r=document.getElementById('st-row-'+itemId); if(r) r.classList.toggle('active', on); }
@@ -541,7 +580,7 @@ function stPickUnit(itemId, unit){ stUnitSel[itemId]=unit; stUpdateRowUI(itemId)
 // switch list (beverage <-> tobacco); keeps the signed-in person
 async function stSetDept(dept){
   if(dept===stDept || stLoading) return;
-  stDept = dept; stSearch=''; stCatFilter=''; stUnitSel={};
+  stDept = dept; stSearch=''; stCatFilters=[]; stUnitSel={};
   await stOpen();
 }
 
@@ -606,7 +645,7 @@ async function stAddItem(){
   if(!name){ document.getElementById('st-add-name').focus(); return; }
   var unit=(document.getElementById('st-add-unit').value||'').trim();
   var price=Number(document.getElementById('st-add-price').value)||0;
-  var cat = stCatFilter || 'Added items';
+  var cat = stCatFilters.length===1 ? stCatFilters[0] : 'Added items';
   var maxSort = stItems.length ? Math.max.apply(null, stItems.map(function(i){ return i.sort_order||0; })) : 0;
   var res = await sb.from('stock_take_items').insert({
     venue_id:STOCK_VENUE, dept:stDept, month:stMonth, item_group:cat, code:'',
