@@ -490,6 +490,24 @@ if ('serviceWorker' in navigator) {
   .module-card.coming-soon { opacity: 0.42; cursor: default; }
   .module-card.coming-soon:hover { padding-left: 0; border-color: rgba(107,31,42,0.18); }
   .module-card.coming-soon::after { display:none; }
+  .module-section {
+    font-size: 9px;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    color: var(--gold-dim);
+    font-weight: 600;
+    padding: 26px 0 10px;
+  }
+  .module-row { display: flex; gap: 16px; align-items: center; }
+  .module-ico {
+    width: 42px; height: 42px; border-radius: 10px;
+    background: var(--vino);
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .module-ico svg { width: 20px; height: 20px; }
+  .module-row .module-name { margin-bottom: 4px; }
+  .module-row .module-desc { max-width: 400px; }
   .module-tag {
     font-size: 9px;
     letter-spacing: 0.3em;
@@ -2106,7 +2124,7 @@ if ('serviceWorker' in navigator) {
     <div class="foh-hero-content">
       <img class="foh-hero-logo" src="robertos-logo-white.svg" alt="Roberto's">
     </div>
-    <div id="foh-build" style="position:absolute;bottom:6px;right:10px;font-size:9px;letter-spacing:.08em;color:rgba(255,255,255,.4);z-index:3;font-variant-numeric:tabular-nums;">build 2026-07-02.3</div>
+    <div id="foh-build" style="position:absolute;bottom:6px;right:10px;font-size:9px;letter-spacing:.08em;color:rgba(255,255,255,.4);z-index:3;font-variant-numeric:tabular-nums;">build 2026-07-02.4</div>
   </div>
 
   <!-- main scroll area -->
@@ -2140,8 +2158,8 @@ if ('serviceWorker' in navigator) {
 
       <div onclick="fohTab('manager')" style="background:#fff;border:1px solid rgba(107,31,42,0.12);border-top:2px solid #6B1F2A;padding:16px 14px;cursor:pointer;display:flex;flex-direction:column;">
         <div style="font-size:8px;letter-spacing:.24em;text-transform:uppercase;color:#A88930;font-weight:600;margin-bottom:6px;">Live</div>
-        <div style="font-family:'Playfair Display',serif;font-size:17px;color:#2C1810;margin-bottom:5px;">Activations &amp; Reports</div>
-        <div style="font-size:11px;color:#8B7355;line-height:1.4;flex:1;">Listening Bar, Jazz Night, planning</div>
+        <div style="font-family:'Playfair Display',serif;font-size:17px;color:#2C1810;margin-bottom:5px;">Management</div>
+        <div style="font-size:11px;color:#8B7355;line-height:1.4;flex:1;">Reports, revenue, activations &amp; events</div>
         <div style="font-size:16px;color:#6B1F2A;opacity:.4;margin-top:8px;">›</div>
       </div>
 
@@ -2186,38 +2204,56 @@ if ('serviceWorker' in navigator) {
   <div class="landing-content">
     <img class="landing-brand" src="robertos-logo-burgundy.svg" alt="Roberto's">
     <div class="landing-kicker">Management Module</div>
-    <div class="landing-title"><span>Manager</span></div>
-    <div class="landing-sub">Activations planning, operational tools, and reporting for Roberto's DIFC.</div>
+    <div class="landing-title"><span>Management</span></div>
+    <div class="landing-sub">Daily reports, activations, revenue &amp; events — everything for running Roberto's DIFC.</div>
     <div class="landing-divider"></div>
     <div class="module-grid">
-      <div class="module-card" id="mod-card-events" onclick="enterApp('events')">
-        <div class="module-tag">Live</div>
-        <div class="module-name">Activations</div>
-        <div class="module-desc">The Listening Bar, Jazz Tuesdays and weekly activations.</div>
-        <div class="module-badge">Open</div>
-      </div>
+      <div class="module-section" id="sec-daily">Tonight &amp; every day</div>
       <div class="module-card" id="mod-card-operations" onclick="enterApp('operations')">
-        <div class="module-tag">Live</div>
-        <div class="module-name">Operations</div>
-        <div class="module-desc">Daily closing report — revenue, tips, comps &amp; shift notes.</div>
-        <div class="module-badge">Open</div>
+        <div class="module-row">
+          <span class="module-ico"><svg viewBox="0 0 24 24" fill="none" stroke="#E8D9C7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="m9 14 2 2 4-4"/></svg></span>
+          <div>
+            <div class="module-name">Closing Report</div>
+            <div class="module-desc">Tonight's revenue, tips, comps &amp; shift notes.</div>
+          </div>
+        </div>
       </div>
+      <div class="module-card" id="mod-card-events" onclick="enterApp('events')">
+        <div class="module-row">
+          <span class="module-ico"><svg viewBox="0 0 24 24" fill="none" stroke="#E8D9C7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></span>
+          <div>
+            <div class="module-name">Activations</div>
+            <div class="module-desc">The Listening Bar, Jazz Tuesdays &amp; weekly activations.</div>
+          </div>
+        </div>
+      </div>
+      <div class="module-section" id="sec-business">Business</div>
       <div class="module-card" id="mod-card-revenue" onclick="enterApp('revenue')">
-        <div class="module-tag">Live</div>
-        <div class="module-name">Revenue</div>
-        <div class="module-desc">Daily budget, covers, spend &amp; month-vs-month review.</div>
-        <div class="module-badge">Open</div>
+        <div class="module-row">
+          <span class="module-ico"><svg viewBox="0 0 24 24" fill="none" stroke="#E8D9C7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="12" width="4" height="8" rx="1"/><rect x="10" y="8" width="4" height="12" rx="1"/><rect x="17" y="4" width="4" height="16" rx="1"/></svg></span>
+          <div>
+            <div class="module-name">Revenue</div>
+            <div class="module-desc">Daily budget, covers, spend &amp; month-vs-month review.</div>
+          </div>
+        </div>
       </div>
       <div class="module-card" id="mod-card-stocktake" onclick="enterApp('stocktake')">
-        <div class="module-tag">Live</div>
-        <div class="module-name">Stock Take</div>
-        <div class="module-desc">Monthly beverage &amp; tobacco inventory count.</div>
-        <div class="module-badge">Open</div>
+        <div class="module-row">
+          <span class="module-ico"><svg viewBox="0 0 24 24" fill="none" stroke="#E8D9C7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.29 7 12 12 20.71 7"/><line x1="12" y1="22" x2="12" y2="12"/></svg></span>
+          <div>
+            <div class="module-name">Stock Take</div>
+            <div class="module-desc">Monthly beverage &amp; tobacco inventory count.</div>
+          </div>
+        </div>
       </div>
       <div class="module-card" id="mod-card-admin" onclick="enterApp('admin')" style="display:none;">
-        <div class="module-tag">Admin</div>
-        <div class="module-name">Admin</div>
-        <div class="module-desc">Users, access &amp; notifications.</div>
+        <div class="module-row">
+          <span class="module-ico"><svg viewBox="0 0 24 24" fill="none" stroke="#E8D9C7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>
+          <div>
+            <div class="module-name">Admin</div>
+            <div class="module-desc">Users, access &amp; notifications.</div>
+          </div>
+        </div>
         <div class="module-badge">You only</div>
       </div>
     </div>
@@ -2550,6 +2586,11 @@ function applyFohAccess(){
   });
   var ad=document.getElementById('mod-card-admin');
   if(ad) ad.style.display = (state.access && state.access.isAdmin) ? '' : 'none';
+  // Section labels hide when every module inside them is hidden for this user.
+  var s1=document.getElementById('sec-daily');
+  if(s1) s1.style.display = (!fohBlocked('operations') || !fohBlocked('events')) ? '' : 'none';
+  var s2=document.getElementById('sec-business');
+  if(s2) s2.style.display = (!fohBlocked('revenue') || !fohBlocked('stocktake')) ? '' : 'none';
 }
 async function loadFohAccess(){
   state.access=null;
@@ -5269,7 +5310,7 @@ async function chkShowHistory(){
   }
 })();
 </script>
-<script src="foh-events.js?v=2026-07-02.3"></script>
+<script src="foh-events.js?v=2026-07-02.4"></script>
 <script src="foh-revenue.js?v=2026-07-02.1"></script>
 <script src="foh-closing.js?v=2026-06-25.4"></script>
 <script src="foh-ops.js?v=2026-06-26.3"></script>

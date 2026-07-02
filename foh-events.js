@@ -134,7 +134,7 @@ function renderMain(){
   const el = document.getElementById('main-content');
   const sec = document.getElementById('topbar-section');
   const tab = state.currentTab;
-  if(sec) sec.textContent = tab==='revenue' ? 'Revenue' : (tab==='operations' ? 'Operations' : (tab==='stocktake' ? 'Stock Take' : (tab==='admin' ? 'Admin' : (tab==='dashboard' ? 'Leaders' : 'Activations'))));
+  if(sec) sec.textContent = tab==='revenue' ? 'Revenue' : (tab==='operations' ? 'Closing Report' : (tab==='stocktake' ? 'Stock Take' : (tab==='admin' ? 'Admin' : (tab==='dashboard' ? 'Leaders' : 'Activations'))));
   // Build the HTML first, then only touch the DOM if it actually changed.
   // The realtime path reloads all tables and re-renders on ANY change from ANY
   // screen — most of which don't affect the current view. Skipping an identical
