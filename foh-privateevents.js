@@ -13,6 +13,8 @@ var peState = {
   view:'list',            // list | calendar | event | library | report
   libTab:'dishes',        // dishes | bev | packages
   filter:'open',          // open | all | draft | sent | confirmed | deposit | done
+  q:'',                   // search text on the events list
+  fcFrom:null, fcTo:null, fcRun:false,
   currentId:null,
   month:null,             // YYYY-MM shown in calendar/report
   events:[], items:{},    // items: event_id -> [{id,dish_id,pcs_per_guest}]
@@ -22,6 +24,7 @@ var peState = {
   editDishId:null, editBevId:null, editPackId:null
 };
 
+var PE_TEAM_CC = ['astellacci@robertos.ae','afalcone@robertos.ae','rmazouz@robertos.ae','reservations@robertos.ae','aviscardi@robertos.ae','kvukotic@robertos.ae','asacchi@skelmore.com'];
 var PE_TARGETS = {
   cells: {'Vegetarian|Cold':7,'Fish|Cold':7,'Beef|Cold':6,'Vegetarian|Hot':7,'Fish|Hot':6,'Beef|Hot':7,'Dessert|Dessert':5},
   serve: {Cold:20, Hot:20, Dessert:5},
@@ -188,8 +191,9 @@ function peHeader(active){
 
 // ── list view ────────────────────────────────────────────────────────────────
 function peFilteredEvents(){
-  var f = peState.filter;
+  var f = peState.filter, q = (peState.q||'').toLowerCase();
   return peState.events.filter(function(e){
+    if(q && String((e.client_name||'')+' '+(e.company||'')+' '+(e.contact_name||'')).toLowerCase().indexOf(q)<0) return false;
     if(f==='all') return true;
     if(f==='open') return ['draft','sent','confirmed','deposit'].indexOf(e.status)>=0;
     return e.status===f;
@@ -206,9 +210,11 @@ function peRenderList(){
     '<button class="pe-btn sec" onclick="peQuick.qty={};peGo(\'quick\')">Quick menu</button>'+
     '<button class="pe-btn sec" onclick="peCopyGuestLink()">Guest link</button>'+
   '</div>';
-  h += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">'+filters.map(function(f){
+  h += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;align-items:center">'+filters.map(function(f){
     return '<span class="pe-tab'+(peState.filter===f[0]?' on':'')+'" style="font-size:11px;padding:4px 11px" onclick="peState.filter=\''+f[0]+'\';renderMain()">'+f[1]+'</span>';
-  }).join('')+'</div>';
+  }).join('')+
+  '<input class="pe-in" style="width:190px;margin-left:auto" placeholder="Search client or company\u2026" value="'+peEsc(peState.q||'')+'" oninput="peState.q=this.value;renderMain();var el=document.querySelectorAll(\'input[placeholder^=Search]\')[0];if(el){el.focus();el.setSelectionRange(el.value.length,el.value.length);}">'+
+  '</div>';
   h += '<div class="pe-card">';
   if(!evs.length){
     h += '<div style="text-align:center;padding:26px;color:#8B7355;font-size:13px">No events here yet. Tap “+ New event” to start a quotation.</div>';
@@ -396,7 +402,9 @@ function peRenderEvent(){
     '<div style="display:flex;flex-direction:column;gap:7px;margin-top:9px">'+
     '<button class="pe-btn" onclick="pePrintProposal(\''+e.id+'\')">Client menu / proposal</button>'+
     '<button class="pe-btn sec" onclick="pePrintFunctionSheet(\''+e.id+'\')">Function sheet</button>'+
-    '<button class="pe-btn sec" onclick="peSendCoordEmail(\''+e.id+'\')">Coordination email…</button>'+
+    '<button class="pe-btn sec" onclick="peSendCoordEmail(\''+e.id+'\')">Coordination email\u2026</button>'+
+    '<button class="pe-btn sec" onclick="peEmailProposal(\''+e.id+'\')"'+(e.contact_email?'':' disabled title="No client email on the event"')+'>Email proposal to client</button>'+
+    '<button class="pe-btn sec" onclick="peWhatsApp(\''+e.id+'\')"'+(e.contact_phone?'':' disabled title="No phone on the event"')+'>WhatsApp the client</button>'+
     '<button class="pe-btn sec" onclick="peCopyClientLink(\''+e.id+'\')">Copy client selection link</button>'+
     (e.client_selection ? '<div style="font-size:11.5px;color:#2E6B34;background:#E7F0E4;border-radius:8px;padding:8px 10px">Client picked '+((e.client_selection.dish_ids||[]).length)+' dishes'+(e.client_selection.note?' · “'+peEsc(e.client_selection.note)+'”':'')+' <span style="text-decoration:underline;cursor:pointer" onclick="peApplyClientSelection(\''+e.id+'\')">apply to event</span></div>' : '')+
     '</div></div>';
@@ -633,7 +641,8 @@ function peCoordEmailHTML(e){
 }
 async function peSendCoordEmail(id){
   var e = peEvById(id); if(!e) return;
-  var to = prompt('Coordination email — send to (comma-separated).\nTip: send to yourself first to review.', state.userEmail||'');
+  var def = (state.userEmail?state.userEmail+', ':'')+PE_TEAM_CC.join(', ');
+  var to = prompt('Coordination email \u2014 send to (comma-separated).\nThe standard team list is prefilled \u2014 remove anyone not needed.', def);
   if(to===null) return;
   var list = to.split(',').map(function(s){ return s.trim(); }).filter(function(s){ return s.indexOf('@')>0; });
   if(!list.length){ peToast('No valid recipients', true); return; }
@@ -646,6 +655,33 @@ async function peSendCoordEmail(id){
   }catch(err){
     peToast('Email NOT sent — '+String(err&&err.message||err).slice(0,120), true);
   }
+}
+async function peEmailProposal(id){
+  var e = peEvById(id); if(!e || !e.contact_email) return;
+  if(!confirm('Send the branded proposal to '+e.contact_email+' now?')) return;
+  try{
+    var r = await sb.functions.invoke('send-event-email', { body:{
+      to:[e.contact_email],
+      subject: 'Your canap\u00e9 proposal \u2014 Roberto\u2019s'+(e.event_date?' \u00b7 '+peDLabel(e.event_date):''),
+      html: peProposalHTML(e)
+    }});
+    if(r.error || (r.data&&r.data.error)) throw (r.error||r.data.error);
+    peToast('Proposal sent to '+e.contact_email+' \u2713');
+    if(e.status==='draft') peSetStatus(id, 'sent');
+    sb.from('event_log').insert({event_id:id, action:'email', detail:'proposal \u2192 '+e.contact_email, actor:peActor()}).then(function(){ peLoadLog(id); });
+  }catch(err){
+    peToast('NOT sent \u2014 '+String(err&&err.message||err).slice(0,120), true);
+  }
+}
+function peWhatsApp(id){
+  var e = peEvById(id); if(!e || !e.contact_phone) return;
+  var digits = String(e.contact_phone).replace(/[^0-9]/g,'');
+  if(digits.length && digits[0]==='0') digits = '971'+digits.slice(1);
+  if(digits.length <= 9) digits = '971'+digits;
+  var msg = 'Ciao'+(e.contact_name?' '+e.contact_name.split(' ')[0]:'')+'! Thank you for your enquiry with Roberto\u2019s'+
+    (e.event_date?' for '+peDLabel(e.event_date):'')+'. I\u2019m preparing everything for you \u2014 Valentina';
+  window.open('https://wa.me/'+digits+'?text='+encodeURIComponent(msg), '_blank');
+  sb.from('event_log').insert({event_id:id, action:'whatsapp', detail:'chat opened \u2192 '+e.contact_phone, actor:peActor()});
 }
 function peCopyClientLink(id){
   var e = peEvById(id); if(!e) return;
@@ -818,14 +854,16 @@ function peRenderBevLib(){
       '</div><div class="pe-grid2" style="margin-top:8px">'+
       '<div><div class="pe-lbl">Price / guest (AED)</div><input class="pe-in" id="pe-b-price_pp" type="number" value="'+peEsc(ed.price_pp!=null?ed.price_pp:'')+'"></div>'+
       '<div><div class="pe-lbl">Includes</div><input class="pe-in" id="pe-b-includes" value="'+peEsc(ed.includes||'')+'" placeholder="House wine, beers, soft drinks, water"></div>'+
-      '</div><div style="margin-top:10px;display:flex;gap:8px">'+
+      '</div><div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">'+
       '<button class="pe-btn" onclick="peSaveBev(\''+(ed.id||'')+'\')">Save package</button>'+
-      '<button class="pe-btn sec" onclick="peState.editBevId=null;renderMain()">Cancel</button></div></div>';
+      '<button class="pe-btn sec" onclick="peState.editBevId=null;renderMain()">Cancel</button>'+
+      (ed.id?'<button class="pe-btn sec" style="margin-left:auto;color:#B00020;border-color:#B00020" onclick="peToggleBev(\''+ed.id+'\','+(ed.active===false?'true':'false')+')">'+(ed.active===false?'Reactivate':'Retire package')+'</button>':'')+
+      '</div></div>';
   } else {
     h += '<div style="margin-bottom:10px"><button class="pe-btn" onclick="peState.editBevId=\'new\';renderMain()">+ Add a beverage package</button></div>';
   }
   h += '<div class="pe-card">'+(peState.bevs.length?peState.bevs.map(function(b){
-    return '<div class="pe-dishrow"><span><b>'+peEsc(b.name)+'</b> · '+(b.duration_hours?b.duration_hours+'h · ':'')+'AED '+peMoney(b.price_pp)+'/guest<br><span style="font-size:11px;color:#8B7355">'+peEsc(b.includes||'')+'</span></span>'+
+    return '<div class="pe-dishrow" style="opacity:'+(b.active===false?.45:1)+'"><span><b>'+peEsc(b.name)+'</b> · '+(b.duration_hours?b.duration_hours+'h · ':'')+'AED '+peMoney(b.price_pp)+'/guest<br><span style="font-size:11px;color:#8B7355">'+peEsc(b.includes||'')+'</span></span>'+
       '<button class="pe-btn sec sm" onclick="peState.editBevId=\''+b.id+'\';renderMain()">Edit</button></div>';
   }).join(''):'<div style="font-size:12px;color:#8B7355">No packages yet.</div>')+'</div>';
   return h;
@@ -841,6 +879,12 @@ async function peSaveBev(id){
   if(r.error || !r.data){ peToast('NOT saved — '+String(r.error&&r.error.message||'').slice(0,100), true); return; }
   if(id){ peState.bevs = peState.bevs.map(function(b){ return b.id===id ? r.data : b; }); } else peState.bevs.push(r.data);
   peState.editBevId = null; peToast('Beverage package saved ✓'); renderMain();
+}
+async function peToggleBev(id, active){
+  var r = await sb.from('event_bev_packages').update({active:active==='true'||active===true}).eq('id', id);
+  if(r.error){ peToast('NOT changed \u2014 check connection', true); return; }
+  peState.bevs.forEach(function(b){ if(b.id===id) b.active = (active==='true'||active===true); });
+  peState.editBevId = null; renderMain();
 }
 function peRenderPackLib(){
   var ed = peState.editPackId==='new' ? {dish_ids:[]} : (peState.editPackId ? (peState.packs.filter(function(p){return p.id===peState.editPackId;})[0]||{dish_ids:[]}) : null);
@@ -881,6 +925,85 @@ async function peSavePack(id){
 }
 
 // ── monthly report (replaces the Group Report + RLL financials) ──────────────
+function peKpis(){
+  var today = peToday();
+  var mk = peMonthKey(today);
+  var plus30 = localISO(new Date(Date.now()+30*86400000));
+  var k = { m:{n:0,v:0}, n30:{n:0,v:0}, pipe:{n:0,v:0}, ytd:{n:0,v:0} };
+  peState.events.forEach(function(e){
+    var v = peEventValue(e)||0;
+    var d = e.event_date ? String(e.event_date).slice(0,10) : null;
+    var conf = ['confirmed','deposit','done'].indexOf(e.status)>=0;
+    if(conf && d && peMonthKey(d)===mk){ k.m.n++; k.m.v+=v; }
+    if(conf && d && d>=today && d<plus30){ k.n30.n++; k.n30.v+=v; }
+    if(['draft','sent'].indexOf(e.status)>=0){ k.pipe.n++; k.pipe.v+=v; }
+    if(conf && d && d.slice(0,4)===today.slice(0,4)){ k.ytd.n++; k.ytd.v+=v; }
+  });
+  function card(lbl, v, sub){
+    return '<div class="pe-card" style="padding:11px 12px;margin-bottom:0"><div class="pe-lbl">'+lbl+'</div>'+
+      '<div style="font-family:\'Playfair Display\',serif;font-size:19px;color:#400207">AED '+peMoney(v.v)+'</div>'+
+      '<div style="font-size:11px;color:#8B7355">'+v.n+' '+sub+'</div></div>';
+  }
+  return '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:14px">'+
+    card('This month', k.m, 'confirmed events')+
+    card('Next 30 days', k.n30, 'events coming')+
+    card('Open pipeline', k.pipe, 'enquiries in play')+
+    card(new Date().getFullYear()+' to date', k.ytd, 'confirmed events')+
+  '</div>';
+}
+function peForecastData(){
+  var from = peState.fcFrom, to = peState.fcTo;
+  if(!from || !to) return null;
+  var conf={n:0,v:0}, pipe={n:0,v:0}, lost=0, rows=[];
+  peState.events.forEach(function(e){
+    var d = e.event_date ? String(e.event_date).slice(0,10) : null;
+    if(!d || d<from || d>to) return;
+    var v = peEventValue(e)||0;
+    if(['confirmed','deposit','done'].indexOf(e.status)>=0){ conf.n++; conf.v+=v; rows.push(e); }
+    else if(['draft','sent'].indexOf(e.status)>=0){ pipe.n++; pipe.v+=v; rows.push(e); }
+    else if(e.status==='lost') lost++;
+  });
+  rows.sort(function(a,b){ return String(a.event_date).localeCompare(String(b.event_date)); });
+  return { from:from, to:to, conf:conf, pipe:pipe, lost:lost, rows:rows };
+}
+function peForecastHTML(fc){
+  var rows = fc.rows.map(function(e){
+    return '<tr><td>'+peDLabel(e.event_date)+'</td><td>'+peEsc(e.client_name||'')+(e.company?' \u2014 '+peEsc(e.company):'')+'</td>'+
+      '<td>'+peEsc(e.area||'')+'</td><td>'+(e.guests||'')+'</td><td>'+peEsc(peStatusMeta(e.status).n)+'</td>'+
+      '<td style="text-align:right">'+peMoney(peEventValue(e))+'</td></tr>';
+  }).join('');
+  return '<div class="brand">R O B E R T O \u2019 S</div><div class="fs-h">EVENTS FORECAST \u2014 '+peEsc(fc.from)+' to '+peEsc(fc.to)+'</div>'+
+    '<p style="font-family:Arial,sans-serif;font-size:13px">Confirmed &amp; definite: <b>AED '+peMoney(fc.conf.v)+'</b> ('+fc.conf.n+' events) \u00b7 '+
+    'Pipeline: <b>AED '+peMoney(fc.pipe.v)+'</b> ('+fc.pipe.n+' enquiries) \u00b7 Lost: '+fc.lost+'</p>'+
+    '<table><tr><td class="l">Date</td><td class="l">Client</td><td class="l">Venue</td><td class="l">Pax</td><td class="l">Status</td><td class="l" style="text-align:right">Value AED</td></tr>'+rows+'</table>'+
+    '<div class="ft">Generated from the Events module \u00b7 '+new Date().toLocaleDateString('en-GB')+' \u00b7 values are minimum-spend or quoted package totals</div>';
+}
+function peRunForecast(){
+  var f = document.getElementById('pe-fc-from'), t2 = document.getElementById('pe-fc-to');
+  if(!f || !t2 || !f.value || !t2.value){ peToast('Pick both dates first', true); return; }
+  peState.fcFrom = f.value; peState.fcTo = t2.value; peState.fcRun = true;
+  renderMain();
+}
+function pePrintForecastDoc(){
+  var fc = peForecastData(); if(!fc) return;
+  pePrintHTML(peDocShell('Events forecast', peForecastHTML(fc)));
+}
+async function peEmailForecast(){
+  var fc = peForecastData(); if(!fc) return;
+  var def = 'asacchi@skelmore.com, '+(state.userEmail||'');
+  var to = prompt('Email this forecast to:', def);
+  if(to===null) return;
+  var list = to.split(',').map(function(s){ return s.trim(); }).filter(function(s){ return s.indexOf('@')>0; });
+  if(!list.length){ peToast('No valid recipients', true); return; }
+  try{
+    var r = await sb.functions.invoke('send-event-email', { body:{
+      to:list, subject:'Roberto\u2019s DIFC \u2014 Events forecast '+fc.from+' to '+fc.to,
+      html: peDocShell('Events forecast', peForecastHTML(fc))
+    }});
+    if(r.error || (r.data&&r.data.error)) throw (r.error||r.data.error);
+    peToast('Forecast sent to '+list.length+' recipient'+(list.length>1?'s':'')+' \u2713');
+  }catch(err){ peToast('NOT sent \u2014 '+String(err&&err.message||err).slice(0,120), true); }
+}
 function peRenderReport(){
   if(!peState.month) peState.month = peMonthKey(peToday());
   var mk = peState.month;
@@ -889,11 +1012,29 @@ function peRenderReport(){
   var groups = [
     {n:'DEF (Definite)', st:['deposit','done']},
     {n:'Confirmed without payment', st:['confirmed']},
-    {n:'Pipeline', st:['draft','sent']}
+    {n:'Pipeline', st:['draft','sent']},
+    {n:'Lost (LOS)', st:['lost']}
   ];
-  var monthEvents = peState.events.filter(function(e){ return e.event_date && peMonthKey(e.event_date)===mk && e.status!=='lost'; })
+  var monthEvents = peState.events.filter(function(e){ return e.event_date && peMonthKey(e.event_date)===mk; })
     .sort(function(a,b){ return String(a.event_date).localeCompare(String(b.event_date)); });
   var h = peHeader('report');
+  h += peKpis();
+  var fc = peState.fcRun ? peForecastData() : null;
+  h += '<div class="pe-card" style="border-color:rgba(201,168,76,0.5)">'+
+    '<div style="font-size:12.5px;color:#6B4A33;margin-bottom:8px"><b style="color:#400207">Forecast any period</b> \u2014 confirmed vs pipeline for the dates you pick:</div>'+
+    '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">'+
+    '<input class="pe-in" style="width:auto" type="date" id="pe-fc-from" value="'+peEsc(peState.fcFrom||'')+'">'+
+    '<span style="font-size:12px;color:#8B7355">to</span>'+
+    '<input class="pe-in" style="width:auto" type="date" id="pe-fc-to" value="'+peEsc(peState.fcTo||'')+'">'+
+    '<button class="pe-btn sm" onclick="peRunForecast()">Run forecast</button>'+
+    (fc?'<button class="pe-btn sec sm" onclick="pePrintForecastDoc()">Print / PDF</button>'+
+        '<button class="pe-btn sec sm" onclick="peEmailForecast()">Email report</button>':'')+
+    '</div>'+
+    (fc?'<div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:10px;font-size:12.5px;color:#5A3A1E">'+
+      '<span><b style="color:#2E6B34">Confirmed &amp; definite:</b> AED '+peMoney(fc.conf.v)+' \u00b7 '+fc.conf.n+' events</span>'+
+      '<span><b style="color:#8A6400">Pipeline:</b> AED '+peMoney(fc.pipe.v)+' \u00b7 '+fc.pipe.n+' enquiries</span>'+
+      '<span><b style="color:#933">Lost:</b> '+fc.lost+'</span></div>':'')+
+  '</div>';
   h += '<div class="pe-top" style="margin-bottom:8px"><button class="pe-btn sec sm" onclick="peCalShift(-1)">‹ Prev</button>'+
        '<div class="pe-title" style="font-size:17px">'+mLbl+'</div>'+
        '<span><button class="pe-btn sec sm" onclick="peCalShift(1)">Next ›</button> <button class="pe-btn sm" onclick="pePrintReport()">Print / PDF</button></span></div>';
