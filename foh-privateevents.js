@@ -338,6 +338,12 @@ function peRenderEvent(){
   h += '<div class="pe-steps">'+PE_STATUS.filter(function(s){return s.k!=='lost';}).map(function(s){
     return '<span class="pe-step'+(e.status===s.k?' cur':'')+'" onclick="peSetStatus(\''+e.id+'\',\''+s.k+'\')">'+s.n+'</span>';
   }).join('')+'<span class="pe-step'+(e.status==='lost'?' cur':'')+'" style="margin-left:auto" onclick="peSetStatus(\''+e.id+'\',\'lost\')">Lost</span></div>';
+  if(e.status==='lost'){
+    var lr = null;
+    log.forEach(function(l){ if(!lr && l.action==='lost') lr = String(l.detail||'').replace(/^.*?→ lost — /,''); });
+    if(!lr && peState.lostReasons) lr = peState.lostReasons[e.id];
+    h += '<div style="font-size:12px;color:#933;margin:-4px 0 10px">Lost — '+peEsc(lr||'reason not recorded')+'</div>';
+  }
 
   // facts
   h += '<div class="pe-card"><div class="pe-grid3">'+
@@ -470,6 +476,7 @@ async function peDeleteEvent(id){
 }
 async function peSetStatus(id, status){
   var e = peEvById(id); if(!e || e.status===status) return;
+  if(status==='lost'){ peAskLostReason(id); return; }
   var was = e.status;
   var r = await sb.from('events_desk').update({status:status, updated_by:peActor(), updated_at:new Date().toISOString()}).eq('id', id);
   if(r.error){ peToast('Status NOT changed — check connection', true); return; }
@@ -478,6 +485,46 @@ async function peSetStatus(id, status){
   renderMain();
   if(status==='confirmed'){
     peToast('Confirmed — the kitchen and hostess can now see this event. Send the coordination email from Documents.');
+  }
+}
+var PE_LOST_REASONS = ['Price too high','Date not available','Chose another venue','No response','Guest cancelled'];
+function peAskLostReason(id){
+  var bg = document.createElement('div'); bg.className='pe-modal-bg';
+  bg.addEventListener('click', function(ev){ if(ev.target===bg) bg.remove(); });
+  bg.innerHTML = '<div class="pe-modal" style="max-width:440px">'+
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><b style="color:#400207">Mark as lost — what happened?</b><span class="pe-x" onclick="this.closest(\'.pe-modal-bg\').remove()">✕</span></div>'+
+    '<div style="margin-bottom:8px">'+PE_LOST_REASONS.map(function(r){
+      return '<span class="pe-chip" onclick="var p=this.parentNode;p.querySelectorAll(\'.pe-chip\').forEach(function(c){c.classList.remove(\'on\')});this.classList.add(\'on\')">'+r+'</span>';
+    }).join('')+'</div>'+
+    '<div class="pe-lbl">More detail (optional when a reason above is picked)</div>'+
+    '<textarea class="pe-in" id="pe-lost-note" rows="2" placeholder="e.g. their budget was AED 150 per guest"></textarea>'+
+    '<div style="display:flex;gap:8px;margin-top:10px"><button class="pe-btn" onclick="peConfirmLost(\''+id+'\')">Mark as lost</button>'+
+    '<button class="pe-btn sec" onclick="this.closest(\'.pe-modal-bg\').remove()">Cancel</button></div></div>';
+  document.body.appendChild(bg);
+}
+async function peConfirmLost(id){
+  var bg = document.querySelector('.pe-modal-bg'); if(!bg) return;
+  var chip = bg.querySelector('.pe-chip.on');
+  var note = (bg.querySelector('#pe-lost-note')||{value:''}).value.trim();
+  var reason = [chip?chip.textContent:'', note].filter(Boolean).join(' — ');
+  if(!reason){ peToast('Pick a reason or write one — it helps us learn', true); return; }
+  var e = peEvById(id); var was = e ? e.status : '';
+  var r = await sb.from('events_desk').update({status:'lost', updated_by:peActor(), updated_at:new Date().toISOString()}).eq('id', id);
+  if(r.error){ peToast('Status NOT changed — check connection', true); return; }
+  if(e) e.status = 'lost';
+  if(peState.lostReasons) peState.lostReasons[id] = reason;
+  bg.remove();
+  sb.from('event_log').insert({event_id:id, action:'lost', detail:(was?was+' → lost — ':'')+reason.slice(0,300), actor:peActor()}).then(function(){ peLoadLog(id); });
+  peToast('Marked as lost — reason saved');
+  renderMain();
+}
+async function peLoadLostReasons(){
+  if(peState.lostReasons) return;
+  peState.lostReasons = {};
+  var r = await sb.from('event_log').select('event_id,detail,created_at').eq('action','lost').order('created_at',{ascending:true});
+  if(!r.error && r.data && r.data.length){
+    r.data.forEach(function(l){ peState.lostReasons[l.event_id] = String(l.detail||'').replace(/^.*?→ lost — /,''); });
+    renderMain();
   }
 }
 async function peAddFollowup(id){
@@ -1059,17 +1106,20 @@ function peRenderReport(){
     if(e.event_date && peMonthKey(e.event_date)===mk) mtot += v;
   });
   groups.forEach(function(g){
+    var isLost = g.st.length===1 && g.st[0]==='lost';
+    if(isLost && !peState.lostReasons) peLoadLostReasons();
     var list = monthEvents.filter(function(e){ return g.st.indexOf(e.status)>=0; });
     h += '<div class="pe-lbl" style="margin:14px 0 6px;font-size:11px">'+g.n+' ('+list.length+')</div>';
-    h += '<div class="pe-card" style="overflow-x:auto"><table class="pe-report"><tr><th>Date</th><th>Name / Company</th><th>Venue</th><th>Type</th><th>Time</th><th>Pax</th><th>Package</th><th>Min spend</th><th>Contact</th></tr>';
-    if(!list.length) h += '<tr><td colspan="9" style="color:#8B7355">—</td></tr>';
+    h += '<div class="pe-card" style="overflow-x:auto"><table class="pe-report"><tr><th>Date</th><th>Name / Company</th><th>Venue</th><th>Type</th><th>Time</th><th>Pax</th><th>Package</th><th>Min spend</th><th>Contact</th>'+(isLost?'<th>Why lost</th>':'')+'</tr>';
+    if(!list.length) h += '<tr><td colspan="'+(isLost?10:9)+'" style="color:#8B7355">—</td></tr>';
     list.forEach(function(e){
       h += '<tr style="cursor:pointer" onclick="peGo(\'event\',\''+e.id+'\')"><td>'+peDLabel(e.event_date)+'</td>'+
         '<td>'+peEsc(e.client_name||'')+(e.company?'<br><span style="color:#8B7355">'+peEsc(e.company)+'</span>':'')+'</td>'+
         '<td>'+peEsc(e.area||'')+'</td><td>'+peEsc(e.event_type||'')+'</td><td>'+peEsc(e.time_from||'')+'</td>'+
         '<td>'+(e.guests||'')+'</td><td>'+peEsc(e.package_label||'')+'</td>'+
         '<td>'+(e.min_spend?peMoney(e.min_spend):'')+'</td>'+
-        '<td>'+peEsc(e.contact_name||'')+(e.contact_phone?'<br>'+peEsc(e.contact_phone):'')+'</td></tr>';
+        '<td>'+peEsc(e.contact_name||'')+(e.contact_phone?'<br>'+peEsc(e.contact_phone):'')+'</td>'+
+        (isLost?'<td>'+peEsc((peState.lostReasons||{})[e.id]||'')+'</td>':'')+'</tr>';
     });
     h += '</table></div>';
   });
