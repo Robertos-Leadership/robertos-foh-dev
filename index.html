@@ -454,33 +454,7 @@ if ('serviceWorker' in navigator) {
     flex-direction: column;
     max-width: 620px;
     width: 100%;
-    border-top: 1px solid rgba(107,31,42,0.18);
   }
-  .module-card {
-    background: transparent;
-    border-bottom: 1px solid rgba(107,31,42,0.18);
-    padding: 12px 0;
-    cursor: pointer;
-    transition: padding 0.2s, border-color 0.2s;
-    position: relative;
-    overflow: hidden;
-  }
-  .module-card::after {
-    content:'->';
-    position:absolute;
-    right:0;
-    top:16px;
-    color: var(--vino);
-    font-size: 18px;
-    transform: translateX(-8px);
-    opacity: 0;
-    transition: opacity 0.2s, transform 0.2s;
-  }
-  .module-card:hover { padding-left: 10px; border-color: rgba(107,31,42,0.36); }
-  .module-card:hover::after { opacity: 1; transform: translateX(0); }
-  .module-card.coming-soon { opacity: 0.42; cursor: default; }
-  .module-card.coming-soon:hover { padding-left: 0; border-color: rgba(107,31,42,0.18); }
-  .module-card.coming-soon::after { display:none; }
   .module-section {
     font-size: 9px;
     letter-spacing: 0.3em;
@@ -489,44 +463,71 @@ if ('serviceWorker' in navigator) {
     font-weight: 600;
     padding: 16px 0 8px;
   }
-  .module-row { display: flex; gap: 16px; align-items: center; }
+  .module-duo {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .module-card {
+    background: #fff;
+    border: 1px solid rgba(107,31,42,0.14);
+    border-top: 2px solid var(--vino);
+    border-radius: 0 0 10px 10px;
+    padding: 13px 14px;
+    cursor: pointer;
+    transition: border-color 0.2s, transform 0.15s;
+  }
+  .module-card:hover { border-color: rgba(107,31,42,0.4); transform: translateY(-1px); }
+  .module-row { display: flex; gap: 11px; align-items: center; margin-bottom: 6px; }
   .module-ico {
-    width: 36px; height: 36px; border-radius: 9px;
-    background: var(--vino);
+    width: 36px; height: 36px; border-radius: 50%;
+    border: 1px solid var(--gold);
     display: flex; align-items: center; justify-content: center;
     flex-shrink: 0;
   }
-  .module-ico svg { width: 18px; height: 18px; }
-  .module-row .module-name { margin-bottom: 4px; }
-  .module-row .module-desc { max-width: 400px; }
-  .module-tag {
-    font-size: 9px;
-    letter-spacing: 0.3em;
-    text-transform: uppercase;
-    color: var(--gold-dim);
-    margin-bottom: 8px;
+  .module-mono {
+    font-family: 'Playfair Display', serif;
+    font-style: italic;
+    font-size: 18px;
+    color: var(--vino);
+    line-height: 1;
   }
   .module-name {
     font-family: 'Playfair Display', serif;
-    font-size: 18px;
+    font-size: 16px;
     color: var(--vino-dark);
-    margin-bottom: 8px;
   }
   .module-desc {
-    font-size: 12px;
+    font-size: 11px;
     color: var(--text-light);
     line-height: 1.45;
-    max-width: 430px;
   }
-  .module-badge {
-    display: inline-block;
+  .module-stat {
+    font-size: 11px;
+    color: #7A5C1E;
     margin-top: 8px;
+    min-height: 14px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .module-stat .dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+  .module-card.module-admin {
+    display: flex; align-items: center; gap: 8px;
+    background: rgba(255,255,255,0.6);
+    border: 1px dashed rgba(107,31,42,0.25);
+    border-radius: 10px;
+    border-top: 1px dashed rgba(107,31,42,0.25);
+    padding: 10px 14px;
+    margin-top: 14px;
+  }
+  .module-admin .module-name { font-size: 13px; font-family: inherit; color: var(--text-light); }
+  .module-badge {
     font-size: 9px;
     letter-spacing: 0.2em;
     text-transform: uppercase;
-    color: var(--vino);
-    border: 1px solid rgba(107,31,42,0.22);
-    padding: 3px 8px;
+    color: var(--gold-dim);
+    margin-left: auto;
   }
 
   /* -- FOH HERO HEADER -- */
@@ -2109,7 +2110,7 @@ if ('serviceWorker' in navigator) {
     <div class="foh-hero-content">
       <img class="foh-hero-logo" src="robertos-logo-white.svg" alt="Roberto's">
     </div>
-    <div id="foh-build" style="position:absolute;bottom:6px;right:10px;font-size:9px;letter-spacing:.08em;color:rgba(255,255,255,.4);z-index:3;font-variant-numeric:tabular-nums;">build 2026-07-02.5</div>
+    <div id="foh-build" style="position:absolute;bottom:6px;right:10px;font-size:9px;letter-spacing:.08em;color:rgba(255,255,255,.4);z-index:3;font-variant-numeric:tabular-nums;">build 2026-07-02.6</div>
   </div>
 
   <!-- main scroll area -->
@@ -2194,52 +2195,47 @@ if ('serviceWorker' in navigator) {
     <div class="landing-divider"></div>
     <div class="module-grid">
       <div class="module-section" id="sec-daily">Tonight &amp; every day</div>
-      <div class="module-card" id="mod-card-operations" onclick="enterApp('operations')">
-        <div class="module-row">
-          <span class="module-ico"><svg viewBox="0 0 24 24" fill="none" stroke="#E8D9C7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="m9 14 2 2 4-4"/></svg></span>
-          <div>
+      <div class="module-duo">
+        <div class="module-card" id="mod-card-operations" onclick="enterApp('operations')">
+          <div class="module-row">
+            <span class="module-ico"><span class="module-mono">C</span></span>
             <div class="module-name">Closing Report</div>
-            <div class="module-desc">Tonight's revenue, tips, comps &amp; shift notes.</div>
           </div>
+          <div class="module-desc">Tonight's revenue, tips, comps &amp; shift notes.</div>
+          <div class="module-stat" id="hubstat-operations"></div>
         </div>
-      </div>
-      <div class="module-card" id="mod-card-events" onclick="enterApp('events')">
-        <div class="module-row">
-          <span class="module-ico"><svg viewBox="0 0 24 24" fill="none" stroke="#E8D9C7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></span>
-          <div>
+        <div class="module-card" id="mod-card-events" onclick="enterApp('events')">
+          <div class="module-row">
+            <span class="module-ico"><span class="module-mono">A</span></span>
             <div class="module-name">Activations</div>
-            <div class="module-desc">The Listening Bar, Jazz Tuesdays &amp; weekly activations.</div>
           </div>
+          <div class="module-desc">The Listening Bar, Jazz Tuesdays &amp; weekly nights.</div>
+          <div class="module-stat" id="hubstat-events"></div>
         </div>
       </div>
       <div class="module-section" id="sec-business">Business</div>
-      <div class="module-card" id="mod-card-revenue" onclick="enterApp('revenue')">
-        <div class="module-row">
-          <span class="module-ico"><svg viewBox="0 0 24 24" fill="none" stroke="#E8D9C7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="12" width="4" height="8" rx="1"/><rect x="10" y="8" width="4" height="12" rx="1"/><rect x="17" y="4" width="4" height="16" rx="1"/></svg></span>
-          <div>
+      <div class="module-duo">
+        <div class="module-card" id="mod-card-revenue" onclick="enterApp('revenue')">
+          <div class="module-row">
+            <span class="module-ico"><span class="module-mono">R</span></span>
             <div class="module-name">Revenue</div>
-            <div class="module-desc">Daily budget, covers, spend &amp; month-vs-month review.</div>
           </div>
+          <div class="module-desc">Daily budget, covers, spend &amp; month review.</div>
+          <div class="module-stat" id="hubstat-revenue"></div>
         </div>
-      </div>
-      <div class="module-card" id="mod-card-stocktake" onclick="enterApp('stocktake')">
-        <div class="module-row">
-          <span class="module-ico"><svg viewBox="0 0 24 24" fill="none" stroke="#E8D9C7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.29 7 12 12 20.71 7"/><line x1="12" y1="22" x2="12" y2="12"/></svg></span>
-          <div>
+        <div class="module-card" id="mod-card-stocktake" onclick="enterApp('stocktake')">
+          <div class="module-row">
+            <span class="module-ico"><span class="module-mono">S</span></span>
             <div class="module-name">Stock Take</div>
-            <div class="module-desc">Monthly beverage &amp; tobacco inventory count.</div>
           </div>
+          <div class="module-desc">Monthly beverage &amp; tobacco count.</div>
+          <div class="module-stat" id="hubstat-stocktake"></div>
         </div>
       </div>
-      <div class="module-card" id="mod-card-admin" onclick="enterApp('admin')" style="display:none;">
-        <div class="module-row">
-          <span class="module-ico"><svg viewBox="0 0 24 24" fill="none" stroke="#E8D9C7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>
-          <div>
-            <div class="module-name">Admin</div>
-            <div class="module-desc">Users, access &amp; notifications.</div>
-          </div>
-        </div>
-        <div class="module-badge">You only</div>
+      <div class="module-card module-admin" id="mod-card-admin" onclick="enterApp('admin')" style="display:none;">
+        <span class="module-ico" style="width:26px;height:26px;"><span class="module-mono" style="font-size:13px;">A</span></span>
+        <span class="module-name">Admin &mdash; users &amp; access</span>
+        <span class="module-badge">You only</span>
       </div>
     </div>
     <div class="landing-signout">
@@ -2576,6 +2572,62 @@ function applyFohAccess(){
   if(s1) s1.style.display = (!fohBlocked('operations') || !fohBlocked('events')) ? '' : 'none';
   var s2=document.getElementById('sec-business');
   if(s2) s2.style.display = (!fohBlocked('revenue') || !fohBlocked('stocktake')) ? '' : 'none';
+  try{ fohLoadHubStats(); }catch(e){}
+}
+// ── Landing live stats: one small fact per module card. Cards render instantly;
+// these fill in afterwards. Every stat is independent and fails silently — a
+// broken query just leaves that card without a status line, never an error.
+var _hubStatsAt = 0;
+async function fohLoadHubStats(){
+  if(Date.now() - _hubStatsAt < 60000) return;
+  _hubStatsAt = Date.now();
+  function setStat(key, dot, txt){
+    var el = document.getElementById('hubstat-'+key);
+    if(el) el.innerHTML = '<span class="dot" style="background:'+dot+'"></span><span>'+txt+'</span>';
+  }
+  try{
+    var r = await sb.from('closing_reports').select('service_date,rest_lunch_net,rest_dinner_net,lounge_lunch_net,lounge_dinner_net').order('service_date',{ascending:false}).limit(1);
+    if(!r.error && r.data && r.data[0]){
+      var row = r.data[0];
+      var net = Number(row.rest_lunch_net||0)+Number(row.rest_dinner_net||0)+Number(row.lounge_lunch_net||0)+Number(row.lounge_dinner_net||0);
+      var y = new Date(); y.setDate(y.getDate()-1);
+      var fresh = String(row.service_date).slice(0,10) >= localISO(y);
+      var dLbl = new Date(String(row.service_date).slice(0,10)+'T12:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short'});
+      setStat('operations', fresh?'#2E6B34':'#B00020', (fresh?'Last night':'Last report '+dLbl)+' \u00b7 AED '+Math.round(net).toLocaleString('en-US'));
+    }
+  }catch(e){}
+  try{
+    var wd = new Date().toLocaleDateString('en-GB',{weekday:'long'});
+    var r2 = await sb.from('events').select('name,day_of_week,status').limit(50);
+    if(!r2.error && r2.data){
+      var tonight = r2.data.filter(function(e){ return e.day_of_week===wd && (e.status||'active')!=='paused'; });
+      if(tonight.length) setStat('events', '#A88930', 'Tonight: '+tonight.map(function(e){ return e.name; }).join(' \u00b7 '));
+      else setStat('events', '#8B7355', 'Nothing scheduled tonight');
+    }
+  }catch(e){}
+  try{
+    var t = new Date();
+    var mStart = t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-01';
+    var r3 = await sb.from('rev_daily').select('service_date,net_actual').gte('service_date',mStart).lte('service_date',localISO(t)).limit(400);
+    if(!r3.error && r3.data && r3.data.length){
+      var mtd = 0, has = false;
+      r3.data.forEach(function(d){ if(d.net_actual!=null){ mtd += Number(d.net_actual); has = true; } });
+      if(has) setStat('revenue', '#A88930', t.toLocaleDateString('en-GB',{month:'long'})+' to date \u00b7 AED '+Math.round(mtd).toLocaleString('en-US'));
+    }
+  }catch(e){}
+  try{
+    var s = await sb.from('stock_take_sheets').select('month').eq('venue_id','robertos-difc').order('month',{ascending:false}).limit(1);
+    if(!s.error && s.data && s.data[0]){
+      var mo = s.data[0].month;
+      var t2 = new Date();
+      var eom = new Date(t2.getFullYear(), t2.getMonth()+1, 0);
+      var left = Math.max(0, Math.ceil((eom - t2)/86400000));
+      var cRes = await sb.from('stock_take_counts').select('item_id',{count:'exact',head:true}).eq('venue_id','robertos-difc').eq('dept','beverage').eq('month',mo);
+      var iRes = await sb.from('stock_take_items').select('id',{count:'exact',head:true}).eq('venue_id','robertos-difc').eq('dept','beverage').eq('month',mo).eq('active',true);
+      var prog = (cRes.count!=null && iRes.count) ? Math.min(cRes.count, iRes.count)+'/'+iRes.count+' counted \u00b7 ' : '';
+      setStat('stocktake', left<=3?'#B00020':'#A88930', prog+'month-end in '+left+(left===1?' day':' days'));
+    }
+  }catch(e){}
 }
 async function loadFohAccess(){
   state.access=null;
