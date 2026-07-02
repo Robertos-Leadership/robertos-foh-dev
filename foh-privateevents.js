@@ -707,7 +707,7 @@ function peRenderDishLib(){
       '<div style="grid-column:1/3"><div class="pe-lbl">Dish name</div><input class="pe-in" id="pe-d-name" value="'+peEsc(ed.name||'')+'"></div>'+
       '<div><div class="pe-lbl">Cost (AED, net)</div><input class="pe-in" id="pe-d-cost" type="number" step="0.01" value="'+peEsc(ed.cost!=null?ed.cost:'')+'"></div>'+
       '</div><div class="pe-grid3" style="margin-top:8px">'+
-      '<div><div class="pe-lbl">Category</div><select class="pe-in" id="pe-d-category">'+['Vegetarian','Fish','Beef','Dessert'].map(function(c){ return '<option'+(ed.category===c?' selected':'')+'>'+c+'</option>'; }).join('')+'</select></div>'+
+      '<div><div class="pe-lbl">Category</div><select class="pe-in" id="pe-d-category">'+['Vegetarian','Fish','Beef','Chicken','Dessert'].map(function(c){ return '<option'+(ed.category===c?' selected':'')+'>'+c+'</option>'; }).join('')+'</select></div>'+
       '<div><div class="pe-lbl">Served</div><select class="pe-in" id="pe-d-serve">'+['Cold','Hot','Dessert'].map(function(c){ return '<option'+(ed.serve===c?' selected':'')+'>'+c+'</option>'; }).join('')+'</select></div>'+
       '<div><div class="pe-lbl">Min order (pcs)</div><input class="pe-in" id="pe-d-min_order" type="number" value="'+peEsc(ed.min_order!=null?ed.min_order:10)+'"></div>'+
       '</div>'+
@@ -914,7 +914,7 @@ function pePrintReport(){
 // ── quick menu: the Excel selector, reborn — priced table, qty per dish,
 //    live totals and the same warnings Valentina already knows ──────────────
 function peQuickGroups(){
-  var order = [['Vegetarian','Cold'],['Fish','Cold'],['Beef','Cold'],['Vegetarian','Hot'],['Fish','Hot'],['Beef','Hot'],['Dessert','Dessert']];
+  var order = [['Vegetarian','Cold'],['Fish','Cold'],['Beef','Cold'],['Chicken','Cold'],['Vegetarian','Hot'],['Fish','Hot'],['Beef','Hot'],['Chicken','Hot'],['Dessert','Dessert']];
   return order.map(function(o){
     return { label: (o[0]==='Dessert' ? 'Dolci' : o[0]+' \u00b7 '+o[1]),
              dishes: peState.dishes.filter(function(d){ return d.active && d.category===o[0] && d.serve===o[1]; }) };
