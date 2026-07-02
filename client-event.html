@@ -45,6 +45,7 @@ var FN_BASE = 'https://paoaivwtkzujmrgrfjuq.supabase.co/functions/v1/event-clien
 var token = new URLSearchParams(location.search).get('t') || '';
 var picked = {};
 var guestCount = 0;
+var dishById = {};
 function allowedDishes(g){ return g>=30 ? 15 : (g>=20 ? 8 : (g>=15 ? 5 : 0)); }
 function pickedCount(){ return Object.keys(picked).filter(function(k){ return picked[k]; }).length; }
 
@@ -66,6 +67,7 @@ async function load(){
 
 function render(data){
   var ev = data.event || {};
+  (data.dishes||[]).forEach(function(d){ dishById[d.id] = d; });
   (data.preselected||[]).forEach(function(id){ picked[id] = true; });
   if(data.selection && data.selection.dish_ids) (data.selection.dish_ids).forEach(function(id){ picked[id] = true; });
   var groups = [['Cold','Cold canapés'],['Hot','Hot canapés'],['Dessert','Dolci']];
@@ -78,7 +80,8 @@ function render(data){
   if(!open && ev.guests) guestCount = Number(ev.guests)||0;
   h += '<div class="gbox"><div style="font-size:12px;color:#8A6A4F;margin-bottom:5px">How many guests will you be? <span style="color:#A5876B">(canapé events start from 15)</span></div>'+
     '<input class="fld" id="cl-gcount" type="number" min="15" placeholder="Number of guests" value="'+(guestCount||'')+'" oninput="onGuests(this.value)" style="margin-bottom:4px">'+
-    '<div id="cl-allow" style="font-size:12.5px;color:#400207;font-family:Arial,sans-serif;min-height:17px"></div></div>';
+    '<div id="cl-allow" style="font-size:12.5px;color:#400207;font-family:Arial,sans-serif;min-height:17px"></div>'+
+    '<div id="cl-total" style="font-size:12.5px;color:#400207;font-family:Arial,sans-serif;margin-top:4px"></div></div>';
   groups.forEach(function(g){
     var list = (data.dishes||[]).filter(function(d){ return d.serve===g[0]; });
     if(!list.length) return;
@@ -88,7 +91,7 @@ function render(data){
           '<span class="box"><svg viewBox="0 0 24 24"><path d="M4 12l5 5L20 7"/></svg></span>'+
           '<span style="flex:1"><span class="nm">'+esc(d.name)+((d.allergens||[]).length?' <span class="cd">('+(d.allergens||[]).join(')(')+')</span>':'')+'</span>'+
           (d.description?'<br><span class="ds">'+esc(d.description)+'</span>':'')+'</span>'+
-          (d.sell_price!=null?'<span class="pr">AED '+Math.round(Number(d.sell_price))+'<br><span style="font-size:9px">per piece</span></span>':'')+'</div>';
+          (d.sell_price!=null?'<span class="pr">AED '+Math.round(Number(d.sell_price))+' <span style="font-size:9px">/pc</span><br><span style="font-size:9px;color:#A5876B">min '+(d.min_order||10)+' pcs</span></span>':'')+'</div>';
       }).join('')+'</div>';
   });
   if(open){
@@ -150,6 +153,20 @@ function counts(){
   if(al && guestCount >= 15){
     var cap = allowedDishes(guestCount);
     al.textContent = pickedCount()+' of '+cap+' canapés picked — '+guestCount+' guests.';
+  }
+  var tl = el('cl-total');
+  if(tl){
+    var total = 0, any = false;
+    Object.keys(picked).forEach(function(k){
+      if(!picked[k] || !dishById[k]) return;
+      var d = dishById[k];
+      total += (Number(d.sell_price)||0) * Math.max(guestCount, Number(d.min_order)||10);
+      any = true;
+    });
+    if(any && guestCount >= 15){
+      tl.innerHTML = '<b>Estimated total: AED '+Math.round(total).toLocaleString('en-US')+'</b> · about AED '+Math.round(total/guestCount).toLocaleString('en-US')+' per guest'+
+        '<br><span style="font-size:10.5px;color:#A5876B">Based on one piece per guest of each canapé (minimum quantities apply) — Valentina will confirm your final quote.</span>';
+    } else tl.innerHTML = '';
   }
 }
 async function send(){
