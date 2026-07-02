@@ -25,6 +25,7 @@
   .ds{font-size:12px;color:#8A6A4F}
   .note{margin:18px 22px 0}
   .note textarea{width:100%;box-sizing:border-box;border:1px solid #C9AD96;border-radius:8px;background:#fff;padding:9px 10px;font-family:Arial,sans-serif;font-size:13px;min-height:64px;resize:vertical}
+  .fld{width:100%;box-sizing:border-box;border:1px solid #C9AD96;border-radius:8px;background:#fff;padding:9px 10px;font-family:Arial,sans-serif;font-size:13px;margin-bottom:8px}
   .btnrow{padding:20px 22px 26px}
   .btn{width:100%;background:#400207;color:#E8D9C7;border:none;border-radius:9px;padding:14px;font-size:14px;font-family:Georgia,serif;letter-spacing:1px;cursor:pointer}
   .btn:disabled{opacity:.55}
@@ -49,9 +50,8 @@ function fail(msg){
 }
 
 async function load(){
-  if(!token) return fail('This link is incomplete — please use the link exactly as it was sent to you.');
   try{
-    var r = await fetch(FN_BASE + '?t=' + encodeURIComponent(token));
+    var r = await fetch(FN_BASE + (token ? '?t=' + encodeURIComponent(token) : ''));
     var data = await r.json();
     if(!r.ok || data.error) return fail(data.error || 'This link is no longer available.');
     render(data);
@@ -64,9 +64,11 @@ function render(data){
   if(data.selection && data.selection.dish_ids) (data.selection.dish_ids).forEach(function(id){ picked[id] = true; });
   var groups = [['Cold','Cold canapés'],['Hot','Hot canapés'],['Dessert','Dolci']];
   var dt = ev.event_date ? new Date(ev.event_date+'T12:00:00').toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'}) : '';
+  var open = data.mode==='open';
   var h = '<div class="brand">R O B E R T O ’ S</div>'+
-    '<div class="sub">Canapé selection for your event</div>'+
-    '<div class="sub2">'+esc([ev.client_name||ev.company, dt, ev.area].filter(Boolean).join(' · '))+(ev.guests?' · '+ev.guests+' guests':'')+'</div>';
+    '<div class="sub">'+(open?'Our canapé selection — pick your favourites':'Canapé selection for your event')+'</div>'+
+    (open ? '<div class="sub2">Tick what you like and send it to us — Valentina will take care of the rest.</div>'
+          : '<div class="sub2">'+esc([ev.client_name||ev.company, dt, ev.area].filter(Boolean).join(' · '))+(ev.guests?' · '+ev.guests+' guests':'')+'</div>');
   groups.forEach(function(g){
     var list = (data.dishes||[]).filter(function(d){ return d.serve===g[0]; });
     if(!list.length) return;
@@ -78,6 +80,14 @@ function render(data){
           (d.description?'<br><span class="ds">'+esc(d.description)+'</span>':'')+'</span></div>';
       }).join('')+'</div>';
   });
+  if(open){
+    h += '<div class="note"><div style="font-size:12px;color:#8A6A4F;margin-bottom:5px">So we can come back to you</div>'+
+      '<input class="fld" id="cl-name" placeholder="Your name" maxlength="120">'+
+      '<div style="display:flex;gap:8px"><input class="fld" id="cl-phone" placeholder="Phone" maxlength="40" style="flex:1">'+
+      '<input class="fld" id="cl-email" placeholder="Email" maxlength="120" style="flex:1.4"></div>'+
+      '<div style="display:flex;gap:8px"><input class="fld" id="cl-date" type="date" title="Event date (optional)" style="flex:1">'+
+      '<input class="fld" id="cl-guests" type="number" placeholder="Guests (approx.)" style="flex:1"></div></div>';
+  }
   h += '<div class="note"><div style="font-size:12px;color:#8A6A4F;margin-bottom:5px">Anything we should know? Allergies, favourites, the occasion…</div>'+
        '<textarea id="cl-note" maxlength="900">'+esc(data.selection&&data.selection.note||'')+'</textarea></div>';
   h += '<div class="btnrow"><button class="btn" id="cl-send" onclick="send()">Send selection to Roberto’s</button>'+
@@ -103,10 +113,21 @@ function counts(){
 async function send(){
   var ids = Object.keys(picked).filter(function(k){ return picked[k]; });
   if(!ids.length){ alert('Pick at least one canapé first.'); return; }
+  var payload = { dish_ids:ids, note:(el('cl-note')||{}).value||'' };
+  if(token){ payload.t = token; }
+  else {
+    payload.name = (el('cl-name')||{}).value||'';
+    payload.phone = (el('cl-phone')||{}).value||'';
+    payload.email = (el('cl-email')||{}).value||'';
+    payload.event_date = (el('cl-date')||{}).value||'';
+    payload.guests = (el('cl-guests')||{}).value||'';
+    if(!payload.name.trim()){ alert('Please tell us your name.'); return; }
+    if(!payload.phone.trim() && !payload.email.trim()){ alert('Please leave a phone number or email so we can reach you.'); return; }
+  }
   var btn = el('cl-send'); btn.disabled = true; btn.textContent = 'Sending…';
   try{
     var r = await fetch(FN_BASE, { method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ t:token, dish_ids:ids, note:(el('cl-note')||{}).value||'' }) });
+      body: JSON.stringify(payload) });
     var data = await r.json();
     if(!r.ok || data.error) throw new Error(data.error||'failed');
     el('card').innerHTML = '<div class="brand">R O B E R T O ’ S</div>'+

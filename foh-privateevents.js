@@ -172,7 +172,8 @@ function peHeader(active){
     '<div class="pe-tabs">'+tabs.map(function(t){
       return '<span class="pe-tab'+(active===t[0]?' on':'')+'" onclick="peGo(\''+t[0]+'\')">'+t[1]+'</span>';
     }).join('')+'</div>'+
-    '<span style="display:flex;gap:8px"><button class="pe-btn sec" onclick="peQuick.qty={};peGo(\'quick\')">Quick menu</button>'+
+    '<span style="display:flex;gap:8px;flex-wrap:wrap"><button class="pe-btn sec" onclick="peCopyGuestLink()">Guest link</button>'+
+    '<button class="pe-btn sec" onclick="peQuick.qty={};peGo(\'quick\')">Quick menu</button>'+
     '<button class="pe-btn" onclick="peNewEvent()">+ New event</button></span>'+
   '</div>';
 }
@@ -1039,4 +1040,15 @@ async function peQuickSave(){
   peQuick.qty = {};
   peToast('Saved as a draft event \u2014 add the client details when ready');
   peGo('event', r.data.id);
+}
+
+
+// the standing guest link: full canape selection, no event needed — a guest
+// enquiry from it arrives as a new draft with the selection attached
+function peCopyGuestLink(){
+  var base = location.origin + location.pathname.replace(/[^\/]*$/, '');
+  var url = base + 'client-event.html';
+  (navigator.clipboard ? navigator.clipboard.writeText(url) : Promise.reject()).then(function(){
+    peToast('Guest link copied — send it to anyone; their picks arrive here as a new draft');
+  }).catch(function(){ prompt('Copy this link:', url); });
 }
