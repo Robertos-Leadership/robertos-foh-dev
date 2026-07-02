@@ -104,7 +104,10 @@ function render(data){
       '<input class="fld" id="cl-name" placeholder="Your name" maxlength="120">'+
       '<div style="display:flex;gap:8px"><input class="fld" id="cl-phone" placeholder="Phone" maxlength="40" style="flex:1">'+
       '<input class="fld" id="cl-email" placeholder="Email" maxlength="120" style="flex:1.4"></div>'+
-      '<input class="fld" id="cl-date" type="date" title="Event date (optional)"></div>';
+      '<div style="font-size:12px;color:#8A6A4F;margin:2px 0 5px">When is your event?</div>'+
+      '<div style="display:flex;gap:8px"><input class="fld" id="cl-date" type="date" style="flex:1.2">'+
+      '<input class="fld" id="cl-time" type="time" title="Preferred start time" style="flex:1"></div>'+
+      '<div style="font-size:10.5px;color:#A5876B;margin-top:-2px">Canap\u00e9 receptions run up to 3 hours from your start time.</div></div>';
   }
   h += '<div class="note"><div style="font-size:12px;color:#8A6A4F;margin-bottom:5px">Anything we should know? Allergies, favourites, the occasion…</div>'+
        '<textarea id="cl-note" maxlength="900">'+esc(data.selection&&data.selection.note||'')+'</textarea></div>';
@@ -212,8 +215,12 @@ async function send(){
     payload.phone = (el('cl-phone')||{}).value||'';
     payload.email = (el('cl-email')||{}).value||'';
     payload.event_date = (el('cl-date')||{}).value||'';
+    payload.time_from = (el('cl-time')||{}).value||'';
     if(!payload.name.trim()){ alert('Please tell us your name.'); return; }
     if(!payload.phone.trim() && !payload.email.trim()){ alert('Please leave a phone number or email so we can reach you.'); return; }
+    if(!payload.event_date){ alert('Please tell us the date of your event.'); return; }
+    var todayISO = new Date().getFullYear()+'-'+String(new Date().getMonth()+1).padStart(2,'0')+'-'+String(new Date().getDate()).padStart(2,'0');
+    if(payload.event_date < todayISO){ alert('Please pick a date in the future.'); return; }
   }
   var btn = el('cl-send'); btn.disabled = true; btn.textContent = 'Sending…';
   try{
