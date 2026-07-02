@@ -384,7 +384,7 @@ if ('serviceWorker' in navigator) {
     flex-direction: column;
     justify-content: center;
     padding: 28px clamp(20px, 5vw, 48px);
-    max-width: 760px;
+    max-width: 860px;
     margin: 0 auto;
     width: 100%;
   }
@@ -452,82 +452,113 @@ if ('serviceWorker' in navigator) {
   .module-grid {
     display: flex;
     flex-direction: column;
-    max-width: 620px;
+    max-width: 800px;
     width: 100%;
   }
+  .landing-titlerow { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+  .landing-date { font-size: 11px; color: #8B7355; white-space: nowrap; }
   .module-section {
+    display: flex;
+    align-items: center;
+    gap: 12px;
     font-size: 9px;
     letter-spacing: 0.3em;
     text-transform: uppercase;
     color: var(--gold-dim);
     font-weight: 600;
-    padding: 16px 0 8px;
+    padding: 16px 0 10px;
+  }
+  .module-section::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(90deg, rgba(201,168,76,0.5), transparent);
   }
   .module-duo {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 10px;
+    gap: 14px;
   }
   .module-card {
-    background: #fff;
-    border: 1px solid rgba(107,31,42,0.14);
-    border-top: 2px solid var(--vino);
-    border-radius: 0 0 10px 10px;
-    padding: 13px 14px;
+    background: #E8D9C7;
+    border: 1px solid rgba(107,31,42,0.35);
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: 0 8px 22px rgba(74,21,32,0.12);
     cursor: pointer;
-    transition: border-color 0.2s, transform 0.15s;
+    transition: transform 0.15s, box-shadow 0.2s;
   }
-  .module-card:hover { border-color: rgba(107,31,42,0.4); transform: translateY(-1px); }
-  .module-row { display: flex; gap: 11px; align-items: center; margin-bottom: 6px; }
+  .module-card:hover { transform: translateY(-2px); box-shadow: 0 12px 28px rgba(74,21,32,0.18); }
+  .module-band {
+    background: var(--vino);
+    padding: 11px 15px;
+    display: flex;
+    align-items: center;
+    gap: 11px;
+  }
+  .module-accent { height: 3px; background: var(--acc, #C9A84C); }
   .module-ico {
-    width: 36px; height: 36px; border-radius: 50%;
-    border: 1px solid var(--gold);
+    width: 32px; height: 32px; border-radius: 50%;
+    border: 1.5px solid var(--acc, #C9A84C);
     display: flex; align-items: center; justify-content: center;
     flex-shrink: 0;
   }
   .module-mono {
     font-family: 'Playfair Display', serif;
     font-style: italic;
-    font-size: 18px;
-    color: var(--vino);
+    font-size: 16px;
+    color: #E8D9C7;
     line-height: 1;
   }
   .module-name {
     font-family: 'Playfair Display', serif;
     font-size: 16px;
-    color: var(--vino-dark);
+    color: #F5EDE2;
   }
+  .module-body { padding: 12px 15px 13px; }
   .module-desc {
     font-size: 11px;
-    color: var(--text-light);
+    color: #6B4A33;
     line-height: 1.45;
   }
   .module-stat {
     font-size: 11px;
-    color: #7A5C1E;
-    margin-top: 8px;
-    min-height: 14px;
+    color: #5A3A1E;
+    margin-top: 9px;
+    padding-top: 9px;
+    border-top: 1px solid rgba(107,31,42,0.2);
+    min-height: 15px;
     display: flex;
     align-items: center;
     gap: 5px;
   }
   .module-stat .dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
   .module-card.module-admin {
-    display: flex; align-items: center; gap: 8px;
-    background: rgba(255,255,255,0.6);
-    border: 1px dashed rgba(107,31,42,0.25);
-    border-radius: 10px;
-    border-top: 1px dashed rgba(107,31,42,0.25);
-    padding: 10px 14px;
-    margin-top: 14px;
+    display: flex; align-items: center; gap: 10px;
+    background: rgba(232,217,199,0.45);
+    border: 1px dashed rgba(107,31,42,0.3);
+    border-radius: 12px;
+    box-shadow: none;
+    padding: 10px 15px;
+    margin-top: 16px;
   }
-  .module-admin .module-name { font-size: 13px; font-family: inherit; color: var(--text-light); }
+  .module-admin .module-ico { width: 26px; height: 26px; border: 1px solid rgba(107,31,42,0.4); }
+  .module-admin .module-mono { font-size: 13px; color: var(--vino); }
+  .module-admin .module-name { font-size: 12px; font-family: inherit; color: #6B4A33; }
   .module-badge {
     font-size: 9px;
     letter-spacing: 0.2em;
     text-transform: uppercase;
     color: var(--gold-dim);
     margin-left: auto;
+  }
+  @media (max-width: 640px) {
+    .module-duo { gap: 10px; }
+    .module-band { padding: 9px 12px; gap: 8px; }
+    .module-ico { width: 28px; height: 28px; }
+    .module-mono { font-size: 14px; }
+    .module-name { font-size: 14px; }
+    .module-body { padding: 10px 12px 11px; }
   }
 
   /* -- FOH HERO HEADER -- */
@@ -2110,7 +2141,7 @@ if ('serviceWorker' in navigator) {
     <div class="foh-hero-content">
       <img class="foh-hero-logo" src="robertos-logo-white.svg" alt="Roberto's">
     </div>
-    <div id="foh-build" style="position:absolute;bottom:6px;right:10px;font-size:9px;letter-spacing:.08em;color:rgba(255,255,255,.4);z-index:3;font-variant-numeric:tabular-nums;">build 2026-07-02.6</div>
+    <div id="foh-build" style="position:absolute;bottom:6px;right:10px;font-size:9px;letter-spacing:.08em;color:rgba(255,255,255,.4);z-index:3;font-variant-numeric:tabular-nums;">build 2026-07-02.7</div>
   </div>
 
   <!-- main scroll area -->
@@ -2190,50 +2221,76 @@ if ('serviceWorker' in navigator) {
   <div class="landing-content">
     <img class="landing-brand" src="robertos-logo-burgundy.svg" alt="Roberto's">
     <div class="landing-kicker">Management Module</div>
-    <div class="landing-title"><span>Management</span></div>
+    <div class="landing-titlerow"><div class="landing-title"><span>Management</span></div><div class="landing-date" id="hub-date"></div></div>
     <div class="landing-sub">Daily reports, activations, revenue &amp; events — everything for running Roberto's DIFC.</div>
     <div class="landing-divider"></div>
     <div class="module-grid">
       <div class="module-section" id="sec-daily">Tonight &amp; every day</div>
       <div class="module-duo">
-        <div class="module-card" id="mod-card-operations" onclick="enterApp('operations')">
-          <div class="module-row">
+        <div class="module-card" id="mod-card-operations" onclick="enterApp('operations')" style="--acc:#C9A84C;">
+          <div class="module-band">
             <span class="module-ico"><span class="module-mono">C</span></span>
             <div class="module-name">Closing Report</div>
           </div>
-          <div class="module-desc">Tonight's revenue, tips, comps &amp; shift notes.</div>
-          <div class="module-stat" id="hubstat-operations"></div>
+          <div class="module-accent"></div>
+          <div class="module-body">
+            <div class="module-desc">Tonight's revenue, tips, comps &amp; shift notes.</div>
+            <div class="module-stat" id="hubstat-operations"></div>
+          </div>
         </div>
-        <div class="module-card" id="mod-card-events" onclick="enterApp('events')">
-          <div class="module-row">
+        <div class="module-card" id="mod-card-events" onclick="enterApp('events')" style="--acc:#E85D24;">
+          <div class="module-band">
             <span class="module-ico"><span class="module-mono">A</span></span>
             <div class="module-name">Activations</div>
           </div>
-          <div class="module-desc">The Listening Bar, Jazz Tuesdays &amp; weekly nights.</div>
-          <div class="module-stat" id="hubstat-events"></div>
+          <div class="module-accent"></div>
+          <div class="module-body">
+            <div class="module-desc">The Listening Bar, Jazz Tuesdays &amp; weekly nights.</div>
+            <div class="module-stat" id="hubstat-events"></div>
+          </div>
         </div>
       </div>
       <div class="module-section" id="sec-business">Business</div>
       <div class="module-duo">
-        <div class="module-card" id="mod-card-revenue" onclick="enterApp('revenue')">
-          <div class="module-row">
+        <div class="module-card" id="mod-card-revenue" onclick="enterApp('revenue')" style="--acc:#4E6B51;">
+          <div class="module-band">
             <span class="module-ico"><span class="module-mono">R</span></span>
             <div class="module-name">Revenue</div>
           </div>
-          <div class="module-desc">Daily budget, covers, spend &amp; month review.</div>
-          <div class="module-stat" id="hubstat-revenue"></div>
+          <div class="module-accent"></div>
+          <div class="module-body">
+            <div class="module-desc">Daily budget, covers, spend &amp; month review.</div>
+            <div class="module-stat" id="hubstat-revenue"></div>
+          </div>
         </div>
-        <div class="module-card" id="mod-card-stocktake" onclick="enterApp('stocktake')">
-          <div class="module-row">
+        <div class="module-card" id="mod-card-stocktake" onclick="enterApp('stocktake')" style="--acc:#A97142;">
+          <div class="module-band">
             <span class="module-ico"><span class="module-mono">S</span></span>
             <div class="module-name">Stock Take</div>
           </div>
-          <div class="module-desc">Monthly beverage &amp; tobacco count.</div>
-          <div class="module-stat" id="hubstat-stocktake"></div>
+          <div class="module-accent"></div>
+          <div class="module-body">
+            <div class="module-desc">Monthly beverage &amp; tobacco count.</div>
+            <div class="module-stat" id="hubstat-stocktake"></div>
+          </div>
+        </div>
+      </div>
+      <!-- Events (private events desk) — hidden until the module ships; the section
+           label and card are pre-built so launching it is a one-line display toggle. -->
+      <div class="module-section" id="sec-privateevents" style="display:none;">Events</div>
+      <div class="module-card" id="mod-card-privateevents" style="--acc:#8A9A5B; display:none;">
+        <div class="module-band">
+          <span class="module-ico"><span class="module-mono">E</span></span>
+          <div class="module-name">Events</div>
+        </div>
+        <div class="module-accent"></div>
+        <div class="module-body">
+          <div class="module-desc">Quotations, canap&eacute; menus &amp; function sheets &mdash; private events desk.</div>
+          <div class="module-stat" id="hubstat-privateevents"></div>
         </div>
       </div>
       <div class="module-card module-admin" id="mod-card-admin" onclick="enterApp('admin')" style="display:none;">
-        <span class="module-ico" style="width:26px;height:26px;"><span class="module-mono" style="font-size:13px;">A</span></span>
+        <span class="module-ico"><span class="module-mono">A</span></span>
         <span class="module-name">Admin &mdash; users &amp; access</span>
         <span class="module-badge">You only</span>
       </div>
@@ -2572,6 +2629,8 @@ function applyFohAccess(){
   if(s1) s1.style.display = (!fohBlocked('operations') || !fohBlocked('events')) ? '' : 'none';
   var s2=document.getElementById('sec-business');
   if(s2) s2.style.display = (!fohBlocked('revenue') || !fohBlocked('stocktake')) ? '' : 'none';
+  var hd=document.getElementById('hub-date');
+  if(hd) hd.textContent = new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'});
   try{ fohLoadHubStats(); }catch(e){}
 }
 // ── Landing live stats: one small fact per module card. Cards render instantly;
