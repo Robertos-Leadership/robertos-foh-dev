@@ -122,8 +122,14 @@ function revReview(p){
   var cur=revMonthData(p), W=cur.windowDay||0, prevP=revPrevPeriod(p);
   var cW=revWindowSum(p,W), pW=revWindowSum(prevP,W);
   var cAvg=revWeekdayAvgs(p), pAvg=revWeekdayAvgs(prevP);
+  // Projection rate per weekday: use THIS month's average where we already have a
+  // real sample for that weekday; otherwise fall back to the recent ~10-week run-rate
+  // (same source the Forecast tab uses). Without this, weekdays this month hasn't
+  // logged yet project as 0 — collapsing the full-month forecast early in every month.
+  var fcAvg=revFcWeekdayAvgs(p).avg;
+  function projRate(wd){ return (cAvg[wd]!=null)?cAvg[wd]:(fcAvg[wd]||0); }
   var dim=revDaysInMonth(p), proj=0, remaining=0;
-  for(var d=W+1; d<=dim; d++){ var wd=revWeekday(p+'-'+String(d).padStart(2,'0')); if(wd==='Sunday') continue; proj+=(cAvg[wd]||0); remaining++; }
+  for(var d=W+1; d<=dim; d++){ var wd=revWeekday(p+'-'+String(d).padStart(2,'0')); if(wd==='Sunday') continue; proj+=projRate(wd); remaining++; }
   var forecast=cur.mtdNet+proj;
   function ac(o){ return o.tdays?o.net/o.tdays:0; }
   return {
@@ -135,7 +141,7 @@ function revReview(p){
     spendCover:{cur:cW.covers?cW.net/cW.covers:0,prev:pW.covers?pW.net/pW.covers:0,chg:revChg(cW.covers?cW.net/cW.covers:0,pW.covers?pW.net/pW.covers:0)},
     venueRest:{cur:cW.restCov?cW.restNet/cW.restCov:0,prev:pW.restCov?pW.restNet/pW.restCov:0,chg:revChg(cW.restCov?cW.restNet/cW.restCov:0,pW.restCov?pW.restNet/pW.restCov:0)},
     venueLoun:{cur:cW.lounCov?cW.lounNet/cW.lounCov:0,prev:pW.lounCov?pW.lounNet/pW.lounCov:0,chg:revChg(cW.lounCov?cW.lounNet/cW.lounCov:0,pW.lounCov?pW.lounNet/pW.lounCov:0)},
-    weekdays:['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'].map(function(wd){ return {wd:wd,cur:cAvg[wd]||0,prev:pAvg[wd]||0,chg:revChg(cAvg[wd]||0,pAvg[wd]||0)}; }),
+    weekdays:['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'].map(function(wd){ return {wd:wd,cur:cAvg[wd]||0,prev:pAvg[wd]||0,chg:revChg(cAvg[wd]||0,pAvg[wd]||0),proj:projRate(wd)}; }),
     mtd:cur.mtdNet, projected:proj, remaining:remaining, forecast:forecast,
     budgetTotal:cur.budgetTotal, vsBudget:forecast-cur.budgetTotal, vsBudgetPct:cur.budgetTotal?(forecast-cur.budgetTotal)/cur.budgetTotal:''
   };
@@ -175,7 +181,7 @@ function revScenario(params){
   var projScen;
   if(scope==='all'){ projScen=rv.projected*f; }
   else {
-    var dim=revDaysInMonth(p), add=0, wAvg=(rv.weekdays.filter(function(x){return x.wd===scope;})[0]||{cur:0}).cur;
+    var dim=revDaysInMonth(p), add=0, wAvg=(rv.weekdays.filter(function(x){return x.wd===scope;})[0]||{proj:0}).proj;
     for(var d=rv.windowDay+1; d<=dim; d++){ if(revWeekday(p+'-'+String(d).padStart(2,'0'))===scope) add += wAvg*(f-1); }
     projScen=rv.projected+add;
   }
