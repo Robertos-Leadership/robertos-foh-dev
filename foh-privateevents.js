@@ -497,18 +497,24 @@ function peRenderEvent(){
     h += '<div class="pe-flag" style="color:#B00020">▲ Allergens missing: '+peEsc(t.missingAllergens.join(', '))+'</div>';
   }
   h += '</div>';
-  // documents & actions
+  // documents & actions — grouped: what the guest gets, then the team side
+  var noMail = e.contact_email?'':' disabled title="Add the client email above first"';
+  var noPhone = e.contact_phone?'':' disabled title="Add the client phone above first"';
+  var grpLbl = 'font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#A88930;margin:2px 2px 5px';
   h += '<div class="pe-card" style="margin-top:12px"><b style="font-size:14px;color:#400207">Documents</b>'+
-    '<div style="display:flex;flex-direction:column;gap:7px;margin-top:9px">'+
-    '<button class="pe-btn" onclick="pePrintProposal(\''+e.id+'\')">Client menu / proposal</button>'+
-    '<button class="pe-btn sec" onclick="pePrintFunctionSheet(\''+e.id+'\')">Function sheet</button>'+
-    '<button class="pe-btn sec" onclick="peSendCoordEmail(\''+e.id+'\')">Coordination email\u2026</button>'+
-    '<button class="pe-btn sec" onclick="peEmailProposal(\''+e.id+'\')"'+(e.contact_email?'':' disabled title="No client email on the event"')+'>Email proposal to client</button>'+
-    '<button class="pe-btn sec" onclick="peWhatsApp(\''+e.id+'\')"'+(e.contact_phone?'':' disabled title="No phone on the event"')+'>WhatsApp the client</button>'+
-    '<button class="pe-btn sec" onclick="peEmailAgreement(\''+e.id+'\')"'+(e.contact_email?'':' disabled title="No client email on the event"')+'>Email proposal + agreement to sign</button>'+
-    '<button class="pe-btn sec" onclick="peCopyAgreementLink(\''+e.id+'\')">Copy agreement link</button>'+
-    '<button class="pe-btn sec" onclick="peCopyClientLink(\''+e.id+'\')">Copy client selection link</button>'+
+    '<div style="'+grpLbl+';margin-top:10px">For the guest</div>'+
+    '<div style="display:flex;flex-direction:column;gap:7px">'+
+    '<button class="pe-btn" onclick="peEmailAgreement(\''+e.id+'\')"'+noMail+'>Send proposal &amp; agreement to sign</button>'+
+    '<button class="pe-btn sec" onclick="peEmailProposal(\''+e.id+'\')"'+noMail+'>Send proposal only (menu &amp; price)</button>'+
+    '<button class="pe-btn sec" onclick="peCopyClientLink(\''+e.id+'\')">Let the guest choose their dishes</button>'+
+    '<div style="display:flex;gap:7px"><button class="pe-btn sec" style="flex:1" onclick="peWhatsApp(\''+e.id+'\')"'+noPhone+'>WhatsApp</button>'+
+    '<button class="pe-btn sec" style="flex:1" onclick="peCopyAgreementLink(\''+e.id+'\')">Copy link</button></div>'+
     (e.client_selection ? '<div style="font-size:11.5px;color:#2E6B34;background:#E7F0E4;border-radius:8px;padding:8px 10px">Client picked '+((e.client_selection.dish_ids||[]).length)+' dishes'+(e.client_selection.note?' · “'+peEsc(e.client_selection.note)+'”':'')+' <span style="text-decoration:underline;cursor:pointer" onclick="peApplyClientSelection(\''+e.id+'\')">apply to event</span></div>' : '')+
+    '</div>'+
+    '<div style="'+grpLbl+';margin-top:12px">For the team</div>'+
+    '<div style="display:flex;flex-direction:column;gap:7px">'+
+    '<button class="pe-btn sec" onclick="peSendCoordEmail(\''+e.id+'\')">Coordination email…</button>'+
+    '<button class="pe-btn sec" onclick="pePrintProposal(\''+e.id+'\')">Print proposal / function sheet</button>'+
     '</div></div>';
   h += '</div></div>';
   return h+'</div>';
@@ -1144,9 +1150,10 @@ function peWhatsApp(id){
   if(digits.length && digits[0]==='0') digits = '971'+digits.slice(1);
   if(digits.length <= 9) digits = '971'+digits;
   var msg = 'Ciao'+(e.contact_name?' '+e.contact_name.split(' ')[0]:'')+'! Thank you for your enquiry with Roberto\u2019s'+
-    (e.event_date?' for '+peDLabel(e.event_date):'')+'. I\u2019m preparing everything for you \u2014 Valentina';
+    (e.event_date?' for '+peDLabel(e.event_date):'')+'. Here is your proposal and event agreement to review and sign at your convenience:\n'+
+    peAgreementUrl(e)+'\nIt will be our pleasure \u2014 Valentina';
   window.open('https://wa.me/'+digits+'?text='+encodeURIComponent(msg), '_blank');
-  sb.from('event_log').insert({event_id:id, action:'whatsapp', detail:'chat opened \u2192 '+e.contact_phone, actor:peActor()});
+  sb.from('event_log').insert({event_id:id, action:'whatsapp', detail:'proposal + agreement link \u2192 '+e.contact_phone, actor:peActor()});
 }
 function peCopyClientLink(id){
   var e = peEvById(id); if(!e) return;
