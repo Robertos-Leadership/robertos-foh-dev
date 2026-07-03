@@ -423,7 +423,7 @@ function peRenderEvent(){
     h += '<div class="pe-flag" style="color:'+(t.foodCostPct<=27?'#2E5B30':'#7A5500')+'">'+(t.foodCostPct<=27?'✓':'▲')+' Food cost '+t.foodCostPct.toFixed(1)+'%'+(t.foodCostPct<=27?' — on target':' — above 25% target')+'</div>';
   }
   if(t.pcs){
-    h += '<div class="pe-flag" style="color:'+(t.pcs>=8&&t.pcs<=12?'#2E5B30':'#7A5500')+'">'+(t.pcs>=8&&t.pcs<=12?'✓':'▲')+' '+t.pcs+' pieces / guest'+(t.pcs<8?' — below 8–12 norm':(t.pcs>12?' — above 8–12 norm':''))+'</div>';
+    h += '<div class="pe-flag" style="color:'+(t.pcs>=8&&t.pcs<=12?'#2E5B30':'#7A5500')+'">'+(t.pcs>=8&&t.pcs<=12?'✓':'▲')+' '+(Math.round(t.pcs*10)/10)+' pieces / guest'+(t.pcs<8?' — below 8–12 norm':(t.pcs>12?' — above 8–12 norm':''))+'</div>';
   }
   if(t.missingAllergens.length){
     h += '<div class="pe-flag" style="color:#B00020">▲ Allergens missing: '+peEsc(t.missingAllergens.join(', '))+'</div>';
@@ -652,9 +652,13 @@ function peProposalHTML(e){
   var groups = [{k:'Cold',n:'Cold'},{k:'Hot',n:'Hot'},{k:'Dessert',n:'Dolci'}];
   var body = '<div class="brand">R O B E R T O ’ S</div><div class="rule"></div>';
   body += '<h2>'+peEsc(e.package_label||'Canapé Selection')+'</h2>';
-  var priceLine = t.foodPP ? 'AED '+peMoney(t.foodPP)+' / person' : (e.min_spend ? 'Minimum spend AED '+peMoney(e.min_spend) : '');
-  if(priceLine) body += '<div class="sub">'+priceLine+(t.pcs?' · '+t.pcs+' pieces per guest':'')+'</div>';
-  if(e.client_name||e.event_date) body += '<div class="sub" style="margin-top:3px">'+peEsc(e.client_name||'')+(e.event_date?' · '+peDLabel(e.event_date):'')+(e.area?' · '+peEsc(e.area):'')+'</div>';
+  // Guest-facing: no per-person maths or piece counts at the top — just who,
+  // when, where. The one complete figure lives in "Your event" at the end.
+  var who = [];
+  if(e.client_name) who.push('Prepared for '+peEsc(e.client_name));
+  if(e.event_date) who.push(peDLabel(e.event_date));
+  if(e.area) who.push(peEsc(e.area));
+  if(who.length) body += '<div class="sub">'+who.join(' · ')+'</div>';
   groups.forEach(function(g){
     var list = t.items.map(function(it){ return peDishById(it.dish_id); }).filter(function(d){ return d && d.serve===g.k; });
     if(!list.length) return;
@@ -666,8 +670,17 @@ function peProposalHTML(e){
   });
   var bev = e.bev_package_id ? peBevById(e.bev_package_id) : null;
   if(bev){
-    body += '<div class="sec">Beverage</div><div class="dish">'+peEsc(bev.name)+(bev.duration_hours?' — '+bev.duration_hours+' hours':'')+' · AED '+peMoney(bev.price_pp)+' / person'+
+    body += '<div class="sec">Beverage</div><div class="dish">'+peEsc(bev.name)+(bev.duration_hours?' — '+bev.duration_hours+' hours':'')+
       (bev.includes?'<br><span class="d">'+peEsc(bev.includes)+'</span>':'')+'</div>';
+  }
+  // One complete, rounded figure — food and beverage together, for the party.
+  if(t.total && e.guests){
+    body += '<div class="rule" style="margin-top:26px"></div><div class="sec">Your event</div>'+
+      '<div class="dish" style="font-size:15px">'+e.guests+' guests · AED '+peMoney(t.total)+
+      '<br><span class="d">'+(t.items.length?'Canapé selection':'Menu')+(bev?' and '+(bev.duration_hours?bev.duration_hours+'-hour ':'')+'beverage package':'')+' — everything included</span></div>';
+  } else if(e.min_spend){
+    body += '<div class="rule" style="margin-top:26px"></div><div class="sec">Your event</div>'+
+      '<div class="dish" style="font-size:15px">Minimum spend AED '+peMoney(e.min_spend)+'</div>';
   }
   body += '<div class="ft">Our Chefs will do their best to accommodate your dietary requirements, please inform your waiter.<br>'+
     'All prices are in AED inclusive of 5% VAT, 7% DIFC Authority Fee and 10% Service Charge.<br>'+
@@ -682,7 +695,7 @@ function peFunctionSheetHTML(e){
   body += row('Booking name', e.client_name)+row('Company', e.company)+row('Contact', (e.contact_name||'')+(e.contact_phone?' · '+e.contact_phone:'')+(e.contact_email?' · '+e.contact_email:''));
   body += row('Event date', peDLabel(e.event_date))+row('Type', e.event_type)+row('Timing', (e.time_from||'')+(e.time_to?' – '+e.time_to:''));
   body += row('Area', e.area)+row('Guests', e.guests);
-  body += row('Food', (e.package_label||'Bespoke selection')+(t.foodPP?' · AED '+peMoney(t.foodPP)+'/guest':'')+(t.pcs?' · '+t.pcs+' pcs/guest':''));
+  body += row('Food', (e.package_label||'Bespoke selection')+(t.foodPP?' · AED '+peMoney(t.foodPP)+'/guest':'')+(t.pcs?' · '+(Math.round(t.pcs*10)/10)+' pcs/guest':''));
   var bev = e.bev_package_id ? peBevById(e.bev_package_id) : null;
   body += row('Beverage', bev ? bev.name+' · AED '+peMoney(bev.price_pp)+'/guest' : '—');
   body += row('Estimated total', t.total ? 'AED '+peMoney(t.total) : '—')+row('Minimum spend', e.min_spend?'AED '+peMoney(e.min_spend):'—');
