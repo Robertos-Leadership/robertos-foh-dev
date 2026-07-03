@@ -382,7 +382,7 @@ function peRenderEvent(){
   h += '<div class="pe-card"><b style="font-size:14px;color:#400207">Beverage</b>'+
     '<div style="margin-top:8px"><select class="pe-in" id="pe-f-bev_package_id" onchange="peSaveField(\''+e.id+'\',\'bev_package_id\',this.value||null)">'+
       '<option value="">No beverage package</option>'+
-      peState.bevs.map(function(b){ return '<option value="'+b.id+'"'+(e.bev_package_id===b.id?' selected':'')+'>'+peEsc(b.name)+' — '+(b.duration_hours?b.duration_hours+'h — ':'')+'AED '+peMoney(b.price_pp)+'/guest</option>'; }).join('')+
+      peState.bevs.filter(function(b){ return b.active!==false || b.id===e.bev_package_id; }).map(function(b){ return '<option value="'+b.id+'"'+(e.bev_package_id===b.id?' selected':'')+'>'+peEsc(b.name)+' — '+(b.duration_hours?b.duration_hours+'h — ':'')+'AED '+peMoney(b.price_pp)+'/guest'+(b.active===false?' (retired)':'')+'</option>'; }).join('')+
     '</select>'+
     (e.bev_package_id && peBevById(e.bev_package_id) ? '<div style="font-size:11.5px;color:#8B7355;margin-top:6px">'+peEsc(peBevById(e.bev_package_id).includes||'')+'</div>' : '')+
     '</div></div>';
