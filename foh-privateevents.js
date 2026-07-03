@@ -1036,13 +1036,77 @@ function peCoordPrepHTML(e){
   if(rows.some(function(r){ return r.unconfirmed; })) h += '<p style="font-size:11px;color:#B08D3E;margin:4px 0 0">Items marked <b>default</b> are still at 1 pc/guest — quantities to be confirmed.</p>';
   return h;
 }
-async function peSendCoordEmail(id){
+// Friendly names for the standard team, so the picker reads like people not emails.
+var PE_PEOPLE = {
+  'dvalla@robertos.ae':'Danilo Valla','jthomas@robertos.ae':'Jins Thomas','mpetrosino@robertos.ae':'Manuel Petrosino',
+  'astellacci@robertos.ae':'Antonio Stellacci','afalcone@robertos.ae':'Andrea Falcone',
+  'reservations@robertos.ae':'Reservations','asacchi@skelmore.com':'Andrea Sacchi'
+};
+// A branded, tap-to-include recipient picker — replaces the raw prompt() box.
+function pePickRecipients(opts){
+  var standard = opts.standard || [];
+  var checked = opts.checked || standard.slice();
+  var you = opts.you || '';
+  var row = function(em){
+    var lbl = (em===you) ? 'You' : (PE_PEOPLE[em]||'');
+    var on = checked.indexOf(em)>=0;
+    return '<label style="display:flex;align-items:center;gap:10px;padding:8px 4px;border-bottom:1px solid rgba(107,31,42,0.08);cursor:pointer">'+
+      '<input type="checkbox" class="pe-rcp" value="'+peEsc(em)+'" '+(on?'checked':'')+' style="accent-color:#400207;width:16px;height:16px;flex-shrink:0">'+
+      '<span style="flex:1;min-width:0"><span style="font-size:13px;color:#2C1810">'+peEsc(lbl||em)+'</span>'+
+      (lbl?'<br><span style="font-size:11px;color:#8B7355">'+peEsc(em)+'</span>':'')+'</span></label>';
+  };
+  var bg = document.createElement('div'); bg.className='pe-modal-bg';
+  bg.addEventListener('click', function(ev){ if(ev.target===bg) bg.remove(); });
+  bg.innerHTML = '<div class="pe-modal" style="max-width:440px">'+
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px"><b style="color:#400207;font-size:15px">'+peEsc(opts.title||'Send email')+'</b><span class="pe-x" onclick="this.closest(\'.pe-modal-bg\').remove()">✕</span></div>'+
+    (opts.subtitle?'<div style="font-size:12px;color:#8B7355;margin-bottom:6px">'+peEsc(opts.subtitle)+'</div>':'')+
+    '<div style="font-size:11px;color:#8B7355;margin-bottom:4px">Tap to include or leave out. Add anyone else below.</div>'+
+    '<div id="pe-rcp-list" style="max-height:44vh;overflow-y:auto">'+standard.map(row).join('')+'</div>'+
+    '<div style="display:flex;gap:6px;margin-top:10px"><input class="pe-in" id="pe-rcp-add" placeholder="Add another email…" style="flex:1" onkeydown="if(event.key===\'Enter\'){event.preventDefault();peRcpAdd();}"><button class="pe-btn sec sm" onclick="peRcpAdd()">Add</button></div>'+
+    '<div style="display:flex;gap:8px;margin-top:12px"><button class="pe-btn" id="pe-rcp-send">Send</button>'+
+    '<button class="pe-btn sec" onclick="this.closest(\'.pe-modal-bg\').remove()">Cancel</button></div></div>';
+  document.body.appendChild(bg);
+  function refresh(){
+    var n = bg.querySelectorAll('.pe-rcp:checked').length;
+    var b = bg.querySelector('#pe-rcp-send');
+    b.textContent = n ? 'Send to '+n+' '+(n===1?'person':'people') : 'Select recipients';
+    b.disabled = !n;
+  }
+  bg.addEventListener('change', refresh);
+  bg.querySelector('#pe-rcp-send').addEventListener('click', function(){
+    var list = Array.prototype.map.call(bg.querySelectorAll('.pe-rcp:checked'), function(c){ return c.value; });
+    if(!list.length) return;
+    bg.remove();
+    opts.onSend(list);
+  });
+  refresh();
+}
+function peRcpAdd(){
+  var bg = document.querySelector('.pe-modal-bg'); if(!bg) return;
+  var inp = bg.querySelector('#pe-rcp-add'); var em = (inp.value||'').trim();
+  if(em.indexOf('@')<1){ peToast('Enter a valid email', true); return; }
+  var dup = Array.prototype.some.call(bg.querySelectorAll('.pe-rcp'), function(c){ return c.value.toLowerCase()===em.toLowerCase(); });
+  if(dup){ peToast('Already on the list', true); inp.value=''; return; }
+  bg.querySelector('#pe-rcp-list').insertAdjacentHTML('beforeend',
+    '<label style="display:flex;align-items:center;gap:10px;padding:8px 4px;border-bottom:1px solid rgba(107,31,42,0.08);cursor:pointer">'+
+    '<input type="checkbox" class="pe-rcp" value="'+peEsc(em)+'" checked style="accent-color:#400207;width:16px;height:16px;flex-shrink:0">'+
+    '<span style="flex:1;min-width:0;font-size:13px;color:#2C1810">'+peEsc(em)+'</span></label>');
+  inp.value='';
+  var b = bg.querySelector('#pe-rcp-send'); var n = bg.querySelectorAll('.pe-rcp:checked').length;
+  b.textContent = 'Send to '+n+' '+(n===1?'person':'people'); b.disabled = !n;
+}
+function peSendCoordEmail(id){
   var e = peEvById(id); if(!e) return;
-  var def = (state.userEmail?state.userEmail+', ':'')+PE_TEAM_CC.join(', ');
-  var to = prompt('Coordination email \u2014 send to (comma-separated).\nThe standard team list is prefilled \u2014 remove anyone not needed.', def);
-  if(to===null) return;
-  var list = to.split(',').map(function(s){ return s.trim(); }).filter(function(s){ return s.indexOf('@')>0; });
-  if(!list.length){ peToast('No valid recipients', true); return; }
+  var standard = (state.userEmail?[state.userEmail]:[]).concat(PE_TEAM_CC);
+  standard = standard.filter(function(x,i){ return standard.indexOf(x)===i; });
+  pePickRecipients({
+    title:'Coordination email', subtitle:(e.client_name||'Event')+' · '+peDLabel(e.event_date),
+    standard:standard, checked:standard, you:state.userEmail,
+    onSend:function(list){ peDoSendCoord(id, list); }
+  });
+}
+async function peDoSendCoord(id, list){
+  var e = peEvById(id); if(!e || !list.length) return;
   var subject = "Private Event "+(e.event_date?peDLabel(e.event_date):'')+(e.client_name?' — '+e.client_name:'');
   try{
     var r = await sb.functions.invoke('send-event-email', { body:{ to:list, subject:subject, html:peCoordEmailHTML(e) } });
@@ -1803,13 +1867,18 @@ function pePrintForecastDoc(){
   var fc = peForecastData(); if(!fc) return;
   pePrintHTML(peDocShell('Events forecast', peForecastHTML(fc)));
 }
-async function peEmailForecast(){
+function peEmailForecast(){
   var fc = peForecastData(); if(!fc) return;
-  var def = 'asacchi@skelmore.com, '+(state.userEmail||'');
-  var to = prompt('Email this forecast to:', def);
-  if(to===null) return;
-  var list = to.split(',').map(function(s){ return s.trim(); }).filter(function(s){ return s.indexOf('@')>0; });
-  if(!list.length){ peToast('No valid recipients', true); return; }
+  var standard = ['asacchi@skelmore.com'].concat(state.userEmail?[state.userEmail]:[]);
+  standard = standard.filter(function(x,i){ return standard.indexOf(x)===i; });
+  pePickRecipients({
+    title:'Email the forecast', subtitle:fc.from+' to '+fc.to,
+    standard:standard, checked:standard, you:state.userEmail,
+    onSend:function(list){ peDoEmailForecast(fc, list); }
+  });
+}
+async function peDoEmailForecast(fc, list){
+  if(!fc || !list.length) return;
   try{
     var r = await sb.functions.invoke('send-event-email', { body:{
       to:list, subject:'Roberto\u2019s DIFC \u2014 Events forecast '+fc.from+' to '+fc.to,
