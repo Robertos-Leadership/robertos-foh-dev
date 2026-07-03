@@ -994,10 +994,13 @@ function peKitchenPrepHTML(e, t){
   return h;
 }
 function pePrintFunctionSheet(id){ var e = peEvById(id); if(e) pePrintHTML(peFunctionSheetHTML(e)); }
+var PE_BRIEF_FN = 'https://paoaivwtkzujmrgrfjuq.supabase.co/functions/v1/event-brief';
 function peCoordEmailHTML(e){
   // The team's brief arrives as a full branded Roberto's document (same as the
-  // printout), not a small plain table.
-  return peDocShell('Roberto’s — event brief', peBriefBodyHTML(e));
+  // printout). A print button at the top opens it as its own page to print
+  // for the wall (email itself can't run a print button).
+  var bar = e.brief_token ? '<div style="text-align:center;margin:0 0 8px"><a href="'+PE_BRIEF_FN+'?t='+e.brief_token+'" style="display:inline-block;background:#400207;color:#E8D9C7;padding:9px 22px;border-radius:20px;text-decoration:none;font-size:12px;letter-spacing:.5px">🖨 Open &amp; print this brief for the wall</a></div>' : '';
+  return peDocShell('Roberto’s — event brief', bar + peBriefBodyHTML(e));
 }
 // @Danilo's half of the coordination email — the selected menu with the
 // quantities the kitchen has to prepare, so nobody has to call to ask.
@@ -1096,6 +1099,14 @@ function peSendCoordEmail(id){
 }
 async function peDoSendCoord(id, list){
   var e = peEvById(id); if(!e || !list.length) return;
+  // Save a printable copy the team can reopen from the email (its own token so
+  // it's never reachable from a guest link).
+  if(!e.brief_token){ e.brief_token = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : ('b'+Date.now().toString(36)+Math.round(Math.random()*1e9).toString(36)); }
+  var snapshot = peDocShell('Roberto’s — event brief', peBriefBodyHTML(e));
+  var sv = await sb.from('events_desk').update({brief_token:e.brief_token, brief_html:snapshot, updated_at:new Date().toISOString()}).eq('id', id);
+  // If the printable-brief columns aren't in place yet, still send the brief —
+  // just without the wall-print button (no brief_token → peCoordEmailHTML omits it).
+  if(sv.error){ e.brief_token = null; }
   var subject = "Event brief — "+(e.client_name||'event')+(e.event_date?' · '+peDLabel(e.event_date):'');
   try{
     var r = await sb.functions.invoke('send-event-email', { body:{ to:list, subject:subject, html:peCoordEmailHTML(e) } });
