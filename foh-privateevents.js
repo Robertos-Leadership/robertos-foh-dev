@@ -1424,9 +1424,18 @@ async function peSetBeverage(id, val){
 async function peDeleteEvent(id){
   var e = peEvById(id); if(!e || e.status!=='draft') return;
   if(!(await peConfirm({title:'Delete this draft?', body:'Delete this draft event? This cannot be undone.', ok:'Delete', cancel:'Keep it', danger:true}))) return;
+  // Belt-and-suspenders: remove the draft's child rows (dishes + history) first, so
+  // nothing is left orphaned even if the database foreign keys aren't set to cascade.
+  // If a child delete fails we stop before touching the event — retrying is safe
+  // (deleting already-gone rows is a no-op). See foh-events-cascade.sql for the DB fix.
+  var ri = await sb.from('event_items').delete().eq('event_id', id);
+  if(ri.error){ peToast('Delete didn’t finish — the dishes couldn’t be removed. Try again.', true); return; }
+  var rl = await sb.from('event_log').delete().eq('event_id', id);
+  if(rl.error){ peToast('Delete didn’t finish — the history couldn’t be removed. Try again.', true); return; }
   var r = await sb.from('events_desk').delete().eq('id', id);
   if(r.error){ peToast('Delete failed — check connection', true); return; }
   peState.events = peState.events.filter(function(x){ return x.id!==id; });
+  delete peState.items[id];
   peToast('Draft deleted');
   peGo('list');
 }
@@ -2888,11 +2897,72 @@ async function peWizCreate(){
 // Sits ON TOP of the free-form editor: collect the essentials in 4 calm steps,
 // then hand off to the full event (already filled in). Never removes a capability.
 var peGuide = null;
+// Work-in-progress key. The guided flow keeps everything in memory and only writes
+// to the DB at the final step — so if her phone locks or a call reloads the app
+// mid-setup, steps 1–3 would be lost. We mirror peGuide into localStorage on every
+// change (minus the transient busy/emailErr flags) so an accidental reload recovers.
+var PE_GUIDE_WIP = 'pe_guide_wip';
+function peGuideStash(){
+  try{
+    if(!peGuide) return;
+    var g = peGuide, out = {};
+    for(var k in g){
+      if(k==='busy' || k==='emailErr') continue;
+      if(Object.prototype.hasOwnProperty.call(g,k)) out[k] = g[k];
+    }
+    localStorage.setItem(PE_GUIDE_WIP, JSON.stringify(out));
+  }catch(e){}
+}
+function peGuideClearWip(){ try{ localStorage.removeItem(PE_GUIDE_WIP); }catch(e){} }
+function peGuideLoadWip(){
+  try{
+    var raw = localStorage.getItem(PE_GUIDE_WIP); if(!raw) return null;
+    var o = JSON.parse(raw); return (o && typeof o==='object') ? o : null;
+  }catch(e){ return null; }
+}
+// True only if real content was entered (not just the empty defaults) — so we never
+// nag about a stash that holds nothing.
+function peGuideWipHasData(o){
+  if(!o) return false;
+  return !!((o.name&&String(o.name).trim())||(o.company&&String(o.company).trim())||
+    (o.email&&String(o.email).trim())||(o.phone&&String(o.phone).trim())||
+    o.date||o.guests||o.time||o.foodMode||o.packId||o.setKey||o.bevId);
+}
 function peGuideFresh(){ return { step:0, name:'', company:'', email:'', phone:'', date:'', time:'', area:'Scala and Bar', guests:'', foodMode:'', packId:'', setKey:'', bevId:'', busy:false }; }
-function peStartGuide(){ peGuide = peGuideFresh(); peGo('guided'); }
-function peGuideSet(f, v){ peGuide[f] = v; }
-function peGuideFood(mode){ peGuide.foodMode = mode; renderMain(); }
-function peGuideBack(){ if(!peGuide){ peGo('list'); return; } if(peGuide.step>0){ peGuide.step--; renderMain(); } else { peGuide=null; peGo('list'); } }
+async function peStartGuide(){
+  // If she has an unfinished event stashed, offer to resume it rather than silently
+  // overwriting her work with a blank form.
+  var wip = peGuideLoadWip();
+  if(peGuideWipHasData(wip)){
+    var nm = (wip.name && String(wip.name).trim()) ? String(wip.name).trim() : 'unnamed';
+    var resume = await peConfirm({
+      title:'Resume the event you started?',
+      html:'You have an unfinished event — <b>'+peEsc(nm)+'</b>. Pick up where you left off, or start a new one instead?',
+      ok:'Resume', cancel:'Start fresh' });
+    if(resume){
+      peGuide = peGuideFresh();
+      for(var k in wip){ if(Object.prototype.hasOwnProperty.call(wip,k)) peGuide[k] = wip[k]; }
+      peGuide.busy = false; peGuide.emailErr = false;
+      peGo('guided');
+      return;
+    }
+    peGuideClearWip();   // Start fresh — drop the old work-in-progress.
+  }
+  peGuide = peGuideFresh(); peGuideStash(); peGo('guided');
+}
+function peGuideSet(f, v){ peGuide[f] = v; peGuideStash(); }
+function peGuideFood(mode){ peGuide.foodMode = mode; peGuideStash(); renderMain(); }
+async function peGuideBack(){
+  if(!peGuide){ peGo('list'); return; }
+  if(peGuide.step>0){ peGuide.step--; peGuideStash(); renderMain(); return; }
+  // Step 0 → leaving the guided flow. If real data was entered, name the consequence
+  // before discarding it. (An accidental reload still recovers from the stash — this
+  // only fires on a deliberate Cancel/Back.)
+  if(peGuideWipHasData(peGuide)){
+    if(!(await peConfirm({title:'Discard this new event?', html:'You’ve started an event but haven’t created it yet. Leave now and what you entered won’t be kept.', ok:'Discard', cancel:'Keep editing', danger:true}))) return;
+  }
+  peGuideClearWip(); peGuide=null; peGo('list');
+}
 function peGuideNext(){
   var g = peGuide;
   if(g.step===0 && !(g.name && g.name.trim())){ peToast('Add a name to continue', true); return; }
@@ -2902,7 +2972,7 @@ function peGuideNext(){
     if(!g.date){ peToast('Add the date to continue', true); return; }
     if(!g.guests){ peToast('Add the number of guests', true); return; }
   }
-  g.step++; renderMain();
+  g.step++; peGuideStash(); renderMain();
 }
 function peRenderGuided(){
   if(!peGuide) peGuide = peGuideFresh();
@@ -3032,7 +3102,7 @@ async function peGuideFinish(action){
       if(!ri.error) peState.items[r.data.id] = ri.data||[];
     }
     sb.from('event_log').insert({event_id:r.data.id, action:'created', detail:'guided setup', actor:peActor()});
-    var id = r.data.id; peGuide = null;
+    var id = r.data.id; peGuide = null; peGuideClearWip();
     peGo('event', id);
     if(action==='send'){ peEmailAgreement(id); }
     else {
