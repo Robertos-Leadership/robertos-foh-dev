@@ -101,6 +101,26 @@ function peScrollToCard(name){
   var el = document.getElementById('pe-card-'+name);
   if(el && el.scrollIntoView) el.scrollIntoView({behavior:'smooth', block:'start'});
 }
+// Branded confirm (pe-modal) — names the consequence in the body, never a bare
+// "OK?". Resolves true only on the named action button; backdrop/✕/Cancel = false.
+function peConfirm(opts){
+  return new Promise(function(resolve){
+    var bg = document.createElement('div'); bg.className='pe-modal-bg';
+    var done = function(v){ bg.remove(); resolve(v); };
+    bg.addEventListener('click', function(ev){ if(ev.target===bg) done(false); });
+    var m = document.createElement('div'); m.className='pe-modal'; m.style.maxWidth='440px';
+    m.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">'+
+      '<b style="color:#400207">'+peEsc(opts.title||'Are you sure?')+'</b><span class="pe-x">✕</span></div>'+
+      '<div style="font-size:12.5px;color:#6B4A33;margin:6px 0 12px;line-height:1.55">'+(opts.html||peEsc(opts.body||''))+'</div>'+
+      '<div style="display:flex;gap:8px;flex-wrap:wrap">'+
+      '<button class="pe-btn" data-pecf="ok"'+(opts.danger?' style="background:#B00020;border-color:#B00020"':'')+'>'+peEsc(opts.ok||'Continue')+'</button>'+
+      '<button class="pe-btn sec" data-pecf="no">'+peEsc(opts.cancel||'Cancel')+'</button></div>';
+    m.querySelector('.pe-x').addEventListener('click', function(){ done(false); });
+    m.querySelector('[data-pecf="ok"]').addEventListener('click', function(){ done(true); });
+    m.querySelector('[data-pecf="no"]').addEventListener('click', function(){ done(false); });
+    bg.appendChild(m); document.body.appendChild(bg);
+  });
+}
 // The single next thing to do ON THIS event — drives the strip at the top of the
 // editor so Valentina is never lost on that long screen. Points her at the exact
 // field/card, or triggers the next action.
@@ -331,7 +351,8 @@ function peNextStep(e){
     if(!e.guests) return {label:'Add the guest count', kind:'danger'};
     if(!e.area) return {label:'Add the area', kind:'danger'};
   }
-  if(e.status==='draft') return {label:'Send proposal', kind:'warn'};
+  // No email = nothing to send to — the chip must ask for the email, not promise a send.
+  if(e.status==='draft') return e.contact_email ? {label:'Send proposal', kind:'warn'} : {label:'Add the client email', kind:'danger'};
   if(e.status==='sent') return e.signed_at ? {label:'Confirm the booking', kind:'warn'} : {label:'Chase signature', kind:'info'};
   if(e.status==='confirmed' || e.status==='deposit') return {label:'Send team brief', kind:'warn'};
   return {label:'', kind:'neutral'};
@@ -849,8 +870,12 @@ function peRenderEvent(){
     h += gap>0 ? '<div class="pe-flag" style="color:#7A5500">▲ AED '+peMoney(gap)+' below the '+peMoney(e.min_spend)+' min spend</div>'
                : '<div class="pe-flag" style="color:#2E5B30">✓ Min spend covered</div>';
   }
+  // #3 (Batch 1) — a set food price the dishes have outgrown must never drift silently.
+  if(e.food_price_pp!=null && e.food_price_pp!=='' && Math.round(t.foodComputed) > Math.round(Number(e.food_price_pp))){
+    h += '<div class="pe-flag" style="color:#7A5500">▲ Dishes worth AED '+peMoney(t.foodComputed)+'/guest — you’re charging the set AED '+peMoney(e.food_price_pp)+'</div>';
+  }
   if(t.foodCostPct!=null){
-    h += '<div class="pe-flag" style="color:'+(t.foodCostPct<=27?'#2E5B30':'#7A5500')+'">'+(t.foodCostPct<=27?'✓':'▲')+' Food cost '+t.foodCostPct.toFixed(1)+'%'+(t.foodCostPct<=27?' — on target':' — above 25% target')+'</div>';
+    h += '<div class="pe-flag" style="color:'+(t.foodCostPct<=27?'#2E5B30':'#7A5500')+'">'+(t.foodCostPct<=27?'✓':'▲')+' Food cost '+t.foodCostPct.toFixed(1)+'%'+(t.foodCostPct<=27?' — on target':' — above the 27% target')+'</div>';
   }
   if(t.pcs){
     h += '<div class="pe-flag" style="color:'+(t.pcs>=8&&t.pcs<=12?'#2E5B30':'#7A5500')+'">'+(t.pcs>=8&&t.pcs<=12?'✓':'▲')+' '+(Math.round(t.pcs*10)/10)+' pieces / guest'+(t.pcs<8?' — below 8–12 norm':(t.pcs>12?' — above 8–12 norm':''))+'</div>';
@@ -1017,6 +1042,10 @@ function peSendChecks(e){
   // Allergen safety — the dishes below have no allergen info recorded, so a guest
   // (or the kitchen) can't see what's in them. Named before any client-facing send.
   if(t.missingAllergens && t.missingAllergens.length) msgs.push(t.missingAllergens.length+(t.missingAllergens.length>1?' dishes have':' dish has')+' no allergens recorded: '+t.missingAllergens.join(', ')+'.');
+  // Double-booking — the same date + area already holds another live event. Named
+  // here so a send confirm says it out loud, not only the banner she may have scrolled past.
+  var clash = peConflicts(e);
+  if(clash.length) msgs.push((e.area||'This area')+' is already booked on '+peDLabel(e.event_date)+' for: '+clash.map(function(c){ return c.client_name||c.company||'an unnamed event'; }).join(', ')+'.');
   return msgs;
 }
 // Confirm past any send gaps, naming each one. Returns true to proceed.
@@ -1273,24 +1302,51 @@ function peFoodSetMenuHTML(e){
   }
   return h+'</div>';
 }
+// A set menu REPLACES the menu, like peApplyPackage: confirm, then clear any
+// existing dishes — otherwise the guest proposal and kitchen brief print BOTH.
 async function peApplySetMenu(eventId){
   var sel = document.getElementById('pe-sm-sel'); if(!sel || !sel.value) return;
   var m = peSetMenuByKey(sel.value); if(!m) return;
+  var e = peEvById(eventId); if(!e) return;
+  var cur = peState.items[eventId]||[];
+  var hadPrice = e.food_price_pp!=null && e.food_price_pp!=='';
+  if(cur.length || hadPrice){
+    var body = 'Using “'+m.name+'” replaces the food on this event'+
+      (cur.length ? ' — the '+cur.length+' dish'+(cur.length>1?'es':'')+' on it now will be removed' : '')+
+      (hadPrice ? (cur.length?' and':' —')+' the AED '+peMoney(e.food_price_pp)+'/guest food price becomes AED '+peMoney(m.price)+'/guest' : '')+
+      '. The proposal and the kitchen brief will show only the set menu.';
+    if(!(await peConfirm({title:'Switch to “'+m.name+'”?', body:body, ok:'Use “'+m.name+'”', cancel:'Keep the current menu'}))){ renderMain(); return; }
+  }
   if(!(await peConfirmSignedEdit(eventId, 'the menu'))){ renderMain(); return; }
+  if(cur.length){
+    var dr = await sb.from('event_items').delete().in('id', cur.map(function(i){ return i.id; }));
+    if(dr.error){ peToast('Could not replace the menu — check connection', true); return; }
+    peState.items[eventId] = [];
+  }
   var patch = { set_menu:{key:m.key, choices:{}}, package_label:m.name, food_price_pp:m.price, updated_at:new Date().toISOString() };
   var r = await sb.from('events_desk').update(patch).eq('id', eventId);
   if(r.error){ peToast('NOT applied — '+(r.error.message||'check connection'), true); return; }
-  var e = peEvById(eventId); Object.keys(patch).forEach(function(k){ e[k] = patch[k]; });
+  Object.keys(patch).forEach(function(k){ e[k] = patch[k]; });
   peToast('Set menu applied — enter the guests’ choices for the kitchen');
   renderMain();
 }
+// Removing the set menu drops its per-guest price — never silently: the modal
+// names what the food price becomes (dishes total, or nothing) before it changes.
 async function peClearSetMenu(eventId){
+  var e = peEvById(eventId); if(!e) return;
+  var m = e.set_menu ? peSetMenuByKey(e.set_menu.key) : null;
+  var t = peCalcTotals(e);
+  var body = 'This takes “'+(m?m.name:'the set menu')+'”'+(m?' and its AED '+peMoney(m.price)+'/guest food price':'')+' off this event. '+
+    (t.foodComputed
+      ? 'The food price becomes the dishes on the event — AED '+peMoney(t.foodComputed)+'/guest.'
+      : 'The event will have NO food or food price until you pick a package or build a menu.');
+  if(!(await peConfirm({title:'Remove the set menu?', body:body, ok:'Remove set menu', cancel:'Keep it', danger:true}))){ renderMain(); return; }
   if(!(await peConfirmSignedEdit(eventId, 'the menu'))){ renderMain(); return; }
   var patch = { set_menu:null, package_label:null, food_price_pp:null, updated_at:new Date().toISOString() };
   var r = await sb.from('events_desk').update(patch).eq('id', eventId);
   if(r.error){ peToast('NOT changed — check connection', true); return; }
-  var e = peEvById(eventId); Object.keys(patch).forEach(function(k){ e[k] = patch[k]; });
-  peToast('Set menu removed');
+  Object.keys(patch).forEach(function(k){ e[k] = patch[k]; });
+  peToast(t.foodComputed ? 'Set menu removed — food price is now the dishes total, AED '+peMoney(t.foodComputed)+'/guest' : 'Set menu removed — this event now has no food on it');
   renderMain();
 }
 async function peSetMenuCount(eventId, course, option, val){
@@ -2475,7 +2531,7 @@ async function peGuideFinish(action){
   try{
     var row = { venue_id:'robertos-difc', status:'draft', updated_by:peActor(),
       client_name:g.name||null, company:g.company||null,
-      contact_name:g.name||null, contact_email:g.email||null, contact_phone:g.phone||null,
+      contact_email:g.email||null, contact_phone:g.phone||null,
       event_date:g.date||null, time_from:g.time||null, area:g.area||null,
       guests:g.guests?parseInt(g.guests,10):null,
       bev_package_id:(!g.dry && g.bevId)?g.bevId:null, bev_mode:g.dry?'dry':null,
