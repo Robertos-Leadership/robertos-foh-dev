@@ -43,6 +43,13 @@ var PE_STATUS = [
 var PE_AREAS = ['Restaurant','Scala bar & lounge','Scala lounge','Cortile terrace','Piemonte room','Private dining','Full venue'];
 var PE_TYPES = ['Gathering','Private gathering','Dinner','Lunch','Reception','Full buyout'];
 var PE_ALL_CODES = ['D','E','H','N','R','S','V'];
+var PE_ALLERGEN_WORDS = {D:'dairy', E:'egg', H:'homemade', N:'nuts', R:'raw', S:'shellfish', V:'vegetarian'};
+// A plain-language allergen line for staff-facing screens — never a bare "(–)"
+// or a lone "(S)". "Allergens: shellfish, nuts" / "Allergens: none".
+function peAllergenText(alg){
+  var list = (alg||[]).map(function(c){ return PE_ALLERGEN_WORDS[c]||String(c).toLowerCase(); });
+  return 'Allergens: ' + (list.length ? list.join(', ') : 'none');
+}
 var PE_GROSS = 1.23585;   // 10% SC + 7% DIFC + 5% VAT compounding — net = gross / PE_GROSS
 var PE_TIERS = [{n:'Classic',p:10},{n:'Elevated',p:20},{n:'Signature',p:35}];
 // The three designed set menus (PDFs live in menus/ inside this repo, so they
@@ -83,6 +90,13 @@ function peEsc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</
 function peMoney(n){ return n==null||isNaN(n) ? '—' : Math.round(Number(n)).toLocaleString('en-US'); }
 function peToast(msg, bad){ if(typeof toast==='function') toast(msg, !!bad); else alert(msg); }
 function peActor(){ return (state.access && state.access.name) || state.userEmail || 'unknown'; }
+// A disabled action explains itself out loud: toast the reason and jump to the
+// empty field (touch users never see hover tooltips).
+function peScrollToField(fid, msg){
+  peToast(msg, true);
+  var el = document.getElementById('pe-f-'+fid);
+  if(el){ try{ el.focus(); }catch(e){} if(el.scrollIntoView) el.scrollIntoView({behavior:'smooth', block:'center'}); }
+}
 function peToday(){ return localISO(new Date()); }
 function peMonthKey(d){ return String(d).slice(0,7); }
 function peDishById(id){ for(var i=0;i<peState.dishes.length;i++) if(peState.dishes[i].id===id) return peState.dishes[i]; return null; }
@@ -156,6 +170,8 @@ function peGo(view, id){
   '.pe-btn{font-size:12.5px;padding:8px 14px;border-radius:8px;border:1px solid var(--vino);background:var(--vino);color:var(--cream);cursor:pointer}'+
   '.pe-btn.sec{background:transparent;color:var(--vino)}'+
   '.pe-btn.sm{padding:5px 10px;font-size:11.5px}'+
+  '.pe-primary{font-weight:700;box-shadow:0 2px 8px rgba(64,2,7,0.22)}'+
+  '.pe-side .pe-primary{font-size:14px;padding:12px 14px;margin-bottom:2px}'+
   '.pe-btn:disabled{opacity:.5;cursor:default}'+
   '.pe-card{background:#fff;border:1px solid rgba(107,31,42,0.16);border-radius:12px;padding:14px 16px;margin-bottom:12px}'+
   '.pe-row{display:grid;grid-template-columns:1.5fr 1.2fr 0.5fr 0.9fr 1fr;gap:8px;padding:10px 4px;border-bottom:1px solid rgba(107,31,42,0.1);align-items:center;cursor:pointer}'+
@@ -188,12 +204,14 @@ function peGo(view, id){
   '.pe-cal-d.today{border-color:var(--vino);border-width:2px}'+
   '.pe-cal-n{color:#8B7355;font-size:10px;margin-bottom:2px}'+
   '.pe-cal-ev{border-radius:5px;padding:2px 5px;margin-bottom:2px;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10.5px}'+
+  '.pe-agenda{display:none}'+
+  '@media(max-width:640px){.pe-cal{display:none}.pe-agenda{display:block}}'+
   '.pe-log{font-size:12px;padding:6px 0;border-bottom:1px solid rgba(107,31,42,0.08)}'+
   '.pe-log .t{color:#8B7355;font-size:10.5px}'+
   '.pe-modal-bg{position:fixed;inset:0;background:rgba(44,24,16,0.45);z-index:200;display:flex;align-items:center;justify-content:center;padding:16px}'+
   '.pe-modal{background:#FBF7F1;border-radius:14px;max-width:640px;width:100%;max-height:86vh;overflow-y:auto;padding:18px 20px}'+
   '.pe-steps{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px}'+
-  '.pe-step{font-size:11px;padding:4px 11px;border-radius:11px;border:1px solid rgba(107,31,42,0.25);color:#8B7355;cursor:pointer}'+
+  '.pe-step{font-size:12px;padding:9px 15px;border-radius:11px;border:1px solid rgba(107,31,42,0.25);color:#8B7355;cursor:pointer;min-height:20px;display:inline-flex;align-items:center}'+
   '.pe-step.cur{background:var(--vino);color:var(--cream);border-color:var(--vino)}'+
   '.pe-report{width:100%;border-collapse:collapse;font-size:11.5px}'+
   '.pe-report th{background:var(--vino);color:var(--cream);padding:6px 7px;text-align:left;font-weight:600;font-size:10.5px;letter-spacing:.03em}'+
@@ -219,8 +237,10 @@ function renderPrivateEvents(){
   return peRenderList();
 }
 function peHeader(active){
-  var left = [['list','Events'],['calendar','Calendar'],['report','Monthly report'],['packs','Menu packages']];
+  var mine = [['list','Events'],['calendar','Calendar'],['report','Monthly report']];
   var right = [['chef','Chef corner'],['bev','Beverage corner']];
+  var secLbl = 'font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:#A88930;margin:9px 6px 3px';
+  var snav = function(k, label){ return '<span class="pe-snav'+(active===k?' on':'')+'" onclick="peGo(\''+k+'\')">'+label+'</span>'; };
   return '<div class="pe-wrap">'+
     '<div class="pe-kbar">'+
     '<span style="font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:#A88930;margin-right:2px">Kitchen &amp; bar</span>'+
@@ -229,43 +249,62 @@ function peHeader(active){
     }).join('')+'</div>'+
     '<div class="pe-shell">'+
     '<div class="pe-side">'+
-      '<button class="pe-btn" onclick="peNewEvent()">+ New event</button>'+
-      '<button class="pe-btn sec" onclick="peQuick.qty={};peGo(\'quick\')">Quick menu</button>'+
-      '<button class="pe-btn sec" onclick="peWizReset();peGo(\'wizard\')">Budget proposal</button>'+
-      '<button class="pe-btn sec" onclick="peCopyGuestLink()">Guest link</button>'+
-      '<div class="pe-sdiv"></div>'+
-    left.map(function(t){
-      return '<span class="pe-snav'+(active===t[0]?' on':'')+'" onclick="peGo(\''+t[0]+'\')">'+t[1]+'</span>';
-    }).join('')+
+      '<button class="pe-btn pe-primary" onclick="peNewEvent()">+ New event</button>'+
+      '<div style="'+secLbl+'">My events</div>'+
+      mine.map(function(t){ return snav(t[0], t[1]); }).join('')+
+      '<div style="'+secLbl+'">Tools</div>'+
+      '<span class="pe-snav" onclick="peQuick.qty={};peGo(\'quick\')">Quick menu</span>'+
+      '<span class="pe-snav'+(active==='wizard'?' on':'')+'" onclick="peWizReset();peGo(\'wizard\')">New quote from a budget</span>'+
+      '<span class="pe-snav" onclick="peCopyGuestLink()">Guest link</span>'+
+      snav('packs','Menu packages')+
     '</div>'+
     '<div class="pe-main">';
 }
 var PE_FOOT = '</div></div></div>';
 
 // ── list view ────────────────────────────────────────────────────────────────
+function peEventMatchesQuery(e, q){
+  if(!q) return true;
+  var hay = [e.client_name||'', e.company||'', e.contact_name||'', e.area||'', e.event_date||'', peDLabel(e.event_date)].join(' ').toLowerCase();
+  return hay.indexOf(q)>=0;
+}
+function pePassesStatus(e, f){
+  if(f==='all') return true;
+  if(f==='open') return ['draft','sent','confirmed','deposit'].indexOf(e.status)>=0;
+  return e.status===f;
+}
 function peFilteredEvents(){
   var f = peState.filter, q = (peState.q||'').toLowerCase();
   return peState.events.filter(function(e){
-    if(q && String((e.client_name||'')+' '+(e.company||'')+' '+(e.contact_name||'')).toLowerCase().indexOf(q)<0) return false;
-    if(f==='all') return true;
-    if(f==='open') return ['draft','sent','confirmed','deposit'].indexOf(e.status)>=0;
-    return e.status===f;
+    return peEventMatchesQuery(e, q) && pePassesStatus(e, f);
   });
 }
 function peRenderList(){
   var evs = peFilteredEvents().slice().sort(function(a,b){ return String(a.event_date||'9999').localeCompare(String(b.event_date||'9999')); });
-  var filters = [['open','Open'],['draft','Draft'],['sent','Sent'],['confirmed','Confirmed'],['deposit','Deposit paid'],['done','Done'],['all','All']];
+  var filters = [['open','Open'],['draft','Draft'],['sent','Sent'],['confirmed','Confirmed'],['deposit','Deposit paid'],['done','Done'],['lost','Lost'],['all','All']];
+  var filterName = {open:'Open',draft:'Draft',sent:'Sent',confirmed:'Confirmed',deposit:'Deposit paid',done:'Done',lost:'Lost',all:'All'};
   var pipeline = 0;
   evs.forEach(function(e){ var t = peEventValue(e); if(t && ['draft','sent','confirmed','deposit'].indexOf(e.status)>=0) pipeline += t; });
   var h = peHeader('list');
+  h += '<div class="pe-top" style="margin-bottom:6px"><div><div class="pe-title">Events</div>'+
+    '<div style="font-size:12px;color:#8B7355">Create a booking, quote it, send the agreement.</div></div>'+
+    '<button class="pe-btn pe-primary" onclick="peNewEvent()">+ New event</button></div>';
   h += '<div class="pe-card">';
   h += '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;border-bottom:1px solid rgba(107,31,42,0.1);padding-bottom:10px;margin-bottom:4px">'+filters.map(function(f){
     return '<span class="pe-tab'+(peState.filter===f[0]?' on':'')+'" style="font-size:11px;padding:4px 11px" onclick="peState.filter=\''+f[0]+'\';renderMain()">'+f[1]+'</span>';
   }).join('')+
-  '<input class="pe-in" style="width:190px;margin-left:auto" placeholder="Search client or company\u2026" value="'+peEsc(peState.q||'')+'" oninput="peState.q=this.value;renderMain();var el=document.querySelectorAll(\'input[placeholder^=Search]\')[0];if(el){el.focus();el.setSelectionRange(el.value.length,el.value.length);}">'+
+  '<input class="pe-in" style="width:210px;margin-left:auto" placeholder="Search name, company, date or area\u2026" value="'+peEsc(peState.q||'')+'" oninput="peState.q=this.value;renderMain();var el=document.querySelectorAll(\'input[placeholder^=Search]\')[0];if(el){el.focus();el.setSelectionRange(el.value.length,el.value.length);}">'+
   '</div>';
   if(!evs.length){
-    h += '<div style="text-align:center;padding:26px;color:#8B7355;font-size:13px">No events here yet. Tap “+ New event” to start a quotation.</div>';
+    var qNow = (peState.q||'').toLowerCase();
+    var inAll = peState.events.filter(function(e){ return peEventMatchesQuery(e, qNow); }).length;
+    if(peState.filter!=='all' && inAll){
+      h += '<div style="text-align:center;padding:22px;color:#8B7355;font-size:13px">No results in <b>'+filterName[peState.filter]+'</b> — '+inAll+' more in <span style="color:#400207;text-decoration:underline;cursor:pointer" onclick="peState.filter=\'all\';renderMain()">All</span>.</div>';
+    } else if(qNow){
+      h += '<div style="text-align:center;padding:22px;color:#8B7355;font-size:13px">Nothing matches your search. <span style="color:#400207;text-decoration:underline;cursor:pointer" onclick="peState.q=\'\';renderMain()">Clear search</span></div>';
+    } else {
+      h += '<div style="text-align:center;padding:26px;color:#8B7355;font-size:13px">No events here yet. Tap “+ New event” to start a quotation.</div>';
+    }
   } else {
     h += evs.map(function(e){
       var m = peStatusMeta(e.status);
@@ -304,13 +343,20 @@ function peRenderCalendar(){
   });
   var mLbl = first.toLocaleDateString('en-GB',{month:'long',year:'numeric'});
   var h = peHeader('calendar');
-  h += '<div class="pe-top" style="margin-bottom:8px"><button class="pe-btn sec sm" onclick="peCalShift(-1)">‹ Prev</button>'+
+  h += '<div class="pe-top" style="margin-bottom:8px"><span style="display:flex;gap:6px"><button class="pe-btn sec sm" onclick="peCalShift(-1)">‹ Prev</button>'+
+       '<button class="pe-btn sec sm" onclick="peCalToday()">Today</button></span>'+
        '<div class="pe-title" style="font-size:17px">'+mLbl+'</div>'+
        '<button class="pe-btn sec sm" onclick="peCalShift(1)">Next ›</button></div>';
+  // inline colour legend
+  var legend = [['sent','Proposal sent'],['confirmed','Confirmed'],['deposit','Deposit paid'],['draft','Draft'],['done','Done'],['lost','Lost']];
+  var pillColors = {draft:'#F1EDE6;color:#6B5E4E', sent:'#FAF0DA;color:#8A6400', confirmed:'#E7F0E4;color:#2E6B34', deposit:'#E4EDF5;color:#1F5580', done:'#EDEDED;color:#555', lost:'#F7E6E6;color:#933'};
+  h += '<div style="display:flex;flex-wrap:wrap;gap:5px 12px;margin-bottom:10px;font-size:11px;color:#6B4A33">'+legend.map(function(l){
+    return '<span style="display:inline-flex;align-items:center;gap:5px"><span style="width:11px;height:11px;border-radius:3px;background:'+pillColors[l[0]].split(';')[0]+';border:1px solid rgba(0,0,0,.12)"></span>'+l[1]+'</span>';
+  }).join('')+'</div>';
+  var today = peToday();
+  // wide screens: the month grid
   h += '<div class="pe-cal">'+['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(function(d){ return '<div class="pe-cal-h">'+d+'</div>'; }).join('');
   for(var i=0;i<startDow;i++) h += '<div class="pe-cal-d dim"></div>';
-  var today = peToday();
-  var pillColors = {draft:'#F1EDE6;color:#6B5E4E', sent:'#FAF0DA;color:#8A6400', confirmed:'#E7F0E4;color:#2E6B34', deposit:'#E4EDF5;color:#1F5580', done:'#EDEDED;color:#555', lost:'#F7E6E6;color:#933'};
   for(var d=1; d<=days; d++){
     var ds = y+'-'+String(mo).padStart(2,'0')+'-'+String(d).padStart(2,'0');
     var evs = byDate[ds]||[];
@@ -320,9 +366,24 @@ function peRenderCalendar(){
       }).join('')+'</div>';
   }
   h += '</div>';
-  h += '<div style="font-size:11px;color:#8B7355;margin-top:8px">Tap an event to open it. Colors follow the status pills.</div>';
+  // narrow screens: a stacked agenda list (the 7-col grid is unreadable on a phone)
+  var agendaDates = Object.keys(byDate).sort();
+  h += '<div class="pe-agenda">';
+  if(!agendaDates.length){ h += '<div style="font-size:12px;color:#8B7355;padding:10px 2px">No events this month.</div>'; }
+  agendaDates.forEach(function(ds){
+    h += '<div style="font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#8B7355;margin:10px 2px 4px">'+peEsc(peDLabel(ds))+'</div>';
+    byDate[ds].forEach(function(e){
+      var pm = peStatusMeta(e.status);
+      h += '<div class="pe-card" style="padding:9px 12px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;gap:8px;cursor:pointer" onclick="peGo(\'event\',\''+e.id+'\')">'+
+        '<span><b style="font-size:13px;color:#2C1810">'+peEsc(e.client_name||e.company||'Unnamed')+'</b>'+(e.guests?' · '+e.guests+' pax':'')+'<br><span style="font-size:11px;color:#8B7355">'+peEsc(e.area||'')+(e.time_from?' · '+peEsc(e.time_from):'')+'</span></span>'+
+        '<span class="pe-pill '+pm.pill+'">'+pm.n+'</span></div>';
+    });
+  });
+  h += '</div>';
+  h += '<div style="font-size:11px;color:#8B7355;margin-top:8px">Tap an event to open it.</div>';
   return h+PE_FOOT;
 }
+function peCalToday(){ peState.month = peMonthKey(peToday()); renderMain(); }
 function peCalShift(n){
   var y = +peState.month.slice(0,4), mo = +peState.month.slice(5,7)-1+n;
   var d = new Date(y, mo, 1);
@@ -352,7 +413,12 @@ function peCalcTotals(e){
   });
   var foodPP = (e.food_price_pp!=null && e.food_price_pp!=='') ? Number(e.food_price_pp) : (foodComputed||null);
   var bev = e.bev_package_id ? peBevById(e.bev_package_id) : null;
-  var bevPP = bev ? Number(bev.price_pp) : 0;
+  // Dry event: an alcoholic (or not-yet-flagged) package can never be charged —
+  // the "no alcohol" promise and the money must never contradict. Only a package
+  // explicitly flagged alcohol-free may carry a price on a dry event.
+  var dry = e.bev_mode==='dry';
+  var bevCounts = bev && !(dry && !bev.non_alcoholic);
+  var bevPP = bevCounts ? Number(bev.price_pp) : 0;
   var perGuest = (foodPP||0)+bevPP;
   var total = e.guests ? perGuest*Number(e.guests) : null;
   var foodCostPct = foodPP ? (cost/(foodPP/PE_GROSS))*100 : null;
@@ -379,6 +445,12 @@ function peRenderEvent(){
     if(!lr && peState.lostReasons) lr = peState.lostReasons[e.id];
     h += '<div style="font-size:12px;color:#933;margin:-4px 0 10px">Lost — '+peEsc(lr||'reason not recorded')+'</div>';
   }
+  // #11 — persistent next step once the event is ON: send the team brief.
+  if(e.status==='confirmed' || e.status==='deposit'){
+    h += '<div style="background:#E7F0E4;border:1px solid #BAD5B5;border-radius:10px;padding:10px 13px;margin-bottom:12px;font-size:12.5px;color:#2E5B30;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">'+
+      '<span>This event is <b>ON</b> — the kitchen and hostess team need the brief.</span>'+
+      '<button class="pe-btn sm" onclick="peSendCoordEmail(\''+e.id+'\')">Send coordination email now</button></div>';
+  }
 
   // #3 — double-booking warning
   var clash = peConflicts(e);
@@ -387,6 +459,17 @@ function peRenderEvent(){
       '⚠ Also booked in <b>'+peEsc(e.area)+'</b> on <b>'+peEsc(peDLabel(e.event_date))+'</b>: '+
       clash.map(function(c){ return '<span style="text-decoration:underline;cursor:pointer" onclick="peGo(\'event\',\''+c.id+'\')">'+peEsc(c.client_name||c.company||'another event')+'</span> ('+peEsc(peStatusMeta(c.status).n)+')'; }).join(', ')+
       ' — check this is intentional.</div>';
+  }
+
+  // P0/#6 — persistent banner when an edit voided the signed agreement (stays
+  // until it's re-sent for signature, unlike the fading toast that first fired).
+  if(peState.voided && peState.voided[e.id] && !e.signed_at){
+    h += '<div style="background:#FBE9E7;border:1px solid #E8A99E;border-radius:10px;padding:11px 13px;margin-bottom:12px;font-size:13px;color:#8A2A1A;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">'+
+      '<span><b>▲ Agreement voided by your edit</b> — it needs re-signing before this event is confirmed.</span>'+
+      '<span style="display:flex;gap:6px;flex-wrap:wrap">'+
+      '<button class="pe-btn sm" onclick="peEmailAgreement(\''+e.id+'\')"'+(e.contact_email?'':' disabled title="Add the client email above to re-send"')+'>Re-send for signature</button>'+
+      (e.contact_email?'':'<span style="font-size:11px;color:#8A2A1A;align-self:center">Add the client email above to re-send</span>')+
+      '<button class="pe-btn sec sm" onclick="if(peState.voided)delete peState.voided[\''+e.id+'\'];renderMain()">Dismiss</button></span></div>';
   }
 
   // facts
@@ -398,8 +481,9 @@ function peRenderEvent(){
   '</div><div class="pe-grid2" style="margin-top:10px">'+
     peIn('Dietary requirements','dietary',e)+peIn('Payment terms','payment_terms',e)+
   '</div>'+
-  '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap"><button class="pe-btn" onclick="peSaveEvent(\''+e.id+'\')">Save details</button>'+
-  '<button class="pe-btn sec" onclick="peDeleteEvent(\''+e.id+'\')"'+(e.status==='draft'?'':' disabled')+'>Delete draft</button></div></div>';
+  '<div style="margin-top:6px;font-size:11px;color:#8B7355">Every field saves as you leave it — you’ll see “Saved ✓”.</div>'+
+  '<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button class="pe-btn sec" onclick="peDeleteEvent(\''+e.id+'\')"'+(e.status==='draft'?'':' disabled')+'>Delete draft</button>'+
+  (e.status==='draft'?'':'<span style="font-size:11px;color:#8B7355">Only a draft can be deleted — mark this event Lost instead.</span>')+'</div></div>';
 
   // 2col: food+bev | totals+actions
   h += '<div class="pe-2col"><div>';
@@ -407,36 +491,44 @@ function peRenderEvent(){
   var sm = e.set_menu;
   h += '<div class="pe-card"><div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:6px">'+
     '<b style="font-size:14px;color:#400207">Food</b>'+
-    (sm ? '' : '<span><select class="pe-in" style="width:auto;display:inline-block" id="pe-pack-sel">'+
-      '<option value="">Start from a package…</option>'+
+    (sm ? '' : '<span><select class="pe-in" style="width:auto;display:inline-block" onchange="peApplyPackage(\''+e.id+'\',this.value)">'+
+      '<option value="">Start from a canapé package…</option>'+
       peState.packs.map(function(p){ return '<option value="'+p.id+'">'+peEsc(p.name)+' — AED '+peMoney(p.price_pp)+'/guest</option>'; }).join('')+
-    '</select> <button class="pe-btn sec sm" onclick="peApplyPackage(\''+e.id+'\')">Apply</button></span>')+'</div>';
+    '</select></span>')+'</div>';
+  if(!sm) h += '<div style="font-size:11px;color:#8B7355;margin:-2px 0 8px">Start from a canapé package above, or build the menu dish by dish below.</div>';
   h += peFoodSetMenuHTML(e);
   if(!sm){
     h += '<div class="pe-lbl">Package label on documents (free text)</div>'+
-       '<input class="pe-in" id="pe-f-package_label" value="'+peEsc(e.package_label||'')+'" placeholder="e.g. Canape Cortile">';
+       '<input class="pe-in" id="pe-f-package_label" value="'+peEsc(e.package_label||'')+'" placeholder="e.g. Canape Cortile" onchange="peFact(this,\'package_label\',\''+e.id+'\')">';
     h += '<div style="display:flex;gap:10px;margin-top:8px;align-items:end"><div style="flex:1"><div class="pe-lbl">Food price / guest (AED) — leave blank to use the dishes total</div>'+
-       '<input class="pe-in" id="pe-f-food_price_pp" type="number" value="'+(e.food_price_pp!=null?peEsc(e.food_price_pp):'')+'" placeholder="auto: '+peMoney(t.foodComputed)+'"></div></div>';
+       '<input class="pe-in" id="pe-f-food_price_pp" type="number" value="'+(e.food_price_pp!=null?peEsc(e.food_price_pp):'')+'" placeholder="auto: '+peMoney(t.foodComputed)+'" onchange="peFact(this,\'food_price_pp\',\''+e.id+'\')"></div></div>';
     h += '<div style="margin-top:10px">'+ (t.items.length ? t.items.map(function(it){
         var d = peDishById(it.dish_id); if(!d) return '';
-        return '<div class="pe-dishrow"><span>'+peEsc(d.name)+' <span style="color:#A5876B;font-size:10.5px">('+peEsc((d.allergens||[]).join(')(')||'–')+')</span>'+
+        return '<div class="pe-dishrow"><span>'+peEsc(d.name)+' <span style="color:#A5876B;font-size:10.5px">'+peEsc(peAllergenText(d.allergens))+'</span>'+
           ((d.allergens||[]).length||d.category==='Dessert'?'':' <span class="pe-pill pe-p-sent" style="font-size:10px">no allergens set</span>')+'</span>'+
           '<span style="display:flex;align-items:center;gap:6px;flex-shrink:0"><input class="pe-in" style="width:52px;padding:3px 6px" type="number" step="0.5" value="'+it.pcs_per_guest+'" onchange="peSetPcs(\''+it.id+'\',this.value)"> pc/guest'+
           '<span class="pe-x" onclick="peRemoveItem(\''+it.id+'\')">✕</span></span></div>';
       }).join('') : '<div style="font-size:12px;color:#8B7355;padding:6px 0">No dishes yet — apply a package or add from the library.</div>');
-    h += '<button class="pe-btn sec sm" style="margin-top:8px" onclick="peOpenDishPicker(\''+e.id+'\')">+ Add dish from library</button>';
+    h += '<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap"><button class="pe-btn sec sm" onclick="peOpenDishPicker(\''+e.id+'\')">+ Add dish from library</button>'+
+      (t.items.length?'<button class="pe-btn sec sm" style="color:#B00020;border-color:#B00020" onclick="peClearMenu(\''+e.id+'\')">Clear menu</button>':'')+'</div>';
   }
   h += '</div></div>';
   // beverage
   var dry = e.bev_mode==='dry';
+  // On a dry event only alcohol-free packages may be offered (and charged).
+  var bevOpts = peState.bevs.filter(function(b){
+    if(b.active===false && b.id!==e.bev_package_id) return false;
+    if(dry && !b.non_alcoholic) return false;
+    return true;
+  });
   h += '<div class="pe-card"><b style="font-size:14px;color:#400207">Beverage</b>'+
-    '<div style="margin-top:8px"><label style="font-size:12px;color:#6B4A33;cursor:pointer;display:inline-flex;align-items:center;gap:6px"><input type="checkbox" '+(dry?'checked':'')+' style="accent-color:#400207" onchange="peSaveField(\''+e.id+'\',\'bev_mode\',this.checked?\'dry\':null)"> Dry event — no alcohol served</label></div>'+
+    '<div style="margin-top:8px"><label style="font-size:12px;color:#6B4A33;cursor:pointer;display:inline-flex;align-items:center;gap:6px"><input type="checkbox" '+(dry?'checked':'')+' style="accent-color:#400207" onchange="peSetDryEvent(\''+e.id+'\',this.checked)"> Dry event — no alcohol served</label></div>'+
     (dry
-      ? '<div style="font-size:12px;color:#8A2A1A;background:#FBE9E7;border-radius:8px;padding:8px 10px;margin-top:8px">No alcohol will be served. Documents state this; soft drinks and water only unless a non-alcoholic package is added below.</div>'
+      ? '<div style="font-size:12px;color:#8A2A1A;background:#FBE9E7;border-radius:8px;padding:8px 10px;margin-top:8px">No alcohol will be served — this is stated on every document and the beverage charge is AED 0. Only alcohol-free packages (marked in the Beverage corner) can be added.</div>'
       : '')+
     '<div style="margin-top:8px"><select class="pe-in" id="pe-f-bev_package_id" onchange="peSaveField(\''+e.id+'\',\'bev_package_id\',this.value||null)">'+
       '<option value="">'+(dry?'No package — soft drinks &amp; water':'No beverage package')+'</option>'+
-      peState.bevs.filter(function(b){ return b.active!==false || b.id===e.bev_package_id; }).map(function(b){ return '<option value="'+b.id+'"'+(e.bev_package_id===b.id?' selected':'')+'>'+peEsc(b.name)+' — '+(b.duration_hours?b.duration_hours+'h — ':'')+'AED '+peMoney(b.price_pp)+'/guest'+(b.active===false?' (retired)':'')+'</option>'; }).join('')+
+      bevOpts.map(function(b){ return '<option value="'+b.id+'"'+(e.bev_package_id===b.id?' selected':'')+'>'+peEsc(b.name)+' — '+(b.duration_hours?b.duration_hours+'h — ':'')+'AED '+peMoney(b.price_pp)+'/guest'+(b.non_alcoholic?' · alcohol-free':'')+(b.active===false?' (retired)':'')+'</option>'; }).join('')+
     '</select>'+
     (e.bev_package_id && peBevById(e.bev_package_id) ? '<div style="font-size:11.5px;color:#8B7355;margin-top:6px">'+peEsc(peBevById(e.bev_package_id).includes||'')+'</div>' : '')+
     '</div></div>';
@@ -454,16 +546,19 @@ function peRenderEvent(){
       '<div class="pe-grid3">'+
       '<div><div class="pe-lbl">Pricing</div><select class="pe-in" onchange="peSaveField(\''+e.id+'\',\'pricing_type\',this.value)">'+
         '<option value="set_price"'+(e.pricing_type!=='min_spend'?' selected':'')+'>Set price (from totals)</option>'+
-        '<option value="min_spend"'+(e.pricing_type==='min_spend'?' selected':'')+'>Minimum spend</option></select></div>'+
+        '<option value="min_spend"'+(e.pricing_type==='min_spend'?' selected':'')+'>Minimum spend</option></select>'+
+        (e.pricing_type==='min_spend' ? '<div style="font-size:11px;margin-top:3px">'+(e.min_spend?'<b style="color:#400207">AED '+peMoney(e.min_spend)+'</b> <span style="color:#8B7355">— set up top</span>':'<span style="color:#B00020;cursor:pointer;text-decoration:underline" onclick="peScrollToField(\'min_spend\',\'Type the minimum spend in the facts above\')">▲ set the amount up top</span>')+'</div>' : '')+'</div>'+
       '<div><div class="pe-lbl">Deposit %</div><input class="pe-in" type="number" min="0" max="100" step="5" value="'+peEsc(agPct)+'" onchange="peSaveField(\''+e.id+'\',\'deposit_pct\',this.value===\'\'?null:Number(this.value))"></div>'+
-      '<div><div class="pe-lbl">Min. guaranteed guests</div><input class="pe-in" type="number" value="'+peEsc(e.guests_min!=null?e.guests_min:'')+'" placeholder="'+peEsc(e.guests||'')+'" onchange="peSaveField(\''+e.id+'\',\'guests_min\',this.value?parseInt(this.value,10):null)"></div>'+
+      '<div><div class="pe-lbl">Guests the client pays for (minimum)</div><input class="pe-in" type="number" value="'+peEsc(e.guests_min!=null?e.guests_min:'')+'" placeholder="'+peEsc(e.guests||'')+'" onchange="peSaveField(\''+e.id+'\',\'guests_min\',this.value?parseInt(this.value,10):null)"></div>'+
       '</div>'+
       '<div style="margin-top:8px"><div class="pe-lbl">Extras / remarks on the agreement (cake, flowers, tobacco, set-up…)</div>'+
       '<input class="pe-in" value="'+peEsc(e.agreement_remarks||'')+'" onchange="peSaveField(\''+e.id+'\',\'agreement_remarks\',this.value||null)"></div>'+
       '<div style="font-size:12px;color:#6B4A33;margin-top:8px">'+
       (agBase!=null
         ? (e.pricing_type==='min_spend'?'Minimum spend':'Quoted price')+': <b style="color:#400207">AED '+peMoney(agBase)+'</b>'+(agPct>0?' · deposit '+agPct+'%: <b style="color:#400207">AED '+peMoney(agDep)+'</b>':' · no deposit — balance on the day')
-        : '<span style="color:#B00020">▲ '+(e.pricing_type==='min_spend'?'Set the minimum spend above first.':'Add guests + dishes (or a set food price) first — the quoted price comes from the live totals.')+'</span>')+
+        : (e.pricing_type==='min_spend'
+            ? '<span style="color:#B00020;cursor:pointer;text-decoration:underline" onclick="peScrollToField(\'min_spend\',\'Type the minimum spend in the facts above\')">▲ Set the minimum spend above first.</span>'
+            : '<span style="color:#B00020">▲ Add guests + dishes (or a set food price) first — the quoted price comes from the live totals.</span>'))+
       '</div>';
   }
   h += '</div>';
@@ -497,19 +592,24 @@ function peRenderEvent(){
     h += '<div class="pe-flag" style="color:#B00020">▲ Allergens missing: '+peEsc(t.missingAllergens.join(', '))+'</div>';
   }
   h += '</div>';
-  // documents & actions — grouped: what the guest gets, then the team side
-  var noMail = e.contact_email?'':' disabled title="Add the client email above first"';
-  var noPhone = e.contact_phone?'':' disabled title="Add the client phone above first"';
+  // documents & actions — grouped: what the guest gets, then the team side.
+  // Disabled sends stay tappable but explain themselves (toast + jump to field)
+  // and carry a visible reason line, never a hover-only tooltip.
+  var hasMail = !!e.contact_email, hasPhone = !!e.contact_phone;
+  var mailClick = function(fn){ return hasMail ? fn+'(\''+e.id+'\')' : 'peScrollToField(\'contact_email\',\'Add the client email above to send\')'; };
+  var dim = function(ok){ return ok?'':' style="opacity:.55"'; };
   var grpLbl = 'font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#A88930;margin:2px 2px 5px';
   h += '<div class="pe-card" style="margin-top:12px"><b style="font-size:14px;color:#400207">Documents</b>'+
     '<div style="'+grpLbl+';margin-top:10px">For the guest</div>'+
     '<div style="display:flex;flex-direction:column;gap:7px">'+
-    '<button class="pe-btn" onclick="peEmailAgreement(\''+e.id+'\')"'+noMail+'>Send proposal &amp; agreement to sign</button>'+
-    '<button class="pe-btn sec" onclick="peEmailProposal(\''+e.id+'\')"'+noMail+'>Send proposal only (menu &amp; price)</button>'+
-    '<button class="pe-btn sec" onclick="peCopyClientLink(\''+e.id+'\')">Let the guest choose their dishes</button>'+
-    '<div style="display:flex;gap:7px"><button class="pe-btn sec" style="flex:1" onclick="peWhatsApp(\''+e.id+'\')"'+noPhone+'>WhatsApp</button>'+
-    '<button class="pe-btn sec" style="flex:1" onclick="peCopyAgreementLink(\''+e.id+'\')">Copy link</button>'+
+    '<button class="pe-btn"'+dim(hasMail)+' onclick="'+mailClick('peEmailAgreement')+'">Send full proposal (client signs online)</button>'+
+    '<button class="pe-btn sec"'+dim(hasMail)+' onclick="'+mailClick('peEmailProposal')+'">Send price &amp; menu only (no signing)</button>'+
+    (hasMail?'':'<div style="font-size:11px;color:#8A2A1A;margin:-3px 2px 2px">Add the client email above to send these.</div>')+
+    '<button class="pe-btn sec" onclick="peCopyClientLink(\''+e.id+'\')">Copy the guest’s menu link</button>'+
+    '<div style="display:flex;gap:7px"><button class="pe-btn sec" style="flex:1"'+dim(hasPhone)+' onclick="'+(hasPhone?'peWhatsApp(\''+e.id+'\')':'peScrollToField(\'contact_phone\',\'Add the client phone for WhatsApp\')')+'">WhatsApp proposal &amp; agreement</button>'+
+    '<button class="pe-btn sec" style="flex:1" onclick="peCopyAgreementLink(\''+e.id+'\')">Copy signing link</button>'+
     '<button class="pe-btn sec" style="flex:1" onclick="pePrintProposal(\''+e.id+'\')">Print PDF</button></div>'+
+    (hasPhone?'':'<div style="font-size:11px;color:#8A2A1A;margin:-3px 2px 2px">Add the client phone for WhatsApp.</div>')+
     (e.client_selection ? '<div style="font-size:11.5px;color:#2E6B34;background:#E7F0E4;border-radius:8px;padding:8px 10px">Client picked '+((e.client_selection.dish_ids||[]).length)+' dishes'+(e.client_selection.note?' · “'+peEsc(e.client_selection.note)+'”':'')+' <span style="text-decoration:underline;cursor:pointer" onclick="peApplyClientSelection(\''+e.id+'\')">apply to event</span></div>' : '')+
     '</div>'+
     '<div style="'+grpLbl+';margin-top:12px">For the team</div>'+
@@ -520,68 +620,91 @@ function peRenderEvent(){
   h += '</div></div>';
   return h+'</div>';
 }
+// Facts-card fields auto-save on blur (peFact), matching the fields below — one
+// save model per screen, each with a visible "Saved ✓".
 function peIn(lbl, field, e, type){
   var v = e[field];
   if(type==='date') v = v ? String(v).slice(0,10) : '';
-  return '<div><div class="pe-lbl">'+lbl+'</div><input class="pe-in" id="pe-f-'+field+'" type="'+(type||'text')+'" value="'+peEsc(v==null?'':v)+'"></div>';
+  return '<div><div class="pe-lbl">'+lbl+'</div><input class="pe-in" id="pe-f-'+field+'" type="'+(type||'text')+'" value="'+peEsc(v==null?'':v)+'" onchange="peFact(this,\''+field+'\',\''+e.id+'\')"></div>';
 }
 function peSel(lbl, field, e, opts){
-  return '<div><div class="pe-lbl">'+lbl+'</div><select class="pe-in" id="pe-f-'+field+'">'+
+  return '<div><div class="pe-lbl">'+lbl+'</div><select class="pe-in" id="pe-f-'+field+'" onchange="peFact(this,\''+field+'\',\''+e.id+'\')">'+
     '<option value=""></option>'+opts.map(function(o){ return '<option'+(e[field]===o?' selected':'')+'>'+o+'</option>'; }).join('')+
   '</select></div>';
 }
 // Fields whose change is money-relevant / contract-relevant — logged for
 // Andrea's audit trail, and (for guests/date) guarded when already signed.
 var PE_AUDIT_FIELDS = { guests:'Guests', event_date:'Date', food_price_pp:'Food price/guest', min_spend:'Minimum spend', area:'Area', time_from:'Start time', time_to:'End time' };
-async function peSaveEvent(id){
+// Which fields, when changed on a SIGNED event, void the agreement (they change
+// what the client actually agreed to). Menu changes are guarded separately.
+var PE_CONTRACT_FIELDS = ['guests','event_date','area','food_price_pp','min_spend'];
+var PE_FACT_INT = { guests:1 };
+var PE_FACT_NUM = { min_spend:1, food_price_pp:1 };
+// One auto-save handler for every facts-card field: coerces the value, keeps the
+// contract-void guard + Andrea's audit log, and always shows "Saved ✓".
+async function peFact(el, field, id){
   var e = peEvById(id); if(!e) return;
-  var fields = ['client_name','company','event_type','event_date','time_from','time_to','area','guests','min_spend','contact_name','contact_phone','contact_email','dietary','payment_terms','package_label','food_price_pp'];
-  var patch = { updated_by:peActor(), updated_at:new Date().toISOString() };
-  fields.forEach(function(f){
-    var el = document.getElementById('pe-f-'+f); if(!el) return;
-    var v = el.value.trim();
-    if(f==='guests') v = v ? parseInt(v,10) : null;
-    else if(f==='min_spend'||f==='food_price_pp') v = v ? Number(v) : null;
-    else v = v || null;
-    patch[f] = v;
-  });
-  // what actually changed (normalise dates to yyyy-mm-dd so re-saves are quiet)
-  function norm(f,val){ return f==='event_date' && val ? String(val).slice(0,10) : val; }
-  var changed = [];
-  Object.keys(PE_AUDIT_FIELDS).forEach(function(f){
-    if(patch[f]===undefined) return;
-    if(String(norm(f,patch[f])||'') !== String(norm(f,e[f])||'')) changed.push(f);
-  });
+  var raw = el.value;
+  var v;
+  if(PE_FACT_INT[field]) v = raw.trim() ? parseInt(raw,10) : null;
+  else if(PE_FACT_NUM[field]) v = raw.trim() ? Number(raw) : null;
+  else if(field==='event_date') v = raw ? String(raw).slice(0,10) : null;
+  else v = raw.trim() || null;
+  var cur = field==='event_date' ? (e[field]?String(e[field]).slice(0,10):null) : (e[field]==null?null:e[field]);
+  if(String(cur==null?'':cur) === String(v==null?'':v)) return;   // nothing changed — stay quiet
 
-  // #2 — a signed agreement is a contract. Changing guests or the date breaks
-  // what the client signed, so require a deliberate re-sign.
-  var breaksContract = e.signed_at && (changed.indexOf('guests')>=0 || changed.indexOf('event_date')>=0);
-  if(breaksContract){
-    if(!confirm('This event is already SIGNED. Changing the '+
-        (changed.indexOf('guests')>=0 && changed.indexOf('event_date')>=0 ? 'guests and date' : (changed.indexOf('guests')>=0?'guest count':'date'))+
+  var isAudit = !!PE_AUDIT_FIELDS[field];
+  var breaks = !!e.signed_at && PE_CONTRACT_FIELDS.indexOf(field)>=0;
+  if(breaks){
+    if(!confirm('This event is already SIGNED. Changing the '+(PE_AUDIT_FIELDS[field]||field).toLowerCase()+
         ' voids the signed agreement — the client will need to sign again.\n\nProceed and reset it to “Proposal sent”?')){
-      renderMain(); return;
+      renderMain(); return;   // revert the field on screen
     }
+  }
+  var patch = {}; patch[field] = v; patch.updated_at = new Date().toISOString(); patch.updated_by = peActor();
+  // P1.10 — typing a minimum spend makes it the pricing basis in one step.
+  var autoMin = false;
+  if(field==='min_spend' && v!=null && e.pricing_type!=='min_spend'){ patch.pricing_type = 'min_spend'; autoMin = true; }
+  if(breaks){
     patch.signed_at = null; patch.signed_name = null; patch.signed_designation = null; patch.contract_snapshot = null;
     if(['confirmed','deposit','done'].indexOf(e.status)>=0) patch.status = 'sent';
   }
-
   var r = await sb.from('events_desk').update(patch).eq('id', id);
   if(r.error){ peToast('NOT saved — '+(r.error.message||'check connection'), true); return; }
   Object.keys(patch).forEach(function(k){ e[k] = patch[k]; });
 
-  // #4 — audit log for money/contract fields on anything past draft
-  if(changed.length && e.status!=='draft'){
-    var detail = changed.map(function(f){ return PE_AUDIT_FIELDS[f]+' → '+(patch[f]==null||patch[f]===''?'—':patch[f]); }).join(' · ');
-    sb.from('event_log').insert({event_id:id, action:'edited', detail:detail.slice(0,400), actor:peActor()}).then(function(){ peLoadLog(id); });
+  if(isAudit && e.status!=='draft'){
+    sb.from('event_log').insert({event_id:id, action:'edited', detail:(PE_AUDIT_FIELDS[field]+' → '+(v==null||v===''?'—':v)).slice(0,400), actor:peActor()}).then(function(){ peLoadLog(id); });
   }
-  if(breaksContract){
-    sb.from('event_log').insert({event_id:id, action:'unsigned', detail:'signed agreement voided by an edit — awaiting re-sign', actor:peActor()});
+  if(breaks){
+    peState.voided = peState.voided || {}; peState.voided[id] = true;
+    sb.from('event_log').insert({event_id:id, action:'unsigned', detail:'signed agreement voided by editing '+(PE_AUDIT_FIELDS[field]||field), actor:peActor()}).then(function(){ peLoadLog(id); });
     peToast('Saved — the signed agreement was reset. Re-send it for signature.');
   } else {
-    peToast('Saved ✓');
+    peToast(autoMin ? 'Saved ✓ — pricing switched to Minimum spend' : 'Saved ✓');
   }
   renderMain();
+}
+// Menu/set-menu edits on a SIGNED event also void the agreement — same deliberate
+// re-sign, behind a confirm that names the consequence. Returns true to proceed.
+async function peConfirmSignedEdit(id, label){
+  var e = peEvById(id); if(!e || !e.signed_at) return true;
+  if(!confirm('This event is already SIGNED. Changing '+label+' voids the signed agreement — the client will need to sign again.\n\nProceed and reset it to “Proposal sent”?')) return false;
+  var patch = { signed_at:null, signed_name:null, signed_designation:null, contract_snapshot:null, updated_at:new Date().toISOString(), updated_by:peActor() };
+  if(['confirmed','deposit','done'].indexOf(e.status)>=0) patch.status = 'sent';
+  var r = await sb.from('events_desk').update(patch).eq('id', id);
+  if(r.error){ peToast('NOT saved — '+(r.error.message||'check connection'), true); return false; }
+  Object.keys(patch).forEach(function(k){ e[k] = patch[k]; });
+  peState.voided = peState.voided || {}; peState.voided[id] = true;
+  sb.from('event_log').insert({event_id:id, action:'unsigned', detail:'signed agreement voided by editing '+label, actor:peActor()}).then(function(){ peLoadLog(id); });
+  return true;
+}
+function peEventOfItem(itemId){
+  var found = null;
+  Object.keys(peState.items).forEach(function(k){
+    (peState.items[k]||[]).forEach(function(i){ if(i.id===itemId) found = k; });
+  });
+  return found;
 }
 // #3 — other live events sharing this date + area (a real double-booking risk).
 function peConflicts(e){
@@ -592,12 +715,66 @@ function peConflicts(e){
       String(x.event_date||'').slice(0,10)===d && x.area===e.area;
   });
 }
-async function peSaveField(id, field, value){
+// P0 — the first set-menu "choose" course whose per-option split doesn't add up
+// to the guest count (so we can warn before a proposal/agreement goes out).
+function peSetMenuSplitGap(e){
+  if(!e.set_menu) return null;
+  var m = peSetMenuByKey(e.set_menu.key); if(!m) return null;
+  var g = Number(e.guests)||0; if(!g) return null;
+  for(var i=0;i<m.courses.length;i++){
+    var c = m.courses[i]; if(!c.choose) continue;
+    var counts = (e.set_menu.choices&&e.set_menu.choices[c.name])||{};
+    var sum = 0; c.options.forEach(function(o){ sum += Number(counts[o])||0; });
+    if(sum!==g) return {course:c.name, sum:sum, guests:g};
+  }
+  return null;
+}
+// P0 — gaps that should stop a client-facing send until the user confirms.
+// Returns an array of plain-language gap sentences (empty = clean to send).
+function peSendChecks(e){
+  var t = peCalcTotals(e);
+  var msgs = [];
+  if((t.total==null || !t.total) && !e.min_spend) msgs.push('This proposal has no price and no minimum spend set.');
+  var gap = peSetMenuSplitGap(e);
+  if(gap) msgs.push('The '+gap.course+' choices add up to '+gap.sum+' of '+gap.guests+' guests.');
+  return msgs;
+}
+// Confirm past any send gaps, naming each one. Returns true to proceed.
+function peConfirmSend(e){
+  var gaps = peSendChecks(e);
+  if(!gaps.length) return true;
+  return confirm(gaps.join('\n')+'\n\nSend anyway?');
+}
+async function peSaveField(id, field, value, opts){
+  opts = opts || {};
   var e = peEvById(id); if(!e) return;
   var patch = {}; patch[field] = value; patch.updated_at = new Date().toISOString();
   var r = await sb.from('events_desk').update(patch).eq('id', id);
   if(r.error){ peToast('NOT saved — check connection', true); return; }
-  e[field] = value; renderMain();
+  e[field] = value;
+  if(!opts.silent) peToast('Saved ✓');
+  renderMain();
+}
+// P0 — dry event: turning it on clears any alcoholic (not alcohol-free) package
+// so the "no alcohol" promise and the beverage charge can never contradict.
+async function peSetDryEvent(id, on){
+  var e = peEvById(id); if(!e) return;
+  var patch = { bev_mode: on ? 'dry' : null, updated_at:new Date().toISOString() };
+  var cleared = false;
+  if(on && e.bev_package_id){
+    var bev = peBevById(e.bev_package_id);
+    if(bev && !bev.non_alcoholic){
+      if(!confirm('“'+ (bev.name||'The selected package') +'” includes alcohol. A dry event serves no alcohol, so it will be removed from this event.\n\nMark this a dry event?')){
+        renderMain(); return;
+      }
+      patch.bev_package_id = null; cleared = true;
+    }
+  }
+  var r = await sb.from('events_desk').update(patch).eq('id', id);
+  if(r.error){ peToast('NOT saved — check connection', true); return; }
+  Object.keys(patch).forEach(function(k){ e[k] = patch[k]; });
+  peToast(on ? (cleared ? 'Dry event set ✓ — alcohol package removed' : 'Dry event set ✓ — no alcohol, beverage charge AED 0') : 'Dry event turned off ✓');
+  renderMain();
 }
 async function peDeleteEvent(id){
   var e = peEvById(id); if(!e || e.status!=='draft') return;
@@ -611,6 +788,10 @@ async function peDeleteEvent(id){
 async function peSetStatus(id, status){
   var e = peEvById(id); if(!e || e.status===status) return;
   if(status==='lost'){ peAskLostReason(id); return; }
+  // #11 — Confirmed / Deposit paid are real commitments the kitchen and hostess
+  // act on. Name the consequence before flipping.
+  if(status==='confirmed' && !confirm('Mark as Confirmed?\n\nThe kitchen and hostess team treat this as ON — they will prep and staff for it.')) return;
+  if(status==='deposit' && !confirm('Mark Deposit paid?\n\nThis records the client’s deposit as received and keeps the event confirmed.')) return;
   var was = e.status;
   var r = await sb.from('events_desk').update({status:status, updated_by:peActor(), updated_at:new Date().toISOString()}).eq('id', id);
   if(r.error){ peToast('Status NOT changed — check connection', true); return; }
@@ -618,7 +799,9 @@ async function peSetStatus(id, status){
   sb.from('event_log').insert({event_id:id, action:'status', detail:was+' → '+status, actor:peActor()}).then(function(){ peLoadLog(id); });
   renderMain();
   if(status==='confirmed'){
-    peToast('Confirmed — the kitchen and hostess can now see this event. Send the coordination email from Documents.');
+    peToast('Confirmed ✓ — now send the event brief so the kitchen and hostess have it.');
+  } else {
+    peToast('Saved ✓');
   }
 }
 var PE_LOST_REASONS = ['Price too high','Date not available','Chose another venue','No response','Guest cancelled'];
@@ -669,21 +852,43 @@ async function peAddFollowup(id){
 }
 
 // ── dishes on an event ───────────────────────────────────────────────────────
-async function peApplyPackage(eventId){
-  var sel = document.getElementById('pe-pack-sel'); if(!sel || !sel.value) return;
-  var pack = null; peState.packs.forEach(function(p){ if(p.id===sel.value) pack=p; });
+// #12 — applying a package replaces the current menu (like the beverage dropdown
+// replaces the drink). Confirm before overwriting a menu the user has tuned.
+async function peApplyPackage(eventId, packId){
+  if(!packId){ renderMain(); return; }
+  var pack = null; peState.packs.forEach(function(p){ if(p.id===packId) pack=p; });
   if(!pack) return;
-  var existing = (peState.items[eventId]||[]).map(function(i){ return i.dish_id; });
-  var toAdd = (pack.dish_ids||[]).filter(function(d){ return existing.indexOf(d)<0; })
-    .map(function(d){ return {event_id:eventId, dish_id:d, pcs_per_guest:1, qty_confirmed:false}; });
+  var e = peEvById(eventId);
+  var cur = peState.items[eventId]||[];
+  var custom = cur.some(function(i){ return i.qty_confirmed || Number(i.pcs_per_guest)!==1; }) || (e && e.food_price_pp!=null && e.food_price_pp!=='');
+  if(cur.length && custom && !confirm('Applying “'+pack.name+'” replaces your current menu and price with AED '+peMoney(pack.price_pp)+'/guest — continue?')){ renderMain(); return; }
+  if(!(await peConfirmSignedEdit(eventId, 'the menu'))){ renderMain(); return; }
+  if(cur.length){
+    var dr = await sb.from('event_items').delete().in('id', cur.map(function(i){ return i.id; }));
+    if(dr.error){ peToast('Could not replace the menu — check connection', true); return; }
+    peState.items[eventId] = [];
+  }
+  var toAdd = (pack.dish_ids||[]).map(function(d){ return {event_id:eventId, dish_id:d, pcs_per_guest:1, qty_confirmed:false}; });
   if(toAdd.length){
     var r = await sb.from('event_items').insert(toAdd).select();
     if(r.error){ peToast('Package NOT applied — check connection', true); return; }
-    peState.items[eventId] = (peState.items[eventId]||[]).concat(r.data||[]);
+    peState.items[eventId] = (r.data||[]);
   }
-  await peSaveField(eventId, 'package_label', pack.name);
-  await peSaveField(eventId, 'food_price_pp', Number(pack.price_pp));
-  peToast('Package applied — adjust dishes freely');
+  await peSaveField(eventId, 'package_label', pack.name, {silent:true});
+  await peSaveField(eventId, 'food_price_pp', Number(pack.price_pp), {silent:true});
+  peToast('“'+pack.name+'” applied ✓ — AED '+peMoney(pack.price_pp)+'/guest, adjust dishes freely');
+}
+// #12 — clear the whole menu (with a confirm), so a wrong package can be undone.
+async function peClearMenu(eventId){
+  var cur = peState.items[eventId]||[];
+  if(!cur.length){ peToast('No dishes to clear'); return; }
+  if(!confirm('Remove all '+cur.length+' dishes from this event’s menu?')) return;
+  if(!(await peConfirmSignedEdit(eventId, 'the menu'))) return;
+  var dr = await sb.from('event_items').delete().in('id', cur.map(function(i){ return i.id; }));
+  if(dr.error){ peToast('Could not clear the menu — check connection', true); return; }
+  peState.items[eventId] = [];
+  await peSaveField(eventId, 'package_label', null, {silent:true});
+  peToast('Menu cleared ✓');
 }
 function peOpenDishPicker(eventId){
   var existing = (peState.items[eventId]||[]).map(function(i){ return i.dish_id; });
@@ -703,12 +908,15 @@ function peOpenDishPicker(eventId){
   document.body.insertAdjacentHTML('beforeend', h);
 }
 async function peAddItem(eventId, dishId){
+  if(!(await peConfirmSignedEdit(eventId, 'the menu'))) return;
   var r = await sb.from('event_items').insert({event_id:eventId, dish_id:dishId, pcs_per_guest:1, qty_confirmed:false}).select().single();
   if(r.error || !r.data){ peToast('NOT added — check connection', true); return; }
   (peState.items[eventId]=peState.items[eventId]||[]).push(r.data);
   renderMain();
 }
 async function peRemoveItem(itemId){
+  var evId = peEventOfItem(itemId);
+  if(evId && !(await peConfirmSignedEdit(evId, 'the menu'))){ renderMain(); return; }
   var r = await sb.from('event_items').delete().eq('id', itemId);
   if(r.error){ peToast('NOT removed — check connection', true); return; }
   Object.keys(peState.items).forEach(function(k){
@@ -718,15 +926,19 @@ async function peRemoveItem(itemId){
 }
 async function peSetPcs(itemId, val){
   var v = Number(val); if(!(v>0)){ peToast('Enter a quantity above 0', true); renderMain(); return; }
+  var evId = peEventOfItem(itemId);
+  if(evId && !(await peConfirmSignedEdit(evId, 'the menu quantities'))){ renderMain(); return; }
   var r = await sb.from('event_items').update({pcs_per_guest:v, qty_confirmed:true}).eq('id', itemId);
   if(r.error){ peToast('NOT saved — check connection', true); return; }
   Object.keys(peState.items).forEach(function(k){
     peState.items[k].forEach(function(i){ if(i.id===itemId){ i.pcs_per_guest = v; i.qty_confirmed = true; } });
   });
+  peToast('Saved ✓');
   renderMain();
 }
 async function peApplyClientSelection(eventId){
   var e = peEvById(eventId); if(!e || !e.client_selection) return;
+  if(!(await peConfirmSignedEdit(eventId, 'the menu'))) return;
   var want = e.client_selection.dish_ids||[];
   var qmap = e.client_selection.quantities||{};
   var g = Number(e.guests)||0;
@@ -752,8 +964,8 @@ function peFoodSetMenuHTML(e){
   var sm = e.set_menu;
   var h = '<div style="margin-top:8px;padding-top:8px;border-top:1px dashed rgba(107,31,42,0.15)">';
   if(!sm){
-    h += '<div class="pe-lbl">Or use a set menu</div>'+
-      '<span style="display:flex;gap:6px;align-items:center"><select class="pe-in" style="flex:1" id="pe-sm-sel"><option value="">Choose a set menu…</option>'+
+    h += '<div class="pe-lbl">Or use a plated set menu…</div>'+
+      '<span style="display:flex;gap:6px;align-items:center"><select class="pe-in" style="flex:1" id="pe-sm-sel"><option value="">Choose a plated set menu…</option>'+
       PE_SET_MENUS.map(function(m){ return '<option value="'+m.key+'">'+peEsc(m.name)+' — AED '+m.price+'/guest</option>'; }).join('')+
       '</select><button class="pe-btn sec sm" onclick="peApplySetMenu(\''+e.id+'\')">Use</button></span>';
     return h+'</div>';
@@ -774,7 +986,7 @@ function peFoodSetMenuHTML(e){
             '<span style="font-size:12.5px">'+o+'</span>'+
             '<input class="pe-in" style="width:70px;padding:4px 6px" type="number" min="0" value="'+(counts[o]!=null?counts[o]:'')+'" onchange="peSetMenuCount(\''+e.id+'\',\''+peSmEsc(c.name)+'\',\''+peSmEsc(o)+'\',this.value)"></div>';
         }).join('')+
-        '<div style="font-size:11.5px;margin-top:3px;color:'+((g&&sum===g)?'#2E6B34':'#8A6400')+'">'+sum+' of '+(g||'—')+' guests assigned'+
+        '<div style="font-size:12px;margin-top:3px;color:'+((g&&sum===g)?'#2E6B34':'#B00020')+(g&&sum!==g?';font-weight:600':'')+'">'+((g&&sum!==g)?'▲ ':'')+sum+' of '+(g||'—')+' guests assigned'+
         ((g&&sum!==g)?' — '+(sum<g?(g-sum)+' still to assign':(sum-g)+' over'):(g?' ✓':''))+'</div></div>';
     });
   }
@@ -783,6 +995,7 @@ function peFoodSetMenuHTML(e){
 async function peApplySetMenu(eventId){
   var sel = document.getElementById('pe-sm-sel'); if(!sel || !sel.value) return;
   var m = peSetMenuByKey(sel.value); if(!m) return;
+  if(!(await peConfirmSignedEdit(eventId, 'the menu'))){ renderMain(); return; }
   var patch = { set_menu:{key:m.key, choices:{}}, package_label:m.name, food_price_pp:m.price, updated_at:new Date().toISOString() };
   var r = await sb.from('events_desk').update(patch).eq('id', eventId);
   if(r.error){ peToast('NOT applied — '+(r.error.message||'check connection'), true); return; }
@@ -791,6 +1004,7 @@ async function peApplySetMenu(eventId){
   renderMain();
 }
 async function peClearSetMenu(eventId){
+  if(!(await peConfirmSignedEdit(eventId, 'the menu'))){ renderMain(); return; }
   var patch = { set_menu:null, package_label:null, food_price_pp:null, updated_at:new Date().toISOString() };
   var r = await sb.from('events_desk').update(patch).eq('id', eventId);
   if(r.error){ peToast('NOT changed — check connection', true); return; }
@@ -807,7 +1021,7 @@ async function peSetMenuCount(eventId, course, option, val){
   if(n>0) sm.choices[course][option] = n; else delete sm.choices[course][option];
   var r = await sb.from('events_desk').update({set_menu:sm, updated_at:new Date().toISOString()}).eq('id', eventId);
   if(r.error){ peToast('NOT saved — check connection', true); return; }
-  e.set_menu = sm; renderMain();
+  e.set_menu = sm; peToast('Saved ✓'); renderMain();
 }
 
 // ── documents ────────────────────────────────────────────────────────────────
@@ -886,7 +1100,7 @@ function peBriefBodyHTML(e){
   body += row('Booking name', e.client_name)+row('Company', e.company)+row('Contact', (e.contact_name||'')+(e.contact_phone?' · '+e.contact_phone:'')+(e.contact_email?' · '+e.contact_email:''));
   body += row('Event date', peDLabel(e.event_date))+row('Type', e.event_type)+row('Timing', (e.time_from||'')+(e.time_to?' – '+e.time_to:''));
   body += row('Area', e.area)+row('Guests', e.guests);
-  body += row('Food', (e.package_label||'Bespoke selection')+(t.foodPP?' · AED '+peMoney(t.foodPP)+'/guest':'')+(t.pcs?' · '+(Math.round(t.pcs*10)/10)+' pcs/guest':''));
+  body += row('Food', (e.package_label||'Bespoke selection')+(t.foodPP?' · AED '+peMoney(t.foodPP)+'/guest':'')+(t.pcs?' · '+(Math.round(t.pcs*10)/10)+' pieces/guest':''));
   var bev = e.bev_package_id ? peBevById(e.bev_package_id) : null;
   body += row('Beverage', bev ? bev.name+' · AED '+peMoney(bev.price_pp)+'/guest' : (e.bev_mode==='dry'?'DRY EVENT — no alcohol served (soft drinks & water)':'—'));
   body += row('Estimated total', t.total ? 'AED '+peMoney(t.total) : '—')+row('Minimum spend', e.min_spend?'AED '+peMoney(e.min_spend):'—');
@@ -982,7 +1196,7 @@ function peKitchenPrepHTML(e, t){
       lastServe = r.d.serve;
       h += '<tr><td colspan="3" style="background:#F3E9DA;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#8A6A4F">'+(r.d.serve==='Dessert'?'Dolci':peEsc(r.d.serve))+'</td></tr>';
     }
-    h += '<tr><td>'+peEsc(r.d.name)+' <span style="font-size:10px;color:#A5876B">('+((r.d.allergens||[]).join(')(')||'–')+')</span></td>'+
+    h += '<tr><td>'+peEsc(r.d.name)+' <span style="font-size:10px;color:#A5876B">'+peEsc(peAllergenText(r.d.allergens))+'</span></td>'+
       '<td>'+(Math.round(r.pcs*10)/10)+' pc'+(r.unconfirmed?' <span style="color:#B08D3E;font-size:9px">default</span>':'')+'</td>'+
       '<td><b>'+(r.total!=null ? r.total+' pcs' : '— set guests')+'</b>'+(r.minFlag?' <span style="color:#B00020;font-size:10px">min order '+r.minFlag+'</span>':'')+'</td></tr>';
   });
@@ -1023,7 +1237,7 @@ function peCoordPrepHTML(e){
       h += '<tr><td colspan="3" style="padding:3px 8px;border:1px solid #ddd;color:#8A6A4F;font-size:11px;text-transform:uppercase;letter-spacing:1px">'+(r.d.serve==='Dessert'?'Dolci':peEsc(r.d.serve))+'</td></tr>';
     }
     if(r.total) totalPcs += r.total;
-    h += '<tr><td style="padding:3px 8px;border:1px solid #ddd">'+peEsc(r.d.name)+' <span style="color:#999;font-size:11px">('+((r.d.allergens||[]).join(')(')||'–')+')</span></td>'+
+    h += '<tr><td style="padding:3px 8px;border:1px solid #ddd">'+peEsc(r.d.name)+' <span style="color:#999;font-size:11px">'+peEsc(peAllergenText(r.d.allergens))+'</span></td>'+
       '<td style="padding:3px 8px;border:1px solid #ddd">'+(Math.round(r.pcs*10)/10)+' pc'+(r.unconfirmed?' <span style="color:#B08D3E;font-size:10px">default</span>':'')+'</td>'+
       '<td style="padding:3px 8px;border:1px solid #ddd"><b>'+(r.total!=null?r.total+' pcs':'— set guests')+'</b>'+(r.minFlag?' <span style="color:#B00020;font-size:11px">min '+r.minFlag+'</span>':'')+'</td></tr>';
   });
@@ -1036,7 +1250,8 @@ function peCoordPrepHTML(e){
 var PE_PEOPLE = {
   'vdetoni@robertos.ae':'Valentina De Toni','dvalla@robertos.ae':'Danilo Valla','jthomas@robertos.ae':'Jins Thomas','mpetrosino@robertos.ae':'Manuel Petrosino',
   'astellacci@robertos.ae':'Antonio Stellacci','afalcone@robertos.ae':'Andrea Falcone',
-  'reservations@robertos.ae':'Reservations','asacchi@skelmore.com':'Andrea Sacchi'
+  'reservations@robertos.ae':'Reservations','asacchi@skelmore.com':'Andrea Sacchi',
+  'kvukotic@robertos.ae':'Katarina Vukotic','rmazouz@robertos.ae':'R. Mazouz','aviscardi@robertos.ae':'A. Viscardi'
 };
 // A branded, tap-to-include recipient picker — replaces the raw prompt() box.
 function pePickRecipients(opts){
@@ -1093,6 +1308,12 @@ function peRcpAdd(){
 }
 function peSendCoordEmail(id){
   var e = peEvById(id); if(!e) return;
+  // P0 — the team can't act on a brief that's missing the basics.
+  var missing = [];
+  if(!(e.client_name||e.company)) missing.push('a booking name');
+  if(!e.event_date) missing.push('the date');
+  if(!e.guests) missing.push('the guest count');
+  if(missing.length && !confirm('This event is still missing '+missing.join(', ')+'.\n\nSend the brief to the team anyway?')) return;
   var standard = (state.userEmail?[state.userEmail]:[]).concat(PE_TEAM_CC);
   standard = standard.filter(function(x,i){ return standard.indexOf(x)===i; });
   pePickRecipients({
@@ -1123,6 +1344,7 @@ async function peDoSendCoord(id, list){
 }
 async function peEmailProposal(id){
   var e = peEvById(id); if(!e || !e.contact_email) return;
+  if(!peConfirmSend(e)) return;
   if(!confirm('Send the branded proposal to '+e.contact_email+' now?')) return;
   // The sender is copied (her inbox record of exactly what the client got)
   // and set as reply-to, so the client's answer reaches a person.
@@ -1144,6 +1366,7 @@ async function peEmailProposal(id){
 }
 function peWhatsApp(id){
   var e = peEvById(id); if(!e || !e.contact_phone) return;
+  if(!peConfirmSend(e)) return;
   var digits = String(e.contact_phone).replace(/[^0-9]/g,'');
   if(digits.length && digits[0]==='0') digits = '971'+digits.slice(1);
   if(digits.length <= 9) digits = '971'+digits;
@@ -1181,6 +1404,7 @@ function peViewSignedCopy(id){
 }
 async function peEmailAgreement(id){
   var e = peEvById(id); if(!e || !e.contact_email) return;
+  if(!peConfirmSend(e)) return;
   if(!confirm('Email the proposal + agreement link to '+e.contact_email+' now?\nThe guest reads the menu and terms on one page and signs electronically.')) return;
   var sender = state.userEmail || 'vdetoni@robertos.ae';
   var url = peAgreementUrl(e);
@@ -1194,6 +1418,7 @@ async function peEmailAgreement(id){
       html: peGuestEmailHTML('Your Event Agreement', intro, e.contact_name||e.client_name, null, inner)
     }});
     if(r.error || (r.data&&r.data.error)) throw (r.error||r.data.error);
+    if(peState.voided) delete peState.voided[id];   // re-sent — clear the void banner
     peToast('Sent to '+e.contact_email+' ✓ — the events desk is emailed the moment they sign');
     if(e.status==='draft') peSetStatus(id, 'sent');
     sb.from('event_log').insert({event_id:id, action:'email', detail:'proposal + agreement link → '+e.contact_email, actor:peActor()}).then(function(){ peLoadLog(id); });
@@ -1216,26 +1441,38 @@ function peRenderBevCorner(){
   return h+PE_FOOT;
 }
 function peRenderPacksView(){
+  var tab = peState.packsTab || 'setmenu';
   var bevs = peState.bevs.filter(function(b){ return b.active!==false; });
   var h = peHeader('packs');
-  h += '<div style="font-size:12px;color:#8B7355;margin-bottom:10px">Tick anything from either section — one set menu, a few beverage packages, or a mix — the guest receives it all in ONE branded email.</div>';
-  h += '<div class="pe-card"><div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap"><b style="color:#400207">Food packages — the set menus</b>'+peSelLinks('food')+'</div>'+
-    '<div style="font-size:11px;color:#8B7355;margin:2px 0 8px">Open any menu to see the designed PDF — the email carries a button to each ticked menu.</div>'+
-    PE_SET_MENUS.map(function(m){
-      return '<div class="pe-dishrow"><span><label style="cursor:pointer"><input type="checkbox" class="pe-mp-check" data-kind="food" data-key="'+m.key+'" onchange="peMpCount()" style="accent-color:#400207;margin-right:8px;vertical-align:-2px">'+
-        '<b>'+m.name+'</b> · AED '+m.price+' / person</label><br>'+
-        '<span style="font-size:11px;color:#8B7355">'+m.line+'</span></span>'+
-        '<button class="pe-btn sec sm" onclick="window.open(\''+m.pdf+'\',\'_blank\')">Open PDF</button></div>';
-    }).join('')+'</div>';
-  h += '<div class="pe-card"><div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap"><b style="color:#400207">Beverage packages</b>'+peSelLinks('bev')+'</div>'+
-    '<div style="font-size:11px;color:#8B7355;margin:2px 0 8px">Guest prices only — costs never leave the Beverage corner.</div>'+
-    (bevs.length?bevs.map(function(b){
-      return '<div class="pe-dishrow"><span><label style="cursor:pointer"><input type="checkbox" class="pe-mp-check" data-kind="bev" data-key="'+b.id+'" onchange="peMpCount()" style="accent-color:#400207;margin-right:8px;vertical-align:-2px">'+
-        '<b>'+peEsc(b.name)+'</b>'+(b.duration_hours?' · '+b.duration_hours+'h':'')+' · AED '+peMoney(b.price_pp)+' / guest</label><br>'+
-        '<span style="font-size:11px;color:#8B7355">'+peEsc(b.includes||'')+'</span></span></div>';
-    }).join(''):'<div style="font-size:12px;color:#8B7355">No packages yet — Manuel adds them in the Beverage corner.</div>')+'</div>';
-  h += peMenuPackEmailForm();
-  h += '<div style="font-size:11.5px;color:#8B7355;margin-top:12px">Looking for the canapé quotation templates (like Canape Cortile)? <span style="color:#400207;text-decoration:underline;cursor:pointer" onclick="peGo(\'packlib\')">They live here</span>.</div>';
+  // #15 — canapé packages are now a first-class tab, not a grey footer link.
+  var tabs = [['canape','Canapé packages'],['setmenu','Set menus'],['bev','Beverage']];
+  h += '<div class="pe-tabs" style="margin-bottom:12px">'+tabs.map(function(t){
+    return '<span class="pe-tab'+(tab===t[0]?' on':'')+'" onclick="peState.packsTab=\''+t[0]+'\';renderMain()">'+t[1]+'</span>';
+  }).join('')+'</div>';
+  if(tab==='canape'){
+    h += '<div style="font-size:12px;color:#8B7355;margin-bottom:10px">Ready-made canapé packages (like Canape Cortile) that start a quotation in one tap from an event’s Food card.</div>';
+    h += peRenderPackLib();
+  } else if(tab==='bev'){
+    h += '<div style="font-size:12px;color:#8B7355;margin-bottom:10px">Tick the beverage packages to send — the guest receives one branded email. Guest prices only; costs never leave the Beverage corner.</div>';
+    h += '<div class="pe-card"><div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap"><b style="color:#400207">Beverage packages</b>'+peSelLinks('bev')+'</div>'+
+      (bevs.length?bevs.map(function(b){
+        return '<div class="pe-dishrow"><span><label style="cursor:pointer"><input type="checkbox" class="pe-mp-check" data-kind="bev" data-key="'+b.id+'" onchange="peMpCount()" style="accent-color:#400207;margin-right:8px;vertical-align:-2px">'+
+          '<b>'+peEsc(b.name)+'</b>'+(b.duration_hours?' · '+b.duration_hours+'h':'')+' · AED '+peMoney(b.price_pp)+' / guest</label><br>'+
+          '<span style="font-size:11px;color:#8B7355">'+peEsc(b.includes||'')+'</span></span></div>';
+      }).join(''):'<div style="font-size:12px;color:#8B7355">No packages yet — Manuel adds them in the Beverage corner.</div>')+'</div>';
+    h += peMenuPackEmailForm();
+  } else {
+    h += '<div style="font-size:12px;color:#8B7355;margin-bottom:10px">Tick the set menus to send — the guest receives one branded email with a button to each menu’s PDF.</div>';
+    h += '<div class="pe-card"><div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap"><b style="color:#400207">Set menus</b>'+peSelLinks('food')+'</div>'+
+      '<div style="font-size:11px;color:#8B7355;margin:2px 0 8px">Open any menu to see the designed PDF — the email carries a button to each ticked menu.</div>'+
+      PE_SET_MENUS.map(function(m){
+        return '<div class="pe-dishrow"><span><label style="cursor:pointer"><input type="checkbox" class="pe-mp-check" data-kind="food" data-key="'+m.key+'" onchange="peMpCount()" style="accent-color:#400207;margin-right:8px;vertical-align:-2px">'+
+          '<b>'+m.name+'</b> · AED '+m.price+' / person</label><br>'+
+          '<span style="font-size:11px;color:#8B7355">'+m.line+'</span></span>'+
+          '<button class="pe-btn sec sm" onclick="window.open(\''+m.pdf+'\',\'_blank\')">Open PDF</button></div>';
+      }).join('')+'</div>';
+    h += peMenuPackEmailForm();
+  }
   return h+PE_FOOT;
 }
 function peSelLinks(kind){
@@ -1425,7 +1662,7 @@ function peRenderDishLib(){
   }
   h += '<div class="pe-card">'+peState.dishes.map(function(d){
     return '<div class="pe-dishrow" style="opacity:'+(d.active?1:.45)+'">'+
-      '<span><b>'+peEsc(d.name)+'</b> <span style="color:#A5876B;font-size:10.5px">('+((d.allergens||[]).join(')(')||'–')+')</span><br>'+
+      '<span><b>'+peEsc(d.name)+'</b> <span style="color:#A5876B;font-size:10.5px">'+peEsc(peAllergenText(d.allergens))+'</span><br>'+
       '<span style="font-size:11px;color:#8B7355">'+peEsc(d.category)+' · '+peEsc(d.serve)+' · '+peEsc(d.tier||'')+' · AED '+peMoney(d.sell_price)+'/pc · cost '+(d.cost!=null?d.cost:'—')+(d.description?' · “'+peEsc(d.description)+'”':' · <span style="color:#B00020">no menu line</span>')+'</span></span>'+
       '<button class="pe-btn sec sm" onclick="peState.editDishId=\''+d.id+'\';peState.aiDesc=null;renderMain()">Edit</button></div>';
   }).join('')+'</div>';
@@ -1493,6 +1730,7 @@ function peRenderBevLib(){
       '<div><div class="pe-lbl">Price / guest (AED)</div><input class="pe-in" id="pe-b-price_pp" type="number" value="'+peEsc(ed.price_pp!=null?ed.price_pp:'')+'"></div>'+
       '<div><div class="pe-lbl">Cost / guest (AED) — our cost, never shown to clients</div><input class="pe-in" id="pe-b-cost_pp" type="number" step="0.01" value="'+peEsc(ed.cost_pp!=null?ed.cost_pp:'')+'"></div>'+
       '</div><div style="margin-top:8px"><div class="pe-lbl">Includes</div><input class="pe-in" id="pe-b-includes" value="'+peEsc(ed.includes||'')+'" placeholder="House wine, beers, soft drinks, water"></div>'+
+      '<div style="margin-top:10px"><label style="font-size:12.5px;color:#6B4A33;cursor:pointer;display:inline-flex;align-items:center;gap:7px"><input type="checkbox" id="pe-b-non_alcoholic" '+(ed.non_alcoholic?'checked':'')+' style="accent-color:#400207"> Alcohol-free package (soft drinks / mocktails only) — can be offered on a dry event</label></div>'+
       '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">'+
       '<button class="pe-btn" onclick="peSaveBev(\''+(ed.id||'')+'\')">Save package</button>'+
       '<button class="pe-btn sec" onclick="peState.editBevId=null;renderMain()">Cancel</button>'+
@@ -1514,11 +1752,20 @@ async function peSaveBev(id){
   var g = function(f){ var el=document.getElementById('pe-b-'+f); return el?el.value.trim():''; };
   if(!g('name')){ peToast('Package name is required', true); return; }
   if(!g('price_pp')){ peToast('Price per guest is required', true); return; }
+  var naEl = document.getElementById('pe-b-non_alcoholic');
   var row = { name:g('name'), duration_hours:g('duration_hours')?Number(g('duration_hours')):null,
               price_pp:Number(g('price_pp')), cost_pp:g('cost_pp')?Number(g('cost_pp')):null,
-              includes:g('includes')||null, created_by:peActor() };
-  var r = id ? await sb.from('event_bev_packages').update(row).eq('id', id).select().single()
-             : await sb.from('event_bev_packages').insert(row).select().single();
+              includes:g('includes')||null, non_alcoholic: naEl?!!naEl.checked:false, created_by:peActor() };
+  async function saveRow(rr){
+    return id ? await sb.from('event_bev_packages').update(rr).eq('id', id).select().single()
+              : await sb.from('event_bev_packages').insert(rr).select().single();
+  }
+  var r = await saveRow(row);
+  // Degrade gracefully if the alcohol-free column isn't in the DB yet — save the
+  // rest so the app never breaks before the SQL is run.
+  if(r.error && /non_alcoholic/.test(String(r.error.message||''))){
+    delete row.non_alcoholic; r = await saveRow(row);
+  }
   if(r.error || !r.data){ peToast('NOT saved — '+String(r.error&&r.error.message||'').slice(0,100), true); return; }
   if(id){ peState.bevs = peState.bevs.map(function(b){ return b.id===id ? r.data : b; }); } else peState.bevs.push(r.data);
   peState.editBevId = null; peToast('Beverage package saved ✓'); renderMain();
@@ -1572,18 +1819,20 @@ async function peSavePack(id){
 // the app does ALL the math on her own library — beverage total, balance for
 // food per guest, then a canapé mix that fits it under the kitchen rules
 // (8–12 pcs/guest, variety cap by guest count, min orders). No AI, no guessing.
-var peWiz = { client:'', date:'', time:'', area:'Scala bar & lounge', guests:'', budget:'', bev:'', excl:{}, busy:false };
-function peWizReset(){ peWiz = { client:'', date:'', time:'', area:'Scala bar & lounge', guests:'', budget:'', bev:'', excl:{}, busy:false }; }
+var peWiz = { client:'', date:'', time:'', area:'Scala bar & lounge', guests:'', budget:'', bev:'', excl:{}, dietaryNote:'', vegonly:false, dry:false, busy:false };
+function peWizReset(){ peWiz = { client:'', date:'', time:'', area:'Scala bar & lounge', guests:'', budget:'', bev:'', excl:{}, dietaryNote:'', vegonly:false, dry:false, busy:false }; }
 function peWizSet(f, v){ peWiz[f] = v; peWizPaint(); }
 function peWizTogl(k){ peWiz.excl[k] = !peWiz.excl[k]; renderMain(); }
+function peWizToglVeg(){ peWiz.vegonly = !peWiz.vegonly; renderMain(); }
+function peWizToglDry(){ peWiz.dry = !peWiz.dry; if(peWiz.dry){ var b=peWiz.bev?peBevById(peWiz.bev):null; if(b && !b.non_alcoholic){ peWiz.bev=''; peToast('Dry event — alcohol packages hidden ✓'); } else peToast('Dry event set ✓'); } else peToast('Dry event turned off ✓'); renderMain(); }
 function peWizCap(guests){ return guests>=30 ? 15 : (guests>=20 ? 8 : 5); }
 // What the guest doesn't want, applied to the live library before any math —
 // so the mix the wizard proposes is always actually serveable.
-var PE_WIZ_EXCL = [['beef','No beef','Beef'],['chicken','No chicken','Chicken'],['fish','No fish / shellfish','Fish'],['dessert','No dessert','Dessert'],['vegonly','Vegetarian only',null]];
+var PE_WIZ_EXCL = [['beef','No beef','Beef'],['chicken','No chicken','Chicken'],['fish','No fish / shellfish','Fish'],['dessert','No dessert','Dessert']];
 function peWizPool(){
   return peState.dishes.filter(function(d){
     if(!d.active) return false;
-    if(peWiz.excl.vegonly && d.category!=='Vegetarian' && d.category!=='Dessert') return false;
+    if(peWiz.vegonly && d.category!=='Vegetarian' && d.category!=='Dessert') return false;
     if(peWiz.excl.beef && d.category==='Beef') return false;
     if(peWiz.excl.chicken && d.category==='Chicken') return false;
     if(peWiz.excl.fish && d.category==='Fish') return false;
@@ -1668,6 +1917,8 @@ function peWizCalc(){
   var guests = parseInt(peWiz.guests,10)||0;
   var budget = Number(peWiz.budget)||0;
   var bev = peWiz.bev==='none' ? null : (peWiz.bev ? peBevById(peWiz.bev) : undefined);
+  // Dry event: an alcoholic package never counts toward the budget.
+  if(peWiz.dry && bev && !bev.non_alcoholic) bev = null;
   if(!guests || !budget || bev===undefined) return {ready:false};
   if(guests < 15) return {ready:false, err:'Canapé receptions start at 15 guests — for smaller groups use a normal event.'};
   var bevPP = bev ? Number(bev.price_pp)||0 : 0;
@@ -1684,6 +1935,7 @@ function peWizCalc(){
   }
   var pool = peWizPool();
   var exclOn = PE_WIZ_EXCL.filter(function(x){ return peWiz.excl[x[0]]; }).map(function(x){ return x[1].toLowerCase(); });
+  if(peWiz.vegonly) exclOn.unshift('vegetarian only');
   // A tight budget (under AED 80/guest) still gets a proposal — a lighter one,
   // clearly labelled, rather than a dead end.
   var light = foodPP < 80;
@@ -1703,9 +1955,9 @@ function peWizCalc(){
           cap:peWizCap(guests), excl:exclOn, light:light, bigGap:bigGap, foodUnspentPP:foodUnspentPP};
 }
 function peRenderWizard(){
-  var bevs = peState.bevs.filter(function(b){ return b.active!==false; });
-  var h = peHeader('');
-  h += '<div class="pe-top"><div class="pe-title">Budget proposal</div></div>';
+  var bevs = peState.bevs.filter(function(b){ return b.active!==false && (!peWiz.dry || b.non_alcoholic); });
+  var h = peHeader('wizard');
+  h += '<div class="pe-top"><div class="pe-title">New quote from a budget</div></div>';
   h += '<div style="font-size:12px;color:#8B7355;margin-bottom:10px">Type the enquiry as the guest gave it — the app computes the beverage, the balance for food, and builds a canapé selection that fits. You review, then send.</div>';
   h += '<div class="pe-card"><div class="pe-grid3">'+
     '<div><div class="pe-lbl">Client name</div><input class="pe-in" id="pe-w-client" value="'+peEsc(peWiz.client)+'" onchange="peWiz.client=this.value" placeholder="e.g. Mrs Anna"></div>'+
@@ -1718,12 +1970,17 @@ function peRenderWizard(){
     '</div><div style="margin-top:8px"><div class="pe-lbl">Beverage package the guest wants</div>'+
     '<select class="pe-in" onchange="peWizSet(\'bev\',this.value)"><option value="" '+(peWiz.bev===''?'selected':'')+'>Choose…</option>'+
     '<option value="none"'+(peWiz.bev==='none'?' selected':'')+'>No beverage package — whole budget on food</option>'+
-    bevs.map(function(b){ return '<option value="'+b.id+'"'+(peWiz.bev===b.id?' selected':'')+'>'+peEsc(b.name)+(b.duration_hours?' — '+b.duration_hours+'h':'')+' — AED '+peMoney(b.price_pp)+'/guest</option>'; }).join('')+
-    '</select></div>'+
+    bevs.map(function(b){ return '<option value="'+b.id+'"'+(peWiz.bev===b.id?' selected':'')+'>'+peEsc(b.name)+(b.duration_hours?' — '+b.duration_hours+'h':'')+' — AED '+peMoney(b.price_pp)+'/guest'+(b.non_alcoholic?' · alcohol-free':'')+'</option>'; }).join('')+
+    '</select>'+
+    '<div style="margin-top:8px"><label style="font-size:12.5px;color:#6B4A33;cursor:pointer;display:inline-flex;align-items:center;gap:7px"><input type="checkbox" '+(peWiz.dry?'checked':'')+' style="accent-color:#400207" onclick="peWizToglDry()"> Dry event — no alcohol served (beverage charge AED 0)</label></div></div>'+
     '<div style="margin-top:8px"><div class="pe-lbl">The guest doesn’t want… (tap to exclude)</div>'+
     PE_WIZ_EXCL.map(function(x){
       return '<span class="pe-chip'+(peWiz.excl[x[0]]?' on':'')+'" onclick="peWizTogl(\''+x[0]+'\')">'+x[1]+'</span>';
-    }).join('')+'</div></div>';
+    }).join('')+'</div>'+
+    '<div style="margin-top:8px"><div class="pe-lbl">Menu style</div>'+
+    '<span class="pe-chip'+(peWiz.vegonly?' on':'')+'" onclick="peWizToglVeg()">Vegetarian only</span></div>'+
+    '<div style="margin-top:8px"><div class="pe-lbl">Other dietary / allergy notes (reaches the kitchen)</div>'+
+    '<input class="pe-in" id="pe-w-diet" value="'+peEsc(peWiz.dietaryNote)+'" onchange="peWiz.dietaryNote=this.value" placeholder="e.g. one guest has a severe nut allergy; two gluten-free"></div></div>';
   h += '<div id="pe-wiz-out">'+peWizOutHTML()+'</div>';
   return h+PE_FOOT;
 }
@@ -1736,19 +1993,23 @@ function peWizOutHTML(){
   if(w.err) return '<div class="pe-card" style="border-color:#B00020"><div style="font-size:13px;color:#B00020">'+w.err+'</div></div>';
   if(!w.ready) return '<div class="pe-card"><div style="font-size:12px;color:#8B7355">Fill guests, budget and the beverage choice — the proposal appears here instantly.</div></div>';
   function mrow(l, v){ return '<div style="display:flex;justify-content:space-between;font-size:12.5px;padding:3px 0"><span style="color:#6B4A33">'+l+'</span><span style="color:#400207;font-weight:600">'+v+'</span></div>'; }
+  var perGuest = w.realFoodPP + w.bevPP;
+  var summary = w.mix.pcs+' canapés per guest · AED '+peMoney(perGuest)+' per guest · '+
+    (w.gap<0 ? 'AED '+peMoney(-w.gap)+' over budget' : 'AED '+peMoney(w.gap)+' under budget');
   var h = '<div class="pe-card" style="background:#F7EEE2;border-color:rgba(201,168,76,0.5)">'+
+    '<div style="font-size:14.5px;color:#400207;font-weight:600;margin-bottom:8px">'+summary+'</div>'+
     '<div class="pe-lbl" style="color:#8A6A4F">The math — every number from your own prices</div>'+
     (w.bev ? mrow('Beverage — '+peEsc(w.bev.name)+(w.bev.duration_hours?' ('+w.bev.duration_hours+'h)':''), w.guests+' × AED '+peMoney(w.bevPP)+' = AED '+peMoney(w.bevTotal))
-           : mrow('Beverage', 'none — whole budget on food'))+
+           : mrow('Beverage', peWiz.dry ? 'dry event — no alcohol (AED 0)' : 'none — whole budget on food'))+
     mrow('Balance for food', 'AED '+peMoney(w.balance)+' → AED '+peMoney(w.foodPP)+' / guest')+
-    mrow('Canapé mix that fits', w.mix.pcs+' pcs/guest — '+[w.mix.s?w.mix.s+' Signature':null, w.mix.e?w.mix.e+' Elevated':null, w.mix.c?w.mix.c+' Classic':null].filter(Boolean).join(' + '))+
+    mrow('Canapé mix that fits', w.mix.pcs+' pieces/guest — '+[w.mix.s?w.mix.s+' Signature':null, w.mix.e?w.mix.e+' Elevated':null, w.mix.c?w.mix.c+' Classic':null].filter(Boolean).join(' + '))+
     mrow('Proposal total', w.guests+' × AED '+peMoney(w.realFoodPP+w.bevPP)+' = AED '+peMoney(w.total))+
     (w.gap<0
       ? '<div style="font-size:12px;margin-top:4px;color:#B00020">AED '+peMoney(-w.gap)+' OVER budget</div>'
       : w.bigGap
-        ? '<div style="font-size:12px;margin-top:4px;color:#8A6400">▲ AED '+peMoney(w.gap)+' of the budget is unspent — canapés top out near AED 420/guest. Suggest a longer beverage package, an extra course, or a bespoke menu to use it.</div>'
+        ? '<div style="font-size:12px;margin-top:4px;color:#8A6400">This is the full canapé spread for this budget — extra courses (a set-menu addition or a longer beverage package) are added later in the event. AED '+peMoney(w.gap)+' of the budget is left for those.</div>'
         : '<div style="font-size:12px;margin-top:4px;color:#2E6B34">AED '+peMoney(w.gap)+' under the AED '+peMoney(w.budget)+' budget ✓</div>')+
-    (w.light ? '<div style="font-size:12px;margin-top:4px;color:#8A6400">▲ Light selection — '+w.mix.pcs+' pcs/guest is below the usual 8–12. Fine for a short reception; raise the budget for a fuller spread.</div>' : '')+
+    (w.light ? '<div style="font-size:12px;margin-top:4px;color:#8A6400">▲ Light selection — '+w.mix.pcs+' pieces/guest is below the usual 8–12. Fine for a short reception; raise the budget for a fuller spread.</div>' : '')+
     '<div style="font-size:10.5px;color:#8B7355;margin-top:4px">Kitchen rules applied: '+(w.light?'light ':'8–12 ')+'pieces per guest · '+w.guests+' guests → up to '+w.cap+' different canapés · minimum orders respected'+(w.excl&&w.excl.length?' · <b style="color:#400207">guest requests: '+w.excl.join(', ')+'</b>':'')+'.</div></div>';
   var groups = [{k:'Cold',n:'Cold'},{k:'Hot',n:'Hot'},{k:'Dessert',n:'Dolci'}];
   h += '<div class="pe-card"><b style="color:#400207">Suggested menu — '+w.picked.length+' canapés</b>'+
@@ -1759,7 +2020,7 @@ function peWizOutHTML(){
     h += '<div style="font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:#A88930;margin:8px 0 2px">'+g.n+'</div>';
     list.forEach(function(p){
       var d = p.dish;
-      h += '<div class="pe-dishrow"><span><b>'+peEsc(d.name)+'</b> <span style="color:#A5876B;font-size:10.5px">('+((d.allergens||[]).join(')(')||'–')+')</span>'+
+      h += '<div class="pe-dishrow"><span><b>'+peEsc(d.name)+'</b> <span style="color:#A5876B;font-size:10.5px">'+peEsc(peAllergenText(d.allergens))+'</span>'+
         '<br><span style="font-size:11px;color:#8B7355">'+peEsc(d.tier||'')+' · AED '+peMoney(d.sell_price)+'/pc'+(p.pcs>1?' · ×'+p.pcs+' per guest':'')+'</span></span>'+
         '<span style="font-size:11.5px;color:#400207;white-space:nowrap">AED '+peMoney((Number(d.sell_price)||0)*p.pcs)+' /guest</span></div>';
     });
@@ -1780,12 +2041,16 @@ async function peWizCreate(){
       var parts = peWiz.time.split(':');
       timeTo = String((parseInt(parts[0],10)+Math.round(hrs))%24).padStart(2,'0')+':'+parts[1];
     }
+    var dietParts = [];
+    if(w.excl&&w.excl.length) dietParts.push('Guest requests: '+w.excl.join(', '));
+    if(peWiz.dietaryNote && peWiz.dietaryNote.trim()) dietParts.push(peWiz.dietaryNote.trim());
     var row = { venue_id:'robertos-difc', status:'draft', updated_by:peActor(),
                 client_name: peWiz.client||null, event_date: peWiz.date||null,
                 time_from: peWiz.time||null, time_to: timeTo,
                 area: peWiz.area||null, guests: w.guests,
                 bev_package_id: w.bev ? w.bev.id : null,
-                dietary: (w.excl&&w.excl.length) ? 'Guest requests: '+w.excl.join(', ') : null,
+                bev_mode: peWiz.dry ? 'dry' : null,
+                dietary: dietParts.length ? dietParts.join(' · ') : null,
                 payment_terms:'50% deposit to confirm, balance on the day' };
     var r = await sb.from('events_desk').insert(row).select().single();
     if(r.error || !r.data) throw (r.error||{message:'no data'});
@@ -1876,9 +2141,11 @@ function peEmailForecast(){
   var fc = peForecastData(); if(!fc) return;
   var standard = ['asacchi@skelmore.com'].concat(state.userEmail?[state.userEmail]:[]);
   standard = standard.filter(function(x,i){ return standard.indexOf(x)===i; });
+  // #20 — external (skelmore.com) addresses start unticked; the sender opts them in.
+  var checked = standard.filter(function(x){ return !/skelmore\.com$/i.test(x); });
   pePickRecipients({
     title:'Email the forecast', subtitle:fc.from+' to '+fc.to,
-    standard:standard, checked:standard, you:state.userEmail,
+    standard:standard, checked:checked, you:state.userEmail,
     onSend:function(list){ peDoEmailForecast(fc, list); }
   });
 }
@@ -1899,10 +2166,10 @@ function peRenderReport(){
   var first = new Date(+mk.slice(0,4), +mk.slice(5,7)-1, 1);
   var mLbl = first.toLocaleDateString('en-GB',{month:'long',year:'numeric'});
   var groups = [
-    {n:'DEF (Definite)', st:['deposit','done']},
-    {n:'Confirmed without payment', st:['confirmed']},
-    {n:'Pipeline', st:['draft','sent']},
-    {n:'Lost (LOS)', st:['lost']}
+    {n:'Definite — deposit paid', st:['deposit','done']},
+    {n:'Confirmed (no deposit yet)', st:['confirmed']},
+    {n:'Pipeline — enquiries', st:['draft','sent']},
+    {n:'Lost', st:['lost']}
   ];
   var monthEvents = peState.events.filter(function(e){ return e.event_date && peMonthKey(e.event_date)===mk; })
     .sort(function(a,b){ return String(a.event_date).localeCompare(String(b.event_date)); });
@@ -1916,9 +2183,10 @@ function peRenderReport(){
     '<span style="font-size:12px;color:#8B7355">to</span>'+
     '<input class="pe-in" style="width:auto" type="date" id="pe-fc-to" value="'+peEsc(peState.fcTo||'')+'">'+
     '<button class="pe-btn sm" onclick="peRunForecast()">Run forecast</button>'+
-    (fc?'<button class="pe-btn sec sm" onclick="pePrintForecastDoc()">Print / PDF</button>'+
-        '<button class="pe-btn sec sm" onclick="peEmailForecast()">Email report</button>':'')+
+    '<button class="pe-btn sec sm"'+(fc?'':' style="opacity:.55"')+' onclick="'+(fc?'pePrintForecastDoc()':'peToast(\'Run a forecast first\',true)')+'">Print / PDF</button>'+
+    '<button class="pe-btn sec sm"'+(fc?'':' style="opacity:.55"')+' onclick="'+(fc?'peEmailForecast()':'peToast(\'Run a forecast first\',true)')+'">Email report</button>'+
     '</div>'+
+    (fc?'':'<div style="font-size:11px;color:#8B7355;margin-top:6px">Pick the dates and tap <b>Run forecast</b> — then you can print or email it.</div>')+
     (fc?'<div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:10px;font-size:12.5px;color:#5A3A1E">'+
       '<span><b style="color:#2E6B34">Confirmed &amp; definite:</b> AED '+peMoney(fc.conf.v)+' \u00b7 '+fc.conf.n+' events</span>'+
       '<span><b style="color:#8A6400">Pipeline:</b> AED '+peMoney(fc.pipe.v)+' \u00b7 '+fc.pipe.n+' enquiries</span>'+
@@ -2004,7 +2272,7 @@ function peRenderQuick(){
       var q = Number(peQuick.qty[d.id])||0;
       var bad = q>0 && d.min_order && q<d.min_order;
       h += '<div class="pe-dishrow"><span><b style="font-weight:600">'+peEsc(d.name)+'</b>'+
-        ((d.allergens||[]).length?' <span style="color:#A5876B;font-size:10px">('+(d.allergens||[]).join(')(')+')</span>':'')+
+        ' <span style="color:#A5876B;font-size:10px">'+peEsc(peAllergenText(d.allergens))+'</span>'+
         '<br><span style="font-size:11px;color:#8B7355">'+peEsc(d.tier||'')+' \u00b7 AED '+peMoney(d.sell_price)+'/pc \u00b7 min '+(d.min_order||10)+' pcs'+
         (d.description?' \u00b7 '+peEsc(d.description):'')+'</span>'+
         (bad?'<br><span style="font-size:10.5px;color:#B00020">below the minimum order of '+d.min_order+'</span>':'')+'</span>'+
