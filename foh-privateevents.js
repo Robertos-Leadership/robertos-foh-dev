@@ -717,7 +717,9 @@ function peRenderEvent(){
         ? (e.pricing_type==='min_spend'?'Minimum spend':'Quoted price')+': <b style="color:#400207">AED '+peMoney(agBase)+'</b>'+(agPct>0?' · deposit '+agPct+'%: <b style="color:#400207">AED '+peMoney(agDep)+'</b>':' · no deposit — balance on the day')
         : (e.pricing_type==='min_spend'
             ? '<span style="color:#B00020;cursor:pointer;text-decoration:underline" onclick="peScrollToField(\'min_spend\',\'Type the minimum spend in the facts above\')">▲ Set the minimum spend above first.</span>'
-            : '<span style="color:#B00020">▲ Add guests + dishes (or a set food price) first — the quoted price comes from the live totals.</span>'))+
+            : (!e.guests
+                ? '<span style="color:#B00020;cursor:pointer;text-decoration:underline" onclick="peScrollToField(\'guests\',\'Add the guest count in the facts above\')">▲ Add the guest count above first.</span>'
+                : '<span style="color:#B00020;cursor:pointer;text-decoration:underline" onclick="peScrollToCard(\'food\')">▲ Add the menu or a set food price first — the quoted price comes from it.</span>')))+
       '</div>';
   }
   h += '</div>';
@@ -899,6 +901,9 @@ function peSendChecks(e){
   if((t.total==null || !t.total) && !e.min_spend) msgs.push('This proposal has no price and no minimum spend set.');
   var gap = peSetMenuSplitGap(e);
   if(gap) msgs.push('The '+gap.course+' choices add up to '+gap.sum+' of '+gap.guests+' guests.');
+  // Allergen safety — the dishes below have no allergen info recorded, so a guest
+  // (or the kitchen) can't see what's in them. Named before any client-facing send.
+  if(t.missingAllergens && t.missingAllergens.length) msgs.push(t.missingAllergens.length+(t.missingAllergens.length>1?' dishes have':' dish has')+' no allergens recorded: '+t.missingAllergens.join(', ')+'.');
   return msgs;
 }
 // Confirm past any send gaps, naming each one. Returns true to proceed.
@@ -927,7 +932,7 @@ async function peSetDryEvent(id, on){
     var bev = peBevById(e.bev_package_id);
     if(bev && !bev.non_alcoholic){
       if(!confirm('“'+ (bev.name||'The selected package') +'” includes alcohol. A dry event serves no alcohol, so it will be removed from this event.\n\nMark this a dry event?')){
-        renderMain(); return;
+        peToast('Not changed — this is still a normal event with the alcohol package'); renderMain(); return;
       }
       patch.bev_package_id = null; cleared = true;
     }
@@ -971,7 +976,8 @@ function peAskLostReason(id){
   var bg = document.createElement('div'); bg.className='pe-modal-bg';
   bg.addEventListener('click', function(ev){ if(ev.target===bg) bg.remove(); });
   bg.innerHTML = '<div class="pe-modal" style="max-width:440px">'+
-    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><b style="color:#400207">Mark as lost — what happened?</b><span class="pe-x" onclick="this.closest(\'.pe-modal-bg\').remove()">✕</span></div>'+
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px"><b style="color:#400207">Mark as lost — what happened?</b><span class="pe-x" onclick="this.closest(\'.pe-modal-bg\').remove()">✕</span></div>'+
+    '<div style="font-size:11.5px;color:#8B7355;margin-bottom:8px">This moves the event out of your open pipeline. You can reopen it later from the “Lost” filter.</div>'+
     '<div style="margin-bottom:8px">'+PE_LOST_REASONS.map(function(r){
       return '<span class="pe-chip" onclick="var p=this.parentNode;p.querySelectorAll(\'.pe-chip\').forEach(function(c){c.classList.remove(\'on\')});this.classList.add(\'on\')">'+r+'</span>';
     }).join('')+'</div>'+
@@ -1010,7 +1016,7 @@ async function peAddFollowup(id){
   var el = document.getElementById('pe-fu-note'); if(!el || !el.value.trim()) return;
   var r = await sb.from('event_log').insert({event_id:id, action:'followup', detail:el.value.trim().slice(0,500), actor:peActor()});
   if(r.error){ peToast('Note NOT saved — check connection', true); return; }
-  el.value=''; peLoadLog(id);
+  el.value=''; peToast('Saved ✓'); peLoadLog(id);
 }
 
 // ── dishes on an event ───────────────────────────────────────────────────────
