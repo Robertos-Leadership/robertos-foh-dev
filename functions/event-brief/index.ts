@@ -32,15 +32,9 @@ Deno.serve(async (req) => {
       return page("<p style='font-family:Georgia,serif;text-align:center;margin-top:60px'>This brief is no longer available.</p>", 404);
     }
 
-    // The saved brief is a full branded HTML document. Inject a floating Print
-    // button (hidden when actually printing) so the wall copy comes out clean.
-    const btn =
-      '<div class="pe-print-bar" style="position:fixed;top:12px;right:12px;z-index:99">' +
-      '<button onclick="window.print()" style="background:#400207;color:#E8D9C7;border:none;border-radius:9px;padding:11px 20px;font-family:Georgia,serif;font-size:14px;letter-spacing:.5px;cursor:pointer;box-shadow:0 4px 14px rgba(44,24,16,.25)">🖨 Print for the wall</button></div>' +
-      '<style>@media print{.pe-print-bar{display:none !important}}</style>';
-    let html: string = rows[0].brief_html;
-    html = html.includes("<body>") ? html.replace("<body>", "<body>" + btn) : btn + html;
-    return page(html);
+    // Return the saved branded brief as-is. The print button is added by the
+    // print-brief.html page that renders this (kept here to a single button).
+    return page(rows[0].brief_html);
   } catch (e) {
     return new Response("Error: " + String((e as Error)?.message || e).slice(0, 200), { status: 500, headers: cors });
   }
