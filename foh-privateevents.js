@@ -168,7 +168,7 @@ async function peLoadLog(eventId){
 function peGo(view, id){
   peState.view = view;
   if(id !== undefined) peState.currentId = id;
-  if(view==='event' && id) peLoadLog(id);
+  if((view==='event' || view==='guidedevent') && id) peLoadLog(id);
   renderMain();
   var mc = document.getElementById('main-content'); if(mc) mc.scrollTop = 0;
 }
@@ -263,6 +263,7 @@ function renderPrivateEvents(){
   if(v==='packlib')   return peRenderPacksLibView();
   if(v==='wizard')   return peRenderWizard();
   if(v==='guided')   return peRenderGuided();
+  if(v==='guidedevent') return peGuideEventView();
   if(v==='library')  return peRenderChefCorner();
   if(v==='report')   return peRenderReport();
   return peRenderList();
@@ -376,7 +377,7 @@ function peListRow(e){
     '<div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:600;color:#2C1810">'+nameHtml+'</div>'+
     '<div style="font-size:11.5px;color:#8B7355">'+(parts.join(' · ')||'—')+'</div></div>'+
     (val?'<div class="pe-hide-m" style="font-size:13px;color:#6B4A33;white-space:nowrap">AED '+peMoney(val)+'</div>':'')+
-    (ns.label?'<span style="'+PE_CHIP[ns.kind]+';border-radius:9px;padding:6px 11px;font-size:12px;font-weight:600;white-space:nowrap">'+ns.label+'</span>':'')+
+    (ns.label?'<span onclick="event.stopPropagation();peGo(\'guidedevent\',\''+e.id+'\')" style="'+PE_CHIP[ns.kind]+';border-radius:9px;padding:6px 11px;font-size:12px;font-weight:600;white-space:nowrap;cursor:pointer">'+ns.label+'</span>':'')+
   '</div>';
 }
 function peRenderList(){
@@ -575,6 +576,86 @@ function peCalcTotals(e){
   return { foodComputed:foodComputed, foodPP:foodPP, bevPP:bevPP, perGuest:perGuest, total:total,
            pcs:pcs, foodCostPct:foodCostPct, missingAllergens:missing, items:items };
 }
+// ── guided lifecycle view — walk an EXISTING event through its next step, one
+// calm screen at a time. Reuses every real action; the full editor is one tap away.
+function peDaysSince(iso){ if(!iso) return null; var d = Math.floor((Date.now()-new Date(iso).getTime())/86400000); return d>=0?d:null; }
+function peGuideReminder(id){
+  var e = peEvById(id); if(!e) return;
+  if(e.contact_phone){ peWhatsApp(id); }
+  else if(e.contact_email){ peEmailAgreement(id); }
+  else { peToast('Add a phone or email first', true); peGo('event', id); }
+}
+function peGuideEventView(){
+  var e = peEvById(peState.currentId);
+  if(!e) return peHeader('list')+'<div class="pe-card">Event not found.</div>'+PE_FOOT;
+  var log = peState.log[e.id]||[];
+  var name = e.client_name || e.company || 'the client';
+  var lost = e.status==='lost';
+  var idx = 0;
+  if(e.status==='draft') idx = 0;
+  else if(e.status==='sent') idx = e.signed_at ? 2 : 1;
+  else if(e.status==='confirmed' || e.status==='deposit') idx = 3;
+  else if(e.status==='done') idx = 4;
+  var stages = ['Draft','Sent','Signed','Confirmed','Done'];
+  var h = '<div class="pe-wrap" style="max-width:520px">';
+  h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">'+
+    '<span class="pe-tab" onclick="peGo(\'list\')">‹ All events</span>'+
+    '<span style="font-size:13px;color:#400207;font-weight:600">'+peEsc(e.client_name||e.company||'Event')+'</span></div>';
+  if(!lost){
+    h += '<div style="display:flex;align-items:center;gap:4px;margin-bottom:16px;font-size:9.5px">'+stages.map(function(s,i){
+      var done=i<idx, cur=i===idx;
+      var seg = i<stages.length-1 ? '<span style="flex:1;height:1px;background:'+(i<idx?'#BAD5B5':'#E3D5C2')+'"></span>' : '';
+      return '<span style="white-space:nowrap;color:'+(cur?'#400207':(done?'#2E6B34':'#8B7355'))+(cur?';font-weight:600':'')+'">'+(done?'✓ ':(cur?'● ':''))+s+'</span>'+seg;
+    }).join('')+'</div>';
+  }
+  var title='', sub='', body='';
+  function pbtn(label, onclick){ return '<button class="pe-btn" style="width:100%;box-sizing:border-box;padding:13px;margin-bottom:8px" onclick="'+onclick+'">'+label+'</button>'; }
+  function sbtn(label, onclick){ return '<button class="pe-btn sec" style="width:100%;box-sizing:border-box;padding:11px;margin-bottom:8px" onclick="'+onclick+'">'+label+'</button>'; }
+  if(lost){
+    title = 'Marked as lost';
+    sub = 'This booking is out of your open pipeline. Open the full event to reopen it or see why.';
+  } else if(e.status==='done'){
+    title = 'All set — event done';
+    sub = 'Nothing left to do here. Grande!';
+    body = pbtn('Back to my events', "peGo('list')");
+  } else if(e.status==='draft'){
+    var items = peState.items[e.id]||[]; var t = peCalcTotals(e);
+    var hasFood = items.length>0 || !!e.set_menu || (e.food_price_pp!=null && e.food_price_pp!=='');
+    var hasPrice = !!t.total || !!e.min_spend;
+    var nx = peEditorNext(e);
+    if(hasFood && hasPrice && e.contact_email){
+      title = 'Ready to send';
+      sub = 'Everything is on this event. Send '+peEsc(name)+' the proposal to review and sign online.';
+      body = pbtn('Send the proposal', "peEmailAgreement('"+e.id+"')") + sbtn('Open full event to review first', "peGo('event','"+e.id+"')");
+    } else {
+      title = 'Let’s finish this booking';
+      sub = nx ? 'Still to do: '+nx.label+'. Open the event and I’ll point you to it.' : 'A few details are still needed before you can send it.';
+      body = pbtn('Open the event to finish', "peGo('event','"+e.id+"')");
+    }
+  } else if(e.status==='sent' && !e.signed_at){
+    var emailLogs = log.filter(function(l){ return l.action==='email'; });
+    var last = emailLogs.length ? emailLogs[0] : null;
+    var days = last ? peDaysSince(last.created_at) : null;
+    title = 'Waiting for the signature';
+    sub = 'Sent to '+peEsc(name)+(days!=null?(days===0?' today':' '+days+' day'+(days>1?'s':'')+' ago'):'')+'. Not signed yet.';
+    body = pbtn(e.contact_phone?'Send a friendly reminder':'Re-send the proposal', "peGuideReminder('"+e.id+"')") +
+           sbtn('Copy the signing link', "peCopyAgreementLink('"+e.id+"')");
+  } else if(e.status==='sent' && e.signed_at){
+    title = peEsc(name)+' signed';
+    sub = 'Signed'+(e.signed_at?' on '+peDLabel(e.signed_at):'')+'. Lock it in so the kitchen and hostess team treat it as ON.';
+    body = pbtn('Mark as Confirmed', "peSetStatus('"+e.id+"','confirmed')");
+  } else if(e.status==='confirmed' || e.status==='deposit'){
+    title = 'It’s ON — tell the team';
+    sub = 'The kitchen and hostess team need the brief'+(e.event_date?' for '+peDLabel(e.event_date):'')+'.';
+    body = pbtn('Send the team brief', "peSendCoordEmail('"+e.id+"')") + sbtn('I’ll send it later', "peGo('list')");
+  }
+  h += '<div class="pe-card">'+
+    '<div class="pe-title" style="font-size:20px">'+title+'</div>'+
+    '<div style="font-size:13px;color:#6B4A33;margin:6px 0 16px">'+sub+'</div>'+
+    body + '</div>';
+  h += '<div style="text-align:center;margin-top:14px"><span class="pe-tab" onclick="peGo(\'event\',\''+e.id+'\')">Open full event ›</span></div>';
+  return h+'</div>';
+}
 function peRenderEvent(){
   var e = peEvById(peState.currentId);
   if(!e) return peHeader('list')+'<div class="pe-card">Event not found.</div>'+PE_FOOT;
@@ -583,7 +664,8 @@ function peRenderEvent(){
   var log = peState.log[e.id]||[];
   var h = '<div class="pe-wrap">';
   h += '<div class="pe-top"><span class="pe-tab" onclick="peGo(\'list\')">‹ All events</span>'+
-       '<span class="pe-pill '+m.pill+'" style="font-size:12px">'+m.n+'</span></div>';
+       '<span style="display:flex;align-items:center;gap:8px"><span class="pe-tab" onclick="peGo(\'guidedevent\',\''+e.id+'\')">Walk me through it</span>'+
+       '<span class="pe-pill '+m.pill+'" style="font-size:12px">'+m.n+'</span></span></div>';
 
   // status stepper
   h += '<div class="pe-steps">'+PE_STATUS.filter(function(s){return s.k!=='lost';}).map(function(s){
