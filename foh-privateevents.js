@@ -176,6 +176,9 @@ function peGo(view, id){
   '.pe-card{background:#fff;border:1px solid rgba(107,31,42,0.16);border-radius:12px;padding:14px 16px;margin-bottom:12px}'+
   '.pe-row{display:grid;grid-template-columns:1.5fr 1.2fr 0.5fr 0.9fr 1fr;gap:8px;padding:10px 4px;border-bottom:1px solid rgba(107,31,42,0.1);align-items:center;cursor:pointer}'+
   '.pe-row:hover{background:var(--cream)}'+
+  '.pe-lrow{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid rgba(107,31,42,0.08);cursor:pointer}'+
+  '.pe-lrow:last-child{border-bottom:none}'+
+  '.pe-lrow:hover{background:var(--cream)}'+
   '.pe-pill{font-size:11px;padding:3px 10px;border-radius:10px;display:inline-block;white-space:nowrap}'+
   '.pe-p-draft{background:#F1EDE6;color:#6B5E4E;border:1px solid #D8CDBB}'+
   '.pe-p-sent{background:#FAF0DA;color:#8A6400;border:1px solid #E8CE92}'+
@@ -279,23 +282,101 @@ function peFilteredEvents(){
     return peEventMatchesQuery(e, q) && pePassesStatus(e, f);
   });
 }
+// Colours for the "next step" chips — plain code Valentina reads on the phone:
+// red = something missing, amber = do it now, blue = waiting on the client, green = done.
+var PE_CHIP = {
+  danger:'background:#FBE9E7;color:#B00020', warn:'background:#FAF0DA;color:#8A6400',
+  info:'background:#E4EDF5;color:#1F5580', success:'background:#E7F0E4;color:#2E6B34',
+  neutral:'background:#F1EDE6;color:#6B5E4E'
+};
+// The one action this booking needs next.
+function peNextStep(e){
+  var name = e.client_name || e.company;
+  if(e.status==='lost') return {label:'Lost', kind:'neutral'};
+  if(e.status==='done') return {label:'Done', kind:'success'};
+  if(e.status==='draft' || e.status==='sent'){
+    if(!name && !e.event_date) return {label:'Add a name and date', kind:'danger'};
+    if(!e.event_date) return {label:'Add a date', kind:'danger'};
+    if(!name) return {label:'Add a name', kind:'danger'};
+    if(!e.guests) return {label:'Add the guest count', kind:'danger'};
+    if(!e.area) return {label:'Add the area', kind:'danger'};
+  }
+  if(e.status==='draft') return {label:'Send proposal', kind:'warn'};
+  if(e.status==='sent') return e.signed_at ? {label:'Confirm the booking', kind:'warn'} : {label:'Chase signature', kind:'info'};
+  if(e.status==='confirmed' || e.status==='deposit') return {label:'Send team brief', kind:'warn'};
+  return {label:'', kind:'neutral'};
+}
+// A draft never given a name, date or guests — clutter to be tidied, not a booking.
+function peIsEmptyDraft(e){ return e.status==='draft' && !(e.client_name||e.company) && !e.event_date && !e.guests; }
+function peTimeBucket(e){
+  var d = e.event_date ? String(e.event_date).slice(0,10) : null;
+  if(!d) return 'nodate';
+  var today = peToday(), wkEnd = localISO(new Date(Date.now()+7*86400000));
+  if(d < today) return 'past';
+  if(d <= wkEnd) return 'week';
+  return 'later';
+}
+// The "state of my world" counts, over everything (not just the current filter).
+function peLandingStats(){
+  var today = peToday(), wkEnd = localISO(new Date(Date.now()+7*86400000));
+  var s = {week:0, send:0, sign:0, empty:0};
+  peState.events.forEach(function(e){
+    if(peIsEmptyDraft(e)){ s.empty++; return; }
+    var open = ['draft','sent','confirmed','deposit'].indexOf(e.status)>=0;
+    var d = e.event_date ? String(e.event_date).slice(0,10) : null;
+    if(open && d && d>=today && d<=wkEnd) s.week++;
+    var ns = peNextStep(e);
+    if(ns.label==='Send proposal') s.send++;
+    else if(ns.label==='Chase signature') s.sign++;
+  });
+  return s;
+}
+function peStatPill(n, label, bg, border, numCol, lblCol, onclick){
+  return '<div style="background:'+bg+';border:1px solid '+border+';border-radius:10px;padding:7px 12px;font-size:12.5px'+(onclick?';cursor:pointer':'')+'"'+(onclick?' onclick="'+onclick+'"':'')+'><b style="font-size:16px;color:'+numCol+'">'+n+'</b> <span style="color:'+lblCol+'">'+label+'</span></div>';
+}
+function peListRow(e){
+  var ns = peNextStep(e);
+  var val = peEventValue(e);
+  var parts = [];
+  if(e.event_date) parts.push(peDLabel(e.event_date)+(e.time_from?' · '+peEsc(e.time_from):''));
+  if(e.area) parts.push(peEsc(e.area));
+  else if(['draft','sent'].indexOf(e.status)>=0) parts.push('<span style="color:#B00020">no area yet</span>');
+  if(e.guests) parts.push(e.guests+' pax');
+  var nameHtml = peEsc(e.client_name||e.company||'Unnamed')+(e.company&&e.client_name?' <span style="font-weight:400;color:#8B7355">· '+peEsc(e.company)+'</span>':'');
+  return '<div class="pe-lrow" onclick="peGo(\'event\',\''+e.id+'\')">'+
+    '<div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:600;color:#2C1810">'+nameHtml+'</div>'+
+    '<div style="font-size:11.5px;color:#8B7355">'+(parts.join(' · ')||'—')+'</div></div>'+
+    (val?'<div class="pe-hide-m" style="font-size:13px;color:#6B4A33;white-space:nowrap">AED '+peMoney(val)+'</div>':'')+
+    (ns.label?'<span style="'+PE_CHIP[ns.kind]+';border-radius:9px;padding:6px 11px;font-size:12px;font-weight:600;white-space:nowrap">'+ns.label+'</span>':'')+
+  '</div>';
+}
 function peRenderList(){
-  var evs = peFilteredEvents().slice().sort(function(a,b){ return String(a.event_date||'9999').localeCompare(String(b.event_date||'9999')); });
   var filters = [['open','Open'],['draft','Draft'],['sent','Sent'],['confirmed','Confirmed'],['deposit','Deposit paid'],['done','Done'],['lost','Lost'],['all','All']];
   var filterName = {open:'Open',draft:'Draft',sent:'Sent',confirmed:'Confirmed',deposit:'Deposit paid',done:'Done',lost:'Lost',all:'All'};
+  var all = peFilteredEvents();
+  var collapse = (peState.filter==='open' || peState.filter==='all') && !(peState.q && peState.q.trim());
+  var empties = collapse ? all.filter(peIsEmptyDraft) : [];
+  var emptyIds = {}; empties.forEach(function(e){ emptyIds[e.id]=1; });
+  var evs = all.filter(function(e){ return !emptyIds[e.id]; });
   var pipeline = 0;
-  evs.forEach(function(e){ var t = peEventValue(e); if(t && ['draft','sent','confirmed','deposit'].indexOf(e.status)>=0) pipeline += t; });
+  all.forEach(function(e){ var t = peEventValue(e); if(t && ['draft','sent','confirmed','deposit'].indexOf(e.status)>=0) pipeline += t; });
+  var st = peLandingStats();
   var h = peHeader('list');
-  h += '<div class="pe-top" style="margin-bottom:6px"><div><div class="pe-title">Events</div>'+
-    '<div style="font-size:12px;color:#8B7355">Create a booking, quote it, send the agreement.</div></div>'+
-    '<button class="pe-btn pe-primary" onclick="peNewEvent()">+ New event</button></div>';
+  h += '<div style="margin-bottom:10px"><div class="pe-title">Events</div>'+
+    '<div style="font-size:12px;color:#8B7355">Create a booking, quote it, send the agreement.</div></div>';
+  h += '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px">'+
+    peStatPill(st.week,'this week','#fff','#E3D5C2','#400207','#8B7355')+
+    peStatPill(st.send,'to send','#FAF0DA','#E8CE92','#8A6400','#8A6400')+
+    peStatPill(st.sign,'waiting to sign','#E4EDF5','#B7CFE3','#1F5580','#1F5580')+
+    (st.empty?peStatPill(st.empty,'empty draft'+(st.empty>1?'s':''),'#F1EDE6','#D8CDBB','#6B5E4E','#6B5E4E','peTidyDrafts()'):'')+
+  '</div>';
   h += '<div class="pe-card">';
   h += '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;border-bottom:1px solid rgba(107,31,42,0.1);padding-bottom:10px;margin-bottom:4px">'+filters.map(function(f){
     return '<span class="pe-tab'+(peState.filter===f[0]?' on':'')+'" style="font-size:11px;padding:4px 11px" onclick="peState.filter=\''+f[0]+'\';renderMain()">'+f[1]+'</span>';
   }).join('')+
   '<input class="pe-in" style="width:210px;margin-left:auto" placeholder="Search name, company, date or area\u2026" value="'+peEsc(peState.q||'')+'" oninput="peState.q=this.value;renderMain();var el=document.querySelectorAll(\'input[placeholder^=Search]\')[0];if(el){el.focus();el.setSelectionRange(el.value.length,el.value.length);}">'+
   '</div>';
-  if(!evs.length){
+  if(!all.length){
     var qNow = (peState.q||'').toLowerCase();
     var inAll = peState.events.filter(function(e){ return peEventMatchesQuery(e, qNow); }).length;
     if(peState.filter!=='all' && inAll){
@@ -305,23 +386,63 @@ function peRenderList(){
     } else {
       h += '<div style="text-align:center;padding:26px;color:#8B7355;font-size:13px">No events here yet. Tap “+ New event” to start a quotation.</div>';
     }
-  } else {
-    h += evs.map(function(e){
-      var m = peStatusMeta(e.status);
-      var val = peEventValue(e);
-      return '<div class="pe-row" onclick="peGo(\'event\',\''+e.id+'\')">'+
-        '<div><div style="font-size:13px;font-weight:600;color:#2C1810">'+peEsc(e.client_name||e.company||'Unnamed')+'</div>'+
-        '<div style="font-size:11px;color:#8B7355">'+peEsc(e.company&&e.client_name?e.company:(e.event_type||''))+'</div></div>'+
-        '<div style="font-size:12px;color:#6B4A33">'+peDLabel(e.event_date)+(e.time_from?' · '+peEsc(e.time_from):'')+'<br><span style="font-size:11px;color:#8B7355">'+peEsc(e.area||'')+'</span></div>'+
-        '<div class="pe-hide-m" style="text-align:center;font-size:13px;color:#6B4A33">'+(e.guests||'—')+'</div>'+
-        '<div class="pe-hide-m" style="text-align:right;font-size:13px;color:#2C1810">'+(val?('AED '+peMoney(val)):'—')+'</div>'+
-        '<div style="text-align:right"><span class="pe-pill '+m.pill+'">'+m.n+'</span></div>'+
-      '</div>';
-    }).join('');
   }
   h += '</div>';
-  h += '<div style="font-size:11.5px;color:#8B7355;display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px"><span>'+evs.length+' events shown</span><span>Open pipeline value: AED '+peMoney(pipeline)+'</span></div>';
+  // grouped by time — soonest first, so Valentina reads her week top-down
+  if(evs.length){
+    var byBucket = {};
+    evs.forEach(function(e){ var b = peTimeBucket(e); (byBucket[b]=byBucket[b]||[]).push(e); });
+    var groups = [['past','Earlier — still open'],['week','This week'],['later','Later'],['nodate','No date yet']];
+    groups.forEach(function(g){
+      var list = (byBucket[g[0]]||[]).sort(function(a,b){ return String(a.event_date||'9999').localeCompare(String(b.event_date||'9999')); });
+      if(!list.length) return;
+      h += '<div style="font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#A88930;margin:14px 2px 6px">'+g[1]+'</div>'+
+        '<div class="pe-card" style="padding:2px 0">'+list.map(peListRow).join('')+'</div>';
+    });
+  }
+  if(empties.length){
+    h += '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;background:#F1EDE6;border:1px dashed #D8CDBB;border-radius:12px;padding:11px 14px;margin-top:6px">'+
+      '<div style="font-size:12.5px;color:#6B5E4E">'+empties.length+' empty draft'+(empties.length>1?'s':'')+' started but never filled in</div>'+
+      '<button class="pe-btn sec sm" onclick="peTidyDrafts()">Review &amp; tidy up</button></div>';
+  }
+  h += '<div style="font-size:11.5px;color:#8B7355;display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px;margin-top:10px"><span>'+all.length+' event'+(all.length===1?'':'s')+' shown</span><span>Open pipeline value: AED '+peMoney(pipeline)+'</span></div>';
   return h+PE_FOOT;
+}
+// Tidy-up modal for the empty drafts.
+function peTidyDrafts(){
+  var old = document.querySelector('.pe-modal-bg'); if(old) old.remove();
+  var empties = peState.events.filter(peIsEmptyDraft);
+  var bg = document.createElement('div'); bg.className='pe-modal-bg';
+  bg.addEventListener('click', function(ev){ if(ev.target===bg) bg.remove(); });
+  var rows = empties.length ? empties.map(function(e){
+    return '<div class="pe-dishrow"><span style="font-size:12.5px;color:#6B4A33">Empty draft'+(e.guests?' · '+e.guests+' pax':'')+(e.event_date?' · '+peDLabel(e.event_date):'')+'</span>'+
+      '<button class="pe-btn sec sm" style="color:#B00020;border-color:#B00020" onclick="peTidyDeleteOne(\''+e.id+'\')">Delete</button></div>';
+  }).join('') : '<div style="font-size:12.5px;color:#8B7355;padding:8px 0">No empty drafts — all tidy.</div>';
+  bg.innerHTML = '<div class="pe-modal" style="max-width:460px">'+
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><b style="color:#400207">Tidy up empty drafts</b><span class="pe-x" onclick="this.closest(\'.pe-modal-bg\').remove()">✕</span></div>'+
+    '<div style="font-size:11.5px;color:#8B7355;margin-bottom:8px">These were started but never given a name, date or guests. Delete the ones you don’t need.</div>'+
+    rows+
+    (empties.length>1?'<div style="margin-top:12px"><button class="pe-btn" style="background:#B00020;border-color:#B00020" onclick="peTidyDeleteAll()">Delete all '+empties.length+'</button></div>':'')+
+    '</div>';
+  document.body.appendChild(bg);
+}
+async function peDeleteEmptyDraft(id){
+  var e = peEvById(id); if(!e || e.status!=='draft') return true;
+  var r = await sb.from('events_desk').delete().eq('id', id);
+  if(r.error){ peToast('Delete failed — check connection', true); return false; }
+  peState.events = peState.events.filter(function(x){ return x.id!==id; });
+  return true;
+}
+async function peTidyDeleteOne(id){ if(await peDeleteEmptyDraft(id)){ peTidyDrafts(); renderMain(); } }
+async function peTidyDeleteAll(){
+  var empties = peState.events.filter(peIsEmptyDraft);
+  if(!empties.length) return;
+  if(!confirm('Delete all '+empties.length+' empty draft'+(empties.length>1?'s':'')+'? They have no name, date or guests, and this cannot be undone.')) return;
+  var ok = true;
+  for(var i=0;i<empties.length;i++){ if(!(await peDeleteEmptyDraft(empties[i].id))){ ok=false; break; } }
+  var bg = document.querySelector('.pe-modal-bg'); if(bg) bg.remove();
+  if(ok) peToast('Empty drafts cleared ✓');
+  renderMain();
 }
 function peEventValue(e){
   var t = peCalcTotals(e);
