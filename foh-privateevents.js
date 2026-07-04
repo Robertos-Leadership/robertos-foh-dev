@@ -918,10 +918,27 @@ function peRenderEvent(){
        '<input class="pe-in" id="pe-f-food_price_pp" type="number" value="'+(e.food_price_pp!=null?peEsc(e.food_price_pp):'')+'" placeholder="auto: '+peMoney(t.foodComputed)+'" onchange="peFact(this,\'food_price_pp\',\''+e.id+'\')"></div></div>';
     h += '<div style="margin-top:10px">'+ (t.items.length ? t.items.map(function(it){
         var d = peDishById(it.dish_id); if(!d) return '';
-        return '<div class="pe-dishrow"><span>'+peEsc(d.name)+' <span style="color:#A5876B;font-size:10.5px">'+peEsc(peAllergenText(d.allergens))+'</span>'+
-          ((d.allergens||[]).length||d.category==='Dessert'?'':' <span class="pe-pill pe-p-sent" style="font-size:10px">no allergens set</span>')+'</span>'+
-          '<span style="display:flex;align-items:center;gap:6px;flex-shrink:0"><input class="pe-in" style="width:52px;padding:3px 6px" type="number" step="0.5" value="'+it.pcs_per_guest+'" onchange="peSetPcs(\''+it.id+'\',this.value)"> pc/guest'+
-          '<span class="pe-x" onclick="peRemoveItem(\''+it.id+'\')">✕</span></span></div>';
+        // Same shape as the Quick-menu row: priced, with a clear quantity and a
+        // live line total. In an event the quantity is per guest, so we also
+        // spell out the absolute pieces (× guests) and the AED/guest it adds.
+        var g = Number(e.guests)||0;
+        var p = Number(it.pcs_per_guest)||0;
+        var lineAED = (Number(d.sell_price)||0)*p;              // AED/guest for this dish
+        var absPcs = g ? Math.round(p*g*10)/10 : null;          // total pieces across all guests
+        var minv = !!(d.min_order && g && (p*g) < d.min_order);
+        return '<div class="pe-dishrow"><span><b style="font-weight:600">'+peEsc(d.name)+'</b>'+
+          ' <span style="color:#A5876B;font-size:10px">'+peEsc(peAllergenText(d.allergens))+'</span>'+
+          ((d.allergens||[]).length||d.category==='Dessert'?'':' <span class="pe-pill pe-p-sent" style="font-size:10px">no allergens set</span>')+
+          '<br><span style="font-size:11px;color:#8B7355">'+peEsc(d.tier||'')+(d.tier?' · ':'')+'AED '+peMoney(d.sell_price)+'/pc · min '+(d.min_order||10)+' pcs</span>'+
+          '<br><span style="font-size:11px;color:'+(minv?'#B00020':'#6B4A33')+'">'+
+            (absPcs!=null?'× '+peEsc(e.guests)+' guests = '+absPcs+' pcs':'add the guest count for total pieces')+
+            ' · AED '+peMoney(lineAED)+'/guest'+
+            (minv?' — below the minimum order of '+d.min_order+' pcs':'')+'</span></span>'+
+          '<span style="display:flex;align-items:center;gap:5px;flex-shrink:0">'+
+            '<span style="display:flex;flex-direction:column;align-items:center;line-height:1.1">'+
+              '<input class="pe-in" style="width:56px;padding:4px 6px;text-align:center'+(minv?';border-color:#B00020;color:#B00020':'')+'" type="number" step="0.5" min="0" value="'+it.pcs_per_guest+'" onchange="peSetPcs(\''+it.id+'\',this.value)">'+
+              '<span style="font-size:9.5px;color:#8B7355;margin-top:2px">pc / guest</span></span>'+
+            '<span class="pe-x" onclick="peRemoveItem(\''+it.id+'\')">✕</span></span></div>';
       }).join('') : '<div style="font-size:12px;color:#8B7355;padding:6px 0">No dishes yet — apply a package or add from the library.</div>');
     h += '<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap"><button class="pe-btn sec sm" onclick="peOpenDishPicker(\''+e.id+'\')">+ Add dish from library</button>'+
       (t.items.length?'<button class="pe-btn sec sm" style="color:#B00020;border-color:#B00020" onclick="peClearMenu(\''+e.id+'\')">Clear menu</button>':'')+'</div>';
@@ -1338,28 +1355,89 @@ async function peClearMenu(eventId){
   peToast('Menu cleared ✓');
 }
 function peOpenDishPicker(eventId){
+  var e = peEvById(eventId);
+  var g = Number(e&&e.guests)||0;
   var existing = (peState.items[eventId]||[]).map(function(i){ return i.dish_id; });
   var cats = {};
   peState.dishes.filter(function(d){ return d.active && existing.indexOf(d.id)<0; })
     .forEach(function(d){ (cats[d.category+' · '+d.serve]=cats[d.category+' · '+d.serve]||[]).push(d); });
   var h = '<div class="pe-modal-bg" onclick="if(event.target===this)this.remove()"><div class="pe-modal">'+
-    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><b style="color:#400207">Add dishes</b><span class="pe-x" onclick="this.closest(\'.pe-modal-bg\').remove()">✕</span></div>';
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><b style="color:#400207">Add dishes from the library</b><span class="pe-x" onclick="this.closest(\'.pe-modal-bg\').remove()">✕</span></div>';
+  if(!Object.keys(cats).length){
+    h += '<div style="font-size:12px;color:#8B7355">Every active dish is already on this event.</div></div></div>';
+    document.body.insertAdjacentHTML('beforeend', h);
+    return;
+  }
+  // Same picking format as the Quick menu: search, priced rows, a clear quantity
+  // and a live line total — so choosing a dish works one way across the module.
+  h += '<input class="pe-in" id="pe-dp-search" placeholder="Search dishes by name…" oninput="peDishPickerFilter(this)" style="margin-bottom:6px">'+
+    '<div style="font-size:11px;color:#8B7355;margin-bottom:8px">Set the pieces per guest, then Add. Prices are per piece.</div>'+
+    '<div id="pe-dp-none-all" style="display:none;font-size:12px;color:#8B7355;padding:6px 0">No dish matches your search.</div>';
   Object.keys(cats).forEach(function(k){
-    h += '<div class="pe-lbl" style="margin-top:8px">'+peEsc(k)+'</div>'+cats[k].map(function(d){
-      return '<div class="pe-dishrow"><span>'+peEsc(d.name)+' <span style="color:#A5876B;font-size:10.5px">'+peEsc(d.description||'')+'</span></span>'+
-        '<button class="pe-btn sm" onclick="peAddItem(\''+eventId+'\',\''+d.id+'\');this.disabled=true;this.textContent=\'Added ✓\'">Add</button></div>';
-    }).join('');
+    h += '<div class="pe-dp-sec"><div class="pe-lbl" style="margin-top:8px">'+peEsc(k)+'</div>'+cats[k].map(function(d){
+      var srch = peEsc((d.name+' '+(d.description||'')+' '+(d.tier||'')).toLowerCase());
+      var absPcs = g ? '× '+g+' guests = '+g+' pcs · ' : '';   // qty defaults to 1 pc/guest
+      return '<div class="pe-dp-row" data-search="'+srch+'"><div class="pe-dishrow">'+
+        '<span><b style="font-weight:600">'+peEsc(d.name)+'</b>'+
+        ' <span style="color:#A5876B;font-size:10px">'+peEsc(peAllergenText(d.allergens))+'</span>'+
+        (d.description?'<br><span style="color:#A5876B;font-size:10.5px">'+peEsc(d.description)+'</span>':'')+
+        '<br><span style="font-size:11px;color:#8B7355">'+peEsc(d.tier||'')+(d.tier?' · ':'')+'AED '+peMoney(d.sell_price)+'/pc · min '+(d.min_order||10)+' pcs</span></span>'+
+        '<span style="display:flex;align-items:center;gap:5px;flex-shrink:0">'+
+          '<span style="display:flex;flex-direction:column;align-items:center;line-height:1.1">'+
+            '<input class="pe-in pe-dp-qty" style="width:56px;padding:4px 6px;text-align:center" type="number" step="0.5" min="0" value="1" data-price="'+(Number(d.sell_price)||0)+'" oninput="peDishPickerQty(this,'+g+')">'+
+            '<span style="font-size:9.5px;color:#8B7355;margin-top:2px">pc / guest</span></span>'+
+          '<button class="pe-btn sm" onclick="peAddItemQty(this,\''+eventId+'\',\''+d.id+'\')">Add</button>'+
+        '</span></div>'+
+        '<div class="pe-dp-help" style="font-size:10.5px;color:#8A6A4F;text-align:right;margin:-3px 0 5px">'+absPcs+'AED '+peMoney(Number(d.sell_price)||0)+'/guest</div>'+
+      '</div>';
+    }).join('')+'</div>';
   });
-  if(!Object.keys(cats).length) h += '<div style="font-size:12px;color:#8B7355">Every active dish is already on this event.</div>';
   h += '</div></div>';
   document.body.insertAdjacentHTML('beforeend', h);
 }
-async function peAddItem(eventId, dishId){
-  if(!(await peConfirmSignedEdit(eventId, 'the menu'))) return;
-  var r = await sb.from('event_items').insert({event_id:eventId, dish_id:dishId, pcs_per_guest:1, qty_confirmed:false}).select().single();
-  if(r.error || !r.data){ peToast('NOT added — check connection', true); return; }
+// Live filter for the dish picker — hides rows (and empty category groups) as
+// she types, without re-rendering, so any quantities she has set are preserved.
+function peDishPickerFilter(input){
+  var term = (input.value||'').trim().toLowerCase();
+  var modal = input.closest('.pe-modal'); if(!modal) return;
+  var any = false;
+  modal.querySelectorAll('.pe-dp-sec').forEach(function(sec){
+    var shown = 0;
+    sec.querySelectorAll('.pe-dp-row').forEach(function(row){
+      var hit = !term || (row.getAttribute('data-search')||'').indexOf(term) >= 0;
+      row.style.display = hit ? '' : 'none';
+      if(hit) shown++;
+    });
+    sec.style.display = shown ? '' : 'none';
+    if(shown) any = true;
+  });
+  var none = modal.querySelector('#pe-dp-none-all');
+  if(none) none.style.display = any ? 'none' : 'block';
+}
+// Live per-row total as she types a quantity in the picker (matches Quick menu).
+function peDishPickerQty(input, g){
+  var q = Math.max(0, Number(input.value)||0);
+  var price = Number(input.getAttribute('data-price'))||0;
+  var row = input.closest('.pe-dp-row'); if(!row) return;
+  var help = row.querySelector('.pe-dp-help'); if(!help) return;
+  help.innerHTML = (g ? '× '+g+' guests = '+(Math.round(q*g*10)/10)+' pcs · ' : '')+'AED '+peMoney(q*price)+'/guest';
+}
+async function peAddItemQty(btn, eventId, dishId){
+  var row = btn.closest('.pe-dp-row');
+  var inp = row && row.querySelector('.pe-dp-qty');
+  var q = Math.max(0, Number(inp&&inp.value)||0);
+  if(!(q>0)){ peToast('Enter pieces per guest above 0', true); return; }
+  var ok = await peAddItem(eventId, dishId, q);
+  if(ok){ btn.disabled = true; btn.textContent = 'Added ✓'; if(inp) inp.disabled = true; }
+}
+async function peAddItem(eventId, dishId, pcs){
+  if(!(await peConfirmSignedEdit(eventId, 'the menu'))) return false;
+  var p = Number(pcs)>0 ? Number(pcs) : 1;
+  var r = await sb.from('event_items').insert({event_id:eventId, dish_id:dishId, pcs_per_guest:p, qty_confirmed:Number(pcs)>0}).select().single();
+  if(r.error || !r.data){ peToast('NOT added — check connection', true); return false; }
   (peState.items[eventId]=peState.items[eventId]||[]).push(r.data);
   renderMain();
+  return true;
 }
 async function peRemoveItem(itemId){
   var evId = peEventOfItem(itemId);
