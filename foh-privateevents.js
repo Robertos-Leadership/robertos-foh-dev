@@ -785,7 +785,9 @@ function peCalcTotals(e){
   items.forEach(function(it){
     var d = peDishById(it.dish_id); if(!d) return;
     var p = Number(it.pcs_per_guest)||0;
-    foodComputed += (Number(d.sell_price)||0)*p;
+    // A dish "on the house" is not charged — but the kitchen still cooks it, so its
+    // COST and its PIECES still count (food-cost % and pieces/guest stay honest).
+    if(!it.comp) foodComputed += (Number(d.sell_price)||0)*p;
     cost += (Number(d.cost)||0)*p;
     pcs += p;
     if(!(d.allergens||[]).length && d.category!=='Dessert') missing.push(d.name);
@@ -799,10 +801,39 @@ function peCalcTotals(e){
   var bevCounts = bev && !(dry && !bev.non_alcoholic);
   var bevPP = bevCounts ? Number(bev.price_pp) : 0;
   var perGuest = (foodPP||0)+bevPP;
-  var total = e.guests ? perGuest*Number(e.guests) : null;
+  var subtotal = e.guests ? perGuest*Number(e.guests) : null;
+  // A courtesy discount comes off the very end — never taking the total below 0.
+  var discount = subtotal!=null ? Math.min(Math.max(0, Number(e.discount)||0), subtotal) : Math.max(0, Number(e.discount)||0);
+  var total = subtotal!=null ? Math.max(0, subtotal - discount) : null;
   var foodCostPct = foodPP ? (cost/(foodPP/PE_GROSS))*100 : null;
-  return { foodComputed:foodComputed, foodPP:foodPP, bevPP:bevPP, perGuest:perGuest, total:total,
+  return { foodComputed:foodComputed, foodPP:foodPP, bevPP:bevPP, perGuest:perGuest,
+           subtotal:subtotal, discount:discount, total:total,
            pcs:pcs, foodCostPct:foodCostPct, missingAllergens:missing, items:items };
+}
+// The agreement's quoted base and deposit — one place, so the editor card, the
+// guided screen and the payment-link send all agree. A courtesy discount reduces
+// the quoted base (so the deposit % and signed agreement follow automatically).
+function peAgBase(e){
+  var t = peCalcTotals(e);
+  if(e.pricing_type==='min_spend'){
+    var ms = Number(e.min_spend);
+    if(!ms) return null;
+    return Math.max(0, ms - Math.max(0, Number(e.discount)||0));   // set_price already discounted in t.total
+  }
+  return t.total;   // already has the discount taken off
+}
+function peDepositAmt(e){
+  var base = peAgBase(e);
+  var pct = e.deposit_pct==null ? 50 : Number(e.deposit_pct);
+  return (base!=null && pct>0) ? Math.round(base*pct/100) : 0;
+}
+// True when a Supabase write failed only because a Batch-7 column isn't in the
+// database yet — so the app can degrade gracefully (keep working in-session)
+// instead of showing a scary red error. Mirrors the non_alcoholic pattern.
+function peColMissing(err, col){
+  var m = String(err && err.message || err || '').toLowerCase();
+  return m.indexOf(col.toLowerCase())>=0 &&
+    (m.indexOf('does not exist')>=0 || m.indexOf('schema cache')>=0 || m.indexOf('could not find')>=0);
 }
 // ── guided lifecycle view — walk an EXISTING event through its next step, one
 // calm screen at a time. Reuses every real action; the full editor is one tap away.
@@ -876,7 +907,11 @@ function peGuideEventView(){
   } else if(e.status==='sent' && e.signed_at){
     title = peEsc(name)+' signed';
     sub = 'Signed'+(e.signed_at?' on '+peDLabel(e.signed_at):'')+'. Lock it in so the kitchen and hostess team treat it as ON.';
-    body = pbtn('Mark as Confirmed', "peSetStatus('"+e.id+"','confirmed')");
+    // Collect the deposit first when a Telr link is ready — named + confirmed + logged.
+    var payBtn = (e.payment_link && e.contact_email)
+      ? pbtn('Send payment link to '+peEsc(e.contact_email)+' — AED '+peMoney(peDepositAmt(e))+' deposit', "peSendPaymentLink('"+e.id+"')")
+      : '';
+    body = payBtn + pbtn('Mark as Confirmed', "peSetStatus('"+e.id+"','confirmed')");
   } else if(e.status==='confirmed' || e.status==='deposit'){
     title = 'It’s ON — tell the team';
     sub = 'The kitchen and hostess team need the brief'+(e.event_date?' for '+peDLabel(e.event_date):'')+'.';
@@ -1013,15 +1048,20 @@ function peRenderEvent(){
         var lineAED = (Number(d.sell_price)||0)*p;              // AED/guest for this dish
         var absPcs = g ? Math.round(p*g*10)/10 : null;          // total pieces across all guests
         var minv = !!(d.min_order && g && (p*g) < d.min_order);
+        var comp = !!it.comp;                                   // "on the house" — cooked, not charged
         return '<div class="pe-dishrow"><span><b style="font-weight:600">'+peEsc(d.name)+'</b>'+
+          (comp?' <span class="pe-pill" style="font-size:10px;background:#EAF0E4;color:#4A6B2E;border:1px solid #C6D6AE">on the house</span>':'')+
           ' <span style="color:#A5876B;font-size:10px">'+peEsc(peAllergenText(d.allergens))+'</span>'+
           ((d.allergens||[]).length||d.category==='Dessert'?'':' <span class="pe-pill pe-p-sent" style="font-size:10px">no allergens set</span>')+
           '<br><span style="font-size:11px;color:#8B7355">'+peEsc(d.tier||'')+(d.tier?' · ':'')+'AED '+peMoney(d.sell_price)+'/pc · min '+(d.min_order||10)+' pcs</span>'+
           '<br><span style="font-size:11px;color:'+(minv?'#B00020':'#6B4A33')+'">'+
             (absPcs!=null?'× '+peEsc(e.guests)+' guests = '+absPcs+' pcs':'add the guest count for total pieces')+
-            ' · AED '+peMoney(lineAED)+'/guest'+
+            ' · '+(comp?'<span style="color:#4A6B2E">with our compliments — not charged</span>':'AED '+peMoney(lineAED)+'/guest')+
             (minv?' — below the minimum order of '+d.min_order+' pcs':'')+'</span></span>'+
           '<span style="display:flex;align-items:center;gap:5px;flex-shrink:0">'+
+            '<label style="display:flex;flex-direction:column;align-items:center;line-height:1.1;cursor:pointer" title="Give this dish for free — the kitchen still prepares it">'+
+              '<input type="checkbox" '+(comp?'checked':'')+' onchange="peToggleComp(\''+it.id+'\',this.checked)" style="accent-color:#4A6B2E;width:16px;height:16px">'+
+              '<span style="font-size:9px;color:#8B7355;margin-top:2px">on the<br>house</span></label>'+
             '<span style="display:flex;flex-direction:column;align-items:center;line-height:1.1">'+
               '<input class="pe-in" style="width:56px;padding:4px 6px;text-align:center'+(minv?';border-color:#B00020;color:#B00020':'')+'" type="number" step="0.5" min="0" value="'+it.pcs_per_guest+'" onchange="peSetPcs(\''+it.id+'\',this.value)">'+
               '<span style="font-size:9.5px;color:#8B7355;margin-top:2px">pc / guest</span></span>'+
@@ -1047,9 +1087,10 @@ function peRenderEvent(){
     (e.bev_package_id && peBevById(e.bev_package_id) ? '<div style="font-size:11.5px;color:#8B7355;margin-top:6px">'+peEsc(peBevById(e.bev_package_id).includes||'')+'</div>' : '')+
     '</div></div>';
   // agreement (terms Valentina adjusts per event; guest signs via the link)
-  var agBase = (e.pricing_type==='min_spend') ? (Number(e.min_spend)||null) : t.total;
+  var agBase = peAgBase(e);                        // already has any courtesy discount taken off
   var agPct = e.deposit_pct==null ? 50 : Number(e.deposit_pct);
-  var agDep = (agBase!=null && agPct>0) ? Math.round(agBase*agPct/100) : 0;
+  var agDep = peDepositAmt(e);
+  var agDisc = Math.max(0, Number(e.discount)||0);
   h += '<div class="pe-card"><b style="font-size:14px;color:#400207">Agreement</b>';
   if(e.signed_at){
     h += '<div style="font-size:12px;color:#2E6B34;background:#E7F0E4;border-radius:8px;padding:9px 11px;margin-top:8px">✓ Signed by <b>'+peEsc(e.signed_name||'')+'</b>'+(e.signed_designation?' ('+peEsc(e.signed_designation)+')':'')+' on '+peEsc(String(e.signed_at).slice(0,10))+
@@ -1064,12 +1105,17 @@ function peRenderEvent(){
         (e.pricing_type==='min_spend' ? '<div style="font-size:11px;margin-top:3px">'+(e.min_spend?'<b style="color:#400207">AED '+peMoney(e.min_spend)+'</b> <span style="color:#8B7355">— set up top</span>':'<span style="color:#B00020;cursor:pointer;text-decoration:underline" onclick="peScrollToField(\'min_spend\',\'Type the minimum spend in the facts above\')">▲ set the amount up top</span>')+'</div>' : '')+'</div>'+
       '<div><div class="pe-lbl">Deposit %</div><input class="pe-in" type="number" min="0" max="100" step="5" value="'+peEsc(agPct)+'" onchange="peSaveField(\''+e.id+'\',\'deposit_pct\',this.value===\'\'?null:Number(this.value))"></div>'+
       '<div><div class="pe-lbl">Guests the client pays for (minimum)</div><input class="pe-in" type="number" value="'+peEsc(e.guests_min!=null?e.guests_min:'')+'" placeholder="'+peEsc(e.guests||'')+'" onchange="peSaveField(\''+e.id+'\',\'guests_min\',this.value?parseInt(this.value,10):null)"></div>'+
+      // A courtesy discount comes straight off the quoted price (so the deposit and
+      // the signed agreement follow it). Saved via peFact = logged + voids if signed.
+      '<div><div class="pe-lbl">Discount / courtesy (AED)</div><input class="pe-in" id="pe-f-discount" type="number" min="0" step="50" value="'+(agDisc>0?peEsc(agDisc):'')+'" placeholder="0" onchange="peFact(this,\'discount\',\''+e.id+'\')"></div>'+
       '</div>'+
       '<div style="margin-top:8px"><div class="pe-lbl">Extras / remarks on the agreement (cake, flowers, tobacco, set-up…)</div>'+
       '<input class="pe-in" value="'+peEsc(e.agreement_remarks||'')+'" onchange="peSaveField(\''+e.id+'\',\'agreement_remarks\',this.value||null)"></div>'+
       '<div style="font-size:12px;color:#6B4A33;margin-top:8px">'+
       (agBase!=null
-        ? (e.pricing_type==='min_spend'?'Minimum spend':'Quoted price')+': <b style="color:#400207">AED '+peMoney(agBase)+'</b>'+(agPct>0?' · deposit '+agPct+'%: <b style="color:#400207">AED '+peMoney(agDep)+'</b>':' · no deposit — balance on the day')
+        ? (e.pricing_type==='min_spend'?'Minimum spend':'Quoted price')+': <b style="color:#400207">AED '+peMoney(agBase)+'</b>'+
+          (agDisc>0?' <span style="color:#4A6B2E">(after AED '+peMoney(agDisc)+' courtesy)</span>':'')+
+          (agPct>0?' · deposit '+agPct+'%: <b style="color:#400207">AED '+peMoney(agDep)+'</b>':' · no deposit — balance on the day')
         : (e.pricing_type==='min_spend'
             ? '<span style="color:#B00020;cursor:pointer;text-decoration:underline" onclick="peScrollToField(\'min_spend\',\'Type the minimum spend in the facts above\')">▲ Set the minimum spend above first.</span>'
             : (!e.guests
@@ -1077,6 +1123,20 @@ function peRenderEvent(){
                 : '<span style="color:#B00020;cursor:pointer;text-decoration:underline" onclick="peScrollToCard(\'food\')">▲ Add the menu or a set food price first — the quoted price comes from it.</span>')))+
       '</div>';
   }
+  // Payment link (from the Telr portal) — shown signed OR unsigned, because the
+  // link is usually generated AFTER signing. It's an ops field, not a contract
+  // term, so it saves quietly (no void). While empty, the agreement promises no
+  // link — the events team contacts the guest instead (see event-agreement fn).
+  h += '<div style="margin-top:'+(e.signed_at?'10px':'12px')+';border-top:1px dashed rgba(107,31,42,0.18);padding-top:10px">'+
+    '<div class="pe-lbl">Payment link (from the Telr portal)</div>'+
+    '<input class="pe-in" id="pe-f-payment_link" value="'+peEsc(e.payment_link||'')+'" placeholder="Paste the Telr payment link here" onchange="peSaveField(\''+e.id+'\',\'payment_link\',this.value.trim()||null)">'+
+    '<div style="font-size:11px;color:#8B7355;margin-top:4px">'+
+      (e.payment_link
+        ? (e.signed_at
+            ? '✓ A “Send payment link” button is ready — below, in the guided view and in Documents.'
+            : 'Once the agreement is signed, a “Send payment link” button appears here and in Documents.')
+        : 'While this is empty, the agreement tells the guest the events team will contact them to arrange the deposit — no broken link is promised.')+
+    '</div></div>';
   h += '</div>';
   // follow-ups
   h += '<div class="pe-card"><b style="font-size:14px;color:#400207">Follow-up log</b>'+
@@ -1092,7 +1152,12 @@ function peRenderEvent(){
     '<div class="pe-tot-row"><span>Food / guest</span><b>AED '+peMoney(t.foodPP||0)+(e.food_price_pp!=null&&e.food_price_pp!==''?' (set)':'')+'</b></div>'+
     '<div class="pe-tot-row"><span>Beverage / guest</span><b>AED '+peMoney(t.bevPP)+'</b></div>'+
     '<div class="pe-tot-row" style="border-top:1px solid #DCC9B2;margin-top:4px;padding-top:7px"><span>Per guest</span><b>AED '+peMoney(t.perGuest)+'</b></div>'+
-    '<div class="pe-tot-row"><span>× '+(e.guests||'—')+' guests</span><b>AED '+peMoney(t.total)+'</b></div>';
+    '<div class="pe-tot-row"><span>× '+(e.guests||'—')+' guests</span><b>AED '+peMoney(t.subtotal)+'</b></div>';
+  // A courtesy discount shows as its own line, then the discounted total below it.
+  if(t.discount>0){
+    h += '<div class="pe-tot-row"><span>Discount / courtesy</span><b style="color:#4A6B2E">− AED '+peMoney(t.discount)+'</b></div>'+
+      '<div class="pe-tot-row" style="border-top:1px solid #DCC9B2;margin-top:4px;padding-top:7px"><span>Total</span><b>AED '+peMoney(t.total)+'</b></div>';
+  }
   if(e.min_spend && t.total!=null){
     var gap = Number(e.min_spend)-t.total;
     h += gap>0 ? '<div class="pe-flag" style="color:#7A5500">▲ AED '+peMoney(gap)+' below the '+peMoney(e.min_spend)+' min spend</div>'
@@ -1126,6 +1191,11 @@ function peRenderEvent(){
     '<div style="display:flex;flex-direction:column;gap:7px">'+
     '<button class="pe-btn"'+dim(hasMail)+' onclick="'+mailClick('peEmailAgreement')+'">Send full proposal (client signs online)</button>'+
     (hasMail?'':'<div style="font-size:11px;color:#8A2A1A;margin:-3px 2px 2px">Add the client email above to send.</div>')+
+    // Once signed AND a Telr link is pasted on the Agreement card, one named,
+    // confirmed, logged send to collect the deposit. (Deposit-paid stays a manual flip.)
+    ((e.signed_at && e.payment_link && hasMail)
+      ? '<button class="pe-btn" onclick="peSendPaymentLink(\''+e.id+'\')">Send payment link to '+peEsc(e.contact_email)+' — AED '+peMoney(peDepositAmt(e))+' deposit</button>'
+      : '')+
     // The other four sends are one tap away, not a wall.
     '<div style="border:1px solid rgba(107,31,42,0.25);border-radius:8px;padding:9px 11px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;color:#6B4A33" onclick="peState.sendMore=peState.sendMore||{};peState.sendMore[\''+e.id+'\']='+(!sendMoreOpen)+';renderMain()">'+
       '<span style="font-size:12.5px">More ways to send</span><span style="font-size:11px;color:#A5876B">price only · WhatsApp · copy link · print '+(sendMoreOpen?'▴':'▾')+'</span></div>'+
@@ -1166,12 +1236,12 @@ function peSel(lbl, field, e, opts){
 }
 // Fields whose change is money-relevant / contract-relevant — logged for
 // Andrea's audit trail, and (for guests/date) guarded when already signed.
-var PE_AUDIT_FIELDS = { guests:'Guests', event_date:'Date', food_price_pp:'Food price/guest', min_spend:'Minimum spend', area:'Area', time_from:'Start time', time_to:'End time' };
+var PE_AUDIT_FIELDS = { guests:'Guests', event_date:'Date', food_price_pp:'Food price/guest', min_spend:'Minimum spend', area:'Area', time_from:'Start time', time_to:'End time', discount:'Discount' };
 // Which fields, when changed on a SIGNED event, void the agreement (they change
 // what the client actually agreed to). Menu changes are guarded separately.
-var PE_CONTRACT_FIELDS = ['guests','event_date','area','food_price_pp','min_spend'];
+var PE_CONTRACT_FIELDS = ['guests','event_date','area','food_price_pp','min_spend','discount'];
 var PE_FACT_INT = { guests:1 };
-var PE_FACT_NUM = { min_spend:1, food_price_pp:1 };
+var PE_FACT_NUM = { min_spend:1, food_price_pp:1, discount:1 };
 // One auto-save handler for every facts-card field: coerces the value, keeps the
 // contract-void guard + Andrea's audit log, and always shows "Saved ✓".
 async function peFact(el, field, id){
@@ -1208,7 +1278,16 @@ async function peFact(el, field, id){
     if(['confirmed','deposit','done'].indexOf(e.status)>=0) patch.status = 'sent';
   }
   var r = await sb.from('events_desk').update(patch).eq('id', id);
-  if(r.error){ peToast('NOT saved — '+(r.error.message||'check connection'), true); return; }
+  if(r.error){
+    // Graceful degradation: a new Batch-7 column (e.g. discount) may not be in the
+    // database yet — keep the value working in-session rather than a scary error.
+    if(peColMissing(r.error, field)){
+      e[field] = v;
+      peToast('Kept for now — “'+(PE_AUDIT_FIELDS[field]||field)+'” needs the Batch 7 database update to save permanently.', true);
+      renderMain(); return;
+    }
+    peToast('NOT saved — '+(r.error.message||'check connection'), true); return;
+  }
   Object.keys(patch).forEach(function(k){ e[k] = patch[k]; });
 
   if(isAudit && e.status!=='draft'){
@@ -1304,7 +1383,15 @@ async function peSaveField(id, field, value, opts){
   var e = peEvById(id); if(!e) return;
   var patch = {}; patch[field] = value; patch.updated_at = new Date().toISOString();
   var r = await sb.from('events_desk').update(patch).eq('id', id);
-  if(r.error){ peToast('NOT saved — check connection', true); return; }
+  if(r.error){
+    // Graceful degradation for a not-yet-added Batch-7 column (e.g. payment_link).
+    if(peColMissing(r.error, field)){
+      e[field] = value;
+      peToast('Kept for now — this needs the Batch 7 database update to save permanently.', true);
+      renderMain(); return;
+    }
+    peToast('NOT saved — check connection', true); return;
+  }
   e[field] = value;
   if(!opts.silent) peToast('Saved ✓');
   renderMain();
@@ -1546,6 +1633,30 @@ async function peSetPcs(itemId, val){
   peToast('Saved ✓');
   renderMain();
 }
+// "On the house": mark a dish free — excluded from the charged food total, but the
+// kitchen still prepares it (cost + pieces still count). A menu/price change, so it
+// voids a signed agreement like any other. Degrades gracefully if the column is absent.
+function peSetItemComp(itemId, on){
+  Object.keys(peState.items).forEach(function(k){
+    peState.items[k].forEach(function(i){ if(i.id===itemId) i.comp = !!on; });
+  });
+}
+async function peToggleComp(itemId, on){
+  var evId = peEventOfItem(itemId);
+  if(evId && !(await peConfirmSignedEdit(evId, 'the menu'))){ renderMain(); return; }
+  var r = await sb.from('event_items').update({comp:!!on}).eq('id', itemId);
+  if(r.error){
+    if(peColMissing(r.error, 'comp')){
+      peSetItemComp(itemId, on);
+      peToast('Marked for now — “on the house” needs the Batch 7 database update to save.', true);
+      renderMain(); return;
+    }
+    peToast('NOT saved — check connection', true); renderMain(); return;
+  }
+  peSetItemComp(itemId, on);
+  peToast(on ? 'On the house ✓ — not charged, the kitchen still prepares it' : 'Back to charged ✓');
+  renderMain();
+}
 async function peApplyClientSelection(eventId){
   var e = peEvById(eventId); if(!e || !e.client_selection) return;
   if(!(await peConfirmSignedEdit(eventId, 'the menu'))) return;
@@ -1698,11 +1809,13 @@ function peProposalHTML(e){
   if(who.length) body += '<div class="sub">'+who.join(' · ')+'</div>';
   body += peProposalSetMenuHTML(e);
   groups.forEach(function(g){
-    var list = t.items.map(function(it){ return peDishById(it.dish_id); }).filter(function(d){ return d && d.serve===g.k; });
+    var list = t.items.filter(function(it){ var d=peDishById(it.dish_id); return d && d.serve===g.k; });
     if(!list.length) return;
     body += '<div class="sec">'+g.n+'</div>';
-    list.forEach(function(d){
+    list.forEach(function(it){
+      var d = peDishById(it.dish_id);
       body += '<div class="dish">'+peEsc(d.name)+((d.allergens||[]).length?' <span class="codes">('+(d.allergens||[]).join(')(')+')</span>':'')+
+        (it.comp?' <span class="d" style="color:#7A8B4A">— with our compliments</span>':'')+
         (d.description?'<br><span class="d">'+peEsc(d.description)+'</span>':'')+'</div>';
     });
   });
@@ -1717,6 +1830,7 @@ function peProposalHTML(e){
   if(t.total && e.guests){
     body += '<div class="rule" style="margin-top:26px"></div><div class="sec">Your event</div>'+
       '<div class="dish" style="font-size:15px">'+e.guests+' guests · AED '+peMoney(t.total)+
+      (t.discount>0?'<br><span class="d" style="color:#7A8B4A">including a courtesy of AED '+peMoney(t.discount)+'</span>':'')+
       '<br><span class="d">'+(t.items.length?'Canapé selection':'Menu')+(bev?' and '+(bev.duration_hours?bev.duration_hours+'-hour ':'')+'beverage package':'')+' — everything included</span></div>';
   } else if(e.min_spend){
     body += '<div class="rule" style="margin-top:26px"></div><div class="sec">Your event</div>'+
@@ -2059,6 +2173,36 @@ async function peEmailAgreement(id){
     peToast('Sent to '+e.contact_email+' ✓ — the events desk is emailed the moment they sign');
     if(e.status==='draft') peSetStatus(id, 'sent');
     sb.from('event_log').insert({event_id:id, action:'email', detail:'proposal + agreement link → '+e.contact_email, actor:peActor()}).then(function(){ peLoadLog(id); });
+  }catch(err){
+    peToast('NOT sent — '+String(err&&err.message||err).slice(0,120), true);
+  }
+}
+
+// Send the guest the Telr deposit payment link — only reachable once the event is
+// signed AND a link has been pasted on the Agreement card. Named (email + amount),
+// confirmed, and logged like every other send. Marking the deposit PAID stays the
+// existing manual status flip — this only delivers the link.
+async function peSendPaymentLink(id){
+  var e = peEvById(id); if(!e) return;
+  if(!e.payment_link){ peScrollToCard('food'); peToast('Paste the Telr payment link on the Agreement card first', true); return; }
+  if(!e.contact_email){ peScrollToField('contact_email','Add the client email to send the payment link'); return; }
+  var dep = peDepositAmt(e);
+  if(!(await peConfirm({title:'Send the payment link?',
+      html:'Email the secure Telr payment link to <b>'+peEsc(e.contact_email)+'</b> to settle the <b>AED '+peMoney(dep)+'</b> deposit?<br><br>Marking the deposit as <b>paid</b> stays a manual step once the money lands.',
+      ok:'Send the link', cancel:'Not yet'}))) return;
+  var sender = state.userEmail || 'vdetoni@robertos.ae';
+  var intro = 'Thank you for confirming your event with Roberto’s'+(e.event_date?' on '+peDLabel(e.event_date):'')+'. To secure your booking, please settle the deposit of AED '+peMoney(dep)+' using the secure link below.';
+  var inner = '<div style="text-align:center;margin:24px 0 10px"><a href="'+peEsc(e.payment_link)+'" style="display:inline-block;background:#400207;color:#E8D9C7;padding:12px 30px;border-radius:22px;text-decoration:none;font-size:13.5px;letter-spacing:1px">Pay the AED '+peMoney(dep)+' deposit</a></div>'+
+    '<p style="font-size:12px;color:#8B7355;text-align:center">This opens Roberto’s secure card payment page. Your balance is settled on the day of the event.</p>';
+  try{
+    var r = await sb.functions.invoke('send-event-email', { body:{
+      to:[e.contact_email, sender], reply_to:sender,
+      subject:'Your deposit payment link — Roberto’s'+(e.event_date?' · '+peDLabel(e.event_date):''),
+      html: peGuestEmailHTML('Your Deposit Payment', intro, e.contact_name||e.client_name, null, inner)
+    }});
+    if(r.error || (r.data&&r.data.error)) throw (r.error||r.data.error);
+    peToast('Payment link sent to '+e.contact_email+' ✓');
+    sb.from('event_log').insert({event_id:id, action:'payment_link', detail:'payment link (AED '+dep+' deposit) → '+e.contact_email, actor:peActor()}).then(function(){ peLoadLog(id); });
   }catch(err){
     peToast('NOT sent — '+String(err&&err.message||err).slice(0,120), true);
   }

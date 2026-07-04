@@ -1,0 +1,112 @@
+════════════════════════════════════════════════════════════════════════════════
+ event-agreement-batch7.txt  —  wording/logic changes for the event-agreement edge fn
+ File:  functions/event-agreement/index.ts   (Supabase project paoaivwtkzujmrgrfjuq)
+ Deploy:  supabase functions deploy event-agreement --no-verify-jwt
+ (Claude did NOT deploy this — apply + deploy when you run foh-events-batch7.sql.)
+
+ Why: three Batch-7 changes need to reach the guest AGREEMENT page (which is server-
+ rendered here), so the signed contract matches the app: (A) a courtesy DISCOUNT comes
+ off the quoted price, (B) COMP dishes are not charged on the agreement total, and
+ (C) while no Telr payment link is set the agreement must NOT promise one.
+
+ Everything below is safe if the Batch-7 columns aren't there yet: Number(ev.discount)
+ is 0 when the column is missing, it.comp is undefined (falsy), ev.payment_link is
+ undefined → the "team will contact you" wording. So you can deploy the function
+ before or after the SQL; the honest fallback holds either way.
+════════════════════════════════════════════════════════════════════════════════
+
+
+── CHANGE 1 — fetch the comp flag on the menu items ────────────────────────────
+In Deno.serve(), the items query (currently ~line 200):
+
+  BEFORE:
+      sb("event_items?event_id=eq." + ev.id + "&select=dish_id,pcs_per_guest"),
+  AFTER:
+      sb("event_items?event_id=eq." + ev.id + "&select=dish_id,pcs_per_guest,comp"),
+
+
+── CHANGE 2 — calcTotals: skip comp dishes, take the discount off the end ───────
+Replace the whole calcTotals(...) function with:
+
+  // deno-lint-ignore no-explicit-any
+  function calcTotals(ev: any, items: any[], dishById: Record<string, any>, bev: any) {
+    let foodComputed = 0;
+    for (const it of items) {
+      const d = dishById[it.dish_id];
+      // A dish "on the house" is prepared but NOT charged — leave it out of the total.
+      if (d && !it.comp) foodComputed += (Number(d.sell_price) || 0) * (Number(it.pcs_per_guest) || 0);
+    }
+    const foodPP = (ev.food_price_pp != null && ev.food_price_pp !== "") ? Number(ev.food_price_pp) : (foodComputed || 0);
+    const bevPP = bev ? Number(bev.price_pp) || 0 : 0;
+    const subtotal = ev.guests ? Math.round((foodPP + bevPP) * Number(ev.guests)) : null;
+    // A courtesy discount comes off the very end, never below 0.
+    const discount = subtotal != null ? Math.min(Math.max(0, Number(ev.discount) || 0), subtotal) : Math.max(0, Number(ev.discount) || 0);
+    const total = subtotal != null ? Math.max(0, subtotal - discount) : null;
+    return { foodPP, bevPP, subtotal, discount, total };
+  }
+
+NOTE: calcTotals now returns `discount` (and `subtotal`). Where the type is written
+inline as `{ total: number | null }` (in termsHtml and signedDocHtml signatures),
+widen it to `{ total: number | null; discount?: number }` — or just use `any`.
+
+
+── CHANGE 3 — agreementNumbers: discount the min-spend base too, carry discount ─
+Replace the whole agreementNumbers(...) function with:
+
+  // deno-lint-ignore no-explicit-any
+  function agreementNumbers(ev: any, totals: { total: number | null; discount?: number }) {
+    const pricingType = ev.pricing_type === "min_spend" ? "min_spend" : "set_price";
+    const disc = Math.max(0, Number(ev.discount) || 0);
+    // set_price total is already discounted in calcTotals; min_spend is discounted here.
+    const quoted = pricingType === "min_spend"
+      ? (Number(ev.min_spend) ? Math.max(0, Number(ev.min_spend) - disc) : null)
+      : totals.total;
+    const pct = ev.deposit_pct == null ? 50 : Number(ev.deposit_pct);
+    const deposit = quoted != null && pct > 0 ? Math.round(quoted * pct / 100) : 0;
+    const guestsMin = ev.guests_min || ev.guests || null;
+    const discount = totals.discount != null ? totals.discount : disc;
+    return { pricingType, quoted, pct, deposit, guestsMin, discount };
+  }
+
+
+── CHANGE 4 — courtesy line in the "Quoted price" clause ────────────────────────
+In termsHtml(...), both branches of quotedClause end with the "All quoted prices are
+inclusive..." bold sentence. Immediately AFTER that closing sentence in EACH branch,
+add the courtesy sentence. Easiest: right before `const depositClause`, insert:
+
+  const courtesy = n.discount > 0
+    ? " This price already includes a courtesy of AED " + money(n.discount) + "."
+    : "";
+
+then change the return's Quoted-price section from:
+
+  BEFORE:  sec("Quoted price", quotedClause) +
+  AFTER:   sec("Quoted price", quotedClause + courtesy) +
+
+
+── CHANGE 5 — Payment clause: no link promised while none is set ────────────────
+In termsHtml(...), replace the Payment section:
+
+  BEFORE:
+    sec("Payment",
+      "Once this agreement is signed, we will send you a secure payment link to settle the deposit by card. The remaining balance, including any additional items consumed, is settled on the date of the event by cash or credit card. Special payment arrangements require the approval of the Chief Financial Officer.<br>" +
+      "Bank transfers may also be made to: <b>" + BANK.name + "</b> · " + BANK.bank + " · IBAN " + BANK.iban + " · SWIFT " + BANK.swift +
+      " · Reference: the name under which the reservation is made.") +
+
+  AFTER:
+    sec("Payment",
+      (ev.payment_link
+        ? "Once this agreement is signed, we will send you a secure payment link to settle the deposit by card. "
+        : "Once this agreement is signed, our events team will contact you to arrange the deposit. ") +
+      "The remaining balance, including any additional items consumed, is settled on the date of the event by cash or credit card. Special payment arrangements require the approval of the Chief Financial Officer.<br>" +
+      "Bank transfers may also be made to: <b>" + BANK.name + "</b> · " + BANK.bank + " · IBAN " + BANK.iban + " · SWIFT " + BANK.swift +
+      " · Reference: the name under which the reservation is made.") +
+
+
+── (OPTIONAL) CHANGE 6 — show the courtesy on the signed-copy summary row ───────
+In signedDocHtml(...), the "Quoted price / Minimum spend" row currently reads:
+    n.quoted != null ? "AED " + money(n.quoted) + " — inclusive of all taxes and service" : "—"
+You may append the courtesy note:
+    n.quoted != null ? "AED " + money(n.quoted) + (n.discount > 0 ? " — includes a courtesy of AED " + money(n.discount) : "") + " — inclusive of all taxes and service" : "—"
+
+════════════════════════════════════════════════════════════════════════════════
