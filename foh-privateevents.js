@@ -994,12 +994,16 @@ function peKitchenPrepHTML(e, t){
   return h;
 }
 function pePrintFunctionSheet(id){ var e = peEvById(id); if(e) pePrintHTML(peFunctionSheetHTML(e)); }
-var PE_BRIEF_FN = 'https://paoaivwtkzujmrgrfjuq.supabase.co/functions/v1/event-brief';
+// The wall-print page is served from our own site (renders reliably in every
+// browser and email client) and pulls the brief from the token-gated function.
+function peBriefPrintUrl(e){
+  return location.origin + location.pathname.replace(/[^\/]*$/, '') + 'print-brief.html?t=' + e.brief_token;
+}
 function peCoordEmailHTML(e){
   // The team's brief arrives as a full branded Roberto's document (same as the
   // printout). A print button at the top opens it as its own page to print
   // for the wall (email itself can't run a print button).
-  var bar = e.brief_token ? '<div style="text-align:center;margin:0 0 8px"><a href="'+PE_BRIEF_FN+'?t='+e.brief_token+'" style="display:inline-block;background:#400207;color:#E8D9C7;padding:9px 22px;border-radius:20px;text-decoration:none;font-size:12px;letter-spacing:.5px">🖨 Open &amp; print this brief for the wall</a></div>' : '';
+  var bar = e.brief_token ? '<div style="text-align:center;margin:0 0 8px"><a href="'+peBriefPrintUrl(e)+'" style="display:inline-block;background:#400207;color:#E8D9C7;padding:9px 22px;border-radius:20px;text-decoration:none;font-size:12px;letter-spacing:.5px">🖨 Open &amp; print this brief for the wall</a></div>' : '';
   return peDocShell('Roberto’s — event brief', bar + peBriefBodyHTML(e));
 }
 // @Danilo's half of the coordination email — the selected menu with the

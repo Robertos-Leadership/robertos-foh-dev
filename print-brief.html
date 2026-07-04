@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Roberto's — event brief</title>
+</head>
+<body style="margin:0;font-family:Georgia,'Times New Roman',serif;color:#6B4A33">
+<div id="pb-msg" style="text-align:center;padding-top:70px;font-size:15px">Opening the brief…</div>
+<script>
+// Served from our own site (renders reliably), it pulls the saved branded brief
+// from the token-gated function and writes it as a full page with a Print button.
+var FN = 'https://paoaivwtkzujmrgrfjuq.supabase.co/functions/v1/event-brief';
+var token = new URLSearchParams(location.search).get('t') || '';
+function fail(m){ var el=document.getElementById('pb-msg'); if(el) el.textContent = m; }
+function showBrief(html){
+  var btn = '<div class="pb-bar" style="position:fixed;top:12px;right:12px;z-index:99">'+
+    '<button onclick="window.print()" style="background:#400207;color:#E8D9C7;border:none;border-radius:9px;padding:11px 20px;font-family:Georgia,serif;font-size:14px;letter-spacing:.5px;cursor:pointer;box-shadow:0 4px 14px rgba(44,24,16,.25)">🖨 Print for the wall</button></div>'+
+    '<style>@media print{.pb-bar{display:none !important}}</style>';
+  html = html.indexOf('<body>')>=0 ? html.replace('<body>', '<body>'+btn) : btn+html;
+  document.open(); document.write(html); document.close();
+}
+function loadBrief(){
+  if(!token){ fail('This link is not valid.'); return; }
+  fetch(FN + '?t=' + encodeURIComponent(token))
+    .then(function(r){ return r.text(); })
+    .then(function(html){
+      if(!html || html.indexOf('EVENT BRIEF')<0){ fail('This brief is no longer available.'); return; }
+      showBrief(html);
+    })
+    .catch(function(){ fail('Could not open the brief — please check your connection and reopen the link.'); });
+}
+if(!window.__pbTest) loadBrief();
+</script>
+</body>
+</html>
