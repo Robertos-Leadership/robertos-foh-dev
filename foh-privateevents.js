@@ -631,16 +631,40 @@ function peRenderEvent(){
       '<button class="pe-btn sm" style="flex-shrink:0" onclick="'+nx.act+'">Take me there ›</button></div>';
   }
 
-  // facts
-  h += '<div class="pe-card"><div class="pe-grid3">'+
-    peIn('Client / booking name','client_name',e)+peIn('Company','company',e)+peSel('Type of event','event_type',e,PE_TYPES)+
-    peIn('Date','event_date',e,'date')+peIn('From (e.g. 6:30 pm)','time_from',e)+peIn('To','time_to',e)+
-    peSel('Venue / area','area',e,PE_AREAS)+peIn('Guests (pax)','guests',e,'number')+peIn('Minimum spend (AED)','min_spend',e,'number')+
-    peIn('Contact name','contact_name',e)+peIn('Contact phone','contact_phone',e)+peIn('Contact email','contact_email',e)+
+  // #2 — a compact running total pinned at the top, so she never scrolls three
+  // cards down to read a number to a guest on the phone.
+  h += '<div style="display:flex;justify-content:space-between;align-items:center;background:#F3E9DA;border-radius:8px;padding:9px 13px;margin-bottom:12px">'+
+    '<span style="font-size:11.5px;color:#8B7355">Running total</span>'+
+    '<b style="font-size:14px;color:#400207">'+(t.total!=null
+      ? 'AED '+peMoney(t.total)+' <span style="font-size:10.5px;font-weight:400;color:#8B7355">· '+peMoney(t.perGuest)+'/guest</span>'
+      : (e.min_spend ? 'Min spend AED '+peMoney(e.min_spend) : 'AED — <span style="font-size:10.5px;font-weight:400;color:#8B7355">set food + guests</span>'))+'</b></div>';
+
+  // facts — a new event shows only the 4 essentials; the rest live under
+  // "More details" and auto-open the moment any of them holds real data.
+  var secTriggers = ['company','event_type','time_from','time_to','min_spend','contact_name','contact_phone','contact_email','dietary'];
+  var hasSecData = secTriggers.some(function(f){ return e[f]!=null && e[f]!==''; });
+  var showMore = hasSecData || (peState.moreOpen && peState.moreOpen[e.id]);
+  h += '<div class="pe-card"><div class="pe-grid2">'+
+    peIn('Client / booking name','client_name',e)+peSel('Venue / area','area',e,PE_AREAS)+
   '</div><div class="pe-grid2" style="margin-top:10px">'+
-    peIn('Dietary requirements','dietary',e)+peIn('Payment terms','payment_terms',e)+
-  '</div>'+
-  '<div style="margin-top:6px;font-size:11px;color:#8B7355">Every field saves as you leave it — you’ll see “Saved ✓”.</div>'+
+    peIn('Date','event_date',e,'date')+peIn('Guests (pax)','guests',e,'number')+
+  '</div>';
+  if(!showMore){
+    h += '<div style="margin-top:12px;border-top:1px dashed rgba(107,31,42,0.18);padding-top:10px;display:flex;align-items:center;justify-content:space-between;cursor:pointer" onclick="peState.moreOpen=peState.moreOpen||{};peState.moreOpen[\''+e.id+'\']=true;renderMain()">'+
+      '<span style="font-size:12.5px;color:#8B7355">+ More details</span>'+
+      '<span style="font-size:11px;color:#A5876B">company · contact · dietary · payment</span></div>';
+  } else {
+    h += '<div style="margin-top:12px;border-top:1px dashed rgba(107,31,42,0.18);padding-top:12px"></div>'+
+      '<div class="pe-grid3">'+
+      peIn('Company','company',e)+peSel('Type of event','event_type',e,PE_TYPES)+peIn('Minimum spend (AED)','min_spend',e,'number')+
+      peIn('From (e.g. 6:30 pm)','time_from',e)+peIn('To','time_to',e)+peIn('Contact name','contact_name',e)+
+      peIn('Contact phone','contact_phone',e)+peIn('Contact email','contact_email',e)+
+    '</div><div class="pe-grid2" style="margin-top:10px">'+
+      peIn('Dietary requirements','dietary',e)+peIn('Payment terms','payment_terms',e)+
+    '</div>'+
+      (!hasSecData ? '<div style="margin-top:8px;font-size:12px;color:#8B7355;cursor:pointer" onclick="peState.moreOpen=peState.moreOpen||{};peState.moreOpen[\''+e.id+'\']=false;renderMain()">– Show fewer details</div>' : '');
+  }
+  h += '<div style="margin-top:8px;font-size:11px;color:#8B7355">Every field saves as you leave it — you’ll see “Saved ✓”.</div>'+
   '<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button class="pe-btn sec" onclick="peDeleteEvent(\''+e.id+'\')"'+(e.status==='draft'?'':' disabled')+'>Delete draft</button>'+
   (e.status==='draft'?'':'<span style="font-size:11px;color:#8B7355">Only a draft can be deleted — mark this event Lost instead.</span>')+'</div></div>';
 
@@ -760,17 +784,24 @@ function peRenderEvent(){
   var mailClick = function(fn){ return hasMail ? fn+'(\''+e.id+'\')' : 'peScrollToField(\'contact_email\',\'Add the client email above to send\')'; };
   var dim = function(ok){ return ok?'':' style="opacity:.55"'; };
   var grpLbl = 'font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#A88930;margin:2px 2px 5px';
+  var sendMoreOpen = !!(peState.sendMore && peState.sendMore[e.id]);
   h += '<div class="pe-card" id="pe-card-docs" style="margin-top:12px"><b style="font-size:14px;color:#400207">Documents</b>'+
     '<div style="'+grpLbl+';margin-top:10px">For the guest</div>'+
+    '<div style="font-size:11.5px;color:#6B4A33;background:#F7EEE2;border-radius:8px;padding:8px 10px;margin-bottom:8px">Most bookings: send the full proposal so the guest can sign online.</div>'+
     '<div style="display:flex;flex-direction:column;gap:7px">'+
     '<button class="pe-btn"'+dim(hasMail)+' onclick="'+mailClick('peEmailAgreement')+'">Send full proposal (client signs online)</button>'+
-    '<button class="pe-btn sec"'+dim(hasMail)+' onclick="'+mailClick('peEmailProposal')+'">Send price &amp; menu only (no signing)</button>'+
-    (hasMail?'':'<div style="font-size:11px;color:#8A2A1A;margin:-3px 2px 2px">Add the client email above to send these.</div>')+
-    '<button class="pe-btn sec" onclick="peCopyClientLink(\''+e.id+'\')">Copy the guest’s menu link</button>'+
-    '<div style="display:flex;gap:7px"><button class="pe-btn sec" style="flex:1"'+dim(hasPhone)+' onclick="'+(hasPhone?'peWhatsApp(\''+e.id+'\')':'peScrollToField(\'contact_phone\',\'Add the client phone for WhatsApp\')')+'">WhatsApp proposal &amp; agreement</button>'+
-    '<button class="pe-btn sec" style="flex:1" onclick="peCopyAgreementLink(\''+e.id+'\')">Copy signing link</button>'+
-    '<button class="pe-btn sec" style="flex:1" onclick="pePrintProposal(\''+e.id+'\')">Print PDF</button></div>'+
-    (hasPhone?'':'<div style="font-size:11px;color:#8A2A1A;margin:-3px 2px 2px">Add the client phone for WhatsApp.</div>')+
+    (hasMail?'':'<div style="font-size:11px;color:#8A2A1A;margin:-3px 2px 2px">Add the client email above to send.</div>')+
+    // The other four sends are one tap away, not a wall.
+    '<div style="border:1px solid rgba(107,31,42,0.25);border-radius:8px;padding:9px 11px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;color:#6B4A33" onclick="peState.sendMore=peState.sendMore||{};peState.sendMore[\''+e.id+'\']='+(!sendMoreOpen)+';renderMain()">'+
+      '<span style="font-size:12.5px">More ways to send</span><span style="font-size:11px;color:#A5876B">price only · WhatsApp · copy link · print '+(sendMoreOpen?'▴':'▾')+'</span></div>'+
+    (sendMoreOpen ?
+      '<button class="pe-btn sec"'+dim(hasMail)+' onclick="'+mailClick('peEmailProposal')+'">Send price &amp; menu only (no signing)</button>'+
+      '<button class="pe-btn sec" onclick="peCopyClientLink(\''+e.id+'\')">Copy the guest’s menu link</button>'+
+      '<div style="display:flex;gap:7px"><button class="pe-btn sec" style="flex:1"'+dim(hasPhone)+' onclick="'+(hasPhone?'peWhatsApp(\''+e.id+'\')':'peScrollToField(\'contact_phone\',\'Add the client phone for WhatsApp\')')+'">WhatsApp</button>'+
+      '<button class="pe-btn sec" style="flex:1" onclick="peCopyAgreementLink(\''+e.id+'\')">Copy signing link</button>'+
+      '<button class="pe-btn sec" style="flex:1" onclick="pePrintProposal(\''+e.id+'\')">Print PDF</button></div>'+
+      (hasPhone?'':'<div style="font-size:11px;color:#8A2A1A;margin:-3px 2px 2px">Add the client phone for WhatsApp.</div>')
+      : '')+
     (e.client_selection ? '<div style="font-size:11.5px;color:#2E6B34;background:#E7F0E4;border-radius:8px;padding:8px 10px">Client picked '+((e.client_selection.dish_ids||[]).length)+' dishes'+(e.client_selection.note?' · “'+peEsc(e.client_selection.note)+'”':'')+' <span style="text-decoration:underline;cursor:pointer" onclick="peApplyClientSelection(\''+e.id+'\')">apply to event</span></div>' : '')+
     '</div>'+
     '<div style="'+grpLbl+';margin-top:12px">For the team</div>'+
