@@ -63,6 +63,15 @@ function peAllergenText(alg){
 }
 var PE_GROSS = 1.23585;   // 10% SC + 7% DIFC + 5% VAT compounding — net = gross / PE_GROSS
 var PE_TIERS = [{n:'Classic',p:10},{n:'Elevated',p:20},{n:'Signature',p:35}];
+// Wizard scaling — there is NO piece cap per guest or per dish (a guest may have
+// 30 pcs of one thing — it's their budget). The only real cap is VARIETY (see
+// peWizCap, max 15 different canapés). PE_WIZ_SANE_PCS is a *sensible* ceiling of
+// canapés per guest: beyond it we stop piling on more pieces and instead offer a
+// plated course / live station / beverage upgrade. PE_WIZ_AVG_PC is the blend the
+// wizard aims for (~AED 20/piece) so the proposal is a full spread, not a few
+// costly pieces — pieces ≈ food balance ÷ 20.
+var PE_WIZ_SANE_PCS = 30;
+var PE_WIZ_AVG_PC = 20;
 // The three designed set menus (PDFs live in menus/ inside this repo, so they
 // deploy with the app and the email links always match the site being served).
 // Each menu carries its courses so the kitchen prep sheet can be built from a
@@ -1171,7 +1180,8 @@ function peRenderEvent(){
     h += '<div class="pe-flag" style="color:'+(t.foodCostPct<=27?'#2E5B30':'#7A5500')+'">'+(t.foodCostPct<=27?'✓':'▲')+' Food cost '+t.foodCostPct.toFixed(1)+'%'+(t.foodCostPct<=27?' — on target':' — above the 27% target')+'</div>';
   }
   if(t.pcs){
-    h += '<div class="pe-flag" style="color:'+(t.pcs>=8&&t.pcs<=12?'#2E5B30':'#7A5500')+'">'+(t.pcs>=8&&t.pcs<=12?'✓':'▲')+' '+(Math.round(t.pcs*10)/10)+' pieces / guest'+(t.pcs<8?' — below 8–12 norm':(t.pcs>12?' — above 8–12 norm':''))+'</div>';
+    // Informational — there is no piece-count norm; the client's budget sets it.
+    h += '<div class="pe-flag" style="color:#6B4A33">'+(Math.round(t.pcs*10)/10)+' pieces / guest</div>';
   }
   if(t.missingAllergens.length){
     h += '<div class="pe-flag" style="color:#B00020">▲ Allergens missing: '+peEsc(t.missingAllergens.join(', '))+'</div>';
@@ -2600,8 +2610,10 @@ async function peSavePack(id){
 // ── budget proposal wizard ───────────────────────────────────────────────────
 // Valentina types the facts of the enquiry (guests, budget, beverage package);
 // the app does ALL the math on her own library — beverage total, balance for
-// food per guest, then a canapé mix that fits it under the kitchen rules
-// (8–12 pcs/guest, variety cap by guest count, min orders). No AI, no guessing.
+// food per guest, then a canapé selection that FILLS that balance: pieces are
+// scaled up (no piece cap) to spend as much of the budget as possible, held only
+// by the real kitchen rules — variety cap (max 15 different canapés), minimum
+// order per dish, tier pricing. No AI, no guessing.
 var peWiz = { client:'', date:'', time:'', area:'Scala and Bar', guests:'', budget:'', bev:'', excl:{}, dietaryNote:'', vegonly:false, dry:false, busy:false };
 function peWizReset(){ peWiz = { client:'', date:'', time:'', area:'Scala and Bar', guests:'', budget:'', bev:'', excl:{}, dietaryNote:'', vegonly:false, busy:false }; }
 function peWizSet(f, v){ peWiz[f] = v; peWizPaint(); }
@@ -2627,42 +2639,59 @@ function peWizAvail(pool){
   pool.forEach(function(d){ if(a[d.tier]!=null) a[d.tier]++; });
   return a;
 }
-function peWizMix(foodPP, guests, pool, minPcs){
-  // best tier mix (pcs of Signature 35 / Elevated 20 / Classic 10 per guest)
-  // that spends as much of the food balance as possible without going over —
-  // constrained to what the live library can actually serve (a dish carries
-  // at most 2 pcs/guest, and the distinct-dish count must fit the variety cap).
-  var avail = peWizAvail(pool), cap = peWizCap(guests);
-  var lo = minPcs || 8;
+function peWizMix(foodPP, guests, pool){
+  // Pieces per guest of each tier (Signature 35 / Elevated 20 / Classic 10) that
+  // spends as CLOSE to the food balance as possible without going over. NO piece
+  // cap — not per guest, not per dish. The only limits: a tier with no dishes in
+  // the library can't be used, and we won't pile past a *sensible* ceiling of
+  // canapés per guest (PE_WIZ_SANE_PCS) — beyond that the wizard offers a plated
+  // course/station instead. We aim for a full, blended spread (~AED 20/piece →
+  // roughly foodPP/20 pieces) rather than a handful of costly pieces.
+  var avail = peWizAvail(pool);
+  var maxS = avail.Signature>0 ? PE_WIZ_SANE_PCS : 0;
+  var maxE = avail.Elevated>0  ? PE_WIZ_SANE_PCS : 0;
+  var maxC = avail.Classic>0   ? PE_WIZ_SANE_PCS : 0;
+  var targetPcs = Math.max(3, Math.min(PE_WIZ_SANE_PCS, Math.round(foodPP/PE_WIZ_AVG_PC)));
   var best = null;
-  for(var pcs=lo; pcs<=12; pcs++){
-    for(var s=0; s<=pcs; s++){
-      for(var e=0; e<=pcs-s; e++){
-        var c = pcs-s-e;
-        if(s > avail.Signature*2 || e > avail.Elevated*2 || c > avail.Classic*2) continue;
-        if(Math.ceil(s/2)+Math.ceil(e/2)+Math.ceil(c/2) > cap) continue;
+  for(var s=0; s<=maxS; s++){
+    if(35*s > foodPP) break;
+    for(var e=0; e<=maxE && s+e<=PE_WIZ_SANE_PCS; e++){
+      if(35*s + 20*e > foodPP) break;
+      var cRoom = PE_WIZ_SANE_PCS - s - e;
+      for(var c=0; c<=maxC && c<=cRoom; c++){
+        var pcs = s+e+c;
+        if(pcs<1) continue;
         var price = 35*s + 20*e + 10*c;
-        if(price > foodPP) continue;
-        var score = (foodPP-price)*100 + Math.abs(pcs-10)*10 - e;
+        if(price > foodPP) break;   // c only raises price — nothing better past here
+        var leftover = foodPP - price;
+        // fill the budget first (leftover dominates), then land near the blended
+        // piece count, then lean to Elevated (the workhorse tier) and a little
+        // Signature for a richer feel.
+        var score = leftover*1000 + Math.abs(pcs-targetPcs)*8 - e*2 - s;
         if(!best || score < best.score) best = {s:s, e:e, c:c, pcs:pcs, price:price, score:score};
       }
     }
   }
-  return best;
+  return best;   // null only when the library has no active dishes at all
 }
 function peWizPick(mix, guests, pool){
   // turn the tier mix into real dishes from the guest-allowed pool, balancing
   // cold/hot/dolci (~40/40/20 of pieces) and spreading categories.
   var cap = peWizCap(guests), avail = peWizAvail(pool);
   var hasDessert = pool.some(function(d){ return d.serve==='Dessert'; });
+  // How many DISTINCT dishes each tier gets — as varied as the library and the
+  // variety cap allow. Pieces then spread across them; a single dish may carry
+  // several pcs/guest (no per-dish cap), so a big piece count needs few dishes.
   var plan = [['Signature',mix.s],['Elevated',mix.e],['Classic',mix.c]]
     .filter(function(t){ return t[1]>0; })
     .map(function(t){ return {tier:t[0], pcs:t[1], distinct:Math.min(t[1], avail[t[0]])}; });
   function totalDistinct(){ return plan.reduce(function(a,p){ return a+p.distinct; },0); }
   while(totalDistinct() > cap){
-    // over the variety cap — double up pieces, shrinking the biggest tier first
+    // over the variety cap — use one fewer dish (it just carries more pieces),
+    // trimming the tier that currently spreads across the most dishes first,
+    // never below one dish per used tier.
     var cand = null;
-    plan.forEach(function(p){ if(p.distinct > Math.ceil(p.pcs/2) && (!cand || p.distinct > cand.distinct)) cand = p; });
+    plan.forEach(function(p){ if(p.distinct > 1 && (!cand || p.distinct > cand.distinct)) cand = p; });
     if(!cand) break;
     cand.distinct--;
   }
@@ -2670,11 +2699,13 @@ function peWizPick(mix, guests, pool){
   var target = hasDessert ? {Cold:.4, Hot:.4, Dessert:.2} : {Cold:.5, Hot:.5, Dessert:0};
   var picked = [];
   plan.forEach(function(p){
-    for(var i=0; i<p.distinct; i++){
-      // spread the tier's pieces over its dishes, max 2 pcs/guest each
-      var pcsHere = Math.min(2, p.pcs - (p.distinct-1-i));
+    var n = p.distinct, remaining = p.pcs;
+    for(var i=0; i<n; i++){
+      // even spread of the tier's pieces across its dishes (22 over 5 → 5,5,4,4,4)
+      var slotsLeft = n - i;
+      var pcsHere = Math.ceil(remaining / slotsLeft);
       if(pcsHere < 1) pcsHere = 1;
-      p.pcs -= pcsHere;
+      remaining -= pcsHere;
       var cand = pool.filter(function(d){
         return d.tier===p.tier && !used[d.id] && (d.min_order||10) <= guests*pcsHere;
       });
@@ -2716,23 +2747,24 @@ function peWizCalc(){
   var pool = peWizPool();
   var exclOn = PE_WIZ_EXCL.filter(function(x){ return peWiz.excl[x[0]]; }).map(function(x){ return x[1].toLowerCase(); });
   if(peWiz.vegonly) exclOn.unshift('vegetarian only');
-  // A tight budget (under AED 80/guest) still gets a proposal — a lighter one,
-  // clearly labelled, rather than a dead end.
-  var light = foodPP < 80;
-  var mix = peWizMix(foodPP, guests, pool, light ? 4 : 8);
+  var mix = peWizMix(foodPP, guests, pool);
   if(!mix) return {ready:false, err: exclOn.length
     ? 'With '+exclOn.join(' + ')+' the library cannot serve a full selection — relax one restriction or add matching canapés in the Chef corner.'
     : 'The dish library cannot serve a selection yet — add more active canapés in the Chef corner.'};
   var picked = peWizPick(mix, guests, pool);
   var realFoodPP = 0; picked.forEach(function(p){ realFoodPP += (Number(p.dish.sell_price)||0)*p.pcs; });
   var total = (realFoodPP+bevPP)*guests;
-  // Ceiling: the canapé selection tops out (~12×35=420/guest). If a large chunk
-  // of the food balance can't be spent, say so instead of a misleading "✓".
   var foodUnspentPP = foodPP - realFoodPP;
-  var bigGap = foodUnspentPP >= 50;
+  // Pieces are scaled to fill the food balance, so normally almost nothing is left
+  // over. Money is only genuinely stranded when the selection has already reached
+  // the sensible ceiling (~PE_WIZ_SANE_PCS pcs/guest — a very heavy reception) and
+  // the budget still isn't spent, OR the library is too thin/cheap to absorb it.
+  // Then we say so and OFFER to add real value rather than parking the money.
+  var addValue = foodUnspentPP >= 20 && mix.pcs >= PE_WIZ_SANE_PCS - 3;
   return {ready:true, guests:guests, budget:budget, bev:bev, bevPP:bevPP, bevTotal:bevTotal, balance:balance,
           foodPP:foodPP, mix:mix, picked:picked, realFoodPP:realFoodPP, total:total, gap:budget-total,
-          cap:peWizCap(guests), excl:exclOn, light:light, bigGap:bigGap, foodUnspentPP:foodUnspentPP};
+          cap:peWizCap(guests), excl:exclOn, foodUnspentPP:foodUnspentPP,
+          addValue:addValue, addValueTotal:Math.round(foodUnspentPP*guests)};
 }
 function peRenderWizard(){
   var bevs = peState.bevs.filter(function(b){ return b.active!==false; })
@@ -2783,15 +2815,14 @@ function peWizOutHTML(){
     (w.bev ? mrow('Beverage — '+peEsc(w.bev.name)+(w.bev.duration_hours?' ('+w.bev.duration_hours+'h)':''), w.guests+' × AED '+peMoney(w.bevPP)+' = AED '+peMoney(w.bevTotal))
            : mrow('Beverage', peWiz.bev==='dry' ? 'no alcohol — soft drinks & water (AED 0)' : 'none — whole budget on food'))+
     mrow('Balance for food', 'AED '+peMoney(w.balance)+' → AED '+peMoney(w.foodPP)+' / guest')+
-    mrow('Canapé mix that fits', w.mix.pcs+' pieces/guest — '+[w.mix.s?w.mix.s+' Signature':null, w.mix.e?w.mix.e+' Elevated':null, w.mix.c?w.mix.c+' Classic':null].filter(Boolean).join(' + '))+
+    mrow('Canapé selection — '+w.mix.pcs+' pieces/guest', [w.mix.s?w.mix.s+' Signature':null, w.mix.e?w.mix.e+' Elevated':null, w.mix.c?w.mix.c+' Classic':null].filter(Boolean).join(' + '))+
     mrow('Proposal total', w.guests+' × AED '+peMoney(w.realFoodPP+w.bevPP)+' = AED '+peMoney(w.total))+
     (w.gap<0
       ? '<div style="font-size:12px;margin-top:4px;color:#B00020">AED '+peMoney(-w.gap)+' OVER budget</div>'
-      : w.bigGap
-        ? '<div style="font-size:12px;margin-top:4px;color:#8A6400">This is the full canapé spread for this budget — extra courses (a set-menu addition or a longer beverage package) are added later in the event. AED '+peMoney(w.gap)+' of the budget is left for those.</div>'
-        : '<div style="font-size:12px;margin-top:4px;color:#2E6B34">AED '+peMoney(w.gap)+' under the AED '+peMoney(w.budget)+' budget ✓</div>')+
-    (w.light ? '<div style="font-size:12px;margin-top:4px;color:#8A6400">▲ Light selection — '+w.mix.pcs+' pieces/guest is below the usual 8–12. Fine for a short reception; raise the budget for a fuller spread.</div>' : '')+
-    '<div style="font-size:10.5px;color:#8B7355;margin-top:4px">Kitchen rules applied: '+(w.light?'light ':'8–12 ')+'pieces per guest · '+w.guests+' guests → up to '+w.cap+' different canapés · minimum orders respected'+(w.excl&&w.excl.length?' · <b style="color:#400207">guest requests: '+w.excl.join(', ')+'</b>':'')+'.</div></div>';
+      : w.addValue
+        ? '<div style="font-size:12px;margin-top:4px;color:#8A6400">This already fills a generous canapé reception — '+w.mix.pcs+' pieces per guest. AED '+peMoney(w.addValueTotal)+' of the budget is still free: add a plated course, a live station, or upgrade the beverage package to use it (add those in the event after creating the draft) rather than leaving it unspent.</div>'
+        : '<div style="font-size:12px;margin-top:4px;color:#2E6B34">Spends the budget — '+w.mix.pcs+' pieces/guest'+(w.gap>0?' · only AED '+peMoney(w.gap)+' to spare':'')+' ✓</div>')+
+    '<div style="font-size:10.5px;color:#8B7355;margin-top:4px">Kitchen rules applied: pieces scaled to fill the budget (no piece cap) · '+w.guests+' guests → up to '+w.cap+' different canapés · minimum orders respected'+(w.excl&&w.excl.length?' · <b style="color:#400207">guest requests: '+w.excl.join(', ')+'</b>':'')+'.</div></div>';
   var groups = [{k:'Cold',n:'Cold'},{k:'Hot',n:'Hot'},{k:'Dessert',n:'Dolci'}];
   h += '<div class="pe-card"><b style="color:#400207">Suggested menu — '+w.picked.length+' canapés</b>'+
     '<div style="font-size:11px;color:#8B7355;margin:2px 0 6px">Built from the live dish library. Create the draft, then swap any dish freely in the event before sending.</div>';
@@ -3251,8 +3282,8 @@ function peRenderQuick(){
   if(tt.distinct>15) h += '<div class="pe-flag" style="color:#B00020">\u25b2 Above the 15-dish kitchen cap \u2014 reduce variety</div>';
   else if(tt.distinct>10) h += '<div class="pe-flag" style="color:#7A5500">\u25b2 Within range \u2014 confirm lead time with the kitchen</div>';
   if(tt.pcsPerGuest!=null && tt.pieces>0){
-    var ok = tt.pcsPerGuest>=8 && tt.pcsPerGuest<=12;
-    h += '<div class="pe-flag" style="color:'+(ok?'#2E5B30':'#7A5500')+'">'+(ok?'\u2713':'\u25b2')+' '+tt.pcsPerGuest.toFixed(1)+' pieces / guest'+(ok?' \u2014 within the 8\u201312 norm':(tt.pcsPerGuest<8?' \u2014 below the 8\u201312 norm':' \u2014 above the 8\u201312 norm'))+'</div>';
+    // Informational \u2014 no piece-count norm; only the 15-dish variety cap above binds.
+    h += '<div class="pe-flag" style="color:#6B4A33">'+tt.pcsPerGuest.toFixed(1)+' pieces / guest</div>';
   }
   if(tt.minViol.length) h += '<div class="pe-flag" style="color:#B00020">\u25b2 Below minimum order: '+peEsc(tt.minViol.join(', '))+'</div>';
   h += '<div style="display:flex;flex-direction:column;gap:7px;margin-top:12px">'+
