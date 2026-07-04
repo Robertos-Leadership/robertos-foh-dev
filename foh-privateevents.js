@@ -335,7 +335,7 @@ function peGo(view, id){
   if(id !== undefined) peState.currentId = id;
   if((view==='event' || view==='guidedevent') && id) peLoadLog(id);
   renderMain();
-  var mc = document.getElementById('main-content'); if(mc) mc.scrollTop = 0;
+  var mc = document.getElementById('foh-tab-content') || document.getElementById('main-content'); if(mc) mc.scrollTop = 0;
 }
 // Where a persistent "back" on an event screen should return to.
 function peBackTarget(){
@@ -345,7 +345,22 @@ function peBackTarget(){
   return {view:'list', label:'Events'};
 }
 function peScrollTopBtn(){
-  return '<button class="pe-totop" onclick="var m=document.getElementById(\'main-content\');if(m&&m.scrollTo)m.scrollTo({top:0,behavior:\'smooth\'});else if(m)m.scrollTop=0;" aria-label="Back to top">↑ Top</button>';
+  return '<button class="pe-totop" onclick="peScrollTop()" aria-label="Back to top">↑ Top</button>';
+}
+// Reset EVERY possible scroll container so this can't miss regardless of which
+// element actually scrolls: any scrolled ancestor of #main-content, #foh-tab-content,
+// the window, and the document scrolling element.
+function peScrollTop(){
+  function top(node){ if(!node) return; if(node.scrollTo){ try{ node.scrollTo({top:0, behavior:'smooth'}); return; }catch(e){} } try{ node.scrollTop = 0; }catch(e){} }
+  var node = document.getElementById('main-content');
+  while(node && node !== document.body){
+    if(node.scrollTop > 0 && node.scrollHeight > node.clientHeight + 2) top(node);
+    node = node.parentElement;
+  }
+  top(document.getElementById('foh-tab-content'));
+  top(document.scrollingElement || document.documentElement);
+  top(document.body);
+  try{ window.scrollTo({top:0, behavior:'smooth'}); }catch(e){ try{ window.scrollTo(0,0); }catch(_){} }
 }
 
 // ── styles (injected once) ───────────────────────────────────────────────────
@@ -520,7 +535,7 @@ function pePillFocus(kind){
   peState.focus = (peState.focus===kind) ? null : kind;
   if(peState.focus) peState.filter = 'open';
   renderMain();
-  var mc = document.getElementById('main-content'); if(mc) mc.scrollTop = 0;
+  var mc = document.getElementById('foh-tab-content') || document.getElementById('main-content'); if(mc) mc.scrollTop = 0;
 }
 // Colours for the "next step" chips — plain code Valentina reads on the phone:
 // red = something missing, amber = do it now, blue = waiting on the client, green = done.
