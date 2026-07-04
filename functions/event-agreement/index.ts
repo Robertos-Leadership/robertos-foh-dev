@@ -44,29 +44,38 @@ function calcTotals(ev: any, items: any[], dishById: Record<string, any>, bev: a
   let foodComputed = 0;
   for (const it of items) {
     const d = dishById[it.dish_id];
-    if (d) foodComputed += (Number(d.sell_price) || 0) * (Number(it.pcs_per_guest) || 0);
+    // A dish "on the house" is prepared but NOT charged — leave it out of the total.
+    if (d && !it.comp) foodComputed += (Number(d.sell_price) || 0) * (Number(it.pcs_per_guest) || 0);
   }
   const foodPP = (ev.food_price_pp != null && ev.food_price_pp !== "") ? Number(ev.food_price_pp) : (foodComputed || 0);
   const bevPP = bev ? Number(bev.price_pp) || 0 : 0;
-  const total = ev.guests ? Math.round((foodPP + bevPP) * Number(ev.guests)) : null;
-  return { foodPP, bevPP, total };
+  const subtotal = ev.guests ? Math.round((foodPP + bevPP) * Number(ev.guests)) : null;
+  // A courtesy discount comes off the very end, never below 0.
+  const discount = subtotal != null ? Math.min(Math.max(0, Number(ev.discount) || 0), subtotal) : Math.max(0, Number(ev.discount) || 0);
+  const total = subtotal != null ? Math.max(0, subtotal - discount) : null;
+  return { foodPP, bevPP, subtotal, discount, total };
 }
 
 // deno-lint-ignore no-explicit-any
-function agreementNumbers(ev: any, totals: { total: number | null }) {
+function agreementNumbers(ev: any, totals: { total: number | null; discount?: number }) {
   const pricingType = ev.pricing_type === "min_spend" ? "min_spend" : "set_price";
-  const quoted = pricingType === "min_spend" ? (Number(ev.min_spend) || null) : totals.total;
+  const disc = Math.max(0, Number(ev.discount) || 0);
+  // set_price total is already discounted in calcTotals; min_spend is discounted here.
+  const quoted = pricingType === "min_spend"
+    ? (Number(ev.min_spend) ? Math.max(0, Number(ev.min_spend) - disc) : null)
+    : totals.total;
   const pct = ev.deposit_pct == null ? 50 : Number(ev.deposit_pct);
   const deposit = quoted != null && pct > 0 ? Math.round(quoted * pct / 100) : 0;
   const guestsMin = ev.guests_min || ev.guests || null;
-  return { pricingType, quoted, pct, deposit, guestsMin };
+  const discount = totals.discount != null ? totals.discount : disc;
+  return { pricingType, quoted, pct, deposit, guestsMin, discount };
 }
 
 // The agreement terms with the event's numbers filled in. This is the ONE
 // place the wording lives — the guest page shows it, and the signed snapshot
 // stores this exact HTML, so what was read is what was signed.
 // deno-lint-ignore no-explicit-any
-function termsHtml(ev: any, bev: any, totals: { total: number | null }): string {
+function termsHtml(ev: any, bev: any, totals: { total: number | null; discount?: number }): string {
   const n = agreementNumbers(ev, totals);
   const sec = (t: string, body: string) =>
     '<div style="margin-top:16px"><div style="font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:#7A8B4A">' + t + "</div>" +
@@ -83,6 +92,10 @@ function termsHtml(ev: any, bev: any, totals: { total: number | null }): string 
       "Additional guests will be charged at the same per-guest rate with prior intimation and confirmation. " +
       "<b>All quoted prices are inclusive of 5% VAT, 7% DIFC authority fee and 10% service charge.</b>";
 
+  const courtesy = n.discount > 0
+    ? " This price already includes a courtesy of AED " + money(n.discount) + "."
+    : "";
+
   const depositClause = n.pct > 0
     ? "The client undertakes to pay a <b>" + n.pct + "% prepayment of AED " + money(n.deposit) + "</b> prior to the reservation date. " +
       "A booking becomes confirmed on receipt of this signed agreement and once the deposit is received. " +
@@ -94,13 +107,16 @@ function termsHtml(ev: any, bev: any, totals: { total: number | null }): string 
   return (
     sec("The agreement",
       "This agreement is between Roberto&rsquo;s Club LTD, a licensed Italian fine dining restaurant located at Gate Village No. 1, Dubai International Financial Centre (&ldquo;DIFC&rdquo;), and you, the Client. Modifications to this agreement are only valid if documented in writing and agreed to by Roberto&rsquo;s.") +
-    sec("Quoted price", quotedClause) +
+    sec("Quoted price", quotedClause + courtesy) +
     sec("Additional items",
       "Additional items such as special cakes, flower arrangements or tobacco will be charged accordingly." +
       (ev.agreement_remarks ? "<br><b>Agreed for this event:</b> " + esc(ev.agreement_remarks) : "")) +
     sec("Booking &amp; deposit", depositClause) +
     sec("Payment",
-      "Once this agreement is signed, we will send you a secure payment link to settle the deposit by card. The remaining balance, including any additional items consumed, is settled on the date of the event by cash or credit card. Special payment arrangements require the approval of the Chief Financial Officer.<br>" +
+      (ev.payment_link
+        ? "Once this agreement is signed, we will send you a secure payment link to settle the deposit by card. "
+        : "Once this agreement is signed, our events team will contact you to arrange the deposit. ") +
+      "The remaining balance, including any additional items consumed, is settled on the date of the event by cash or credit card. Special payment arrangements require the approval of the Chief Financial Officer.<br>" +
       "Bank transfers may also be made to: <b>" + BANK.name + "</b> · " + BANK.bank + " · IBAN " + BANK.iban + " · SWIFT " + BANK.swift +
       " · Reference: the name under which the reservation is made.") +
     sec("Unauthorized extras",
@@ -122,7 +138,7 @@ function termsHtml(ev: any, bev: any, totals: { total: number | null }): string 
 // stored as the frozen snapshot and emailed to both sides.
 // deno-lint-ignore no-explicit-any
 function signedDocHtml(ev: any, items: any[], dishById: Record<string, any>, bev: any,
-  totals: { foodPP: number; bevPP: number; total: number | null },
+  totals: { foodPP: number; bevPP: number; total: number | null; discount?: number },
   signed: { name: string; designation: string; at: string }): string {
   const n = agreementNumbers(ev, totals);
   const row = (l: string, v: string) =>
@@ -152,7 +168,7 @@ function signedDocHtml(ev: any, items: any[], dishById: Record<string, any>, bev
     row("Food", esc(ev.package_label || (items.length ? "Canapé selection" : ""))) +
     row("Beverage", bev ? esc(bev.name) + (bev.duration_hours ? " — " + bev.duration_hours + " hours" : "") : (ev.bev_mode === "dry" ? "Dry event — no alcohol served (soft drinks &amp; water)" : "—")) +
     row(n.pricingType === "min_spend" ? "Minimum spend" : "Quoted price",
-      n.quoted != null ? "AED " + money(n.quoted) + " — inclusive of all taxes and service" : "—") +
+      n.quoted != null ? "AED " + money(n.quoted) + (n.discount > 0 ? " — includes a courtesy of AED " + money(n.discount) : "") + " — inclusive of all taxes and service" : "—") +
     row("Deposit", n.pct > 0 ? n.pct + "% — AED " + money(n.deposit) : "None — balance on the day") +
     row("Remarks", esc(ev.agreement_remarks)) +
     "</table>" +
@@ -197,7 +213,7 @@ Deno.serve(async (req) => {
     const ev = evs[0];
 
     const [itR, dR] = await Promise.all([
-      sb("event_items?event_id=eq." + ev.id + "&select=dish_id,pcs_per_guest"),
+      sb("event_items?event_id=eq." + ev.id + "&select=dish_id,pcs_per_guest,comp"),
       sb("event_dishes?select=id,name,description,allergens,serve,sell_price"),
     ]);
     const items = await itR.json();
