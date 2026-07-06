@@ -304,6 +304,7 @@ function renderActivationsOverview(){
   const acts = state.events.filter(e=>(e.status||'active')!=='paused');
 
   let grandTotal = 0, best = null, attentionNames = [];
+  let nightCount = 0, totCovers = 0, coversNights = 0, revWithCovers = 0;   // for averages
   const rows = acts.map(ev=>{
     const all = activationResultWeeks(ev);
     const wks = period==='all' ? all : all.slice(-period);
@@ -315,7 +316,17 @@ function renderActivationsOverview(){
     const latest = wks[wks.length-1];
     const total = wks.reduce((s,x)=>s+x.rev,0);
     grandTotal += total;
-    for(const x of wks){ if(!best || x.rev>best.rev) best = { rev:x.rev, name:ev.name, date:x.w.week_date }; }
+    nightCount += wks.length;
+    for(const x of wks){
+      if(!best || x.rev>best.rev) best = { rev:x.rev, name:ev.name, date:x.w.week_date };
+      if(x.covers){ totCovers += x.covers; coversNights++; revWithCovers += x.rev; }
+    }
+    // this activation's own averages (shown when its row is expanded)
+    const evCoversNights = wks.filter(x=>x.covers).length;
+    const evCovers = wks.reduce((s,x)=>s+(x.covers||0),0);
+    const evAvgRev = total / wks.length;
+    const evAvgCovers = evCoversNights ? evCovers/evCoversNights : null;
+    const evAvgSpend = evCovers ? wks.filter(x=>x.covers).reduce((s,x)=>s+x.rev,0)/evCovers : null;
     const prior = wks.slice(0,-1);
     const priorAvg = prior.length ? prior.reduce((s,x)=>s+x.rev,0)/prior.length : 0;
     const deltaPct = priorAvg ? Math.round((latest.rev-priorAvg)/priorAvg*100) : null;
@@ -352,6 +363,7 @@ function renderActivationsOverview(){
               <div style="text-align:right;color:${c}">${x.avg?money(x.avg):'—'}</div>`;
           }).join('')}
         </div>
+        <div style="margin-top:10px;font-size:12px;color:var(--vino)">${wks.length} night${wks.length===1?'':'s'} · avg net AED ${money(evAvgRev)}${evAvgCovers?` · avg ${Math.round(evAvgCovers)} covers`:''}${evAvgSpend?` · avg spend AED ${money(evAvgSpend)}`:''}</div>
       </div>` : '';
     return `<div style="background:var(--surface);border:1px solid ${attention?'var(--red)':'var(--border)'};${attention?'border-left:4px solid var(--red);border-radius:0 8px 8px 0':'border-radius:8px'};padding:14px 16px;margin-bottom:8px;cursor:pointer" onclick="toggleOverviewEvent('${ev.id}')">
       <div style="display:flex;align-items:center;gap:14px">
@@ -369,11 +381,21 @@ function renderActivationsOverview(){
 
   const periodChip = (val,label)=>`<span onclick="setOverviewPeriod(${typeof val==='string'?`'${val}'`:val})" style="cursor:pointer;font-size:12px;padding:5px 12px;border-radius:999px;${(state.overviewPeriod||4)===val?'background:var(--vino);color:#fff':'background:var(--surface);border:1px solid var(--border-strong);color:var(--vino)'}">${label}</span>`;
   const periodWord = period==='all' ? 'all time' : period+' wks';
+  const avgRev = nightCount ? grandTotal/nightCount : 0;
+  const avgCovers = coversNights ? totCovers/coversNights : null;
+  const avgSpend = totCovers ? revWithCovers/totCovers : null;
+  const metric = (label,val,strong)=>`<div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:11px 13px">
+      <div style="font-size:10px;color:var(--vino);text-transform:uppercase;letter-spacing:.06em">${label}</div>
+      <div style="font-size:${strong?22:19}px;font-weight:500;color:var(--vino-dark);line-height:1.2;margin-top:2px">${val}</div></div>`;
   const tiles = `
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px">
-      <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 14px">
-        <div style="font-size:11px;color:var(--vino);text-transform:uppercase;letter-spacing:.06em">Total net · ${periodWord}</div>
-        <div style="font-size:22px;font-weight:500;color:var(--vino-dark)">AED ${money(grandTotal)}</div></div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:10px;margin-bottom:10px">
+      ${metric('Total events · '+periodWord, nightCount, true)}
+      ${metric('Total net', 'AED '+money(grandTotal), true)}
+      ${metric('Avg net / event', 'AED '+money(avgRev))}
+      ${metric('Avg covers / event', avgCovers?Math.round(avgCovers):'—')}
+      ${metric('Avg spend / guest', avgSpend?'AED '+money(avgSpend):'—')}
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 14px">
         <div style="font-size:11px;color:var(--vino);text-transform:uppercase;letter-spacing:.06em">Best night</div>
         <div style="font-size:14px;font-weight:500;color:var(--green);line-height:1.25;margin-top:4px">${best?`${best.name} · ${fmtDate(best.date)}<br><span style="font-size:13px;color:var(--vino-dark)">AED ${money(best.rev)}</span>`:'—'}</div></div>
