@@ -191,12 +191,13 @@ function peEditorNext(e){
   var name = e.client_name || e.company;
   var items = peState.items[e.id]||[];
   var hasFood = items.length>0 || !!e.set_menu || (e.food_price_pp!=null && e.food_price_pp!=='');
+  var hasBev = !!e.bev_package_id;   // a beverage-only booking is a real event too
   var t = peCalcTotals(e);
   var hasPrice = !!t.total || !!e.min_spend;
   if(!name) return {label:'Add a booking name', act:"peScrollToField('client_name')"};
   if(!e.event_date) return {label:'Add the event date', act:"peScrollToField('event_date')"};
   if(!e.guests) return {label:'Add the guest count', act:"peScrollToField('guests')"};
-  if(!hasFood) return {label:'Build the menu', act:"peScrollToCard('food')"};
+  if(!hasFood && !hasBev) return {label:'Add the menu or a beverage package', act:"peScrollToCard('food')"};
   if(!hasPrice) return {label:'Set the price', act:"peScrollToField('min_spend')"};
   if((e.status==='draft' || e.status==='sent') && !e.signed_at){
     return e.contact_email
@@ -954,9 +955,10 @@ function peGuideEventView(){
   } else if(e.status==='draft'){
     var items = peState.items[e.id]||[]; var t = peCalcTotals(e);
     var hasFood = items.length>0 || !!e.set_menu || (e.food_price_pp!=null && e.food_price_pp!=='');
+    var hasBev = !!e.bev_package_id;
     var hasPrice = !!t.total || !!e.min_spend;
     var nx = peEditorNext(e);
-    if(hasFood && hasPrice && e.contact_email){
+    if((hasFood||hasBev) && hasPrice && e.contact_email){
       title = 'Ready to send';
       sub = 'Everything is on this event. Send '+peEsc(name)+' the proposal to review and sign online.';
       body = pbtn('Send the proposal', "peEmailAgreement('"+e.id+"')") + sbtn('Open full event to review first', "peGo('event','"+e.id+"')");
@@ -1444,7 +1446,8 @@ function peSendChecks(e){
   var msgs = [];
   var items = peState.items[e.id]||[];
   var hasFood = items.length>0 || !!e.set_menu || (e.food_price_pp!=null && e.food_price_pp!=='');
-  if(!hasFood) msgs.push('This proposal has no food or menu on it.');
+  var hasBev = !!e.bev_package_id;
+  if(!hasFood && !hasBev) msgs.push('This proposal has no food, menu, or beverage on it.');
   if((t.total==null || !t.total) && !e.min_spend) msgs.push('This proposal has no price and no minimum spend set.');
   var gap = peSetMenuSplitGap(e);
   if(gap) msgs.push('The '+gap.course+' choices add up to '+gap.sum+' of '+gap.guests+' guests.');
@@ -1915,7 +1918,10 @@ function peProposalHTML(e){
   var t = peCalcTotals(e);
   var groups = [{k:'Cold',n:'Cold'},{k:'Hot',n:'Hot'},{k:'Dessert',n:'Dolci'}];
   var body = '<div class="brand">R O B E R T O ’ S</div><div class="rule"></div>';
-  body += '<h2>'+peEsc(e.package_label||'Canapé Selection')+'</h2>';
+  // Title falls back to the food theme, but a beverage-only booking has no canapés —
+  // don't head the guest's proposal "Canapé Selection" when there's no food on it.
+  var hasFoodDoc = t.items.length>0 || !!e.set_menu || (e.food_price_pp!=null && e.food_price_pp!=='');
+  body += '<h2>'+peEsc(e.package_label || (hasFoodDoc ? 'Canapé Selection' : 'Beverage Package'))+'</h2>';
   // Guest-facing: no per-person maths or piece counts at the top — just who,
   // when, where. The one complete figure lives in "Your event" at the end.
   var who = [];
