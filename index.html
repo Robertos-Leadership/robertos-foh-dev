@@ -2403,7 +2403,7 @@ if ('serviceWorker' in navigator) {
 <!-- TOAST -->
 <div class="toast" id="toast"></div>
 
-<script src="common.js?v=1782123000"></script>
+<script src="common.js?v=20260710a"></script>
 <script>
 const SUPABASE_URL = 'https://paoaivwtkzujmrgrfjuq.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBhb2Fpdnd0a3p1am1yZ3JmanVxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEwNzAxMzAsImV4cCI6MjA5NjY0NjEzMH0.VynG9PBeIaqRG2lkMEuzskkcB11EhR-UfO9eGYsaUxk';
@@ -2845,7 +2845,7 @@ async function fohLoadLiveTonight(){
   if(fa) fa.style.display = money ? '' : 'none';
   var figs = document.getElementById('lt-figs');   // 5 figures with money, 3 without
   if(figs) figs.style.gridTemplateColumns = 'repeat('+(money?5:3)+',1fr)';
-  var d = localISO(new Date());   // today, venue-local
+  var d = chkToday().iso;   // operational night: before 06:00 Dubai counts as prior day
   var opts = { method:'POST', headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+KITCHEN_KEY, 'x-proxy-secret':'Kitchen' } };
   var url = KITCHEN_URL + '/functions/v1/sevenrooms-sync?';
   function jget(q){ return fetch(url+q+'='+d, opts).then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); }); }
