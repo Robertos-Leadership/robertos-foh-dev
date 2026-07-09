@@ -1124,6 +1124,7 @@ function peRenderEvent(){
         var p = Number(it.pcs_per_guest)||0;
         var lineAED = (Number(d.sell_price)||0)*p;              // AED/guest for this dish
         var absPcs = g ? Math.round(p*g*10)/10 : null;          // total pieces across all guests
+        var lineTotal = (Number(d.sell_price)||0)*(absPcs!=null?absPcs:p); // total AED for this selection
         var minv = !!(d.min_order && g && (p*g) < d.min_order);
         var comp = !!it.comp;                                   // "on the house" — cooked, not charged
         return '<div class="pe-dishrow"><span><b style="font-weight:600">'+peEsc(d.name)+'</b>'+
@@ -1133,7 +1134,7 @@ function peRenderEvent(){
           '<br><span style="font-size:11px;color:#8B7355">'+peEsc(d.tier||'')+(d.tier?' · ':'')+'AED '+peMoney(d.sell_price)+'/pc · min '+(d.min_order||10)+' pcs</span>'+
           '<br><span style="font-size:11px;color:'+(minv?'#B00020':'#6B4A33')+'">'+
             (absPcs!=null?'× '+peEsc(e.guests)+' guests = '+absPcs+' pcs':'add the guest count for total pieces')+
-            ' · '+(comp?'<span style="color:#4A6B2E">with our compliments — not charged</span>':'AED '+peMoney(lineAED)+'/guest')+
+            ' · '+(comp?'<span style="color:#4A6B2E">with our compliments — not charged</span>':'<b>AED '+peMoney(lineTotal)+'</b>'+(absPcs!=null?'':'/guest'))+
             (minv?' — below the minimum order of '+d.min_order+' pcs':'')+'</span></span>'+
           '<span style="display:flex;align-items:center;gap:5px;flex-shrink:0">'+
             (ce?'<label style="display:flex;flex-direction:column;align-items:center;line-height:1.1;cursor:pointer" title="Give this dish for free — the kitchen still prepares it">'+
