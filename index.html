@@ -2219,7 +2219,7 @@ if ('serviceWorker' in navigator) {
     <div class="foh-hero-content">
       <img class="foh-hero-logo" src="robertos-logo-white.svg" alt="Roberto's">
     </div>
-    <div id="foh-build" style="position:absolute;bottom:6px;right:10px;font-size:9px;letter-spacing:.08em;color:rgba(255,255,255,.4);z-index:3;font-variant-numeric:tabular-nums;">build 2026-07-10.3</div>
+    <div id="foh-build" style="position:absolute;bottom:6px;right:10px;font-size:9px;letter-spacing:.08em;color:rgba(255,255,255,.4);z-index:3;font-variant-numeric:tabular-nums;">build 2026-07-10.4</div>
   </div>
 
   <!-- main scroll area -->
@@ -5262,7 +5262,7 @@ function fohSchedMultiWeekTableHtml(weekStart, numWeeks){
 
   FOH_SECTIONS.forEach(function(sec){
     var allStaff = fohSchedStaff.filter(function(s){ return s.section===sec.key; });
-    html += '<tr class="sch-station-hdr"><td colspan="'+COLS+'">'+sec.label+'</td></tr>';
+    html += '<tr class="sch-station-hdr"><td colspan="'+COLS+'"><span class="krt-secband">'+sec.label+'</span></td></tr>';
     allStaff.forEach(function(staff, xi){
       var sid=staff.id, mpid='fsmpM'+String(sid).replace(/-/g,'');
       var wHours=0, wDays=0;
@@ -5784,6 +5784,10 @@ async function fohKplRevert(){
 // ── Open / close / render / nav ──
 function fohKplOpen(){
   var sview = document.getElementById('foh-sched-fullscreen'); if(sview) sview.style.display = 'none';
+  // Empty the (hidden) live grid while the tool is open — its stale HTML carries the
+  // same element ids (add-staff panels/inputs), so getElementById would hit the hidden
+  // copy and the tool's own panels would never open. Re-rendered on close.
+  var lgrid = document.getElementById('foh-sch-grid-wrap'); if(lgrid) lgrid.innerHTML = '';
   if(!fohSchedWeekStart) fohSchedWeekStart = getMonday(new Date());
   var el = document.getElementById('foh-kpl-full');
   if(!el){
@@ -6031,6 +6035,14 @@ function FOH_KRT_SHELL(){
   #foh-kpl-full .sch-multi .sch-multi-role{font-size:10px;color:var(--vino-light);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:400}
   #foh-kpl-full .sch-multi .sch-weekgroup{background:var(--vino);color:var(--cream);font-family:var(--font-serif);font-size:13px;letter-spacing:.4px;border-left:3px solid var(--sabbia)}
   #foh-kpl-full .sch-multi .sch-weekstart{border-left:3px solid var(--vino-light)}
+  /* Wide grids centre cell text — on a full-width band that pushes the label off-screen.
+     Left-align section bands + add-staff rows in the tool, and pin them to the visible
+     edge in the several-weeks grid so they stay readable while scrolling across weeks. */
+  #foh-kpl-full .sch-grid tr.sch-station-hdr td{text-align:left}
+  #foh-kpl-full .sch-grid .sch-add-row td{text-align:left}
+  #foh-kpl-full .sch-multi tr.sch-station-hdr .krt-secband{position:sticky;left:12px;display:inline-block}
+  #foh-kpl-full .sch-multi .sch-add-row .sch-add-staff-btn{position:sticky;left:12px}
+  #foh-kpl-full .sch-multi .sch-add-row .sch-add-staff-panel.show{position:sticky;left:12px;width:max-content;max-width:calc(100vw - 40px)}
   #foh-kpl-full .krt-sec-row{display:flex;align-items:center;gap:8px;margin:6px 0}
   #foh-kpl-full .krt-sec-row .krt-sec-inp{flex:1;font-size:14px;padding:8px 10px;border:1px solid rgba(74,21,32,.25);border-radius:8px;background:var(--cream);color:var(--ink);font-family:var(--font-sans)}
   #foh-kpl-full .krt-sec-tag{font-size:10px;background:var(--gold);color:#2a1a10;padding:2px 7px;border-radius:10px;font-weight:700;letter-spacing:.5px}
