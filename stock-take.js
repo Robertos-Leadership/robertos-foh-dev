@@ -1,12 +1,19 @@
 // ══════════════════════════════════════════════════════════════════════════
-// FOH STOCK TAKE MODULE — monthly inventory count (Beverage + Tobacco).
-// The FOH twin of the Kitchen stock take. Two lists live in one screen, flipped
-// by a Beverage | Tobacco toggle at the top — each is its own dept, own totals,
-// own Excel back to Aung. Items + prices come from the cost controller's monthly
-// Excels (uploaded in-app); staff enter quantities live, gated by employee ID.
+// FOH STOCK TAKE MODULE — monthly inventory count, by SECTION.
+// The FOH twin of the Kitchen stock take. Aung (cost controller) sends one Excel
+// per bar section each month-end; each is its own list, flipped by the section
+// buttons at the top — each is its own dept, own totals, own Excel back to Aung.
+// SECTIONS (10 Jul 2026, at Aung's request — the old single "Beverage" list was
+// split into five so each section is uploaded/counted/sent on its own):
+//   Bar Food · Non Alcoholic · Alcoholic · Wine · Coffee & Tea · Tobacco.
+// Items + prices come from the cost controller's monthly Excels (uploaded
+// in-app); staff enter quantities live, gated by employee ID.
 //
 // Tables (FOH project paoaivwtkzujmrgrfjuq): stock_take_sheets / _items / _counts.
-// Scale-ready: every row carries venue_id + dept('beverage'|'tobacco') + month.
+// NO schema change was needed — `dept` is free text (unique on venue+dept+month),
+// so adding sections is purely this array. The old dept='beverage' rows stay in
+// the DB as history (just no button), and dept='tobacco' carries over unchanged.
+// Scale-ready: every row carries venue_id + dept(section key) + month.
 //
 // FOH integration: a single-page "Stock Take" tab (like Revenue / Operations),
 // reached via enterApp('stocktake'). renderMain() writes a STABLE shell
@@ -19,7 +26,20 @@
 // ══════════════════════════════════════════════════════════════════════════
 
 var STOCK_VENUE = 'robertos-difc';
-var STOCK_DEPTS = [{ key:'beverage', label:'Beverage' }, { key:'tobacco', label:'Tobacco' }];
+// One entry per section = one upload/count/email each. `key` is the DB dept value
+// (NEVER rename a key once live — it strands that section's history). `tobacco`
+// kept as-is so its existing months carry over. Order = button order on screen.
+// `fileHint` gates the uploader so the wrong section's Excel can't be loaded into
+// the wrong tab (see stFileMatchesDept) — `notAny` stops "Alcoholic" swallowing
+// the "Non Alcoholic" file, since one label is a substring of the other.
+var STOCK_DEPTS = [
+  { key:'barfood',   label:'Bar Food',      fileHint:{ any:['bar food'] } },
+  { key:'nonalc',    label:'Non Alcoholic', fileHint:{ any:['non alcoholic','non-alcoholic'] } },
+  { key:'alcoholic', label:'Alcoholic',     fileHint:{ any:['alcoholic'], notAny:['non alcoholic','non-alcoholic'] } },
+  { key:'wine',      label:'Wine',          fileHint:{ any:['wine'] } },
+  { key:'coffeetea', label:'Coffee & Tea',  fileHint:{ any:['coffee'] } },
+  { key:'tobacco',   label:'Tobacco',       fileHint:{ any:['tobacco'] } }
+];
 
 // Review & send recipients (FOH). To Aung; cc Asarudeen, Manuel, Jad.
 var STOCK_EMAIL_TO = 'ahtwe@robertos.ae';
@@ -44,7 +64,7 @@ function stCanLock(){ return !!(stUser && stUser.emp_id==='0000'); }
 var STOCK_SHOW_PREV = false;
 
 // ── state ──
-var stDept    = 'beverage';  // current list (beverage | tobacco)
+var stDept    = 'barfood';   // current section (see STOCK_DEPTS keys)
 var stSheet   = null;        // { month, status, ... }
 var stMonth   = null;        // 'YYYY-MM'
 var stItems   = [];          // [{id,item_group,code,name,unit,price,units,is_added}]
@@ -66,6 +86,18 @@ var stPrevLabel = '';        // e.g. 'May 2026'
 
 function stActive(){ return typeof state==='object' && state && state.currentTab==='stocktake'; }
 function stDeptLabel(){ var d=STOCK_DEPTS.find(function(x){return x.key===stDept;}); return d?d.label:stDept; }
+// Does the picked file's name look like THIS section's Excel? Soft guard so the
+// wrong section file can't be loaded into the wrong tab (the six files Aung sends
+// are near-identical apart from the section in the name). Never blocks — it only
+// warns + asks — so a differently-named file still gets through if that's intended.
+function stFileMatchesDept(filename){
+  var d = STOCK_DEPTS.find(function(x){ return x.key===stDept; });
+  var h = d && d.fileHint; if(!h) return true;               // no hint = don't gate
+  var n = String(filename||'').toLowerCase();
+  if(h.notAny && h.notAny.some(function(s){ return n.indexOf(s)>-1; })) return false;
+  if(h.any) return h.any.some(function(s){ return n.indexOf(s)>-1; });
+  return true;
+}
 function stMoney(n){ return 'AED ' + (Number(n)||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
 function stEsc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
@@ -338,8 +370,11 @@ function stInjectCss(){
   var s = document.createElement('style'); s.id='st-css';
   s.textContent =
     '#st-root{padding:0 0 70px;max-width:920px;margin:0 auto}'+
-    '.st-deptbar{display:flex;gap:8px;padding:14px 14px 4px}'+
-    '.st-deptbtn{flex:1;height:42px;border:1px solid #c9a84c;background:#fff;color:#7a1218;font-weight:700;font-size:14px;border-radius:10px;cursor:pointer}'+
+    // six sections: a responsive grid that wraps — ~3 per row on a phone, all six
+    // in a row on a wide screen. Buttons centre + allow a 2-line label so
+    // "Non Alcoholic" / "Coffee & Tea" never clip.
+    '.st-deptbar{display:grid;grid-template-columns:repeat(auto-fit,minmax(104px,1fr));gap:8px;padding:14px 14px 4px}'+
+    '.st-deptbtn{display:flex;align-items:center;justify-content:center;text-align:center;min-height:44px;padding:4px 6px;border:1px solid #c9a84c;background:#fff;color:#7a1218;font-weight:700;font-size:13px;line-height:1.15;border-radius:10px;cursor:pointer}'+
     '.st-deptbtn.active{background:#410207;color:#f5ede0;border-color:#410207}'+
     '.st-title{padding:12px 14px 0;font-family:Georgia,serif;color:#410207;font-size:20px;font-weight:700}'+
     '.st-sub{padding:0 14px;color:#8a7a55;font-size:12px}'+
@@ -826,7 +861,14 @@ async function stUploadPreview(){
     var rows=stReadRows(await f.arrayBuffer());
     var guess=stGuessMonth(rows); var monthEl=document.getElementById('st-up-month'); if(guess) monthEl.value=guess;
     var items=stParseRows(rows);
-    statusEl.textContent=items.length?(items.length+' items found for '+monthEl.value+'.'):'No items found — is this the right file?';
+    if(items.length){
+      var mism = !stFileMatchesDept(f.name);
+      statusEl.style.color = mism ? '#b06a00' : '#8a7a55';
+      statusEl.textContent = (mism ? '⚠ This file doesn’t look like the "'+stDeptLabel()+'" list — check you’re on the right section. ' : '')
+        + items.length+' items found for '+monthEl.value+'.';
+    } else {
+      statusEl.style.color='#7a1218'; statusEl.textContent='No items found — is this the right file?';
+    }
   }catch(e){ statusEl.style.color='#7a1218'; statusEl.textContent='Could not read: '+e.message; }
 }
 function stReadRows(buf){
@@ -866,6 +908,7 @@ async function stHandleUpload(){
     var month=document.getElementById('st-up-month').value||stGuessMonth(rows);
     var items=stParseRows(rows);
     if(!items.length){ statusEl.style.color='#7a1218'; statusEl.textContent='No items found — is this the right file?'; return; }
+    if(!stFileMatchesDept(f.name) && !confirm('This file is named "'+f.name+'", which doesn’t match the "'+stDeptLabel()+'" section you’re uploading to.\n\nLoad it into '+stDeptLabel()+' anyway?')){ statusEl.textContent='Cancelled — pick the '+stDeptLabel()+' file, or switch to the matching section first.'; return; }
     statusEl.textContent='Saving '+items.length+' items for '+month+'…';
     await stApplyUpload(month, items, f.name);
     var m=document.getElementById('st-up-modal'); if(m) m.remove();

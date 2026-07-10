@@ -2219,7 +2219,7 @@ if ('serviceWorker' in navigator) {
     <div class="foh-hero-content">
       <img class="foh-hero-logo" src="robertos-logo-white.svg" alt="Roberto's">
     </div>
-    <div id="foh-build" style="position:absolute;bottom:6px;right:10px;font-size:9px;letter-spacing:.08em;color:rgba(255,255,255,.4);z-index:3;font-variant-numeric:tabular-nums;">build 2026-07-10.2</div>
+    <div id="foh-build" style="position:absolute;bottom:6px;right:10px;font-size:9px;letter-spacing:.08em;color:rgba(255,255,255,.4);z-index:3;font-variant-numeric:tabular-nums;">build 2026-07-10.3</div>
   </div>
 
   <!-- main scroll area -->
@@ -2364,7 +2364,7 @@ if ('serviceWorker' in navigator) {
           </div>
           <div class="module-accent"></div>
           <div class="module-body">
-            <div class="module-desc">Monthly beverage &amp; tobacco count.</div>
+            <div class="module-desc">Monthly bar stock count, by section.</div>
             <div class="module-stat" id="hubstat-stocktake"></div>
           </div>
         </div>
@@ -2838,8 +2838,11 @@ async function fohLoadHubStats(){
       var t2 = new Date();
       var eom = new Date(t2.getFullYear(), t2.getMonth()+1, 0);
       var left = Math.max(0, Math.ceil((eom - t2)/86400000));
-      var cRes = await sb.from('stock_take_counts').select('item_id',{count:'exact',head:true}).eq('venue_id','robertos-difc').eq('dept','beverage').eq('month',mo);
-      var iRes = await sb.from('stock_take_items').select('id',{count:'exact',head:true}).eq('venue_id','robertos-difc').eq('dept','beverage').eq('month',mo).eq('active',true);
+      // aggregate ACROSS all sections for the latest month (no dept filter) —
+      // stock take is now split Bar Food / Non Alcoholic / Alcoholic / Wine /
+      // Coffee & Tea / Tobacco, so the home stat sums the whole count.
+      var cRes = await sb.from('stock_take_counts').select('item_id',{count:'exact',head:true}).eq('venue_id','robertos-difc').eq('month',mo);
+      var iRes = await sb.from('stock_take_items').select('id',{count:'exact',head:true}).eq('venue_id','robertos-difc').eq('month',mo).eq('active',true);
       var prog = (cRes.count!=null && iRes.count) ? Math.min(cRes.count, iRes.count)+'/'+iRes.count+' counted \u00b7 ' : '';
       setStat('stocktake', left<=3?'#B00020':'#A88930', prog+'month-end in '+left+(left===1?' day':' days'));
     }
