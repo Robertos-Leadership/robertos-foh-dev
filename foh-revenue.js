@@ -81,6 +81,38 @@ function revMonthData(p){
   var budgetToDate=0; days.forEach(function(x){ if(x.d<=windowDay) budgetToDate+=x.budget; });
   return {period:p,days:days,mtdNet:mtdNet,budgetTotal:budgetTotal,budgetToDate:budgetToDate,coversAct:coversAct,tradingDays:tradingDays,windowDay:windowDay};
 }
+// Trading nights in this month that have ALREADY ENDED but have no revenue entered.
+// An unfiled night silently drops out of MTD while its budget still counts, so the
+// month reads "behind" when it isn't — a silent, misleading gap. This NEVER alters a
+// stored figure; it only surfaces the gap so the number is either complete or says it isn't.
+// "Ended" is measured against the Dubai operational night (RC), not the device clock, and
+// tonight (still in service) is never counted as missing. Fails safe: no RC → flag nothing.
+function revUnfiledNights(p){
+  var map=revDailyMap(), dim=revDaysInMonth(p);
+  var todayIso=(typeof RC!=='undefined'&&RC.dubaiBusinessDate)?RC.dubaiBusinessDate(new Date()):null;
+  if(!todayIso) return [];
+  var curP=todayIso.slice(0,7), lastDay;
+  if(p===curP) lastDay=Number(todayIso.slice(8,10))-1;   // this month — tonight isn't closed yet
+  else if(p<curP) lastDay=dim;                           // a past month — every night should be in
+  else return [];                                        // future month — nothing due yet
+  var out=[];
+  for(var d=1; d<=Math.min(lastDay,dim); d++){
+    var ds=p+'-'+String(d).padStart(2,'0');
+    if(revWeekday(ds)==='Sunday') continue;              // closed — not expected
+    var row=map[ds];
+    if(!row || row.net_actual==null) out.push(d);
+  }
+  return out;
+}
+// Plain-language banner naming the missing nights (empty string when nothing is missing,
+// so it is safe to drop straight into the render output).
+function revUnfiledBanner(p){
+  var u=revUnfiledNights(p); if(!u.length) return '';
+  var names=u.slice(0,6).map(function(d){ return revWeekday(p+'-'+String(d).padStart(2,'0')).slice(0,3)+' '+d; });
+  var extra=u.length>6?(' +'+(u.length-6)+' more'):'', n=u.length;
+  return '<div style="background:rgba(179,64,47,.08);border:1px solid rgba(179,64,47,.35);color:#b3402f;border-radius:6px;padding:10px 14px;margin:0 0 12px;font-size:13px;line-height:1.5">'
+    +'&#9888; <b>'+n+' trading night'+(n>1?'s':'')+' not yet filed</b> ('+names.join(', ')+extra+') &mdash; month-to-date is incomplete until '+(n>1?'those closing reports are':'that closing report is')+' added.</div>';
+}
 function revAreaMTD(p){
   var map=revDailyMap(), dim=revDaysInMonth(p);
   var o={restNet:0,restCov:0,lounNet:0,lounCov:0,totNet:0,totCov:0,rlNet:0,rlCov:0,rdNet:0,rdCov:0,llNet:0,llCov:0,ldNet:0,ldCov:0};
@@ -698,7 +730,7 @@ function revExportMonth(){
     +'<tr><td>Scala Lounge &amp; Bar</td><td>'+revMoney(a.lounNet)+'</td><td>'+(100-rPct)+'%</td><td>'+a.lounCov+'</td><td>'+(a.lounCov?revMoney(a.lounNet/a.lounCov).replace('AED ',''):'—')+'</td></tr>'
     +'<tr><td><b>Total</b></td><td><b>'+revMoney(a.totNet)+'</b></td><td>100%</td><td>'+a.totCov+'</td><td>'+(a.totCov?revMoney(a.totNet/a.totCov).replace('AED ',''):'—')+'</td></tr></tbody></table>';
   var proj='<h2>Full-month projection</h2><table><tbody><tr><td>Actual MTD</td><td>'+revMoney(rv.mtd)+'</td></tr><tr><td>Projected ('+rv.remaining+' remaining days)</td><td>'+revMoney(rv.projected)+'</td></tr><tr><td><b>Forecast — full month</b></td><td><b>'+revMoney(rv.forecast)+'</b></td></tr><tr><td>vs Budget ('+revMoney(rv.budgetTotal)+')</td><td>'+revMoney(rv.vsBudget)+' · '+revPct(rv.vsBudgetPct)+'</td></tr></tbody></table>';
-  revPrintReport(revMonthLabel(p),'<h2>'+revMonthLabel(p)+' — overview</h2>'+kpis+charts+areaTbl+proj);
+  revPrintReport(revMonthLabel(p),'<h2>'+revMonthLabel(p)+' — overview</h2>'+revUnfiledBanner(p)+kpis+charts+areaTbl+proj);
 }
 function revChatLastAssistant(){ var c=revChatInit(); for(var i=c.thread.length-1;i>=0;i--){ if(c.thread[i].role==='assistant') return c.thread[i]; } return null; }
 function revChatExport(){
@@ -748,6 +780,8 @@ function revRenderMonth(){
           : '<span class="rev-alloc">Allocated '+revMoney(m.budgetTotal)+' / budget '+revMoney(mb)+' <b>('+(allocD>=0?'+':'−')+revMoney(Math.abs(allocD)).replace('AED ','')+')</b></span>')
       : '<span class="rev-alloc rev-mut">Distributes across days by weekday pattern. Leave empty to use the rates pattern.</span>')
     +'</div>');
+  // Trust guard: name any ended nights with no closing report, so MTD is never silently short.
+  h.push(revUnfiledBanner(p));
   // summary cards
   h.push('<div class="rev-cards">');
   h.push('<div class="rev-card"><div class="rev-k">MTD net sales</div><div class="rev-v">'+revMoney(m.mtdNet)+'</div><div class="rev-sub">'+m.tradingDays+' trading days</div></div>');
