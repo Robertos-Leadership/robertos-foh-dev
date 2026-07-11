@@ -19,10 +19,12 @@ var peState = {
   currentId:null,
   month:null,             // YYYY-MM shown in calendar/report
   events:[], items:{},    // items: event_id -> [{id,dish_id,pcs_per_guest}]
-  dishes:[], bevs:[], packs:[],
+  dishes:[], bevs:[], packs:[], setMenus:[],
   log:{},                 // event_id -> log rows (loaded per event)
   aiDesc:null, aiBusy:false,
-  editDishId:null, editBevId:null, editPackId:null
+  editDishId:null, editBevId:null, editPackId:null,
+  chefTab:'canape',       // canape | set — Chef Corner sub-tab
+  editSetMenuId:null, smDraft:null, smName:'', smText:'', smBusy:false
 };
 
 var PE_TEAM_CC = ['fguarracino@robertos.ae','vdetoni@robertos.ae','dvalla@robertos.ae','jthomas@robertos.ae','mpetrosino@robertos.ae','astellacci@robertos.ae','afalcone@robertos.ae','rmazouz@robertos.ae','reservations@robertos.ae','aviscardi@robertos.ae','kvukotic@robertos.ae','asacchi@skelmore.com'];
@@ -103,7 +105,33 @@ var PE_SET_MENUS = [
      {name:'Dolci', items:['Choc-Choc']}
    ]}
 ];
-function peSetMenuByKey(k){ for(var i=0;i<PE_SET_MENUS.length;i++) if(PE_SET_MENUS[i].key===k) return PE_SET_MENUS[i]; return null; }
+// Set menus are now data-driven (event_set_menus). PE_SET_MENUS above is the
+// built-in seed / offline fallback used only before the table is loaded.
+// peNormSM gives every menu — DB row or built-in — one shape: price (from
+// price_pp), courses, line, pdf, active. price==null means "price pending".
+function peNormSM(m){
+  if(!m) return null;
+  return { id:(m.id||null), key:m.key, name:m.name,
+           price:(m.price!=null ? m.price : (m.price_pp!=null ? m.price_pp : null)),
+           line:(m.line||''), courses:(m.courses||[]), pdf:(m.pdf||null),
+           active:(m.active!==false) };
+}
+function peSetMenusRaw(){ return (peState.setMenus && peState.setMenus.length) ? peState.setMenus : PE_SET_MENUS; }
+function peSetMenusAll(){ return peSetMenusRaw().map(peNormSM); }
+// Only active, priced menus can be picked into a quote.
+function peSetMenusSel(){ return peSetMenusAll().filter(function(m){ return m.active!==false && m.price!=null; }); }
+function peSetMenuByKey(k){
+  var all = peSetMenusAll();
+  for(var i=0;i<all.length;i++) if(all[i].key===k) return all[i];
+  for(var j=0;j<PE_SET_MENUS.length;j++) if(PE_SET_MENUS[j].key===k) return peNormSM(PE_SET_MENUS[j]);
+  return null;
+}
+function peSmSummary(courses){
+  return (courses||[]).map(function(c){
+    if(c.choose) return 'choice of '+((c.options||[]).join(' / '));
+    return (c.items||[]).join(', ');
+  }).filter(Boolean).join(' · ');
+}
 
 function peStatusMeta(k){ for(var i=0;i<PE_STATUS.length;i++) if(PE_STATUS[i].k===k) return PE_STATUS[i]; return PE_STATUS[0]; }
 function peEsc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
@@ -344,9 +372,12 @@ async function peLoadAll(force){
       peFetchAllPaged(function(){ return sb.from('event_items').select('*').order('event_id').order('id'); }),
       peFetchAllPaged(function(){ return sb.from('event_dishes').select('*').order('category').order('serve').order('name').order('id'); }),
       peFetchAllPaged(function(){ return sb.from('event_bev_packages').select('*').order('name').order('id'); }),
-      peFetchAllPaged(function(){ return sb.from('event_packages').select('*').order('name').order('id'); })
+      peFetchAllPaged(function(){ return sb.from('event_packages').select('*').order('name').order('id'); }),
+      peFetchAllPaged(function(){ return sb.from('event_set_menus').select('*').order('name').order('id'); })
     ]);
-    var bad = res.find(function(r){ return r.error; });
+    // event_set_menus (res[5]) is loaded non-fatally: if the table isn't there
+    // yet (SQL not run), the module still works on the built-in PE_SET_MENUS.
+    var bad = [res[0],res[1],res[2],res[3],res[4]].find(function(r){ return r.error; });
     if(bad) throw bad.error;
     peState.events = res[0].data||[];
     peState.items = {};
@@ -354,6 +385,7 @@ async function peLoadAll(force){
     peState.dishes = res[2].data||[];
     peState.bevs   = res[3].data||[];
     peState.packs  = res[4].data||[];
+    peState.setMenus = (res[5] && !res[5].error && res[5].data && res[5].data.length) ? res[5].data : PE_SET_MENUS.map(peNormSM);
     peState.loaded = true;
   }catch(e){
     console.warn('[peLoadAll]', e);
@@ -1819,7 +1851,7 @@ function peFoodSetMenuHTML(e){
     if(!ce) return '';
     h += '<div class="pe-lbl">Or use a plated set menu…</div>'+
       '<span style="display:flex;gap:6px;align-items:center"><select class="pe-in" style="flex:1" id="pe-sm-sel"><option value="">Choose a plated set menu…</option>'+
-      PE_SET_MENUS.map(function(m){ return '<option value="'+m.key+'">'+peEsc(m.name)+' — AED '+m.price+'/guest</option>'; }).join('')+
+      peSetMenusSel().map(function(m){ return '<option value="'+m.key+'">'+peEsc(m.name)+' — AED '+m.price+'/guest</option>'; }).join('')+
       '</select><button class="pe-btn sec sm" onclick="peApplySetMenu(\''+e.id+'\')">Use</button></span>';
     return h+'</div>';
   }
@@ -1851,6 +1883,7 @@ async function peApplySetMenu(eventId){
   if(!peCanEdit()){ peToast('View only — ask Valentina, Andrea or Francesco to make changes', true); return; }
   var sel = document.getElementById('pe-sm-sel'); if(!sel || !sel.value) return;
   var m = peSetMenuByKey(sel.value); if(!m) return;
+  if(m.price==null){ peToast('“'+m.name+'” has no price yet — Valentina prices it in Chef Corner first', true); return; }
   var e = peEvById(eventId); if(!e) return;
   var cur = peState.items[eventId]||[];
   var hadPrice = e.food_price_pp!=null && e.food_price_pp!=='';
@@ -2362,9 +2395,19 @@ async function peSendPaymentLink(id){
 
 // ── library (chef dishes / Manuel beverage / packages) ───────────────────────
 function peRenderChefCorner(){
+  var tab = peState.chefTab || 'canape';
   var h = peHeader('chef');
-  h += '<div style="font-size:12px;color:#8B7355;margin-bottom:10px">The kitchen\u2019s home: add and update canap\u00e9s \u2014 everything saved here is instantly available to the events desk and the guest menu.</div>';
-  h += peRenderDishLib();
+  var tabs = [['canape','Canap\u00e9s'],['set','Set menus']];
+  h += '<div class="pe-tabs" style="margin-bottom:12px">'+tabs.map(function(t){
+    return '<span class="pe-tab'+(tab===t[0]?' on':'')+'" onclick="peState.chefTab=\''+t[0]+'\';renderMain()">'+t[1]+'</span>';
+  }).join('')+'</div>';
+  if(tab==='set'){
+    h += '<div style="font-size:12px;color:#8B7355;margin-bottom:10px">Plated set menus \u2014 saved here they appear in Valentina\u2019s booking dropdown, the guest proposal and the kitchen brief.</div>';
+    h += peRenderSetMenuLib();
+  } else {
+    h += '<div style="font-size:12px;color:#8B7355;margin-bottom:10px">The kitchen\u2019s home: add and update canap\u00e9s \u2014 everything saved here is instantly available to the events desk and the guest menu.</div>';
+    h += peRenderDishLib();
+  }
   return h+PE_FOOT;
 }
 function peRenderBevCorner(){
@@ -2392,11 +2435,11 @@ function peRenderPacksView(){
   h += '<div style="font-size:12px;color:#8B7355;margin-bottom:10px">Tick anything from either section — one set menu, a few beverage packages, or a mix — the guest receives it all in ONE branded email.</div>';
   h += '<div class="pe-card"><div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap"><b style="color:#400207">Food packages — the set menus</b>'+peSelLinks('food')+'</div>'+
     '<div style="font-size:11px;color:#8B7355;margin:2px 0 8px">Open any menu to see the designed PDF — the email carries a button to each ticked menu.</div>'+
-    PE_SET_MENUS.map(function(m){
+    peSetMenusSel().map(function(m){
       return '<div class="pe-dishrow"><span><label style="cursor:pointer"><input type="checkbox" class="pe-mp-check" data-kind="food" data-key="'+m.key+'" onchange="peMpCount()" style="accent-color:#400207;margin-right:8px;vertical-align:-2px">'+
-        '<b>'+m.name+'</b> · AED '+m.price+' / person</label><br>'+
-        '<span style="font-size:11px;color:#8B7355">'+m.line+'</span></span>'+
-        '<button class="pe-btn sec sm" onclick="window.open(\''+m.pdf+'\',\'_blank\')">Open PDF</button></div>';
+        '<b>'+peEsc(m.name)+'</b> · AED '+m.price+' / person</label><br>'+
+        '<span style="font-size:11px;color:#8B7355">'+peEsc(m.line||peSmSummary(m.courses))+'</span></span>'+
+        (m.pdf?'<button class="pe-btn sec sm" onclick="window.open(\''+m.pdf+'\',\'_blank\')">Open PDF</button>':'')+'</div>';
     }).join('')+'</div>';
   h += '<div class="pe-card"><div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap"><b style="color:#400207">Beverage packages</b>'+peSelLinks('bev')+'</div>'+
     '<div style="font-size:11px;color:#8B7355;margin:2px 0 8px">Guest prices only — costs never leave the Beverage corner.</div>'+
@@ -2462,7 +2505,7 @@ function peMailSection(label){
   return '<div style="text-align:center;margin:30px 0 2px"><span style="font-size:11px;letter-spacing:3px;color:#B99C03;text-transform:uppercase">'+label+'</span></div>';
 }
 function peMenuPackEmailHTML(foodKeys, bevKeys, name, note){
-  var menus = PE_SET_MENUS.filter(function(m){ return foodKeys.indexOf(m.key)>=0; });
+  var menus = peSetMenusSel().filter(function(m){ return foodKeys.indexOf(m.key)>=0; });
   var bevs = bevKeys.map(peBevById).filter(Boolean);
   var both = menus.length && bevs.length;
   var title = both ? 'Menus & Beverage Packages' : (menus.length ? 'Set Menus' : 'Beverage Packages');
@@ -2474,9 +2517,16 @@ function peMenuPackEmailHTML(foodKeys, bevKeys, name, note){
   if(menus.length){
     if(both) inner += peMailSection('The food — set menus');
     inner += menus.map(function(m){
-      return '<div class="sec">'+m.name+' — AED '+m.price+' / person</div>'+
-        '<div class="dish"><span class="d">'+m.line+'</span></div>'+
-        '<div style="text-align:center;margin:10px 0 20px"><a href="'+peBaseUrl()+m.pdf+'" style="display:inline-block;background:#400207;color:#E8D9C7;padding:9px 24px;border-radius:20px;text-decoration:none;font-size:12.5px;letter-spacing:1px">View the full menu</a></div>';
+      // Menus with a designed PDF link to it; menus without one (chef-added)
+      // print their courses inline so the guest still sees the full menu.
+      var extra = m.pdf
+        ? '<div style="text-align:center;margin:10px 0 20px"><a href="'+peBaseUrl()+m.pdf+'" style="display:inline-block;background:#400207;color:#E8D9C7;padding:9px 24px;border-radius:20px;text-decoration:none;font-size:12.5px;letter-spacing:1px">View the full menu</a></div>'
+        : (m.courses||[]).map(function(c){
+            var b = c.choose ? ('choice of '+((c.options||[]).join(' / '))) : ((c.items||[]).join(', '));
+            return '<div class="dish"><span class="d"><b>'+peEsc(c.name)+'</b> — '+peEsc(b)+'</span></div>';
+          }).join('');
+      return '<div class="sec">'+peEsc(m.name)+' — AED '+m.price+' / person</div>'+
+        '<div class="dish"><span class="d">'+peEsc(m.line||peSmSummary(m.courses))+'</span></div>'+extra;
     }).join('');
   }
   if(bevs.length){
@@ -2654,6 +2704,181 @@ async function peToggleDish(id, active){
   if(r.error){ peToast('NOT changed — check connection', true); return; }
   peState.dishes.forEach(function(d){ if(d.id===id) d.active = (active==='true'||active===true); });
   peState.editDishId = null; renderMain();
+}
+// ── set-menu library (Chef Corner → Set menus) ───────────────────────────────
+// Chef builds the menu + courses (open to whoever opens Chef Corner); the
+// price/guest is editable only by the desk editors — an unpriced menu shows
+// "price pending" and can't be quoted. Reuses the event_set_menus table.
+function peSmRawById(id){ for(var i=0;i<peState.setMenus.length;i++){ if(peState.setMenus[i].id===id) return peState.setMenus[i]; } return null; }
+function peSmDraftFrom(courses){
+  return (courses||[]).map(function(c){
+    return { name:(c.name||''), choose:!!c.choose, lines:((c.choose?(c.options||[]):(c.items||[]))||[]).slice() };
+  });
+}
+function peSmNew(){ peState.editSetMenuId='new'; peState.smDraft=[{name:'',choose:false,lines:[]}]; peState.smName=''; peState.smText=''; renderMain(); }
+function peSmEdit(id){ var m=peNormSM(peSmRawById(id)); peState.editSetMenuId=id; peState.smDraft=peSmDraftFrom(m&&m.courses); peState.smName=(m&&m.name)||''; peState.smText=''; renderMain(); }
+function peSmCancel(){ peState.editSetMenuId=null; peState.smDraft=null; peState.smName=''; peState.smText=''; renderMain(); }
+// Read the live form back into state before any structural re-render so typing
+// is never lost when a course is added/removed.
+function peSmSync(){
+  var nEl=document.getElementById('pe-sm-name'); if(nEl) peState.smName=nEl.value;
+  var pEl=document.getElementById('pe-sm-paste'); if(pEl) peState.smText=pEl.value;
+  (peState.smDraft||[]).forEach(function(c,i){
+    var a=document.getElementById('pe-sm-cname-'+i), b=document.getElementById('pe-sm-citems-'+i), ch=document.getElementById('pe-sm-choose-'+i);
+    if(a) c.name=a.value;
+    if(b) c.lines=b.value.split('\n').map(function(s){return s.trim();}).filter(Boolean);
+    if(ch) c.choose=ch.checked;
+  });
+}
+function peSmAddCourse(){ peSmSync(); (peState.smDraft=peState.smDraft||[]).push({name:'',choose:false,lines:[]}); renderMain(); }
+function peSmDelCourse(i){ peSmSync(); peState.smDraft.splice(i,1); renderMain(); }
+function peSmSlug(n){ return String(n||'menu').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,32)+'-'+Date.now().toString(36).slice(-4); }
+// Offline fallback parser: turns "Course: a, b · Secondi (choice): x / y" into
+// the courses structure. The chef confirms/edits everything before saving.
+function peParseMenuText(t){
+  var out=[];
+  var blocks=String(t||'').replace(/·/g,'\n').split(/\n+/).map(function(s){return s.trim();}).filter(Boolean);
+  blocks.forEach(function(b){
+    var m=b.match(/^([^:]{2,44}):\s*(.+)$/);
+    if(m){
+      var name=m[1].trim(), rest=m[2].trim();
+      var isChoice=/choi|choose|either|\bor\b/i.test(name) || /choi|choose|either|\s+or\s+/i.test(rest);
+      name=name.replace(/\s*\((?:choice|choose|guests?[' ]?s? choice)\)\s*/i,'').trim();
+      var parts=rest.split(isChoice?/\s*(?:\/|,|\bor\b)\s*/i:/\s*,\s*/).map(function(s){return s.trim();}).filter(Boolean);
+      if(isChoice) out.push({name:name,choose:1,options:parts});
+      else out.push({name:name,items:parts});
+    } else {
+      out.push({name:'',items:[b]});
+    }
+  });
+  return out.length?{name:'',courses:out}:null;
+}
+function peParseMenuJson(t){
+  try{
+    var s=String(t||''); var a=s.indexOf('{'), b=s.lastIndexOf('}');
+    if(a<0||b<0) return null;
+    var o=JSON.parse(s.slice(a,b+1));
+    if(!o||!Array.isArray(o.courses)) return null;
+    o.courses=o.courses.map(function(c){
+      if(c.choose||Array.isArray(c.options)) return {name:c.name||'',choose:1,options:(c.options||c.items||[]).map(String)};
+      return {name:c.name||'',items:(c.items||[]).map(String)};
+    }).filter(function(c){ return (c.items&&c.items.length)||(c.options&&c.options.length); });
+    return o.courses.length?o:null;
+  }catch(e){ return null; }
+}
+// "Structure it" — tries the AI proxy (revenue-assistant) then falls back to the
+// offline parser, so it works even when the function or network is unavailable.
+async function peStructureMenu(){
+  peSmSync();
+  var txt=peState.smText||'';
+  if(!txt.trim()){ peToast('Paste the menu text first', true); return; }
+  peState.smBusy=true; renderMain();
+  var parsed=null;
+  try{
+    var r=await sb.functions.invoke('revenue-assistant',{ body:{
+      max_tokens:900,
+      system:'You convert a pasted restaurant set menu into strict JSON and nothing else. Output ONLY a JSON object of the form {"name": string, "courses": [ {"name": string, "items": [string]} OR {"name": string, "choose": 1, "options": [string]} ]}. A course where the guest picks one dish (words like choice, choose, or, either) becomes a choose course with options; every other course lists its dishes as items. Keep dish names short. No commentary, no markdown code fences.',
+      messages:[{role:'user',content:txt}]
+    }});
+    if(!r.error && r.data && r.data.text) parsed=peParseMenuJson(r.data.text);
+  }catch(e){}
+  if(!parsed) parsed=peParseMenuText(txt);
+  if(!parsed || !parsed.courses || !parsed.courses.length){ peState.smBusy=false; peToast('Could not read that — add the courses by hand below', true); renderMain(); return; }
+  if(!(peState.smName||'').trim() && parsed.name) peState.smName=parsed.name;
+  peState.smDraft=peSmDraftFrom(parsed.courses);
+  peState.smBusy=false;
+  peToast('Laid out '+parsed.courses.length+' course'+(parsed.courses.length>1?'s':'')+' — check and edit below ✓');
+  renderMain();
+}
+function peSmCourseHTML(c,i){
+  return '<div style="border:1px solid #E3D8C4;border-radius:9px;padding:10px;margin-top:8px">'+
+    '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">'+
+      '<input class="pe-in" id="pe-sm-cname-'+i+'" style="flex:1;min-width:120px" value="'+peEsc(c.name||'')+'" placeholder="Course name (e.g. Secondi)">'+
+      '<label style="font-size:12px;color:#6E5844;white-space:nowrap"><input type="checkbox" id="pe-sm-choose-'+i+'"'+(c.choose?' checked':'')+' style="accent-color:#400207;vertical-align:-2px;margin-right:4px">Guests choose one</label>'+
+      '<button class="pe-btn sec sm" style="color:#B00020;border-color:#B00020" onclick="peSmDelCourse('+i+')">Remove</button>'+
+    '</div>'+
+    '<textarea class="pe-in" id="pe-sm-citems-'+i+'" rows="2" style="margin-top:6px" placeholder="One dish per line">'+peEsc((c.lines||[]).join('\n'))+'</textarea>'+
+  '</div>';
+}
+function peRenderSetMenuLib(){
+  var raw = (peState.editSetMenuId && peState.editSetMenuId!=='new') ? peSmRawById(peState.editSetMenuId) : null;
+  var editing = peState.editSetMenuId==='new' || !!raw;
+  var curPrice = raw ? (raw.price_pp!=null?raw.price_pp:(raw.price!=null?raw.price:null)) : null;
+  var ce = peCanEdit();
+  var h='';
+  if(editing){
+    var priceRow = ce
+      ? '<input class="pe-in" id="pe-sm-price" type="number" min="0" style="max-width:190px" value="'+peEsc(curPrice!=null?curPrice:'')+'" placeholder="e.g. 395">'
+      : '<input class="pe-in" style="max-width:190px;background:#EFE7DA;color:#9C8E75" value="'+(curPrice!=null?('AED '+peMoney(curPrice)):'Price pending')+'" disabled><div style="font-size:11px;color:#9A7B12;margin-top:5px">Price is set by Valentina, Andrea or Francesco.</div>';
+    h += '<div class="pe-card"><b style="color:#400207">'+(raw?'Edit set menu':'New set menu')+'</b>'+
+      '<div style="font-size:11px;color:#8B7355;margin:2px 0 10px">Saved here it appears in Valentina’s dropdown, the guest proposal and the kitchen brief.</div>'+
+      '<div class="pe-lbl">Menu name</div><input class="pe-in" id="pe-sm-name" value="'+peEsc(peState.smName||'')+'" placeholder="e.g. Vegetarian set menu">'+
+      '<div style="margin-top:10px;background:#F4EEE1;border:1px dashed #C9B48E;border-radius:10px;padding:11px">'+
+        '<div class="pe-lbl" style="color:#8A6A4F">Paste the menu — the app lays out the courses for you</div>'+
+        '<textarea class="pe-in" id="pe-sm-paste" rows="3" placeholder="Antipasti: Burrata, artichokes · Primi: truffle risotto · Secondi (choice): melanzane / tortelli · Dolci: tiramisù">'+peEsc(peState.smText||'')+'</textarea>'+
+        '<div style="margin-top:6px"><button class="pe-btn sec sm" onclick="peStructureMenu()"'+(peState.smBusy?' disabled':'')+'>'+(peState.smBusy?'Reading…':'Structure it')+'</button>'+
+        '<span style="font-size:11px;color:#8B7355;margin-left:8px">or add courses by hand below</span></div>'+
+      '</div>'+
+      '<div class="pe-lbl" style="margin-top:12px">Courses</div>'+
+      (peState.smDraft||[]).map(function(c,i){ return peSmCourseHTML(c,i); }).join('')+
+      '<div style="margin-top:6px"><button class="pe-btn sec sm" onclick="peSmAddCourse()">+ Add course</button></div>'+
+      '<div style="margin-top:12px"><div class="pe-lbl">Price / guest (AED)</div>'+priceRow+'</div>'+
+      '<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">'+
+        '<button class="pe-btn" onclick="peSaveSetMenu(\''+(raw?raw.id:'')+'\')">Save menu</button>'+
+        '<button class="pe-btn sec" onclick="peSmCancel()">Cancel</button>'+
+        (raw?'<button class="pe-btn sec" style="margin-left:auto;color:#B00020;border-color:#B00020" onclick="peToggleSetMenu(\''+raw.id+'\','+(raw.active===false?'true':'false')+')">'+(raw.active===false?'Reactivate':'Retire menu')+'</button>':'')+
+      '</div></div>';
+  } else {
+    h += '<div style="margin-bottom:10px"><button class="pe-btn" onclick="peSmNew()">+ Add set menu</button></div>';
+  }
+  var list = peSetMenusRaw();
+  h += '<div class="pe-card">'+(list.length?list.map(function(m){
+    var mm=peNormSM(m); var pending=mm.price==null;
+    return '<div class="pe-dishrow" style="opacity:'+(mm.active===false?.45:1)+'">'+
+      '<span><b style="color:#400207">'+peEsc(mm.name)+'</b> '+
+      (pending?'<span style="background:#FAEEDA;color:#854F0B;font-size:11px;padding:2px 9px;border-radius:20px;margin-left:2px">Price pending</span>':'· AED '+peMoney(mm.price)+'/guest')+
+      (mm.active===false?' <span style="font-size:11px;color:#8B7355">· retired</span>':'')+
+      '<br><span style="font-size:11px;color:#8B7355">'+peEsc(mm.line||peSmSummary(mm.courses))+'</span></span>'+
+      (m.id?'<button class="pe-btn sec sm" onclick="peSmEdit(\''+m.id+'\')">Edit</button>':'<span style="font-size:11px;color:#A5876B">built-in</span>')+
+    '</div>';
+  }).join(''):'<div style="font-size:12px;color:#8B7355">No set menus yet — tap “+ Add set menu”.</div>')+'</div>';
+  return h;
+}
+async function peSaveSetMenu(id){
+  peSmSync();
+  var name=(peState.smName||'').trim();
+  if(!name){ peToast('Menu name is required', true); return; }
+  var courses=(peState.smDraft||[]).map(function(c){
+    var lines=(c.lines||[]).filter(Boolean);
+    return c.choose ? {name:(c.name||'Choice'),choose:1,options:lines} : {name:(c.name||'Course'),items:lines};
+  }).filter(function(c){ return (c.items&&c.items.length)||(c.options&&c.options.length); });
+  if(!courses.length){ peToast('Add at least one course with a dish in it', true); return; }
+  var raw = id ? peSmRawById(id) : null;
+  var priceVal = raw ? (raw.price_pp!=null?raw.price_pp:(raw.price!=null?raw.price:null)) : null;
+  if(peCanEdit()){
+    var pe=document.getElementById('pe-sm-price');
+    if(pe){ var pv=pe.value.trim(); priceVal = pv===''?null:Number(pv); }
+  }
+  var row = { key:(raw&&raw.key)||peSmSlug(name), name:name, courses:courses,
+              line:peSmSummary(courses), price_pp:priceVal, updated_at:new Date().toISOString() };
+  if(!id) row.created_by=peActor();
+  var r = id ? await sb.from('event_set_menus').update(row).eq('id', id).select().single()
+             : await sb.from('event_set_menus').insert(row).select().single();
+  if(r.error || !r.data){ peToast('Set menu NOT saved — '+String(r.error&&r.error.message||'').slice(0,110), true); return; }
+  if(id){ peState.setMenus = peState.setMenus.map(function(m){ return m.id===id ? r.data : m; }); }
+  else { if(!Array.isArray(peState.setMenus)) peState.setMenus=[]; peState.setMenus.push(r.data); }
+  peState.editSetMenuId=null; peState.smDraft=null; peState.smName=''; peState.smText='';
+  peToast(priceVal!=null ? 'Set menu saved ✓ — ready for the events desk' : 'Set menu saved ✓ — Valentina sets the price before it can be quoted');
+  renderMain();
+}
+async function peToggleSetMenu(id, active){
+  var on = (active==='true'||active===true);
+  var r = await sb.from('event_set_menus').update({active:on, updated_at:new Date().toISOString()}).eq('id', id);
+  if(r.error){ peToast('NOT changed — check connection', true); return; }
+  peState.setMenus.forEach(function(m){ if(m.id===id) m.active=on; });
+  peState.editSetMenuId=null; peState.smDraft=null;
+  peToast(on?'Menu reactivated ✓':'Menu retired — existing bookings keep it, new quotes won’t show it');
+  renderMain();
 }
 function peRenderBevLib(){
   var ed = peState.editBevId==='new' ? {} : (peState.editBevId ? peBevById(peState.editBevId)||{} : null);
@@ -3161,7 +3386,7 @@ function peRenderGuided(){
         peState.packs.map(function(p){ return '<option value="'+p.id+'"'+(g.packId===p.id?' selected':'')+'>'+peEsc(p.name)+' — AED '+peMoney(p.price_pp)+'/guest</option>'; }).join('')+'</select></div>';
     } else if(g.foodMode==='setmenu'){
       h += '<div style="margin-top:4px"><div class="pe-lbl">Which set menu?</div><select class="pe-in" onchange="peGuideSet(\'setKey\',this.value)"><option value="">Choose a set menu…</option>'+
-        PE_SET_MENUS.map(function(m){ return '<option value="'+m.key+'"'+(g.setKey===m.key?' selected':'')+'>'+peEsc(m.name)+' — AED '+m.price+'/guest</option>'; }).join('')+'</select></div>';
+        peSetMenusSel().map(function(m){ return '<option value="'+m.key+'"'+(g.setKey===m.key?' selected':'')+'>'+peEsc(m.name)+' — AED '+m.price+'/guest</option>'; }).join('')+'</select></div>';
     }
     var bevs = peState.bevs.filter(function(b){ return b.active!==false; })
       .sort(function(a,b){ return (a.name||'').localeCompare(b.name||'') || (Number(a.duration_hours)||0)-(Number(b.duration_hours)||0); });
