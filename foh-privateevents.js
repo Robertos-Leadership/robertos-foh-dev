@@ -2870,7 +2870,9 @@ async function peToggleDish(id, active){
 function peSmRawById(id){ for(var i=0;i<peState.setMenus.length;i++){ if(peState.setMenus[i].id===id) return peState.setMenus[i]; } return null; }
 function peSmDraftFrom(courses){
   return (courses||[]).map(function(c){
-    return { name:(c.name||''), choose:!!c.choose, lines:((c.choose?(c.options||[]):(c.items||[]))||[]).slice() };
+    // desc = {dish name: one-line English description} — shown to the guest on
+    // the pick-your-numbers page; carried through the editor untouched.
+    return { name:(c.name||''), choose:!!c.choose, lines:((c.choose?(c.options||[]):(c.items||[]))||[]).slice(), desc:(c.desc||null) };
   });
 }
 function peSmNew(){ peState.editSetMenuId='new'; peState.smDraft=[{name:'',choose:false,lines:[]}]; peState.smName=''; peState.smText=''; peState.smPdf=null; renderMain(); }
@@ -2981,8 +2983,11 @@ function peParseMenuJson(t){
     var o=JSON.parse(s.slice(a,b+1));
     if(!o||!Array.isArray(o.courses)) return null;
     o.courses=o.courses.map(function(c){
-      if(c.choose||Array.isArray(c.options)) return {name:c.name||'',choose:1,options:(c.options||c.items||[]).map(String)};
-      return {name:c.name||'',items:(c.items||[]).map(String)};
+      var out;
+      if(c.choose||Array.isArray(c.options)) out={name:c.name||'',choose:1,options:(c.options||c.items||[]).map(String)};
+      else out={name:c.name||'',items:(c.items||[]).map(String)};
+      if(c.desc && typeof c.desc==='object' && !Array.isArray(c.desc)) out.desc=c.desc;
+      return out;
     }).filter(function(c){ return (c.items&&c.items.length)||(c.options&&c.options.length); });
     return o.courses.length?o:null;
   }catch(e){ return null; }
@@ -2998,7 +3003,7 @@ async function peStructureMenu(){
   try{
     var r=await sb.functions.invoke('revenue-assistant',{ body:{
       max_tokens:900,
-      system:'You convert a pasted restaurant set menu into strict JSON and nothing else. Output ONLY a JSON object of the form {"name": string, "courses": [ {"name": string, "items": [string]} OR {"name": string, "choose": 1, "options": [string]} ]}. A course where the guest picks one dish (words like choice, choose, or, either) becomes a choose course with options; every other course lists its dishes as items. Keep dish names short. No commentary, no markdown code fences.',
+      system:'You convert a pasted restaurant set menu into strict JSON and nothing else. Output ONLY a JSON object of the form {"name": string, "courses": [ {"name": string, "items": [string], "desc": {string: string}} OR {"name": string, "choose": 1, "options": [string], "desc": {string: string}} ]}. A course where the guest picks one dish (words like choice, choose, or, either) becomes a choose course with options; every other course lists its dishes as items. Keep dish names short. When the text describes a dish (its ingredients or preparation), put that one-line English description in the course\'s desc object keyed by the exact dish name; omit desc when there are none. No commentary, no markdown code fences.',
       messages:[{role:'user',content:txt}]
     }});
     if(!r.error && r.data && r.data.text) parsed=peParseMenuJson(r.data.text);
@@ -3077,7 +3082,9 @@ async function peSaveSetMenu(id){
   if(!name){ peToast('Menu name is required', true); return; }
   var courses=(peState.smDraft||[]).map(function(c){
     var lines=(c.lines||[]).filter(Boolean);
-    return c.choose ? {name:(c.name||'Choice'),choose:1,options:lines} : {name:(c.name||'Course'),items:lines};
+    var out = c.choose ? {name:(c.name||'Choice'),choose:1,options:lines} : {name:(c.name||'Course'),items:lines};
+    if(c.desc) out.desc = c.desc;
+    return out;
   }).filter(function(c){ return (c.items&&c.items.length)||(c.options&&c.options.length); });
   if(!courses.length){ peToast('Add at least one course with a dish in it', true); return; }
   var raw = id ? peSmRawById(id) : null;
