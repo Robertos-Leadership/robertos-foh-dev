@@ -126,6 +126,24 @@ function peSetMenuByKey(k){
   for(var j=0;j<PE_SET_MENUS.length;j++) if(PE_SET_MENUS[j].key===k) return peNormSM(PE_SET_MENUS[j]);
   return null;
 }
+// Serving-style variants: a menu whose key is '<base>-sharing' is the shared
+// version of the '<base>' menu (e.g. restaurant-week / restaurant-week-sharing).
+// The event pickers show ONE entry (the base); the Food card then offers an
+// "Individual / Everything shared" selector. Each variant stays a full row, so
+// the proposal, agreement and kitchen brief render it with zero special cases.
+function peSmFamily(key){
+  var base = /-sharing$/.test(String(key)) ? String(key).replace(/-sharing$/,'') : String(key);
+  var ind = null, sh = null;
+  peSetMenusSel().forEach(function(x){ if(x.key===base) ind = x; if(x.key===base+'-sharing') sh = x; });
+  return (ind && sh) ? {individual:ind, sharing:sh} : null;
+}
+// The event pickers: hide a '-sharing' row only when its base menu is also
+// selectable — otherwise it stays listed, so a sharing-only menu never vanishes.
+function peSetMenusPick(){
+  return peSetMenusSel().filter(function(m){
+    return !(/-sharing$/.test(m.key) && peSmFamily(m.key));
+  });
+}
 function peSmSummary(courses){
   return (courses||[]).map(function(c){
     if(c.choose) return 'choice of '+((c.options||[]).join(' / '));
@@ -1851,7 +1869,7 @@ function peFoodSetMenuHTML(e){
     if(!ce) return '';
     h += '<div class="pe-lbl">Or use a plated set menu…</div>'+
       '<span style="display:flex;gap:6px;align-items:center"><select class="pe-in" style="flex:1" id="pe-sm-sel"><option value="">Choose a plated set menu…</option>'+
-      peSetMenusSel().map(function(m){ return '<option value="'+m.key+'">'+peEsc(m.name)+' — AED '+m.price+'/guest</option>'; }).join('')+
+      peSetMenusPick().map(function(m){ return '<option value="'+m.key+'">'+peEsc(m.name)+' — AED '+m.price+'/guest</option>'; }).join('')+
       '</select><button class="pe-btn sec sm" onclick="peApplySetMenu(\''+e.id+'\')">Use</button></span>';
     return h+'</div>';
   }
@@ -1859,6 +1877,22 @@ function peFoodSetMenuHTML(e){
   h += '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">'+
     '<b style="color:#400207">'+(m?peEsc(m.name):'Set menu')+(m?' · AED '+m.price+'/guest':'')+'</b>'+
     (ce?'<button class="pe-btn sec sm" style="color:#B00020;border-color:#B00020" onclick="peClearSetMenu(\''+e.id+'\')">Remove set menu</button>':'')+'</div>';
+  // Serving style — when this menu has an individual + sharing version, pick
+  // here; the price and the guest/kitchen documents follow the picked version.
+  var fam = m ? peSmFamily(m.key) : null;
+  if(fam){
+    var isSh = m.key===fam.sharing.key;
+    var pill = function(v, on, lbl){
+      return '<button class="pe-btn sm'+(on?'':' sec')+'" style="flex:1;min-width:150px"'+
+        (on||!ce ? ' disabled' : ' onclick="peSetMenuServe(\''+e.id+'\',\''+peSmEsc(v.key)+'\')"')+'>'+
+        lbl+' — AED '+v.price+'/guest'+(on?' ✓':'')+'</button>';
+    };
+    h += '<div style="margin-top:8px"><div class="pe-lbl">How is it served?</div>'+
+      '<div style="display:flex;gap:6px;flex-wrap:wrap">'+
+      pill(fam.individual, !isSh, 'Individual choices')+
+      pill(fam.sharing, isSh, 'Everything to share')+'</div>'+
+      '<div style="font-size:11px;color:#8B7355;margin-top:4px">'+peEsc(m.line||peSmSummary(m.courses))+'</div></div>';
+  }
   if(m){
     var g = Number(e.guests)||0;
     m.courses.forEach(function(c){
@@ -1905,6 +1939,22 @@ async function peApplySetMenu(eventId){
   if(r.error){ peToast('NOT applied — '+(r.error.message||'check connection'), true); return; }
   Object.keys(patch).forEach(function(k){ e[k] = patch[k]; });
   peToast('Set menu applied — enter the guests’ choices for the kitchen');
+  renderMain();
+}
+// Switch a set menu between its individual and sharing version. Keeps the
+// per-course guest choices — Secondi/Dolci splits carry straight over, and a
+// course that stops being choose-style is simply ignored by every renderer.
+async function peSetMenuServe(eventId, key){
+  if(!peCanEdit()){ peToast('View only — ask Valentina, Andrea or Francesco to make changes', true); return; }
+  var e = peEvById(eventId); if(!e || !e.set_menu || e.set_menu.key===key) return;
+  var m = peSetMenuByKey(key); if(!m || m.price==null) return;
+  if(!(await peConfirmSignedEdit(eventId, 'the menu'))){ renderMain(); return; }
+  var sm = JSON.parse(JSON.stringify(e.set_menu)); sm.key = key;
+  var patch = { set_menu:sm, package_label:m.name, food_price_pp:m.price, updated_at:new Date().toISOString() };
+  var r = await sb.from('events_desk').update(patch).eq('id', eventId);
+  if(r.error){ peToast('NOT changed — '+(r.error.message||'check connection'), true); return; }
+  Object.keys(patch).forEach(function(k){ e[k] = patch[k]; });
+  peToast('Now “'+m.name+'” — AED '+m.price+'/guest');
   renderMain();
 }
 // Removing the set menu drops its per-guest price — never silently: the modal
@@ -3386,7 +3436,8 @@ function peRenderGuided(){
         peState.packs.map(function(p){ return '<option value="'+p.id+'"'+(g.packId===p.id?' selected':'')+'>'+peEsc(p.name)+' — AED '+peMoney(p.price_pp)+'/guest</option>'; }).join('')+'</select></div>';
     } else if(g.foodMode==='setmenu'){
       h += '<div style="margin-top:4px"><div class="pe-lbl">Which set menu?</div><select class="pe-in" onchange="peGuideSet(\'setKey\',this.value)"><option value="">Choose a set menu…</option>'+
-        peSetMenusSel().map(function(m){ return '<option value="'+m.key+'"'+(g.setKey===m.key?' selected':'')+'>'+peEsc(m.name)+' — AED '+m.price+'/guest</option>'; }).join('')+'</select></div>';
+        peSetMenusPick().map(function(m){ return '<option value="'+m.key+'"'+(g.setKey===m.key?' selected':'')+'>'+peEsc(m.name)+' — AED '+m.price+'/guest</option>'; }).join('')+'</select></div>'+
+        '<div style="font-size:11px;color:#8B7355;margin-top:2px">Menus with a sharing version: pick individual or shared on the event’s Food card after this.</div>';
     }
     var bevs = peState.bevs.filter(function(b){ return b.active!==false; })
       .sort(function(a,b){ return (a.name||'').localeCompare(b.name||'') || (Number(a.duration_hours)||0)-(Number(b.duration_hours)||0); });
