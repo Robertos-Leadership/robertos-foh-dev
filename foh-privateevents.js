@@ -1874,8 +1874,12 @@ function peFoodSetMenuHTML(e){
     return h+'</div>';
   }
   var m = peSetMenuByKey(sm.key);
+  // The header shows what this event actually charges — the agreed price when
+  // Valentina negotiated one, with the list price named next to it.
+  var evPP = (e.food_price_pp!=null && e.food_price_pp!=='') ? Number(e.food_price_pp) : null;
+  var custPP = (m && evPP!=null && Math.round(evPP)!==Math.round(Number(m.price)));
   h += '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">'+
-    '<b style="color:#400207">'+(m?peEsc(m.name):'Set menu')+(m?' · AED '+m.price+'/guest':'')+'</b>'+
+    '<b style="color:#400207">'+(m?peEsc(m.name):'Set menu')+(m?' · AED '+peMoney(evPP!=null?evPP:m.price)+'/guest'+(custPP?' <span style="font-weight:normal;font-size:11px;color:#7A5500">(agreed — list AED '+m.price+')</span>':''):'')+'</b>'+
     (ce?'<button class="pe-btn sec sm" style="color:#B00020;border-color:#B00020" onclick="peClearSetMenu(\''+e.id+'\')">Remove set menu</button>':'')+'</div>';
   // Serving style — when this menu has an individual + sharing version, pick
   // here; the price and the guest/kitchen documents follow the picked version.
@@ -1894,6 +1898,12 @@ function peFoodSetMenuHTML(e){
       '<div style="font-size:11px;color:#8B7355;margin-top:4px">'+peEsc(m.line||peSmSummary(m.courses))+'</div></div>';
   }
   if(m){
+    // Agreed price — same audited, contract-guarded field as the facts card
+    // (food_price_pp), surfaced here so a negotiated menu price is one edit.
+    h += '<div style="margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">'+
+      '<span class="pe-lbl" style="margin:0">Agreed price per guest</span>'+
+      '<input class="pe-in" style="width:90px;padding:4px 6px" type="number" min="0" value="'+(evPP!=null?peEsc(e.food_price_pp):'')+'" placeholder="'+m.price+'" onchange="peFact(this,\'food_price_pp\',\''+e.id+'\')"'+(ce?'':' disabled')+'>'+
+      '<span style="font-size:11px;color:#8B7355">list price AED '+m.price+' — change only what was agreed with the guest</span></div>';
     var g = Number(e.guests)||0;
     m.courses.forEach(function(c){
       if(!c.choose) return;
@@ -1908,6 +1918,11 @@ function peFoodSetMenuHTML(e){
         '<div style="font-size:12px;margin-top:3px;color:'+((g&&sum===g)?'#2E6B34':'#B00020')+(g&&sum!==g?';font-weight:600':'')+'">'+((g&&sum!==g)?'▲ ':'')+sum+' of '+(g||'—')+' guests assigned'+
         ((g&&sum!==g)?' — '+(sum<g?(g-sum)+' still to assign':(sum-g)+' over'):(g?' ✓':''))+'</div></div>';
     });
+    // Guest-requested changes to the menu (e.g. a vegan main) — one note that
+    // reaches BOTH the guest proposal and the kitchen brief, so what was
+    // promised and what gets cooked can never drift apart.
+    h += '<div style="margin-top:8px"><div class="pe-lbl">Menu changes the guest asked for — shows on the proposal AND the kitchen brief</div>'+
+      '<textarea class="pe-in" rows="2" style="width:100%;box-sizing:border-box" placeholder="e.g. 2 guests need a vegan main — chef to propose" onchange="peSetMenuNote(\''+e.id+'\',this.value)"'+(ce?'':' disabled')+'>'+peEsc(sm.note||'')+'</textarea></div>';
   }
   return h+'</div>';
 }
@@ -1988,6 +2003,18 @@ async function peSetMenuCount(eventId, course, option, val){
   var r = await sb.from('events_desk').update({set_menu:sm, updated_at:new Date().toISOString()}).eq('id', eventId);
   if(r.error){ peToast('NOT saved — check connection', true); return; }
   e.set_menu = sm; peToast('Saved ✓'); renderMain();
+}
+// The guest's menu-change note (e.g. vegan main) — lives inside set_menu so it
+// travels with the menu and is cleared with it.
+async function peSetMenuNote(eventId, val){
+  if(!peCanEdit()){ peToast('View only — ask Valentina, Andrea or Francesco to make changes', true); renderMain(); return; }
+  var e = peEvById(eventId); if(!e || !e.set_menu) return;
+  var sm = JSON.parse(JSON.stringify(e.set_menu));
+  var v = String(val||'').trim();
+  if(v) sm.note = v; else delete sm.note;
+  var r = await sb.from('events_desk').update({set_menu:sm, updated_at:new Date().toISOString()}).eq('id', eventId);
+  if(r.error){ peToast('NOT saved — check connection', true); return; }
+  e.set_menu = sm; peToast(v ? 'Saved ✓ — the proposal and kitchen brief now carry this note' : 'Note removed'); renderMain();
 }
 
 // ── documents ────────────────────────────────────────────────────────────────
@@ -2112,6 +2139,7 @@ function peSetMenuPrepHTML(e){
     }
   });
   h += '</table>';
+  if(sm.note) h += '<div style="font-family:Arial,sans-serif;font-size:12px;color:#B00020;margin-top:6px"><b>Menu changes agreed with the guest — read before prep:</b> '+peEsc(sm.note)+'</div>';
   if(e.dietary) h += '<div style="font-family:Arial,sans-serif;font-size:12px;color:#B00020;margin-top:6px"><b>Dietary — read before prep:</b> '+peEsc(e.dietary)+'</div>';
   return h;
 }
@@ -2133,7 +2161,9 @@ function peCoordSetMenuHTML(e){
       (c.items||[]).forEach(function(it){ h += '<tr><td style="padding:3px 8px;border:1px solid #ddd">'+it+'</td><td style="padding:3px 8px;border:1px solid #ddd"><b>'+(g?g+' portions':'per guest')+'</b></td></tr>'; });
     }
   });
-  return h+'</table>';
+  h += '</table>';
+  if(sm.note) h += '<p style="color:#B00020;font-size:13px;margin:6px 0"><b>Menu changes agreed with the guest:</b> '+peEsc(sm.note)+'</p>';
+  return h;
 }
 // Elegant set-menu courses for the guest proposal — a menu, not a headcount.
 function peProposalSetMenuHTML(e){
@@ -2148,6 +2178,7 @@ function peProposalSetMenuHTML(e){
       (c.items||[]).forEach(function(it){ h += '<div class="dish">'+it+'</div>'; });
     }
   });
+  if(sm.note) h += '<div class="sec">Special arrangements</div><div class="dish">'+peEsc(sm.note)+'</div>';
   return h;
 }
 // The chef's half of the sheet: every selected dish with the quantity to
