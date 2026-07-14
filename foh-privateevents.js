@@ -1995,7 +1995,9 @@ async function peFetchMenuChoices(id){
   var u = await sb.from('events_desk').update({set_menu:sm, updated_at:new Date().toISOString()}).eq('id', id);
   if(u.error){ peToast('NOT applied — '+(u.error.message||'check connection'), true); return; }
   e.set_menu = sm;
-  sb.from('event_menu_choices').update({applied:true}).eq('id', row.id);
+  // Applying the newest submission settles ALL of this event's submissions —
+  // older ones (re-sends, tests) must not keep the green banner alive.
+  sb.from('event_menu_choices').update({applied:true}).eq('token', e.client_token);
   if(peState.menuChoicesPending) delete peState.menuChoicesPending[e.client_token];
   sb.from('event_log').insert({event_id:id, action:'client_selection', detail:'guest set-menu numbers applied', actor:peActor()});
   peToast('Guest’s numbers applied ✓ — check the green totals, then the kitchen brief is ready');
