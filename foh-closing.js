@@ -30,7 +30,7 @@ async function clOpen(ds){
   C.srCovers=null; C.srCoversError=false;
   (function(){ var d=ds;
     fetch(KITCHEN_URL+'/functions/v1/sevenrooms-sync?covers_actual='+d,{
-      method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+KITCHEN_KEY,'x-proxy-secret':'Kitchen'}
+      method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+KITCHEN_KEY,'x-proxy-secret':KITCHEN_PROXY_SECRET}
     }).then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); }).then(function(sd){
       if(sd&&sd.ok&&typeof sd.covers==='number'){
         C.srCovers={restaurant:Number(sd.restaurant_covers)||0, lounge:Number(sd.lounge_covers)||0, total:Number(sd.covers)||0};

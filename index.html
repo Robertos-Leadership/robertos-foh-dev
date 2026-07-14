@@ -2465,6 +2465,9 @@ const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 // Kitchen App Supabase — used only for public covers read
 const KITCHEN_URL = 'https://zrpglswalgjbtghudmhu.supabase.co';
 const KITCHEN_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpycGdsc3dhbGdqYnRnaHVkbWh1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA5MTIyMjQsImV4cCI6MjA5NjQ4ODIyNH0.pfABN-so4xINK7nHxXUlVeTO4g0h0l6ILHVwpoKrbds';
+// Shared with the Kitchen app's sevenrooms-sync / kitchen-events functions —
+// must match their SEVENROOMS_PROXY_SECRET / KITCHEN_PROXY_SECRET env secrets.
+const KITCHEN_PROXY_SECRET = '8c8223b1916d98aefb0d95018ac5e8e9fc11de64dec1ffc5';
 const sbKitchen = supabase.createClient(KITCHEN_URL, KITCHEN_KEY);
 
 // DEV badge: shows on the dev site only. Tap it to unlock test writes
@@ -2878,7 +2881,7 @@ async function fohLoadLiveTonight(){
   var figs = document.getElementById('lt-figs');   // 5 figures with money, 3 without
   if(figs) figs.style.gridTemplateColumns = 'repeat('+(money?5:3)+',1fr)';
   var d = chkToday().iso;   // operational night: before 06:00 Dubai counts as prior day
-  var opts = { method:'POST', headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+KITCHEN_KEY, 'x-proxy-secret':'Kitchen' } };
+  var opts = { method:'POST', headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+KITCHEN_KEY, 'x-proxy-secret':KITCHEN_PROXY_SECRET } };
   var url = KITCHEN_URL + '/functions/v1/sevenrooms-sync?';
   function jget(q){ return fetch(url+q+'='+d, opts).then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); }); }
   function setNum(id, html){ var el = document.getElementById(id); if(el) el.innerHTML = html; }
@@ -6914,7 +6917,7 @@ async function chkShowHistory(){
 <script src="foh-events.js?v=20260710b"></script>
 <script src="foh-privateevents.js?v=20260714i"></script>
 <script src="foh-revenue.js?v=20260710b"></script>
-<script src="foh-closing.js?v=20260710b"></script>
+<script src="foh-closing.js?v=20260714a"></script>
 <script src="foh-ops.js?v=20260710b"></script>
 <script src="stock-take.js?v=20260710b"></script>
 
