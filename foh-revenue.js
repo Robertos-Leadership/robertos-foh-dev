@@ -367,6 +367,28 @@ function revBriefing(){
       +' | Restaurant '+Math.round(row.rest_net||0)+'/'+rc+'cov | Scala '+Math.round(row.lounge_net||0)+'/'+lc+'cov'
       +' | F&B('+(f.est?'est':'actual')+') food '+f.food+' bev '+f.bev+' tob '+f.tob+(f.other?' other '+f.other:''));
   });
+  // Pre-computed monthly + weekday averages for EVERY month with data — exact app math,
+  // so the model never derives an average from the raw rows itself (it is forbidden to).
+  var perMonth={};
+  R.daily.forEach(function(row){ if(row.net_actual==null) return; var per=revPeriodOf(row.service_date); (perMonth[per]=perMonth[per]||[]).push(row); });
+  L.push('\nPRE-COMPUTED AVERAGES (exact app math — quote verbatim; for ANY other derived figure call compute_stats):');
+  Object.keys(perMonth).sort().forEach(function(per){
+    var rows=perMonth[per], tn=0, tc=0, cd=0, cnet=0, wk={};
+    rows.forEach(function(row){
+      var ds=String(row.service_date).slice(0,10), wd2=revWeekday(ds), net=Number(row.net_actual)||0;
+      var rc2=(row.rest_covers_actual!=null)?Number(row.rest_covers_actual):null;
+      var lc2=(row.lounge_covers_actual!=null)?Number(row.lounge_covers_actual):null;
+      var cov=(rc2!=null||lc2!=null)?((rc2||0)+(lc2||0)):null;
+      tn+=net; if(cov!=null){ tc+=cov; cd++; cnet+=net; }
+      var b=(wk[wd2]=wk[wd2]||{n:0,net:0,cd:0,cov:0}); b.n++; b.net+=net; if(cov!=null){ b.cd++; b.cov+=cov; }
+    });
+    L.push('  '+per+': '+rows.length+' trading days, total net '+Math.round(tn)+', avg net/day '+Math.round(tn/rows.length)
+      +(cd?(', avg covers/day '+(tc/cd).toFixed(1)+(cd<rows.length?' ('+cd+' of '+rows.length+' days have covers)':'')+', avg spend/cover '+(tc?(cnet/tc).toFixed(2):'—')):', covers not entered'));
+    ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'].forEach(function(wd2){
+      var b=wk[wd2]; if(!b) return;
+      L.push('    '+wd2+': '+b.n+' days, avg net '+Math.round(b.net/b.n)+(b.cd?(', avg covers '+(b.cov/b.cd).toFixed(1)+(b.cd<b.n?' ('+b.cd+' of '+b.n+' days have covers)':'')):', covers not entered'));
+    });
+  });
   var rv=revReview(p), m=revMonthData(p);
   L.push('\nANALYSIS — '+revMonthLabel(p)+' (through day '+rv.windowDay+'):');
   L.push('  MTD net '+Math.round(rv.mtd)+' over '+rv.tradingDays.cur+' trading days; budget-to-date '+Math.round(m.budgetToDate)+'.');
@@ -379,7 +401,7 @@ function revBriefing(){
   var od=revOpsDigest(); if(od) L.push(od);
   return L.join('\n');
 }
-// The ONLY tool the analyst can call. It never does arithmetic itself — it parameterises
+// What-if tool. The analyst never does arithmetic itself — it parameterises
 // this, the app computes the exact result (revScenario), and the model narrates the figures.
 var REV_TOOL_SCENARIO={
   name:'compute_scenario',
@@ -406,6 +428,72 @@ function revScenarioCardHTML(r){
     +'<tr><td>Full-month forecast</td><td>'+revMoney(r.forecast.base)+'</td><td>'+revMoney(r.forecast.scenario)+'</td><td>'+chip(r.forecast)+'</td></tr>'
     +(r.gap.target?('<tr><td>Forecast vs target ('+revMoney(r.gap.target)+')</td><td class="'+(r.gap.baseToTarget>=0?'rev-pos':'rev-neg')+'">'+revMoney(r.gap.baseToTarget).replace('AED ','')+'</td><td class="'+(r.gap.scenarioToTarget>=0?'rev-pos':'rev-neg')+'">'+revMoney(r.gap.scenarioToTarget).replace('AED ','')+'</td><td>'+chip(r.forecast)+'</td></tr>'):'')
     +'</tbody></table><div class="rev-scen-note">'+r.forecast.basis+'</div></div>';
+}
+// ── STATS ENGINE — deterministic historical aggregates. Same contract as the scenario
+//    engine: the AI never averages/sums raw rows; it filters via this tool, the APP does
+//    the arithmetic, and the model narrates the exact returned figures. Closes the class
+//    of error where a figure absent from the briefing tempted the model to compute it.
+var REV_TOOL_STATS={
+  name:'compute_stats',
+  description:'Compute EXACT historical statistics from the entered daily revenue data: totals, averages, counts, best/worst day — filtered by month, weekday and venue. You MUST call this for ANY derived figure not printed verbatim in the DATA block (e.g. "average Friday covers in June", "total Scala net this month", "avg spend per cover on Saturdays vs last month" = two calls, one per month). NEVER average, sum, subtract or compute percentages yourself — call this and quote only its exact numbers.',
+  input_schema:{ type:'object', properties:{
+    period:{ type:'string', description:'Month as YYYY-MM. Default = the month currently being viewed.' },
+    weekday:{ type:'string', description:'"all" or one weekday name (Monday..Sunday) to include only that weekday. Default "all".' },
+    venue:{ type:'string', enum:['all','restaurant','scala'], description:'Venue filter: restaurant, scala (the lounge), or all (both). Default "all".' }
+  }, required:[] }
+};
+function revStats(q){
+  var R=revInit(), p=(q&&q.period)||R.period;
+  var wd=(q&&q.weekday&&q.weekday!=='all')?q.weekday:'all';
+  var venue=(q&&q.venue&&q.venue!=='all')?q.venue:'all';
+  var map=revDailyMap(), dim=revDaysInMonth(p), days=[];
+  for(var d=1; d<=dim; d++){
+    var ds=p+'-'+String(d).padStart(2,'0'), w=revWeekday(ds);
+    if(wd!=='all' && w!==wd) continue;
+    var row=map[ds]; if(!row||row.net_actual==null) continue;
+    var rc=(row.rest_covers_actual!=null)?Number(row.rest_covers_actual):null;
+    var lc=(row.lounge_covers_actual!=null)?Number(row.lounge_covers_actual):null;
+    var net,cov;
+    if(venue==='restaurant'){ net=Number(row.rest_net||0); cov=rc; }
+    else if(venue==='scala'){ net=Number(row.lounge_net||0); cov=lc; }
+    else { net=Number(row.net_actual)||0; cov=(rc!=null||lc!=null)?((rc||0)+(lc||0)):null; }
+    days.push({date:ds, weekday:w, net:net, covers:cov});
+  }
+  var n=days.length, totNet=0, covDays=0, totCov=0, netCovDays=0, minD=null, maxD=null;
+  days.forEach(function(x){ totNet+=x.net;
+    if(x.covers!=null){ covDays++; totCov+=x.covers; netCovDays+=x.net; }
+    if(!minD||x.net<minD.net) minD=x; if(!maxD||x.net>maxD.net) maxD=x; });
+  return { period:p, periodLabel:revMonthLabel(p), weekday:wd, venue:venue, days:days,
+    n:n, covDays:covDays, totNet:totNet, totCov:totCov,
+    avgNet:n?Math.round(totNet/n):null,
+    avgCov:covDays?+(totCov/covDays).toFixed(1):null,
+    avgSpend:totCov?+(netCovDays/totCov).toFixed(2):null,
+    minD:minD, maxD:maxD };
+}
+// Model-facing payload: every derived figure pre-computed so the model only quotes.
+function revStatsRound(r){
+  if(!r.n) return { period:r.periodLabel, filter:{weekday:r.weekday, venue:r.venue}, trading_days:0, note:'No entered days match this filter — say the data is not entered; do NOT estimate.' };
+  return { period:r.periodLabel, filter:{weekday:r.weekday, venue:r.venue},
+    days_used:r.days.map(function(x){ return {date:x.date, weekday:x.weekday, net:Math.round(x.net), covers:(x.covers!=null?x.covers:'not entered')}; }),
+    trading_days:r.n, days_with_covers:r.covDays, days_missing_covers:r.n-r.covDays,
+    total:{ net:Math.round(r.totNet), covers:r.totCov },
+    average:{ net_per_day:r.avgNet, covers_per_day:r.avgCov, spend_per_cover:r.avgSpend },
+    best_day:r.maxD?{date:r.maxD.date, net:Math.round(r.maxD.net)}:null,
+    worst_day:r.minD?{date:r.minD.date, net:Math.round(r.minD.net)}:null,
+    note:(r.covDays<r.n?'covers_per_day averages only the '+r.covDays+' days with covers entered; spend_per_cover = net of those days / their covers.':'all days have covers entered.') };
+}
+// Authoritative result card — the app draws the numbers, so what the user sees
+// cannot be altered by the model (same guarantee as the scenario cards).
+function revStatsCardHTML(r){
+  var f=[]; if(r.weekday!=='all') f.push(r.weekday+'s only'); if(r.venue!=='all') f.push(r.venue==='scala'?'Scala only':'Restaurant only');
+  var title='Stats · '+r.periodLabel+(f.length?' · '+f.join(' · '):'');
+  if(!r.n) return '<div class="rev-scen-card"><div class="rev-scen-h">'+title+'</div><div class="rev-scen-note">No entered days match this filter.</div></div>';
+  var body=r.days.map(function(x){ return '<tr><td>'+x.weekday.slice(0,3)+' '+Number(x.date.slice(8))+'</td><td>'+revMoney(x.net)+'</td><td>'+(x.covers!=null?x.covers:'&mdash;')+'</td></tr>'; }).join('');
+  var agg='<tr><td><b>Total ('+r.n+' day'+(r.n===1?'':'s')+')</b></td><td><b>'+revMoney(r.totNet)+'</b></td><td><b>'+r.totCov+'</b></td></tr>'
+    +'<tr><td><b>Average</b></td><td><b>'+(r.avgNet!=null?revMoney(r.avgNet):'&mdash;')+'</b></td><td><b>'+(r.avgCov!=null?r.avgCov:'&mdash;')+'</b></td></tr>';
+  return '<div class="rev-scen-card"><div class="rev-scen-h">'+title+'</div>'
+    +'<table class="rev-scen-tbl"><thead><tr><th>Day</th><th>Net</th><th>Covers</th></tr></thead><tbody>'+body+agg+'</tbody></table>'
+    +'<div class="rev-scen-note">App-computed from the entered days'+(r.avgSpend!=null?' · avg spend/cover '+revMoney(r.avgSpend):'')+(r.covDays<r.n?' · covers averaged over '+r.covDays+' of '+r.n+' days (rest not entered)':'')+'</div></div>';
 }
 // ── Apply-on-approval: the AI PROPOSES a budget/rate change; the user approves; the app writes it. ──
 var REV_TOOL_PROPOSE={
@@ -459,18 +547,20 @@ async function revAiReport(){
   var q=prompt('Ask the revenue analyst (e.g. "F&B split on 12 May", "if avg spend +2%, what\'s the final budget?", "Fridays +5% covers"):','If average spend increased 2%, what would the final budget and forecast look like?');
   if(q===null) return;
   var box=document.getElementById('rev-ai-out'); if(box){ box.style.display='block'; box.textContent='Analysing…'; }
-  var SYS='You are a precise F&B revenue analyst for Roberto\'s DIFC. Use ONLY the figures in the DATA block or returned by the compute_scenario tool — never invent or calculate numbers yourself. For ANY what-if about changing average spend or covers you MUST call compute_scenario. The tool result already contains EVERY derived figure you need — budget/forecast deltas (absolute and %) and gap_to_target (base, scenario, and %). Quote those values verbatim; do NOT perform arithmetic of your own (no subtraction, no computing percentages). When F&B figures are marked "est", state they are estimates from the standard mix, not actuals. Be concise, board-ready, in AED; call out risks and notable swings.';
+  var SYS='You are a precise F&B revenue analyst for Roberto\'s DIFC. HARD RULE — ZERO ARITHMETIC: never add, average, subtract or compute a percentage yourself, not even from two numbers in front of you. Every figure you state must appear VERBATIM in the DATA block or in a tool result. For any historical total/average/count/comparison not printed in DATA (e.g. "average Friday covers in June") you MUST call compute_stats — once per month/filter being compared. For ANY what-if about changing average spend or covers you MUST call compute_scenario; its result already contains every derived figure (deltas, gap_to_target, percentages). Quote tool values verbatim. If neither DATA nor a tool can produce a figure, say the app cannot compute it — never approximate. When F&B figures are marked "est", state they are estimates from the standard mix, not actuals. Be concise, board-ready, in AED; call out risks and notable swings.';
   var messages=[{role:'user', content:q+'\n\nDATA:\n'+revBriefing()}], cardHTML='';
   try{
     for(var step=0; step<5; step++){
-      var resp=await fetch(REV_AI_URL,{ method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+SUPABASE_KEY,'apikey':SUPABASE_KEY}, body:JSON.stringify({ action:'chat', model:'claude-sonnet-4-6', max_tokens:1600, system:SYS, tools:[REV_TOOL_SCENARIO], messages:messages }) });
+      var resp=await fetch(REV_AI_URL,{ method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+SUPABASE_KEY,'apikey':SUPABASE_KEY}, body:JSON.stringify({ action:'chat', model:'claude-sonnet-4-6', max_tokens:1600, system:SYS, tools:[REV_TOOL_SCENARIO, REV_TOOL_STATS], messages:messages }) });
       var data=await resp.json();
       if(!resp.ok) throw new Error(data.error||('HTTP '+resp.status));
       var content=data.content||[];
       messages.push({role:'assistant', content:content});
       var toolUses=content.filter(function(b){return b.type==='tool_use';});
       if(data.stop_reason==='tool_use' && toolUses.length){
-        var results=toolUses.map(function(tu){ var r=revScenario(tu.input); cardHTML+=revScenarioCardHTML(r); return {id:tu.id, round:revScenRound(r)}; });
+        var results=toolUses.map(function(tu){
+          if(tu.name==='compute_stats'){ var st=revStats(tu.input); cardHTML+=revStatsCardHTML(st); return {id:tu.id, round:revStatsRound(st)}; }
+          var r=revScenario(tu.input); cardHTML+=revScenarioCardHTML(r); return {id:tu.id, round:revScenRound(r)}; });
         if(box) box.innerHTML=cardHTML+'<div class="rev-scen-think">Writing analysis…</div>';
         messages.push({role:'user', content:results.map(function(x){ return {type:'tool_result', tool_use_id:x.id, content:JSON.stringify(x.round)}; })});
         continue;
@@ -487,7 +577,7 @@ async function revAiReport(){
 //  AI CHAT / REPORTS — full-screen module. Multi-turn, quick-report chips,
 //  same deterministic engine (the model never computes; it parameterises + narrates).
 // ══════════════════════════════════════════════
-var REV_CHAT_SYS='You are a precise F&B revenue analyst for Roberto\'s DIFC. Use ONLY the figures in the DATA block or returned by the compute_scenario tool — never invent or calculate numbers yourself. For ANY what-if about changing average spend or covers you MUST call compute_scenario; the tool result already contains every derived figure (deltas, gap_to_target, percentages) — quote them verbatim, do NOT do arithmetic. When F&B figures are marked "est", say they are estimates from the standard mix, not actuals. An OPERATIONS LOG (closing reports) may be provided — when asked about patterns/themes, mine it for recurring shift challenges, comps trends, and comment themes, and quantify how often each recurs. When the user asks to SET / CHANGE / APPLY a monthly budget, a weekday average spend, or a weekday cover target, call propose_change with the final value — NEVER claim it has been applied; the app shows the user an Approve button they must click. Be a clear, board-ready analyst: use short headings, tables and bullets; lead with the answer; call out risks and notable swings. Keep follow-ups in context.\n\nVISUALS: When a chart makes the answer clearer (a trend, a comparison or a split), insert a chart token on its OWN line. The app draws the chart from the real data for the month being viewed — you NEVER supply the numbers, you only choose which chart. Available tokens: [[chart:net-vs-budget]] (daily net vs budget bars), [[chart:mtd-cumulative]] (cumulative net vs budget — are we ahead?), [[chart:venue-split]] (Restaurant vs Lounge share), [[chart:weekday]] (avg net by weekday vs last month), [[chart:daypart]] (lunch/dinner by venue). Use at most 2–3 per answer, each on its own line, and refer to them in your text. The user can export any answer to PDF.';
+var REV_CHAT_SYS='You are a precise F&B revenue analyst for Roberto\'s DIFC. HARD RULE — ZERO ARITHMETIC: never add, average, subtract or compute a percentage yourself, not even from two numbers in front of you. Every figure you state must appear VERBATIM in the DATA block or in a tool result. For any historical total/average/count/comparison not printed in DATA (e.g. "average Friday covers in June", "total Scala net last month") you MUST call compute_stats — once per month/filter being compared; an authoritative stats card is shown to the user with each call. For ANY what-if about changing average spend or covers you MUST call compute_scenario; the tool result already contains every derived figure (deltas, gap_to_target, percentages) — quote tool values verbatim. If neither DATA nor a tool can produce a figure, say the app cannot compute it — never approximate. When F&B figures are marked "est", say they are estimates from the standard mix, not actuals. An OPERATIONS LOG (closing reports) may be provided — when asked about patterns/themes, mine it for recurring shift challenges, comps trends, and comment themes, and quantify how often each recurs. When the user asks to SET / CHANGE / APPLY a monthly budget, a weekday average spend, or a weekday cover target, call propose_change with the final value — NEVER claim it has been applied; the app shows the user an Approve button they must click. Be a clear, board-ready analyst: use short headings, tables and bullets; lead with the answer; call out risks and notable swings. Keep follow-ups in context.\n\nVISUALS: When a chart makes the answer clearer (a trend, a comparison or a split), insert a chart token on its OWN line. The app draws the chart from the real data for the month being viewed — you NEVER supply the numbers, you only choose which chart. Available tokens: [[chart:net-vs-budget]] (daily net vs budget bars), [[chart:mtd-cumulative]] (cumulative net vs budget — are we ahead?), [[chart:venue-split]] (Restaurant vs Lounge share), [[chart:weekday]] (avg net by weekday vs last month), [[chart:daypart]] (lunch/dinner by venue). Use at most 2–3 per answer, each on its own line, and refer to them in your text. The user can export any answer to PDF.';
 function revChatInit(){ var R=revInit(); if(!R.chat) R.chat={thread:[], api:[], busy:false}; return R.chat; }
 function revChatOpen(){ revChatInit(); document.getElementById('rev-chat-modal').style.display='flex'; revChatRender(); var inp=document.getElementById('rev-chat-input'); if(inp) setTimeout(function(){inp.focus();},60); }
 function revChatClose(){ document.getElementById('rev-chat-modal').style.display='none'; }
@@ -515,7 +605,7 @@ async function revChatSend(text){
   var cardsHTML='', propIds=[];
   try{
     for(var step=0; step<6; step++){
-      var resp=await fetch(REV_AI_URL,{ method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+SUPABASE_KEY,'apikey':SUPABASE_KEY}, body:JSON.stringify({ action:'chat', model:'claude-sonnet-4-6', max_tokens:1800, system:SYS, tools:[REV_TOOL_SCENARIO, REV_TOOL_PROPOSE], messages:c.api }) });
+      var resp=await fetch(REV_AI_URL,{ method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+SUPABASE_KEY,'apikey':SUPABASE_KEY}, body:JSON.stringify({ action:'chat', model:'claude-sonnet-4-6', max_tokens:1800, system:SYS, tools:[REV_TOOL_SCENARIO, REV_TOOL_STATS, REV_TOOL_PROPOSE], messages:c.api }) });
       var data=await resp.json();
       if(!resp.ok) throw new Error(data.error||('HTTP '+resp.status));
       var content=data.content||[];
@@ -529,6 +619,8 @@ async function revChatSend(text){
             propIds.push(pid);
             return {type:'tool_result', tool_use_id:tu.id, content:JSON.stringify({status:'awaiting_user_approval', note:'A proposal card with an Approve button is now shown to the user. Ask them to review and approve to apply — do NOT claim it has been applied.', preview:revProposalPreview(tu.input)})};
           }
+          if(tu.name==='compute_stats'){ var st=revStats(tu.input); cardsHTML+=revStatsCardHTML(st);
+            return {type:'tool_result', tool_use_id:tu.id, content:JSON.stringify(revStatsRound(st))}; }
           var r=revScenario(tu.input); cardsHTML+=revScenarioCardHTML(r);
           return {type:'tool_result', tool_use_id:tu.id, content:JSON.stringify(revScenRound(r))};
         });
