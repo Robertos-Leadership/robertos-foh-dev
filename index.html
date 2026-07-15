@@ -2978,7 +2978,7 @@ function loadAdminUsers(){
 }
 function adminFind(email){ return (state.adminUsers||[]).find(function(u){return u.email===email;}); }
 async function adminSave(u){
-  var res=await sb.from('app_users').upsert({email:u.email,name:u.name,modules:u.modules,is_admin:u.is_admin,notify:u.notify||[],updated_at:new Date().toISOString()},{onConflict:'email'});
+  var res=await sb.from('app_users').upsert({email:u.email,name:u.name,title:u.title||null,modules:u.modules,is_admin:u.is_admin,notify:u.notify||[],updated_at:new Date().toISOString()},{onConflict:'email'});
   if(res.error){ alert('Could not save: '+res.error.message); return false; }
   return true;
 }
@@ -3171,7 +3171,7 @@ function admBuildPeople(){
   (state.adminFoh||[]).forEach(function(p){ var lg=match(p.name); if(lg) matched[lg.email]=true;
     out.push({src:'foh',id:p.id,name:p.name||'',emp_id:p.emp_id?String(p.emp_id):'',role:p.role||'',section:p.section||'',where:'FOH',login:lg,in_schedule:p.in_schedule!==false}); });
   users.filter(function(u){ return !matched[u.email]; }).forEach(function(u){
-    out.push({src:'office',id:u.email,name:u.name||u.email,emp_id:'',role:'',section:'',where:'Office',email:u.email,login:u}); });
+    out.push({src:'office',id:u.email,name:u.name||u.email,emp_id:'',role:u.title||'',section:'',where:'Office',email:u.email,login:u}); });
   return out;
 }
 // ── search + filter ──
@@ -3407,8 +3407,9 @@ function admDetailFull(p){
     ? '<div class="px-fld"><label>Employee ID</label><div class="ro">— office login —</div></div>'
     : '<div class="px-fld"><label>Employee ID</label><input value="'+admEsc(p.emp_id||'')+'" placeholder="— none —" onchange="admPanelSave(\''+ek+'\',\'code\',this)"></div>';
   var roleFld=off
-    ? '<div class="px-fld"><label>Email</label><div class="ro">'+admEsc(p.email||'')+'</div></div>'
+    ? '<div class="px-fld"><label>Job title</label><input value="'+admEsc(p.role||'')+'" placeholder="e.g. General Manager" onchange="admPanelSave(\''+ek+'\',\'title\',this)"></div>'
     : '<div class="px-fld"><label>Role</label><input value="'+admEsc(p.role||'')+'" onchange="admPanelSave(\''+ek+'\',\'role\',this)"></div>';
+  var emailFld=off?'<div class="px-fld"><label>Email</label><div class="ro">'+admEsc(p.email||'')+'</div></div>':'';
   var venueFld='<div class="px-fld"><label>Where</label><div class="ro">'+admEsc(p.where)+'</div></div>';
   var sectionFld=off?'':'<div class="px-fld"><label>'+(p.src==='foh'?'Section':'Station')+'</label><div class="ro">'+admEsc(p.section||'—')+'</div></div>';
   var schedSec='';
@@ -3437,7 +3438,7 @@ function admDetailFull(p){
   }
   var removeSec=off?'':'<div class="px-psec"><button class="px-prm" onclick="admRemove(\''+p.src+'\',\''+admEsc(String(p.id))+'\')">Remove from '+(p.src==='kitchen'?'Kitchen':'FOH')+' staff</button></div>';
   return '<div class="px-panel"><div class="px-phead"><span class="px-av lg">'+admEsc(admIni(p.name))+'</span><div style="min-width:0;"><div class="px-pname">'+admEsc(p.name)+'</div><div class="px-prole">'+admEsc(p.role||(off?'Office / HQ':''))+' · '+admEsc(p.where)+'</div><div class="px-rb">'+admBadges(p)+'</div></div></div>'
-    +'<div class="px-flds">'+nameFld+codeFld+roleFld+venueFld+sectionFld+'</div>'
+    +'<div class="px-flds">'+nameFld+codeFld+roleFld+venueFld+emailFld+sectionFld+'</div>'
     +schedSec+loginSec+signSec+removeSec+'</div>';
 }
 function admScheduleToggle(key){
@@ -3452,9 +3453,13 @@ function admBack(){ state.adminPick=null; renderMain(); admAfterRender(function(
 function admPanelSave(key,field,el){
   var p=admByKey(key); if(!p) return;
   var val=(el.value||'').trim();
-  if(off_(p)&&field!=='name') return;
+  if(off_(p)&&field!=='name'&&field!=='title') return;
   if(field==='code'){ var c=admCodeClash(val,p.src,p.id); if(c){ alert('Employee ID '+val+' already belongs to '+c.name+' ('+c.where+').\n\nEach code must belong to one person — give this person a different code, or clear '+c.name+'’s first.'); el.value=p.emp_id||''; return; } }
-  admWrite(p,field,val).then(function(ok){ if(!ok){ el.value=(field==='code'?(p.emp_id||''):(field==='role'?(p.role||''):p.name)); return; } admToast('Saved'); });
+  admWrite(p,field,val).then(function(ok){
+    if(!ok){ el.value=(field==='code'?(p.emp_id||''):((field==='role'||field==='title')?(p.role||''):p.name)); return; }
+    admToast('Saved');
+    if(field==='title') renderMain();   // refresh the name-line under the header
+  });
 }
 function off_(p){ return p.src==='office'; }
 // re-render when the screen crosses the phone/wide breakpoint so the layout follows
@@ -3517,7 +3522,7 @@ function admRowHTML2(p){
   var sel=!!(state.adminSel&&state.adminSel[key]);
   var open=state.adminExpanded===key;
   var codeTxt=p.emp_id?admEsc(p.emp_id):'—';
-  var roleTxt=off?admEsc(p.email||''):admEsc(p.role||'');
+  var roleTxt=admEsc(p.role||'');
   var badge=p.login?(p.login.is_admin?'<span class="px-badge px-admin">admin</span>':'<span class="px-badge px-login">login</span>'):'';
   var hay=admNorm(p.name+' '+(p.emp_id||'')+' '+(p.role||'')+' '+(p.email||'')+' '+p.where);
   function cell(col,txt,editable,cls){
@@ -3528,7 +3533,7 @@ function admRowHTML2(p){
     +'<td class="px-selcol"><input type="checkbox" class="px-sel" data-key="'+admEsc(key)+'" '+(sel?'checked':'')+' onclick="admToggleSel(this,event)"></td>'
     +cell('name',admEsc(p.name),true)
     +cell('code',codeTxt,!off,(p.emp_id?'':'miss'))
-    +cell('role',roleTxt,!off)
+    +cell('role',roleTxt,true)
     +'<td><span class="px-where">'+admEsc(p.where)+'</span>'+badge+'</td>'
     +'<td style="text-align:right;"><button class="px-chev'+(open?' open':'')+'" onclick="admToggleExpand(\''+admEsc(key)+'\')" title="Access &amp; signing">▸</button></td>'
     +'</tr>';
@@ -3641,9 +3646,13 @@ function admBeginEdit(cell,seed){
 // mutates the cached record so the next render shows the new value before adminRefresh.
 function admWrite(p,col,val){
   if(p.src==='office'){
-    if(col!=='name') return Promise.resolve(false);
+    // Office logins live in app_users, not a staff table — name + job title only.
+    // 'role' is the grid's column name for the same field the panel calls 'title'.
+    if(col!=='name' && col!=='title' && col!=='role') return Promise.resolve(false);
     var u=adminFind(p.id); if(!u) return Promise.resolve(false);
-    return adminSave({email:u.email,name:val,modules:u.modules,is_admin:u.is_admin,notify:u.notify||[]}).then(function(ok){ if(ok) u.name=val; return ok; });
+    var next={email:u.email,name:u.name,title:u.title||null,modules:u.modules,is_admin:u.is_admin,notify:u.notify||[]};
+    if(col==='name') next.name=val; else next.title=val||null;
+    return adminSave(next).then(function(ok){ if(ok){ if(col==='name') u.name=val; else u.title=val||''; } return ok; });
   }
   var client=p.src==='foh'?sb:sbKitchen, table=p.src==='foh'?'foh_staff':'staff', payload={};
   if(col==='name') payload.name=val;
