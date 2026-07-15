@@ -57,78 +57,127 @@ async function opsLoadRecent(){
 // Managers write the real signal (complaints, VIPs, events, issues) into the
 // free-text shift notes + comps — NOT the structured comment boxes. So this reads
 // those notes for a chosen window and asks the analyst (the same revenue-assistant
-// relay, key stays server-side) to EXTRACT and group what matters. AI narrates only
-// — it never invents numbers; the app supplies the raw notes verbatim.
+// relay, key stays server-side) to group them. AI narrates only — it never invents
+// numbers; the app supplies the raw notes verbatim.
+//
+// It shows RECURRING issues ONLY: something written up on OPS_MIN_NIGHTS or more
+// SEPARATE nights inside the chosen window. A one-off is noise here — it already
+// reads in Recent reports, and dressing it up as an "insight" misleads. So the AI
+// only groups notes that mean the same thing and cites the dates it took them
+// from; the APP counts those dates, drops anything under the floor, and throws out
+// any date that is not a real report. The AI never counts and never calculates.
+var OPS_MIN_NIGHTS = 3;
 function opsFeedbackHTML(){
   var R=revInit(), days=R.opsInsightDays||14;
   var h='';
-  h+='<div class="rev-section-h">Service insights · AI read of the closing notes</div>';
-  h+='<div class="rev-mut" style="padding:0 0 10px;font-size:13px">Reads the night/day/late shift notes &amp; comps from recent closing reports and pulls out complaints, recurring issues, VIPs, events and a comps watch. It only summarises what managers wrote — it never invents figures.</div>';
+  h+='<div class="rev-section-h">Recurring issues · AI read of the closing notes</div>';
+  h+='<div class="rev-mut" style="padding:0 0 10px;font-size:13px">Reads the day/night/late shift notes &amp; comps from the closing reports and shows only what managers wrote up on <b>'+OPS_MIN_NIGHTS+' or more separate nights</b> — the things that keep happening. One-off nights are left out on purpose: they are in Recent reports, and treating them as a pattern is misleading. It only groups what managers wrote — it never invents figures.</div>';
   h+='<div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap">';
   [7,14,30].forEach(function(d){ h+='<button onclick="opsSetInsightDays('+d+')" style="padding:5px 12px;border-radius:14px;border:1px solid var(--vino);cursor:pointer;font-size:12px;font-family:var(--font-sans);'+(d===days?'background:var(--vino);color:var(--cream);font-weight:700':'background:transparent;color:var(--vino)')+'">'+d+' days</button>'; });
-  h+='<button onclick="opsGenInsights()" style="padding:6px 16px;border-radius:6px;border:none;background:var(--vino);color:var(--cream);font-weight:700;cursor:pointer;font-size:13px;font-family:var(--font-sans)">&#10024; Generate insights</button>';
+  h+='<button onclick="opsGenInsights()" style="padding:6px 16px;border-radius:6px;border:none;background:var(--vino);color:var(--cream);font-weight:700;cursor:pointer;font-size:13px;font-family:var(--font-sans)">&#10024; Find recurring issues</button>';
   h+='</div>';
-  h+='<div id="ops-insights">'+(R.opsInsights?opsRenderInsights(R.opsInsights):'<div class="rev-mut">Tap &ldquo;Generate insights&rdquo; to read the last '+days+' days of closing notes.</div>')+'</div>';
+  h+='<div id="ops-insights">'+(R.opsInsights?opsRenderInsights(R.opsInsights):'<div class="rev-mut">Tap &ldquo;Find recurring issues&rdquo; to read the last '+days+' days of closing notes.</div>')+'</div>';
   return h;
 }
 function opsSetInsightDays(d){ revInit().opsInsightDays=d; if(typeof renderMain==='function') renderMain(); }
+// Day number (noon-anchored, so DST/timezone can never shift a date by one).
+function opsDayNum(d){ return Math.round(new Date(String(d).slice(0,10)+'T12:00:00').getTime()/86400000); }
+function opsFDate(d){ return new Date(String(d).slice(0,10)+'T12:00:00').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'}); }
+// Tightest run: the fewest days that contain OPS_MIN_NIGHTS of these nights.
+// 3 nights inside 6 days is a fire; 3 nights spread over 30 is a slow drip.
+function opsTightestRun(ds){
+  var best=9999;
+  for(var i=0;i+OPS_MIN_NIGHTS-1<ds.length;i++){
+    var w=opsDayNum(ds[i+OPS_MIN_NIGHTS-1])-opsDayNum(ds[i])+1;
+    if(w<best) best=w;
+  }
+  return best;
+}
+// Plain English for how often and how bunched — never "3 of them inside 22 days",
+// which sounds tight when it is actually a slow drip across the whole window.
+function opsCountLine(p){
+  if(p.n===OPS_MIN_NIGHTS) return p.n+' nights, inside '+p.run+' days';
+  if(p.run<=14) return p.n+' nights &middot; the closest '+OPS_MIN_NIGHTS+' inside '+p.run+' days';
+  return p.n+' nights, spread across the window';
+}
+function opsTier(run){
+  if(run<=7)  return { label:OPS_MIN_NIGHTS+'+ in one week', colour:'var(--vino)',        text:'var(--cream)' };
+  if(run<=14) return { label:OPS_MIN_NIGHTS+'+ in two weeks', colour:'var(--gold-dim)',   text:'var(--cream)' };
+  return            { label:OPS_MIN_NIGHTS+'+ in a month',    colour:'var(--sabbia-dark)', text:'var(--ink)' };
+}
 async function opsGenInsights(){
   var R=revInit(), days=R.opsInsightDays||14;
   var box=document.getElementById('ops-insights'); if(box) box.innerHTML='<div class="rev-mut" style="padding:12px">Reading the closing notes&hellip;</div>';
   try{
     var s=new Date(); s.setDate(s.getDate()-days);
     var since=s.getFullYear()+'-'+String(s.getMonth()+1).padStart(2,'0')+'-'+String(s.getDate()).padStart(2,'0');
-    var res=await sb.from('closing_reports').select('service_date,manager_am,manager_pm,comps,shifts,rest_lunch_covers,rest_dinner_covers,lounge_lunch_covers,lounge_dinner_covers').gte('service_date',since).order('service_date',{ascending:false}).limit(60);
+    var res=await sb.from('closing_reports').select('service_date,manager_am,manager_pm,comps,shifts').gte('service_date',since).order('service_date',{ascending:false}).limit(60);
     if(res.error){ if(box) box.innerHTML='<div class="rev-mut">Could not load reports: '+clEsc(res.error.message)+'</div>'; return; }
     var rows=res.data||[];
     if(!rows.length){ if(box) box.innerHTML='<div class="rev-mut">No closing reports in the last '+days+' days.</div>'; return; }
-    var digest=rows.map(function(r){
+    // Only nights that actually say something are sent: an empty night cannot be
+    // part of a pattern, and shipping it just makes the read slower.
+    var real={}, nights=[];
+    rows.forEach(function(r){
+      var d=String(r.service_date).slice(0,10); real[d]=true;
       var sh=r.shifts||{};
       function t(k){ var x=sh[k]||{}; var p=[]; if(x.feedback&&x.feedback.trim())p.push(x.feedback.trim()); if(x.challenges&&x.challenges.trim())p.push('CHALLENGE: '+x.challenges.trim()); return p.join('\n'); }
       var notes=['day','night','late'].map(function(k){ var v=t(k); return v?('['+k+'] '+v):''; }).filter(Boolean).join('\n');
       var comps=(r.comps||[]).map(function(c){ return (Number(c.amount)||0)+' '+(c.reason||'')+' ('+(c.manager||'?')+(c.table?' t'+c.table:'')+')'; }).join('; ');
-      var cov=(Number(r.rest_lunch_covers)||0)+(Number(r.rest_dinner_covers)||0)+(Number(r.lounge_lunch_covers)||0)+(Number(r.lounge_dinner_covers)||0);
-      return '=== '+String(r.service_date).slice(0,10)+' === manager: '+([r.manager_am,r.manager_pm].filter(Boolean).join(' / ')||'—')+' · covers: '+cov+(comps?('\nComps: '+comps):'')+(notes?('\nNotes:\n'+notes):'\n(no notes)');
-    }).join('\n\n');
-    var SYS="You are the operations analyst for Roberto's DIFC, a luxury Italian restaurant in Dubai (the restaurant is called Piemonte; the lounge/bar is Scala). You are given the managers' nightly CLOSING NOTES and COMPS for the last "+days+" days. Read them and surface what matters to the Group Executive Chef. Use ONLY what is written — never invent or estimate numbers or facts; if something is not mentioned, leave it out. Be specific: cite the date and the table/guest name when given. CRITICAL: do NOT add up, total, average or otherwise CALCULATE any figure — repeat amounts exactly as they appear in a note, and describe comp/spend patterns in WORDS (e.g. \"dessert comps on most nights, mostly authorised by Jins\") rather than computing a sum. The app does all arithmetic, never you. Group your answer into these sections, and SKIP any section with nothing to report:\n\n## Complaints & service issues\n- each guest complaint or service problem: date, table/guest, what happened, and any recovery done.\n## Recurring patterns\n- issues that repeat across nights (staffing shortfalls, wait times, food consistency, terrace/weather, etc.).\n## Comps watch\n- what is being comped and any pattern (e.g. dessert comps used as a default), and who comps most.\n## VIPs & notable guests\n- named VIPs, regulars and influencers, with the date seen.\n## Events & standout nights\n- private events, big spenders, and noticeably strong or weak nights.\n## What to watch\n- 2-3 short lines: the most important things for the chef to act on next.\n\nKeep it tight and scannable — short bullets, no fluff, no preamble.";
-    var resp=await fetch(REV_AI_URL,{ method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+SUPABASE_KEY,'apikey':SUPABASE_KEY}, body:JSON.stringify({ action:'chat', model:'claude-sonnet-4-6', max_tokens:1900, system:SYS, messages:[{role:'user', content:'CLOSING NOTES (newest first):\n\n'+digest}] }) });
+      if(!notes && !comps) return;
+      nights.push('=== '+d+' === manager: '+([r.manager_am,r.manager_pm].filter(Boolean).join(' / ')||'—')+(comps?('\nComps: '+comps):'')+(notes?('\nNotes:\n'+notes):''));
+    });
+    if(nights.length<OPS_MIN_NIGHTS){
+      if(box) box.innerHTML='<div class="rev-mut" style="padding:12px">Only '+nights.length+' of the last '+rows.length+' closing reports have any notes or comps written in. Nothing can repeat '+OPS_MIN_NIGHTS+' times yet — try a longer window.</div>';
+      return;
+    }
+    var SYS="You are the operations analyst for Roberto's DIFC, a luxury Italian restaurant in Dubai (the restaurant is called Piemonte; the lounge/bar is Scala). Below are the managers' nightly CLOSING NOTES and COMPS.\n\nYOUR ONLY JOB: find what RECURS. A topic qualifies ONLY if it is written up on "+OPS_MIN_NIGHTS+" or more SEPARATE dates below. Anything that happened once or twice is OUT, no matter how dramatic or expensive — a one-off is not a pattern and reporting it as one is misleading. Do not include it.\n\nGroup notes that mean the same thing even when the wording differs (\"terrace freezing\", \"heaters off outside\", \"guests moved in from the terrace\" = ONE topic). Keep each topic specific and concrete — \"starters slow on full nights\", not \"service issues\".\n\nRules:\n- Use ONLY what is written. Never invent, estimate, total, average or otherwise CALCULATE anything — the app does all arithmetic, never you.\n- Every date you list must be a date that literally heads the note you took it from.\n- Give a few words quoted verbatim from the notes as evidence.\n\nReturn STRICT JSON and NOTHING else — no markdown, no code fences, no preamble:\n{\"patterns\":[{\"topic\":\"short name, max 6 words\",\"kind\":\"service|food|staffing|facility|comps|guest\",\"dates\":[\"YYYY-MM-DD\"],\"detail\":\"one plain sentence: what keeps happening and what it costs us\",\"evidence\":[\"short verbatim quote\"]}]}\n\nList only topics with "+OPS_MIN_NIGHTS+" or more distinct dates, most serious first. If nothing recurs that often, return {\"patterns\":[]} — that is a perfectly good answer, do not pad it.";
+    var resp=await fetch(REV_AI_URL,{ method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+SUPABASE_KEY,'apikey':SUPABASE_KEY}, body:JSON.stringify({ action:'chat', model:'claude-sonnet-4-6', max_tokens:900, system:SYS, messages:[{role:'user', content:'CLOSING NOTES (newest first):\n\n'+nights.join('\n\n')}] }) });
     var data=await resp.json();
     if(!resp.ok || data.error){ if(box) box.innerHTML='<div class="rev-mut">Insights not available: '+clEsc((data&&data.error)||('HTTP '+resp.status))+'. The revenue-assistant Edge Function must be deployed.</div>'; return; }
-    R.opsInsights=data.text||'(no insights returned)'; R.opsInsightsAt=String(rows.length)+' reports · last '+days+' days';
+    var raw=String(data.text||'').trim().replace(/^```(?:json)?/i,'').replace(/```$/,'').trim();
+    var parsed=null;
+    try{ parsed=JSON.parse(raw); }catch(e){ var m=raw.match(/\{[\s\S]*\}/); if(m){ try{ parsed=JSON.parse(m[0]); }catch(e2){} } }
+    if(!parsed || !Array.isArray(parsed.patterns)){ if(box) box.innerHTML='<div class="rev-mut">The analyst did not answer in a readable format. Tap again.</div>'; return; }
+    // ── The app does the counting, not the AI. A topic survives only if it cites
+    // OPS_MIN_NIGHTS+ distinct dates that each match a real closing report.
+    var pats=parsed.patterns.map(function(p){
+      var seen={}, ds=[];
+      ((p&&p.dates)||[]).forEach(function(d){ var k=String(d).slice(0,10); if(real[k] && !seen[k]){ seen[k]=1; ds.push(k); } });
+      ds.sort();
+      return { topic:String((p&&p.topic)||'').trim(), kind:String((p&&p.kind)||'').trim(), detail:String((p&&p.detail)||'').trim(),
+               evidence:((p&&p.evidence)||[]).slice(0,3).map(String), dates:ds, n:ds.length, run:opsTightestRun(ds) };
+    }).filter(function(p){ return p.topic && p.n>=OPS_MIN_NIGHTS; });
+    pats.sort(function(a,b){ return (a.run-b.run) || (b.n-a.n); });
+    R.opsInsights={ pats:pats, nights:nights.length, reports:rows.length, days:days };
+    R.opsInsightsAt='Read the '+nights.length+' night'+(nights.length===1?'':'s')+' with notes out of '+rows.length+' report'+(rows.length===1?'':'s')+' · last '+days+' days';
     if(box) box.innerHTML=opsRenderInsights(R.opsInsights);
   }catch(e){ if(box) box.innerHTML='<div class="rev-mut">Insights error: '+clEsc(String(e&&e.message||e))+'</div>'; }
 }
-// Light markdown → HTML for the analyst output: ## headers, - bullets, **bold**,
-// | pipe tables |, and --- rules.
-function opsRenderInsights(md){
+// Renders the verified pattern list. Every card names the count and the exact
+// nights it happened on, so the chef can open those reports and check us.
+function opsRenderInsights(res){
   var R=revInit();
-  var lines=String(md).split('\n'), html='', inList=false, i=0;
-  function inline(s){ return clEsc(s).replace(/\*\*(.+?)\*\*/g,'<b>$1</b>'); }
-  function closeList(){ if(inList){html+='</ul>';inList=false;} }
-  function isRow(t){ return /^\|.*\|$/.test(t); }
-  function isSep(t){ return /^\|[\s:|-]+\|$/.test(t); }
-  function cells(t){ return t.replace(/^\|/,'').replace(/\|$/,'').split('|').map(function(c){return c.trim();}); }
-  while(i<lines.length){
-    var t=lines[i].trim();
-    if(isRow(t)){
-      var blk=[]; while(i<lines.length && isRow(lines[i].trim())){ blk.push(lines[i].trim()); i++; }
-      closeList();
-      var header=null, body=[];
-      blk.forEach(function(r){ if(isSep(r)) return; if(header===null) header=cells(r); else body.push(cells(r)); });
-      var th=header?('<tr>'+header.map(function(c){return '<th style="text-align:left;padding:4px 8px;border-bottom:1px solid rgba(65,2,7,.25);font-size:12px;color:var(--vino-light);white-space:nowrap">'+inline(c)+'</th>';}).join('')+'</tr>'):'';
-      var tb=body.map(function(row){ return '<tr>'+row.map(function(c){return '<td style="padding:4px 8px;border-bottom:1px solid rgba(65,2,7,.08);font-size:13px;color:var(--ink)">'+inline(c)+'</td>';}).join('')+'</tr>'; }).join('');
-      html+='<table style="border-collapse:collapse;width:100%;margin:6px 0 12px">'+th+tb+'</table>';
-      continue;
-    }
-    if(/^#{1,3}\s+/.test(t)){ closeList(); html+='<div style="font-family:var(--font-serif);color:var(--vino);font-size:15px;font-weight:700;margin:14px 0 6px">'+inline(t.replace(/^#{1,3}\s+/,''))+'</div>'; }
-    else if(/^-{3,}$/.test(t)){ closeList(); }
-    else if(/^[-*]\s+/.test(t)){ if(!inList){html+='<ul style="margin:4px 0 8px 2px;padding-left:18px">';inList=true;} html+='<li style="font-size:14px;color:var(--ink);margin-bottom:5px;line-height:1.4">'+inline(t.replace(/^[-*]\s+/,''))+'</li>'; }
-    else if(t===''){ closeList(); }
-    else { closeList(); html+='<div style="font-size:14px;color:var(--ink);margin:4px 0;line-height:1.4">'+inline(t)+'</div>'; }
-    i++;
+  var pats=(res&&res.pats)||[], html='';
+  if(!pats.length){
+    html='<div style="font-size:14px;color:var(--ink);line-height:1.5">Nothing was written up on '+OPS_MIN_NIGHTS+' or more separate nights in this window — no recurring issue to report.'
+      +'<div class="rev-mut" style="margin-top:6px;font-size:13px">One-off notes from single nights are deliberately not shown here. They are in Recent reports.</div></div>';
+  } else {
+    html=pats.map(function(p){
+      var tier=opsTier(p.run);
+      var chips=p.dates.map(function(d){ return '<span style="display:inline-block;background:var(--cream);border:1px solid var(--sabbia-dark);border-radius:10px;padding:1px 8px;font-size:11px;color:var(--vino);margin:2px 4px 0 0;white-space:nowrap">'+clEsc(opsFDate(d))+'</span>'; }).join('');
+      var quotes=p.evidence.length?('<div class="rev-mut" style="margin-top:6px;font-size:12px;font-style:italic;line-height:1.4">'+p.evidence.map(function(q){ return '&ldquo;'+clEsc(q)+'&rdquo;'; }).join(' &middot; ')+'</div>'):'';
+      return '<div style="border-left:3px solid '+tier.colour+';background:var(--cream);border-radius:5px;padding:10px 12px;margin-bottom:10px">'
+        +'<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:4px">'
+        +'<span style="background:'+tier.colour+';color:'+tier.text+';border-radius:10px;padding:2px 9px;font-size:11px;font-weight:700;white-space:nowrap">'+tier.label+'</span>'
+        +'<span style="font-family:var(--font-serif);font-size:15px;font-weight:700;color:var(--vino)">'+clEsc(p.topic)+'</span>'
+        +'<span class="rev-mut" style="font-size:12px">'+opsCountLine(p)+'</span>'
+        +'</div>'
+        +(p.detail?'<div style="font-size:14px;color:var(--ink);line-height:1.45">'+clEsc(p.detail)+'</div>':'')
+        +'<div style="margin-top:6px">'+chips+'</div>'+quotes+'</div>';
+    }).join('');
   }
-  closeList();
   return '<div style="background:var(--sabbia-light);border-radius:6px;padding:14px 16px;overflow-x:auto">'+html
-    +(R.opsInsightsAt?'<div class="rev-mut" style="margin-top:12px;font-size:11px;border-top:1px solid rgba(65,2,7,.2);padding-top:8px">Analyst read of '+clEsc(R.opsInsightsAt)+' · regenerate any time</div>':'')
+    +(R.opsInsightsAt?'<div class="rev-mut" style="margin-top:12px;font-size:11px;border-top:1px solid rgba(65,2,7,.2);padding-top:8px">'+clEsc(R.opsInsightsAt)+' &middot; only what repeats on '+OPS_MIN_NIGHTS+'+ nights is shown &middot; regenerate any time</div>':'')
     +'</div>';
 }
