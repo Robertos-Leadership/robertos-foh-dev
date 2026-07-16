@@ -393,7 +393,8 @@ async function peLoadAll(force){
       peFetchAllPaged(function(){ return sb.from('event_bev_packages').select('*').order('name').order('id'); }),
       peFetchAllPaged(function(){ return sb.from('event_packages').select('*').order('name').order('id'); }),
       peFetchAllPaged(function(){ return sb.from('event_set_menus').select('*').order('name').order('id'); }),
-      sb.from('event_menu_choices').select('token,created_at').eq('applied', false).order('created_at',{ascending:false})
+      sb.from('event_menu_choices').select('token,created_at').eq('applied', false).order('created_at',{ascending:false}),
+      sb.from('event_log').select('event_id,created_at').eq('action','email').like('detail','event brief%').order('created_at',{ascending:true})
     ]);
     // event_set_menus (res[5]) is loaded non-fatally: if the table isn't there
     // yet (SQL not run), the module still works on the built-in PE_SET_MENUS.
@@ -411,6 +412,14 @@ async function peLoadAll(force){
     peState.menuChoicesPending = {};
     if(res[6] && !res[6].error) (res[6].data||[]).forEach(function(c){
       if(!peState.menuChoicesPending[c.token]) peState.menuChoicesPending[c.token] = c.created_at;
+    });
+    // res[7] (non-fatal): which events have actually had their team brief sent.
+    // The log row is written ONLY after the email leaves, so it can't claim a
+    // send that failed — brief_token is saved BEFORE the send, so it can.
+    // Ascending order → the last write per event wins = the most recent send.
+    peState.briefSent = {};
+    if(res[7] && !res[7].error) (res[7].data||[]).forEach(function(l){
+      peState.briefSent[l.event_id] = l.created_at;
     });
     peState.loaded = true;
   }catch(e){
@@ -646,6 +655,10 @@ var PE_CHIP = {
   info:'background:#B3D2EC;color:#12456E', success:'background:#B8DEB4;color:#1C5A25',
   neutral:'background:#E4DBCC;color:#4E4433'
 };
+// Has this event's team brief actually gone out? Read from the send log only:
+// a brief that failed to send must never show as sent, or the kitchen and the
+// hostess team reach the night not knowing about a confirmed event.
+function peBriefSent(e){ return !!(peState.briefSent && peState.briefSent[e.id]); }
 // The one action this booking needs next.
 function peNextStep(e){
   var name = e.client_name || e.company;
@@ -661,7 +674,11 @@ function peNextStep(e){
   // No email = nothing to send to — the chip must ask for the email, not promise a send.
   if(e.status==='draft') return e.contact_email ? {label:'Send the proposal now', kind:'warn'} : {label:'Add the client email', kind:'danger'};
   if(e.status==='sent') return e.signed_at ? {label:'Confirm the booking', kind:'warn'} : {label:'Chase the signature', kind:'info'};
-  if(e.status==='confirmed' || e.status==='deposit') return {label:'Send team brief', kind:'warn'};
+  // Every other step flips the status once it's done, so its chip moves on by itself.
+  // The brief doesn't — so the chip has to say, on its own, whether it's been sent.
+  if(e.status==='confirmed' || e.status==='deposit') return peBriefSent(e)
+    ? {label:'Team brief sent ✓', kind:'success'}
+    : {label:'Send the team brief', kind:'warn'};
   return {label:'', kind:'neutral'};
 }
 // A draft never given a name, date or guests — clutter to be tidied, not a booking.
@@ -1052,9 +1069,15 @@ function peGuideEventView(){
       : '';
     body = payBtn + pbtn('Mark as Confirmed', "peSetStatus('"+e.id+"','confirmed')");
   } else if(e.status==='confirmed' || e.status==='deposit'){
-    title = 'It’s ON — tell the team';
-    sub = 'The kitchen and hostess team need the brief'+(e.event_date?' for '+peDLabel(e.event_date):'')+'.';
-    body = pbtn('Send the team brief', "peSendCoordEmail('"+e.id+"')") + sbtn('I’ll send it later', "peGo('list')");
+    if(peBriefSent(e)){
+      title = 'It’s ON — the team has the brief';
+      sub = 'The kitchen and hostess team were sent the brief'+(e.event_date?' for '+peDLabel(e.event_date):'')+'. Nothing left to do on this one.';
+      body = pbtn('Back to the events list', "peGo('list')") + sbtn('Re-send the team brief', "peSendCoordEmail('"+e.id+"')");
+    } else {
+      title = 'It’s ON — tell the team';
+      sub = 'The kitchen and hostess team have not been sent the brief'+(e.event_date?' for '+peDLabel(e.event_date):'')+' yet.';
+      body = pbtn('Send the team brief', "peSendCoordEmail('"+e.id+"')") + sbtn('I’ll send it later', "peGo('list')");
+    }
   }
   h += '<div class="pe-card">'+
     '<div class="pe-title" style="font-size:20px">'+title+'</div>'+
@@ -1090,10 +1113,16 @@ function peRenderEvent(){
     h += '<div style="font-size:12px;color:#933;margin:-4px 0 10px">Lost — '+peEsc(lr||'reason not recorded')+'</div>';
   }
   // #11 — persistent next step once the event is ON: send the team brief.
+  // Amber until it's actually been sent — a green "all good" panel above an
+  // unsent brief is exactly how a confirmed event reaches the day unbriefed.
   if(e.status==='confirmed' || e.status==='deposit'){
-    h += '<div style="background:#E7F0E4;border:1px solid #BAD5B5;border-radius:10px;padding:10px 13px;margin-bottom:12px;font-size:12.5px;color:#2E5B30;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">'+
-      '<span>This event is <b>ON</b> — the kitchen and hostess team need the brief.</span>'+
-      (ce?'<button class="pe-btn sm" onclick="peSendCoordEmail(\''+e.id+'\')">Send coordination email now</button>':'')+'</div>';
+    h += peBriefSent(e)
+      ? '<div style="background:#E7F0E4;border:1px solid #BAD5B5;border-radius:10px;padding:10px 13px;margin-bottom:12px;font-size:12.5px;color:#2E5B30;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">'+
+        '<span>This event is <b>ON</b> and the <b>team brief has been sent ✓</b> — the kitchen and hostess team have it.</span>'+
+        (ce?'<button class="pe-btn sec sm" onclick="peSendCoordEmail(\''+e.id+'\')">Re-send the brief</button>':'')+'</div>'
+      : '<div style="background:#FBF0D8;border:1px solid #E6C766;border-radius:10px;padding:10px 13px;margin-bottom:12px;font-size:12.5px;color:#6B4A00;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">'+
+        '<span>This event is <b>ON</b>, but the <b>team brief has not been sent</b> — the kitchen and hostess team do not know about it yet.</span>'+
+        (ce?'<button class="pe-btn sm" onclick="peSendCoordEmail(\''+e.id+'\')">Send the team brief now</button>':'')+'</div>';
   }
 
   // #3 — double-booking warning
@@ -1383,7 +1412,8 @@ function peRenderEvent(){
     '</div>'+
     '<div style="'+grpLbl+';margin-top:12px">For the team</div>'+
     '<div style="display:flex;flex-direction:column;gap:7px">'+
-    '<button class="pe-btn" onclick="peSendCoordEmail(\''+e.id+'\')">Send event brief to the team</button>'+
+    '<button class="pe-btn" onclick="peSendCoordEmail(\''+e.id+'\')">'+(peBriefSent(e)?'Re-send the event brief to the team':'Send the event brief to the team')+'</button>'+
+    (peBriefSent(e)?'<div style="font-size:11.5px;color:#2E5B30;margin:-3px 2px 2px">Sent '+peDLabel(String(peState.briefSent[e.id]).slice(0,10))+' ✓</div>':'')+
     '<button class="pe-btn sec" onclick="pePrintFunctionSheet(\''+e.id+'\')">Print the event brief</button>'+
     '</div></div>';
   h += '</div></div>';
@@ -2478,7 +2508,11 @@ async function peDoSendCoord(id, list){
     var r = await sb.functions.invoke('send-event-email', { body:{ to:list, subject:subject, html:peCoordEmailHTML(e) } });
     if(r.error || (r.data&&r.data.error)) throw (r.error||r.data.error);
     peToast('Event brief sent to '+list.length+' '+(list.length>1?'people':'person')+' ✓');
+    // Flip the chip/banner to "sent ✓" now rather than on the next full reload —
+    // the send only counts as done once she can SEE it's done.
+    (peState.briefSent = peState.briefSent || {})[id] = new Date().toISOString();
     sb.from('event_log').insert({event_id:id, action:'email', detail:'event brief → '+list.join(', '), actor:peActor()}).then(function(){ peLoadLog(id); });
+    renderMain();
   }catch(err){
     peToast('Email NOT sent — '+String(err&&err.message||err).slice(0,120), true);
   }

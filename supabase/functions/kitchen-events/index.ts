@@ -51,12 +51,32 @@ Deno.serve(async (req) => {
     }
 
     const evR = await sb(
-      "events_desk?status=in.(confirmed,deposit)&brief_token=not.is.null" + dateFilter +
+      "events_desk?status=in.(confirmed,deposit)" + dateFilter +
       "&select=id,client_name,event_date,time_from,time_to,area,guests,dietary,set_menu,bev_package_id,bev_mode" +
       "&order=event_date.asc&limit=200",
     );
-    const evs = await evR.json();
-    if (!Array.isArray(evs) || !evs.length) return json({ today, count: 0, events: [] });
+    const evsAll = await evR.json();
+    if (!Array.isArray(evsAll) || !evsAll.length) return json({ today, count: 0, events: [] });
+
+    // "Brief sent" = the send was LOGGED, which only happens after the email
+    // actually leaves. Previously this filtered on brief_token, but that is
+    // written BEFORE the send, so a brief whose email failed still looked sent.
+    // FOH's "Team brief sent" chip reads the same log — both apps, one meaning.
+    // Matched in JS, not a PostgREST "like" filter: the pattern contains a space,
+    // and a mis-encoded filter would silently return NOTHING - which here means a
+    // blank kitchen screen on a night with confirmed events. Row count is tiny.
+    const allIds = evsAll.map((e: { id: string }) => e.id);
+    const lgR = await sb(
+      "event_log?event_id=in.(" + allIds.join(",") + ")&action=eq.email&select=event_id,detail",
+    );
+    const lg = await lgR.json();
+    if (!Array.isArray(lg)) throw new Error("could not read the brief send log");
+    const briefed = new Set(
+      lg.filter((l: { detail: string }) => String(l.detail || "").startsWith("event brief"))
+        .map((l: { event_id: string }) => l.event_id),
+    );
+    const evs = evsAll.filter((e: { id: string }) => briefed.has(e.id));
+    if (!evs.length) return json({ today, count: 0, events: [] });
 
     const ids = evs.map((e: { id: string }) => e.id);
     const itR = await sb("event_items?event_id=in.(" + ids.join(",") + ")&select=event_id,dish_id,pcs_per_guest,comp,qty_confirmed");
