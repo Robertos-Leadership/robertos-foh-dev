@@ -2231,7 +2231,7 @@ if ('serviceWorker' in navigator) {
     <div class="foh-hero-content">
       <img class="foh-hero-logo" src="robertos-logo-white.svg" alt="Roberto's">
     </div>
-    <div id="foh-build" style="position:absolute;bottom:6px;right:10px;font-size:9px;letter-spacing:.08em;color:rgba(255,255,255,.4);z-index:3;font-variant-numeric:tabular-nums;">build 2026-07-16.6</div>
+    <div id="foh-build" style="position:absolute;bottom:6px;right:10px;font-size:9px;letter-spacing:.08em;color:rgba(255,255,255,.4);z-index:3;font-variant-numeric:tabular-nums;">build 2026-07-16.7</div>
   </div>
 
   <!-- main scroll area -->
@@ -3408,6 +3408,119 @@ var FB_ANSWER_COL={'Fix this':{bg:'#F7DED9',t:'#8A2A1A',b:'#D89C90'},
   'Agree, this is fine':{bg:'#E7F0E4',t:'#2E6B34',b:'#A8C6A4'},
   "Doesn't happen":{bg:'#EDE7DC',t:'#7A6B55',b:'#CBBBA2'}};
 function admFbTopicName(t){ return FB_TOPIC_NAMES[t]||t||'—'; }
+// ── Send a round ──
+// The link is the whole product: foh-feedback.html?topic=<set>&who=<Name>. The
+// "who" is only a label on their answers, so a typo is cosmetic, not broken.
+// Send by email (the same edge function the Events module sends on) or open
+// WhatsApp with the message written — WhatsApp needs a human to press send, so
+// we never claim it has gone. See [[feedback-rounds-module]].
+function admFbBase(){ return location.origin + location.pathname.replace(/[^\/]*$/, ''); }
+function admFbUrl(topic, name){
+  return admFbBase()+'foh-feedback.html?topic='+encodeURIComponent(topic)
+    + (name ? '&who='+encodeURIComponent(name) : '');
+}
+function admFbS(){ state.fbSend = state.fbSend || { topic:'events-20', email:'', phone:'' }; return state.fbSend; }
+function admFbWho(){ var u=adminFind(admFbS().email); return (u&&u.name) ? u.name : ''; }
+// Repaint ONLY the link line — never re-render the card while he's typing in it.
+function admFbPaintLink(){
+  var el=document.getElementById('fb-link'); if(!el) return;
+  el.textContent = admFbUrl(admFbS().topic, admFbWho());
+}
+function admFbSet(f, v){ admFbS()[f]=v; admFbPaintLink(); }
+function admFbSendHTML(){
+  var s=admFbS();
+  var people=(state.adminUsers||[]).slice().sort(function(a,b){ return String(a.name||a.email).localeCompare(String(b.name||b.email)); });
+  var topics=Object.keys(FB_TOPIC_NAMES);
+  var inp='width:100%;box-sizing:border-box;border:1.5px solid #e3d5c2;border-radius:8px;padding:9px 10px;font-family:inherit;font-size:13.5px;background:#fff;color:#2c1810;';
+  var lbl='display:block;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:#9c8a72;margin-bottom:4px;';
+  return '<div style="background:#fbf7f1;border:1px solid #e3d5c2;border-radius:12px;padding:14px 16px;margin-bottom:18px;">'
+    +'<div style="font-size:14.5px;font-weight:600;color:#400207;margin-bottom:2px;">Send a round</div>'
+    +'<div style="font-size:12px;color:#9c8a72;margin-bottom:11px;">They answer on their phone &mdash; no login. Their replies land below the moment they tap Send.</div>'
+    +'<div style="display:flex;gap:10px;flex-wrap:wrap;">'
+      +'<div style="flex:2;min-width:180px;"><label style="'+lbl+'" for="fb-topic">Which round</label>'
+      +'<select id="fb-topic" style="'+inp+'" onchange="admFbSet(\'topic\',this.value)">'
+      + topics.map(function(t){ return '<option value="'+admEsc(t)+'"'+(s.topic===t?' selected':'')+'>'+admEsc(FB_TOPIC_NAMES[t])+'</option>'; }).join('')
+      +'</select></div>'
+      +'<div style="flex:2;min-width:180px;"><label style="'+lbl+'" for="fb-who">Who</label>'
+      +'<select id="fb-who" style="'+inp+'" onchange="admFbSet(\'email\',this.value)">'
+      +'<option value="">Choose a person&hellip;</option>'
+      + people.map(function(u){ return '<option value="'+admEsc(u.email)+'"'+(s.email===u.email?' selected':'')+'>'+admEsc(u.name||u.email)+'</option>'; }).join('')
+      +'</select></div>'
+      +'<div style="flex:1;min-width:150px;"><label style="'+lbl+'" for="fb-phone">Mobile <span style="text-transform:none;letter-spacing:0;">&mdash; for WhatsApp</span></label>'
+      +'<input id="fb-phone" style="'+inp+'" value="'+admEsc(s.phone||'')+'" placeholder="05x xxx xxxx" onchange="admFbS().phone=this.value">'
+      +'</div>'
+    +'</div>'
+    +'<div style="margin-top:11px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">'
+      +'<button class="btn btn-sm" onclick="admFbEmail()">Send by email</button>'
+      +'<button class="btn btn-sm" onclick="admFbWa()">Open WhatsApp</button>'
+      +'<button class="btn btn-sm" onclick="admFbCopy()">Copy the link</button>'
+    +'</div>'
+    +'<div style="margin-top:9px;font-size:11px;color:#9c8a72;word-break:break-all;" id="fb-link">'+admEsc(admFbUrl(s.topic, admFbWho()))+'</div>'
+    +'</div>';
+}
+function admFbPickedOr(msg){
+  var s=admFbS();
+  // The link is built from whatever URL this page is open on, so sending from a
+  // local preview mails out a http://localhost/... button that is DEAD in the
+  // recipient's inbox. This is not hypothetical — it reached Valentina once
+  // (16 Jul). Refuse here, at the choke point BOTH sends share, rather than
+  // trusting anyone to notice which URL they happen to be on.
+  if(/^(localhost|127\.|0\.0\.0\.0|\[?::1\]?$)/i.test(location.hostname)){
+    toast('Not sent — you’re on the local preview, so the link would be dead on their phone. Open the real app and send from there.', true);
+    return null;
+  }
+  if(!s.email){ toast(msg, true); var el=document.getElementById('fb-who'); if(el) el.focus(); return null; }
+  var u=adminFind(s.email);
+  return { email:s.email, name:(u&&u.name)||s.email, url:admFbUrl(s.topic, (u&&u.name)||''), topic:s.topic };
+}
+function admFbCopy(){
+  var s=admFbS(), url=admFbUrl(s.topic, admFbWho());
+  (navigator.clipboard ? navigator.clipboard.writeText(url) : Promise.reject())
+    .then(function(){ toast('Link copied — paste it wherever you like'); })
+    .catch(function(){ window.prompt('Copy this link:', url); });
+}
+function admFbEmailHTML(name, url, topicName){
+  return '<div style="font-family:Georgia,serif;background:#F3EBDF;padding:26px 18px;">'
+    +'<div style="max-width:520px;margin:0 auto;background:#FBF7F1;border:1px solid #E3D5C2;border-radius:16px;padding:28px 26px;">'
+    +'<div style="font-size:19px;letter-spacing:6px;color:#400207;text-align:center;">R O B E R T O ’ S</div>'
+    +'<p style="font-size:15px;color:#3A2A1E;line-height:1.6;margin:22px 0 0;">Ciao '+admEsc(String(name).split(' ')[0])+',</p>'
+    +'<p style="font-size:14px;color:#3A2A1E;line-height:1.65;">We tested the app against 20 real enquiries — the kind that land in your WhatsApp on a normal week. Some it handled well, some it made you do the work yourself, and a few it got wrong.</p>'
+    +'<p style="font-size:14px;color:#3A2A1E;line-height:1.65;">Before we change anything we want your read: which of these actually happen to you, and which are worth fixing? It takes a few minutes on your phone, and there are no wrong answers.</p>'
+    +'<div style="text-align:center;margin:24px 0 10px;"><a href="'+admEsc(url)+'" style="display:inline-block;background:#400207;color:#E8D9C7;padding:12px 30px;border-radius:22px;text-decoration:none;font-size:13.5px;letter-spacing:1px;">Tell us what to fix</a></div>'
+    +'<p style="font-size:12px;color:#8B7355;text-align:center;">Tap an answer on each, then Send. You can stop and come back — nothing is lost.</p>'
+    +'</div></div>';
+}
+async function admFbEmail(){
+  var p=admFbPickedOr('Choose who you’re sending to first'); if(!p) return;
+  if(!confirm('Email the round to '+p.name+' ('+p.email+') now?')) return;
+  var sender=state.userEmail||'fguarracino@robertos.ae';
+  try{
+    var r=await sb.functions.invoke('send-event-email', { body:{
+      to:[p.email], reply_to:sender,
+      subject:'Two minutes on the Events app — what should we fix?',
+      html:admFbEmailHTML(p.name, p.url, admFbTopicName(p.topic))
+    }});
+    if(r.error || (r.data&&r.data.error)) throw (r.error||r.data.error);
+    toast('Sent to '+p.email+' ✓ — their answers land here the moment they tap Send');
+  }catch(err){
+    toast('NOT sent — '+String(err&&err.message||err).slice(0,110), true);
+  }
+}
+function admFbWa(){
+  var p=admFbPickedOr('Choose who you’re sending to first'); if(!p) return;
+  var d=String(admFbS().phone||'').replace(/[^0-9]/g,'');
+  if(d.indexOf('00')===0) d=d.slice(2);
+  if(d.length && d[0]==='0') d='971'+d.slice(1);
+  if(d.length && d.length<=9) d='971'+d;
+  var msg='Ciao '+String(p.name).split(' ')[0]+'! We tested the app against 20 real enquiries — the kind you get on a normal week. '
+    +'Before we change anything we’d like your read: which of these actually happen to you, and which are worth fixing?\n\n'
+    +p.url+'\n\nTap an answer on each, then Send. A few minutes, no wrong answers — Francesco';
+  // No number on file just opens WhatsApp so he picks the chat himself. Either way
+  // HE presses send in WhatsApp, so this never claims it has gone.
+  window.open('https://wa.me/'+(d.length>=11?d:'')+'?text='+encodeURIComponent(msg), '_blank');
+  toast(d.length>=11 ? 'WhatsApp opened for '+admFbS().phone+' — press send there to deliver it'
+                     : 'WhatsApp opened — pick '+String(p.name).split(' ')[0]+' and press send');
+}
 async function admFbLoad(){
   state.fbRows=null; state.fbErr=null;
   if(state.currentTab==='admin' && state.adminView==='feedback') renderMain();
@@ -3425,9 +3538,12 @@ function admFbPill(a){
 function admFbHTML(){
   var head='<div class="adm-head"><h2>Feedback — what the team sent back</h2><button class="btn btn-sm" onclick="admFbLoad()">Refresh</button></div>'
     +'<div class="ppl-sum">Answers from the feedback rounds we send the team. Read-only. A row here means it arrived &mdash; nothing is waiting on anyone&rsquo;s phone.</div>';
-  if(state.fbErr) return '<div class="adm-wrap">'+head+'<div class="ppl-empty">Couldn&rsquo;t load the feedback &mdash; '+admEsc(state.fbErr)+'<br><br>If this is the first time, run <b>foh-app-feedback.sql</b> once in Supabase, then tap Refresh.</div></div>';
-  if(!state.fbRows) return '<div class="adm-wrap">'+head+'<div class="loading">Loading&hellip;</div></div>';
-  if(!state.fbRows.length) return '<div class="adm-wrap">'+head+'<div class="ppl-empty">Nothing back yet. Send someone a round &mdash; <b>foh-feedback.html?topic=events-20&amp;who=Their%20Name</b> &mdash; and their answers land here the moment they tap Send.</div></div>';
+  // The send card shows in EVERY state — the first time he opens this tab there are
+  // no replies yet, and that is exactly when he needs to send one.
+  var send = admFbSendHTML();
+  if(state.fbErr) return '<div class="adm-wrap">'+head+send+'<div class="ppl-empty">Couldn&rsquo;t load the replies &mdash; '+admEsc(state.fbErr)+'<br><br>If this is the first time, run <b>foh-app-feedback.sql</b> once in Supabase, then tap Refresh.</div></div>';
+  if(!state.fbRows) return '<div class="adm-wrap">'+head+send+'<div class="loading">Loading&hellip;</div></div>';
+  if(!state.fbRows.length) return '<div class="adm-wrap">'+head+send+'<div class="ppl-empty">Nothing back yet &mdash; send a round above and their answers land here the moment they tap Send.</div></div>';
   // Group by round, newest round first (rows already arrive newest-first).
   var byTopic={}, order=[];
   state.fbRows.forEach(function(r){
@@ -3473,7 +3589,7 @@ function admFbHTML(){
       +'<div style="font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:#9c8a72;padding:10px 4px 0;">Asked to be fixed</div>'+work
       +'<div style="font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:#9c8a72;padding:6px 4px 0;">Who replied</div>'+people;
   }).join('');
-  return '<div class="adm-wrap">'+head+out+'</div>';
+  return '<div class="adm-wrap">'+head+send+out+'</div>';
 }
 
 /* ===================================================================
