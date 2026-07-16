@@ -127,6 +127,48 @@ async function ensureWeekLoaded(weekId){
   _weekLoading[weekId] = false;
   renderMain();
 }
+// Page an .in() fetch past the 1000-row PostgREST cap — same shape as
+// revFetchAllDaily / peFetchAllPaged elsewhere in the app. Ordered by id because
+// that is stable across page boundaries: sort_order and created_at repeat across
+// weeks, so paging on them could skip or double rows at the seam.
+async function evFetchAllPaged(makeQuery){
+  var out=[], from=0, PAGE=1000;
+  for(;;){
+    const res = await makeQuery().range(from, from+PAGE-1);
+    if(res && res.error) return { data:out, error:res.error };
+    const batch = (res && res.data) || [];
+    out = out.concat(batch);
+    if(batch.length < PAGE) break;
+    from += PAGE;
+  }
+  return { data:out, error:null };
+}
+// Load tasks + finance for every week passed in that isn't already in state, in
+// ONE paged pair of queries (loadAll's .in() pattern) rather than one pair per
+// week — a report spanning two years of a weekly event would otherwise fire a
+// request per week. Paged, because that same bulk fetch is exactly what the
+// EVENTS_ACTIVE_DAYS window exists to keep away from the 1000-row cap.
+// Every week fetched is set to an array — [] when it genuinely has no rows — so
+// "loaded and empty" stays distinguishable from "never loaded".
+// Returns false if the load failed, so the caller can say so instead of
+// rendering a zero it can't stand behind.
+async function ensureWeeksLoaded(weeks){
+  const missing = (weeks||[]).filter(function(w){ return w && (state.tasks[w.id]===undefined || state.finance[w.id]===undefined); });
+  if(!missing.length) return true;
+  const wIds = missing.map(function(w){ return w.id; });
+  const [tRes, fRes] = await Promise.all([
+    evFetchAllPaged(function(){ return sb.from('tasks').select('*').in('week_id', wIds).order('id'); }),
+    evFetchAllPaged(function(){ return sb.from('finance').select('*').in('week_id', wIds).order('id'); })
+  ]);
+  if(tRes.error || fRes.error){ console.warn('[ensureWeeksLoaded] load failed', tRes.error||fRes.error); return false; }
+  missing.forEach(function(w){
+    // Re-sort in memory to the order the rest of the app renders in — the fetch
+    // is id-ordered only so the paging above stays stable.
+    state.tasks[w.id] = tRes.data.filter(function(t){ return t.week_id===w.id; }).sort(function(a,b){ return (a.sort_order||0)-(b.sort_order||0); });
+    state.finance[w.id] = fRes.data.filter(function(f){ return f.week_id===w.id; }).sort(function(a,b){ return String(a.created_at||'').localeCompare(String(b.created_at||'')); });
+  });
+  return true;
+}
 
 // -- RENDER MAIN --
 var _lastRenderTab = null, _lastRenderHTML = null;
@@ -982,12 +1024,19 @@ function renderFinanceTrack(items, weekId, eventId){
 }
 
 // -- TOGGLE TRACK --
-function openWeekReport(eventId){
+async function openWeekReport(eventId){
   const ev = state.events.find(e=>e.id===eventId);
   if(!ev) return;
   const weeks = (state.weeks[eventId]||[]).slice().sort((a,b)=>(a.week_date||'').localeCompare(b.week_date||''));
+  // Only the active window's tasks/finance are loaded at login (EVENTS_ACTIVE_DAYS).
+  // Without this, every older week read as state.tasks[w.id]||[] — zero tasks and
+  // AED 0 expenses, indistinguishable from a night that genuinely had none, in the
+  // one screen built to compare nights over time.
+  const loadedOk = await ensureWeeksLoaded(weeks);
   const targetRev = (Number(ev.capacity)||0) * (Number(ev.avg_spend_target)||0);
   const rows = weeks.map(w=>{
+    // A week we couldn't load shows "—", never a 0 we can't stand behind.
+    const loaded = state.tasks[w.id]!==undefined && state.finance[w.id]!==undefined;
     const tasks = state.tasks[w.id] || [];
     const fin = state.finance[w.id] || [];
     const covers = Number(w.covers_actual)||0;
@@ -1006,9 +1055,9 @@ function openWeekReport(eventId){
         <span>${covers || '-'}</span>
         <span>${revenue ? fmt(revenue) : '-'}</span>
         <span>${avg ? fmt(avg) : '-'}</span>
-        <span>${fmt(expenses)}</span>
-        <span>${revenue ? fmt(net) : '-'}</span>
-        <span>${done}/${tasks.length} (${pct}%)</span>
+        <span>${loaded ? fmt(expenses) : '—'}</span>
+        <span>${(loaded && revenue) ? fmt(net) : '-'}</span>
+        <span>${loaded ? `${done}/${tasks.length} (${pct}%)` : '—'}</span>
       </div>`;
   }).join('') || '<div class="empty-state">No weeks to compare yet.</div>';
 
@@ -1022,6 +1071,7 @@ function openWeekReport(eventId){
       <span>Week</span><span>Covers</span><span>Revenue</span><span>Avg Spend</span><span>Expenses</span><span>Net</span><span>Tasks</span>
     </div>
     ${rows}
+    ${!loadedOk ? '<div class="report-note" style="color:#B00020"><b>Some weeks could not be loaded.</b> Their “—” cells are unknown, not zero. Close and reopen the report to try again.</div>' : ''}
     <div class="report-note">Use Enter Results in each Review section to add covers and revenue. Expenses are pulled from the expense list for each week.</div>`;
   document.getElementById('modal-footer').innerHTML = `
     <button class="btn btn-gold" onclick="closeModal()">Done</button>`;

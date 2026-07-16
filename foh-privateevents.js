@@ -1521,6 +1521,21 @@ function peSetMenuSplitGap(e){
   }
   return null;
 }
+// P0 — the facts an agreement is meaningless without. These are NOT judgment calls,
+// so unlike peSendChecks below they are hard stops: no "send anyway". The guided
+// wizard already blocks date + guests (peGuideNext), but a draft made outside it —
+// peQuickSave writes no date at all — lands on the same event page with the same
+// three send buttons, so the gate belongs here, at the choke point they all share.
+// Order and wording follow peEditorNext so the guest-send names the same next step
+// the editor has been pointing at all along.
+// Returns null when clean to send, else the first missing fact + the field to open.
+function peSendBlocks(e){
+  var t = peCalcTotals(e);
+  if(!e.event_date) return {fid:'event_date', msg:'Add the event date before sending — the guest signs against it.'};
+  if(!e.guests) return {fid:'guests', msg:'Add the guest count before sending — the price and the kitchen both work off it.'};
+  if((t.total==null || !t.total) && !e.min_spend) return {fid:'min_spend', msg:'Set a price or a minimum spend before sending — the guest would be signing a blank amount.'};
+  return null;
+}
 // P0 — gaps that should stop a client-facing send until the user confirms.
 // Returns an array of plain-language gap sentences (empty = clean to send).
 function peSendChecks(e){
@@ -1530,7 +1545,6 @@ function peSendChecks(e){
   var hasFood = items.length>0 || !!e.set_menu || (e.food_price_pp!=null && e.food_price_pp!=='');
   var hasBev = !!e.bev_package_id;
   if(!hasFood && !hasBev) msgs.push('This proposal has no food, menu, or beverage on it.');
-  if((t.total==null || !t.total) && !e.min_spend) msgs.push('This proposal has no price and no minimum spend set.');
   var gap = peSetMenuSplitGap(e);
   if(gap) msgs.push('The '+gap.course+' choices add up to '+gap.sum+' of '+gap.guests+' guests.');
   // Allergen safety — the dishes below have no allergen info recorded, so a guest
@@ -1544,6 +1558,11 @@ function peSendChecks(e){
 }
 // Confirm past any send gaps, naming each one. Returns true to proceed.
 async function peConfirmSend(e){
+  // Missing facts stop the send outright and open the field to fix — the same way
+  // peSendPaymentLink refuses a missing link. Only judgment calls (allergens, a
+  // split gap, a double-booking) get the overridable confirm below.
+  var block = peSendBlocks(e);
+  if(block){ peScrollToField(block.fid, block.msg); return false; }
   var gaps = peSendChecks(e);
   if(!gaps.length) return true;
   return await peConfirm({
