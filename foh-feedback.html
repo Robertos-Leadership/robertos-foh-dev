@@ -270,15 +270,22 @@ async function send(){
   if(!answered() && !extra.trim()){ say('Answer at least one first, then send.', true); return; }
   sending = true; paint(); say('');
   try{
+    // Deliberately NO "Prefer: return=representation". Asking PostgREST to hand
+    // the row back makes it read what it just wrote — and only signed-in users
+    // may read this table (answers are people talking candidly about their own
+    // tools), so the insert itself would be refused with an RLS error. A 201 IS
+    // the receipt: PostgREST only returns it once the row is committed.
     var r = await fetch(SUPA+'/rest/v1/app_feedback', {
       method:'POST',
-      headers:{ apikey:KEY, Authorization:'Bearer '+KEY, 'Content-Type':'application/json', Prefer:'return=representation' },
+      headers:{ apikey:KEY, Authorization:'Bearer '+KEY, 'Content-Type':'application/json' },
       body: JSON.stringify({ topic:topic, who:(who||'').trim()||null, answers:answers, extra:extra.trim()||null })
     });
-    var body = await r.json().catch(function(){ return null; });
-    // Only a row coming back proves it landed. Anything else is NOT sent, and we
-    // say so rather than showing a tick she would trust.
-    if(!r.ok || !body || !body.length) throw new Error((body && (body.message||body.hint)) || ('HTTP '+r.status));
+    // Anything but a 201 is NOT sent, and we say so rather than showing her a
+    // tick she would trust.
+    if(r.status !== 201){
+      var err = await r.json().catch(function(){ return null; });
+      throw new Error((err && (err.message||err.hint)) || ('HTTP '+r.status));
+    }
     sent = true;
     try{ localStorage.removeItem(WIP); }catch(e){}
     thanks();
