@@ -2231,7 +2231,7 @@ if ('serviceWorker' in navigator) {
     <div class="foh-hero-content">
       <img class="foh-hero-logo" src="robertos-logo-white.svg" alt="Roberto's">
     </div>
-    <div id="foh-build" style="position:absolute;bottom:6px;right:10px;font-size:9px;letter-spacing:.08em;color:rgba(255,255,255,.4);z-index:3;font-variant-numeric:tabular-nums;">build 2026-07-16.5</div>
+    <div id="foh-build" style="position:absolute;bottom:6px;right:10px;font-size:9px;letter-spacing:.08em;color:rgba(255,255,255,.4);z-index:3;font-variant-numeric:tabular-nums;">build 2026-07-16.6</div>
   </div>
 
   <!-- main scroll area -->
@@ -3311,12 +3311,15 @@ function renderAdmin(){
   var tabs='<div class="adm-wrap" style="padding-bottom:0;"><div class="adm-toggle">'
     +'<button class="'+(v==='people'?'on':'')+'" onclick="admSetView(\'people\')">People</button>'
     +'<button class="'+(v==='usage'?'on':'')+'" onclick="admSetView(\'usage\')">Usage</button>'
+    +'<button class="'+(v==='feedback'?'on':'')+'" onclick="admSetView(\'feedback\')">Feedback</button>'
     +'</div></div>';
-  return '<style>'+ADM_CSS+'</style>'+tabs+(v==='usage'?admUsageHTML():admControlCentre());
+  var body = v==='usage' ? admUsageHTML() : (v==='feedback' ? admFbHTML() : admControlCentre());
+  return '<style>'+ADM_CSS+'</style>'+tabs+body;
 }
 function admSetView(v){
   state.adminView=v;
   if(v==='usage' && !state.usageRows && !state.usageErr) admUsageLoad();
+  if(v==='feedback' && !state.fbRows && !state.fbErr) admFbLoad();
   renderMain();
   if(v==='people') admAfterRender(function(){ try{admApplyFilter();}catch(e){} });
 }
@@ -3388,6 +3391,89 @@ function admUsageHTML(){
   return '<div class="adm-wrap">'+head
     +'<div class="ppl-grp">By person <span>&middot; '+order.length+' people, last '+rows.length+' records</span></div>'+cards
     +'<div class="ppl-grp" style="margin-top:26px;">Recent activity</div>'+recent+'</div>';
+}
+
+/* ===================================================================
+   ADMIN → FEEDBACK — read what the team sent back from foh-feedback.html.
+   One row per person per round (app_feedback). Read-only. Grouped by round,
+   and within a round the "fix this" answers are counted first, because that
+   count IS the work list. Needs foh-app-feedback.sql run once.
+   =================================================================== */
+var FB_TOPIC_NAMES={'events-20':'Events — the 20 enquiries we tested'};
+// Order = how loudly it asks for work. Anything unknown sorts last.
+var FB_ANSWER_ORDER=['Fix this',"NO — there's a problem",'Nice to have','Agree, this is fine',"Doesn't happen"];
+var FB_ANSWER_COL={'Fix this':{bg:'#F7DED9',t:'#8A2A1A',b:'#D89C90'},
+  "NO — there's a problem":{bg:'#F7DED9',t:'#8A2A1A',b:'#D89C90'},
+  'Nice to have':{bg:'#FBF0D6',t:'#7A5500',b:'#DFC680'},
+  'Agree, this is fine':{bg:'#E7F0E4',t:'#2E6B34',b:'#A8C6A4'},
+  "Doesn't happen":{bg:'#EDE7DC',t:'#7A6B55',b:'#CBBBA2'}};
+function admFbTopicName(t){ return FB_TOPIC_NAMES[t]||t||'—'; }
+async function admFbLoad(){
+  state.fbRows=null; state.fbErr=null;
+  if(state.currentTab==='admin' && state.adminView==='feedback') renderMain();
+  try{
+    var r=await sb.from('app_feedback').select('id,topic,who,answers,extra,created_at').order('created_at',{ascending:false}).limit(200);
+    if(r.error) throw r.error;
+    state.fbRows=r.data||[];
+  }catch(err){ state.fbErr=(err&&err.message)||'Could not load the feedback.'; }
+  if(state.currentTab==='admin' && state.adminView==='feedback') renderMain();
+}
+function admFbPill(a){
+  var c=FB_ANSWER_COL[a]||FB_ANSWER_COL["Doesn't happen"];
+  return '<span style="font-size:11px;background:'+c.bg+';color:'+c.t+';border:1px solid '+c.b+';border-radius:10px;padding:2px 9px;white-space:nowrap;">'+admEsc(a)+'</span>';
+}
+function admFbHTML(){
+  var head='<div class="adm-head"><h2>Feedback — what the team sent back</h2><button class="btn btn-sm" onclick="admFbLoad()">Refresh</button></div>'
+    +'<div class="ppl-sum">Answers from the feedback rounds we send the team. Read-only. A row here means it arrived &mdash; nothing is waiting on anyone&rsquo;s phone.</div>';
+  if(state.fbErr) return '<div class="adm-wrap">'+head+'<div class="ppl-empty">Couldn&rsquo;t load the feedback &mdash; '+admEsc(state.fbErr)+'<br><br>If this is the first time, run <b>foh-app-feedback.sql</b> once in Supabase, then tap Refresh.</div></div>';
+  if(!state.fbRows) return '<div class="adm-wrap">'+head+'<div class="loading">Loading&hellip;</div></div>';
+  if(!state.fbRows.length) return '<div class="adm-wrap">'+head+'<div class="ppl-empty">Nothing back yet. Send someone a round &mdash; <b>foh-feedback.html?topic=events-20&amp;who=Their%20Name</b> &mdash; and their answers land here the moment they tap Send.</div></div>';
+  // Group by round, newest round first (rows already arrive newest-first).
+  var byTopic={}, order=[];
+  state.fbRows.forEach(function(r){
+    if(!byTopic[r.topic]){ byTopic[r.topic]=[]; order.push(r.topic); }
+    byTopic[r.topic].push(r);
+  });
+  var out=order.map(function(t){
+    var rows=byTopic[t];
+    // Across everyone in this round: how many flagged each question for work?
+    var tally={};
+    rows.forEach(function(r){
+      var a=r.answers||{};
+      Object.keys(a).forEach(function(q){
+        var v=a[q]&&a[q].a; if(!v) return;
+        if(FB_ANSWER_ORDER.indexOf(v)>1) return;            // only the two "needs work" answers
+        tally[q]=tally[q]||{n:0,notes:[]};
+        tally[q].n++;
+        if(a[q].note) tally[q].notes.push({who:r.who||'someone',note:a[q].note});
+      });
+    });
+    var flagged=Object.keys(tally).sort(function(x,y){ return tally[y].n-tally[x].n || Number(x)-Number(y); });
+    var work=flagged.length
+      ? '<div style="padding:9px 4px 13px;">'+flagged.map(function(q){
+          var notes=tally[q].notes.map(function(nn){ return '<div style="font-size:11.5px;color:#6b5a44;padding:2px 0 0 22px;">&ldquo;'+admEsc(nn.note)+'&rdquo; <span style="color:#9c8a72;">&mdash; '+admEsc(nn.who)+'</span></div>'; }).join('');
+          return '<div style="padding:5px 0;border-bottom:1px solid #f1e9da;"><span style="display:inline-block;min-width:18px;font-weight:600;color:#400207;">'+admEsc(q)+'.</span>'
+            +'<span style="font-size:13px;color:#4a3b2a;">flagged by <b>'+tally[q].n+'</b></span>'+notes+'</div>';
+        }).join('')+'</div>'
+      : '<div class="ppl-empty" style="padding:10px 4px;">Nobody flagged anything for work in this round.</div>';
+    // Each person's own submission.
+    var people=rows.map(function(r){
+      var a=r.answers||{}, counts={};
+      Object.keys(a).forEach(function(q){ var v=a[q]&&a[q].a; if(v) counts[v]=(counts[v]||0)+1; });
+      var pills=FB_ANSWER_ORDER.filter(function(k){ return counts[k]; })
+        .map(function(k){ return admFbPill(k+' · '+counts[k]); }).join(' ');
+      return '<div style="display:flex;align-items:center;gap:10px 14px;flex-wrap:wrap;padding:11px 4px;border-bottom:1px solid #f1e9da;">'
+        +'<div style="min-width:150px;flex:1;"><div style="font-weight:600;color:#2c1810;font-size:14.5px;">'+admEsc(r.who||'Anonymous')+'</div>'
+        +'<div style="font-size:11.5px;color:#9c8a72;">'+admEsc(admUsageAgo(r.created_at))+'</div></div>'
+        +'<div style="flex:2;min-width:180px;display:flex;gap:5px;flex-wrap:wrap;">'+(pills||'<span style="font-size:12px;color:#9c8a72;">no answers, note only</span>')+'</div>'
+        +(r.extra?'<div style="flex-basis:100%;font-size:12.5px;color:#4a3b2a;background:#f7f2e8;border-radius:8px;padding:8px 10px;"><b style="color:#400207;">What we missed:</b> '+admEsc(r.extra)+'</div>':'')
+        +'</div>';
+    }).join('');
+    return '<div class="ppl-grp">'+admEsc(admFbTopicName(t))+' <span>&middot; '+rows.length+(rows.length===1?' reply':' replies')+'</span></div>'
+      +'<div style="font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:#9c8a72;padding:10px 4px 0;">Asked to be fixed</div>'+work
+      +'<div style="font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:#9c8a72;padding:6px 4px 0;">Who replied</div>'+people;
+  }).join('');
+  return '<div class="adm-wrap">'+head+out+'</div>';
 }
 
 /* ===================================================================

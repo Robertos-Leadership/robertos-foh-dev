@@ -70,15 +70,19 @@ self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
   if (url.origin !== self.location.origin) return;   // same-origin only
 
-  // The guest-facing pages are NOT the app and must never be touched by it.
+  // The link-only pages are NOT the app and must never be touched by it.
   // Cloudflare Pages 308-redirects "/client-menus.html?…" to "/client-menus?…",
   // and that redirect trips the offline fallback below — which answers any
   // unmatched navigation with index.html. The result: on a staff device that has
   // the app installed, a link we sent a guest opens the APP instead of their
   // menu. Left to the network, these pages always resolve correctly, and there
-  // is nothing to gain by caching them — a guest opens the link once.
+  // is nothing to gain by caching them — the link is opened once.
   // Matches both "/client-menus.html" and the redirected "/client-menus".
-  if (/\/client-[a-z0-9-]+(\.html)?$/i.test(url.pathname)) return;
+  //
+  // foh-feedback.html is the same shape of thing and hits the same trap HARDER:
+  // we send it to staff, whose phones definitely DO have the app installed, so
+  // without this the feedback link opens the app and the round dies silently.
+  if (/\/(client-[a-z0-9-]+|foh-feedback)(\.html)?$/i.test(url.pathname)) return;
 
   e.respondWith(
     fetch(e.request, { cache: 'no-store' })

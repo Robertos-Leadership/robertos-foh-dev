@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Roberto's — tell us what to fix</title>
+<style>
+  body{margin:0;background:#F3EBDF;font-family:Georgia,'Times New Roman',serif;color:#3A2A1E}
+  .wrap{max-width:560px;margin:0 auto;padding:18px 14px 120px}
+  .card{background:#FBF7F1;border:1px solid #E3D5C2;border-radius:16px;overflow:hidden}
+  .brand{font-size:20px;letter-spacing:6px;color:#400207;text-align:center;padding:26px 20px 4px}
+  .sub{font-size:15px;color:#8A6A4F;text-align:center;padding:0 22px}
+  .intro{margin:16px 22px 0;font-size:13.5px;line-height:1.6;color:#4A3628}
+  .intro p{margin:0 0 9px}
+  .intro p:last-child{margin:0}
+  .howto{margin:16px 22px 0;background:#F3E9DA;border-radius:10px;padding:12px 14px;font-family:Arial,sans-serif;font-size:12.5px;color:#4A3628;line-height:1.55}
+  .howto b{color:#400207}
+
+  .q{border-top:1px solid #E3D5C2;margin:18px 22px 0;padding-top:14px}
+  .qh{display:flex;gap:10px;align-items:baseline}
+  .qn{font-size:19px;color:#7A2430;min-width:24px}
+  .said{font-size:15px;color:#2C1810;font-weight:bold;margin:0;line-height:1.4}
+  .today{font-family:Arial,sans-serif;font-size:12.5px;line-height:1.6;color:#4A3628;margin:8px 0 10px}
+  .today b{color:#400207}
+  .ok{display:inline-block;background:#E7F0E4;color:#2E6B34;border:1px solid #A8C6A4;border-radius:20px;font-family:Arial,sans-serif;font-size:11px;padding:2px 10px;margin-bottom:8px}
+
+  .opts{display:flex;flex-wrap:wrap;gap:7px}
+  .opt{display:inline-flex;align-items:center;gap:7px;font-family:Arial,sans-serif;font-size:13px;color:#3A2A1E;border:1.5px solid #E3D5C2;background:#fff;border-radius:22px;padding:8px 14px 8px 11px;cursor:pointer;-webkit-user-select:none;user-select:none}
+  .opt input{-webkit-appearance:none;appearance:none;margin:0;width:15px;height:15px;border:1.5px solid #7A2430;border-radius:50%;flex-shrink:0;cursor:pointer}
+  .opt input:checked{background:#400207;box-shadow:inset 0 0 0 3px #fff}
+  .opt.on{border-color:#400207;background:#F7EEE2;font-weight:bold}
+
+  .nl{display:block;font-family:Arial,sans-serif;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:#A5876B;margin:11px 0 4px}
+  .nin{width:100%;box-sizing:border-box;border:1.5px solid #E3D5C2;border-radius:8px;background:#fff;padding:8px 10px;font-family:Arial,sans-serif;font-size:13px;min-height:38px;resize:vertical;color:#3A2A1E}
+  .nin:focus{outline:none;border-color:#400207}
+
+  .last{border-top:1px solid #E3D5C2;margin:18px 22px 0;padding-top:14px}
+  .last b{font-size:16px;color:#400207;font-weight:normal;display:block;margin-bottom:4px}
+  .last p{font-family:Arial,sans-serif;font-size:12.5px;color:#4A3628;line-height:1.6;margin:0 0 9px}
+  .ft{text-align:center;font-size:10.5px;color:#A5876B;margin-top:14px;line-height:1.7;font-family:Arial,sans-serif}
+
+  .bar{position:fixed;left:0;right:0;bottom:0;background:#FBF7F1;border-top:1px solid #E3D5C2;box-shadow:0 -4px 18px rgba(64,2,7,.12);padding:11px 14px calc(11px + env(safe-area-inset-bottom));z-index:20}
+  .bar-in{max-width:560px;margin:0 auto;display:flex;align-items:center;gap:11px;flex-wrap:wrap}
+  .cnt{flex:1;min-width:100px;font-family:Arial,sans-serif;font-size:12.5px;color:#8A6A4F}
+  .cnt b{color:#400207}
+  .btn{background:#400207;color:#E8D9C7;border:1.5px solid #400207;border-radius:22px;padding:11px 22px;font-size:14px;font-family:Georgia,serif;letter-spacing:.5px;cursor:pointer}
+  .btn:disabled{opacity:.5;cursor:default}
+  .say{width:100%;margin:0;font-family:Arial,sans-serif;font-size:12px;line-height:1.5;min-height:0}
+  .say.bad{color:#8A2A1A}
+  .say.good{color:#2E6B34}
+
+  .msg{text-align:center;padding:60px 24px;font-size:14px;color:#6B4A33;line-height:1.7}
+  .done{text-align:center;padding:44px 26px}
+  .done .tick{font-size:40px;color:#2E6B34;line-height:1}
+  .done h2{font-size:21px;color:#400207;font-weight:normal;margin:12px 0 6px}
+  .done p{font-family:Arial,sans-serif;font-size:13px;color:#6B4A33;line-height:1.65;margin:0 0 8px}
+</style>
+</head>
+<body>
+<div class="wrap"><div class="card" id="card">
+  <div class="msg">Loading…</div>
+</div></div>
+<div class="bar" id="bar" style="display:none">
+  <div class="bar-in">
+    <span class="cnt" id="cnt">Nothing answered yet</span>
+    <button class="btn" id="send" type="button">Send my answers</button>
+    <p class="say" id="say"></p>
+  </div>
+</div>
+
+<script>
+var SUPA = 'https://paoaivwtkzujmrgrfjuq.supabase.co';
+var KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBhb2Fpdnd0a3p1am1yZ3JmanVxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEwNzAxMzAsImV4cCI6MjA5NjY0NjEzMH0.VynG9PBeIaqRG2lkMEuzskkcB11EhR-UfO9eGYsaUxk';
+
+var q = new URLSearchParams(location.search);
+var topic = q.get('topic') || '';
+var who = q.get('who') || '';
+
+var A_FIX = 'Fix this', A_NICE = 'Nice to have', A_NEVER = "Doesn't happen";
+var A_FINE = 'Agree, this is fine', A_PROB = "NO — there's a problem";
+var ASK = [A_FIX, A_NICE, A_NEVER];
+var OK = [A_FINE, A_PROB];
+
+var SETS = {
+  'events-20': {
+    title: 'The 20 enquiries we tested',
+    intro: [
+      'We put 20 real-life enquiries through the Events app — the kind that land in your WhatsApp and your inbox on a normal week. Some it handled perfectly. Some it made you do the work yourself. A few it got quietly wrong.',
+      'Before we change anything, we want to hear from you: which of these actually happen to you, and which are worth our time to fix?'
+    ],
+    items: [
+      { said: 'WhatsApp: “Cortile, 40 people, 12 August, 250 a head, no beef.”',
+        today: 'The quote tool asks you for the <b>total</b> budget, not the price per head — so you do 250 × 40 in your head first. Then the quote it builds has <b>no email or phone on it</b>, so you can\'t send it to the guest until you open it up and type their details again.',
+        label: 'WhatsApp budget quote — total not per head, no contact on it' },
+      { said: '“Anniversary dinner, 12 of us, something plated.”',
+        today: 'The quote-from-a-budget tool only works from <b>15 people up</b>. Below that you price it by hand.',
+        label: 'Small plated dinner (12 pax) — quote tool won\'t go under 15' },
+      { said: 'A promoter: “I\'m bringing a table of 30 — my usual 10%.”',
+        today: 'There is <b>nowhere in the app</b> to record who sent you the booking, or what they\'re owed. So the promoter\'s side of it lives in your phone, and nobody upstairs can see that channel exists at all.',
+        label: 'Promoter commission — nowhere to record who sent the booking' },
+      { said: '“Can you hold the 19th for me until Friday?”',
+        today: 'There\'s no way to <b>hold</b> a date. You can only leave it as a draft, and a draft sits there forever — nothing tells you Friday came and went, and nothing warns anyone else that the date is spoken for.',
+        label: 'Holding a date until Friday — no hold, no expiry' },
+      { said: '“Canapés in the Cortile first, then dinner in Piemonte.”',
+        today: 'A booking can only be in <b>one place</b>. To describe this you build two separate bookings — and the guest gets two prices for one evening.',
+        label: 'Two spaces in one evening (Cortile then Piemonte)' },
+      { said: 'A lunch and a dinner, same room, same day, two different clients.',
+        today: 'The app <b>warns you they clash</b> — even though they don\'t. It only looks at the date and the room, never the time. Get warned enough times about nothing and you stop reading the warnings.',
+        label: 'Lunch + dinner same room same day — warns about a clash that isn\'t real' },
+      { said: 'A full venue buyout — on a night Piemonte is already booked.',
+        today: 'The app says <b>nothing at all</b>. No warning, no flag. It only spots a clash when the two bookings name the exact same room, so a buyout never clashes with anything. This is the one that could actually double-book us.',
+        label: 'Full venue buyout over an existing booking — NO warning at all' },
+      { said: '“Give them 10% off.”',
+        today: 'You can only type a discount <b>in dirhams</b>, so you work the percentage out yourself. And if the guest count changes later, that dirham figure stays put — so the 10% you promised quietly becomes 8%, and the agreement they signed still says the old number.',
+        label: '10% off — discount is dirhams only and drifts when pax change' },
+      { said: '“Let\'s say a minimum of 25, but we\'re expecting 30.”',
+        today: 'The agreement the guest signs shows them the <b>price for 30</b> and, in the same breath, says <b>minimum guaranteed 25</b>. Two different numbers describing one deal, on one page, in front of the client.',
+        label: 'Minimum 25 / expecting 30 — agreement shows two different numbers' },
+      { said: '“Two vegans, one coeliac, and one severe nut allergy.”',
+        today: 'Nuts and vegetarian are proper tags on every dish — those work. <b>Gluten isn\'t there at all.</b> So coeliac only ever lives in a note, and the app\'s allergy check can\'t see it. It will let that proposal go out saying everything\'s clear.',
+        label: 'Coeliac / gluten — no gluten tag exists, allergy check can\'t see it' },
+      { said: 'Corporate: “Send an invoice against our PO, 30 days, and quote us without VAT.”',
+        today: 'None of that exists — no PO, no invoice, no TRN, and every price is fixed as VAT-included. Payment is the card link only. This one goes back to email and a spreadsheet.',
+        label: 'Corporate PO / invoice / 30 days / ex-VAT — none of it exists' },
+      { said: '“Send me three options and I\'ll pick one.”',
+        today: 'You build <b>three separate bookings</b>. The guest gets three emails, and your pipeline now shows three enquiries where there\'s really one. When they choose, you tidy up the other two by hand.',
+        label: 'Send me 3 options — three separate bookings and three emails' },
+      { said: '“Either the 12th or the 19th — whichever you have.”',
+        today: 'One booking holds <b>one date</b>. So it\'s two drafts, and one of them is going to be forgotten.',
+        label: 'Two possible dates — one booking holds one date only' },
+      { said: '“Same dinner, first Thursday of every month.”',
+        today: 'No repeat. That\'s twelve bookings built by hand, one at a time.',
+        label: 'Monthly recurring dinner — no repeat, 12 by hand' },
+      { said: '“We\'d rather pay 20% now, not 50%.”',
+        today: 'You change the deposit to 20% and everything follows it — the agreement, the amount, the payment link. Nothing to fix.',
+        works: true,
+        label: '20% deposit instead of 50%' },
+      { said: 'Signed, deposit paid — then: “Make it 32, we\'ve got two more coming.”',
+        today: 'You change the number, and the booking <b>drops back to “Proposal sent”</b> as if nothing had ever been agreed. The deposit they paid disappears out of our confirmed figures and back into “still just an enquiry”. Nothing anywhere remembers that the money arrived. And two extra guests is the most normal change in the world.',
+        label: 'Signed + paid then +2 guests — booking falls back to \'proposal sent\', deposit vanishes' },
+      { said: '“Can we have the burrata from the à la carte menu?”',
+        today: 'You can get the <b>price</b> right — but a dish added that way never reaches the <b>kitchen\'s prep list</b>. So the money is correct and the kitchen doesn\'t know about it.',
+        label: 'À la carte dish on an event — priced right but never reaches the kitchen list' },
+      { said: '“Show me the price per person, not the total.”',
+        today: 'One switch, and the guest\'s proposal reads per person instead. Nothing to fix.',
+        works: true,
+        label: 'Price per person instead of the total' },
+      { said: 'They cancel three weeks out — deposit already paid.',
+        today: 'You can mark it lost and give a reason, and that part works. But there\'s <b>nowhere to say what happened to the deposit</b> — kept, refunded, or moved to another date. That story ends in a free-text note.',
+        label: 'Cancels after paying — nowhere to say what happened to the deposit' },
+      { said: '“Six in the evening until one in the morning.”',
+        today: 'Late finishes are normal picks in the time list. Nothing to fix.',
+        works: true,
+        label: 'Late finish, 6pm till 1am' }
+    ]
+  }
+};
+
+var set = SETS[topic] || null;
+var answers = {};          // { "<n>": {a:'', note:''} }
+var extra = '';
+var sending = false, sent = false;
+var WIP = 'foh_feedback_wip_' + topic;
+
+function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function el(id){ return document.getElementById(id); }
+
+function say(msg, bad){
+  var s = el('say');
+  s.textContent = msg || '';
+  s.className = 'say' + (msg ? (bad ? ' bad' : ' good') : '');
+}
+
+function stash(){
+  try{ localStorage.setItem(WIP, JSON.stringify({answers:answers, extra:extra})); }catch(e){}
+}
+function unstash(){
+  try{
+    var raw = localStorage.getItem(WIP); if(!raw) return;
+    var o = JSON.parse(raw);
+    answers = o.answers || {}; extra = o.extra || '';
+  }catch(e){}
+}
+
+function answered(){ return Object.keys(answers).filter(function(k){ return answers[k] && answers[k].a; }).length; }
+
+function paint(){
+  var n = answered();
+  el('cnt').innerHTML = n === 0 ? 'Nothing answered yet' : '<b>'+n+'</b> of '+set.items.length+' answered';
+  el('send').disabled = sending;
+  el('send').textContent = sending ? 'Sending…' : 'Send my answers';
+}
+
+function pick(n, val){
+  answers[n] = answers[n] || {};
+  answers[n].a = val;
+  stash();
+  // Repaint only this question's pills — never re-render the page under her
+  // fingers while she is typing in a note.
+  var box = document.querySelector('[data-opts="'+n+'"]');
+  if(box){
+    box.querySelectorAll('.opt').forEach(function(l){
+      var on = l.querySelector('input').value === val;
+      l.className = 'opt' + (on ? ' on' : '');
+      l.querySelector('input').checked = on;
+    });
+  }
+  paint();
+}
+function noteSet(n, v){ answers[n] = answers[n] || {}; answers[n].note = v; stash(); }
+function extraSet(v){ extra = v; stash(); }
+
+function render(){
+  var h = '<div class="brand">R O B E R T O ’ S</div>'
+        + '<div class="sub">'+esc(set.title)+'</div>'
+        + '<div class="intro">'+set.intro.map(function(p){ return '<p>'+p+'</p>'; }).join('')+'</div>'
+        + '<div class="howto">Read each one and ask yourself: <i>does this happen to me?</i> Then tap an answer. '
+        + 'There are no wrong answers — if something here never comes up in your work, say so and we’ll leave it alone. '
+        + 'The ones marked <b>Works today</b> are already fine; they’re here so you can see the whole picture.<br><br>'
+        + 'Your answers are kept on this phone as you go, so you can stop and come back. '
+        + 'Tap <b>Send my answers</b> when you’re done — you’ll see it confirmed on screen.</div>';
+
+  set.items.forEach(function(it, i){
+    var n = String(i+1);
+    var opts = it.works ? OK : ASK;
+    var cur = (answers[n] && answers[n].a) || '';
+    h += '<div class="q"><div class="qh"><span class="qn">'+n+'</span><p class="said">'+it.said+'</p></div>'
+       + (it.works ? '<div style="margin-top:8px"><span class="ok">Works today</span></div>' : '')
+       + '<p class="today">'+it.today+'</p>'
+       + '<div class="opts" data-opts="'+n+'">'
+       + opts.map(function(o){
+           var on = cur === o;
+           var lbl = o === A_PROB ? 'Actually, there’s a problem' : (o === A_NEVER ? 'Doesn’t happen to me' : (o === A_FIX ? 'Yes — fix this' : o));
+           return '<label class="opt'+(on?' on':'')+'"><input type="radio" name="q'+n+'" value="'+esc(o)+'"'+(on?' checked':'')
+                + ' onchange="pick(\''+n+'\', this.value)"> '+lbl+'</label>';
+         }).join('')
+       + '</div>'
+       + '<label class="nl" for="n'+n+'">Your note</label>'
+       + '<textarea class="nin" id="n'+n+'" rows="1" placeholder="'+(it.works?'If there’s a problem, tell us here…':'Anything you want to add…')+'" oninput="noteSet(\''+n+'\', this.value)">'+esc((answers[n]&&answers[n].note)||'')+'</textarea>'
+       + '</div>';
+  });
+
+  h += '<div class="last"><b>Anything we missed?</b>'
+     + '<p>These are the '+set.items.length+' we thought of. You’re the one living it — what lands in your inbox that isn’t on this list, and what does the app make you fight with that we haven’t spotted?</p>'
+     + '<textarea class="nin" id="extra" rows="4" placeholder="Tell us here…" oninput="extraSet(this.value)">'+esc(extra)+'</textarea></div>'
+     + '<div class="ft">Roberto’s DIFC · this goes straight to Francesco</div>';
+
+  el('card').innerHTML = h;
+  el('bar').style.display = 'block';
+  paint();
+}
+
+function fail(msg){
+  el('card').innerHTML = '<div class="brand">R O B E R T O ’ S</div><div class="msg">'+esc(msg)+'</div>';
+  el('bar').style.display = 'none';
+}
+
+function thanks(){
+  el('card').innerHTML = '<div class="brand">R O B E R T O ’ S</div>'
+    + '<div class="done"><div class="tick">✓</div>'
+    + '<h2>Got it — thank you</h2>'
+    + '<p>Your answers are saved and Francesco can see them now. Nothing else to do.</p>'
+    + '<p>If you think of something later, just message him — or reopen this page and send it again.</p></div>';
+  el('bar').style.display = 'none';
+}
+
+async function send(){
+  if(sending || sent) return;
+  if(!answered() && !extra.trim()){ say('Answer at least one first, then send.', true); return; }
+  sending = true; paint(); say('');
+  try{
+    var r = await fetch(SUPA+'/rest/v1/app_feedback', {
+      method:'POST',
+      headers:{ apikey:KEY, Authorization:'Bearer '+KEY, 'Content-Type':'application/json', Prefer:'return=representation' },
+      body: JSON.stringify({ topic:topic, who:(who||'').trim()||null, answers:answers, extra:extra.trim()||null })
+    });
+    var body = await r.json().catch(function(){ return null; });
+    // Only a row coming back proves it landed. Anything else is NOT sent, and we
+    // say so rather than showing a tick she would trust.
+    if(!r.ok || !body || !body.length) throw new Error((body && (body.message||body.hint)) || ('HTTP '+r.status));
+    sent = true;
+    try{ localStorage.removeItem(WIP); }catch(e){}
+    thanks();
+  }catch(e){
+    sending = false; paint();
+    var m = String(e && e.message || e);
+    say(/app_feedback/i.test(m)
+      ? 'NOT sent — the database update for this page hasn’t been run yet. Tell Francesco, your answers are safe on this phone.'
+      : 'NOT sent — check your connection and tap again. Your answers are safe on this phone.', true);
+  }
+}
+
+function boot(){
+  if(!topic || !set){
+    fail('This link is incomplete — please use the link Roberto’s sent you.');
+    return;
+  }
+  unstash();
+  render();
+  el('send').addEventListener('click', send);
+}
+boot();
+</script>
+</body>
+</html>
