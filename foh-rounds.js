@@ -256,27 +256,33 @@ var FB_ROUNDS = {
         label: 'Small plated dinner (12 pax) — quote tool won\'t go under 15' },
       { said: 'A promoter: “I\'m bringing a table of 30 — my usual 10%.”',
         today: 'There is <b>nowhere in the app</b> to record who sent you the booking, or what they\'re owed. So the promoter\'s side of it lives in your phone, and nobody upstairs can see that channel exists at all.',
+        shipped: { build:'2026-07-17.1', in:'ed3682b', what:'Every booking now records where it came from and who is handling it — walk-in, referral, promoter or call centre.', check:'Open any enquiry — there is a Lead source dropdown, a Handler, and a note for what the promoter is owed.' },
         label: 'Promoter commission — nowhere to record who sent the booking' },
       { said: '“Can you hold the 19th for me until Friday?”',
         today: 'There\'s no way to <b>hold</b> a date. You can only leave it as a draft, and a draft sits there forever — nothing tells you Friday came and went, and nothing warns anyone else that the date is spoken for.',
+        shipped: { build:'2026-07-17.1', in:'ed3682b', what:'You can hold a date until a chosen day — it shows a HELD chip, and flips to HOLD EXPIRED once that day passes.', check:'Open a booking and set Hold until a date — the calendar marks it HELD.' },
         label: 'Holding a date until Friday — no hold, no expiry' },
       { said: '“Canapés in the Cortile first, then dinner in Piemonte.”',
         today: 'A booking can only be in <b>one place</b>. To describe this you build two separate bookings — and the guest gets two prices for one evening.',
         label: 'Two spaces in one evening (Cortile then Piemonte)' },
       { said: 'A lunch and a dinner, same room, same day, two different clients.',
         today: 'The app <b>warns you they clash</b> — even though they don\'t. It only looks at the date and the room, never the time. Get warned enough times about nothing and you stop reading the warnings.',
+        shipped: { build:'2026-07-17.1', in:'1827a80', what:'The clash check now reads the time, not just the date and room — a lunch and a dinner in the same room no longer warn about nothing.', check:'Put a lunch and a dinner in the same room on one day — no false clash warning.' },
         label: 'Lunch + dinner same room same day — warns about a clash that isn\'t real' },
       { said: 'A full venue buyout — on a night Piemonte is already booked.',
         today: 'The app says <b>nothing at all</b>. No warning, no flag. It only spots a clash when the two bookings name the exact same room, so a buyout never clashes with anything. This is the one that could actually double-book us.',
+        shipped: { build:'2026-07-17.1', in:'1827a80', what:'A full buyout now collides with anything else booked that day, because it takes the whole venue — so it can no longer double-book silently.', check:'Add a full buyout over an existing booking — it now warns you.' },
         label: 'Full venue buyout over an existing booking — NO warning at all' },
       { said: '“Give them 10% off.”',
         today: 'You can only type a discount <b>in dirhams</b>, so you work the percentage out yourself. And if the guest count changes later, that dirham figure stays put — so the 10% you promised quietly becomes 8%, and the agreement they signed still says the old number.',
         label: '10% off — discount is dirhams only and drifts when pax change' },
       { said: '“Let\'s say a minimum of 25, but we\'re expecting 30.”',
         today: 'The agreement the guest signs shows them the <b>price for 30</b> and, in the same breath, says <b>minimum guaranteed 25</b>. Two different numbers describing one deal, on one page, in front of the client.',
+        shipped: { build:'2026-07-17.1', in:'1827a80', what:'The agreement now shows one figure — Guests the client pays for (minimum) — instead of two different numbers on the same page.', check:'Open a minimum-spend booking — the minimum is a single clear field.' },
         label: 'Minimum 25 / expecting 30 — agreement shows two different numbers' },
       { said: '“Two vegans, one coeliac, and one severe nut allergy.”',
         today: 'Nuts and vegetarian are proper tags on every dish — those work. <b>Gluten isn\'t there at all.</b> So coeliac only ever lives in a note, and the app\'s allergy check can\'t see it. It will let that proposal go out saying everything\'s clear.',
+        shipped: { build:'2026-07-17.1', in:'1827a80', what:'Gluten is now a proper allergen code (G), so coeliac is tagged like nuts and dairy and the allergy check can see it.', check:'Tag a dish — G for gluten sits in the allergen list with the others.' },
         label: 'Coeliac / gluten — no gluten tag exists, allergy check can\'t see it' },
       { said: 'Corporate: “Send an invoice against our PO, 30 days, and quote us without VAT.”',
         today: 'None of that exists — no PO, no invoice, no TRN, and every price is fixed as VAT-included. Payment is the card link only. This one goes back to email and a spreadsheet.',
@@ -296,9 +302,11 @@ var FB_ROUNDS = {
         label: '20% deposit instead of 50%' },
       { said: 'Signed, deposit paid — then: “Make it 32, we\'ve got two more coming.”',
         today: 'You change the number, and the booking <b>drops back to “Proposal sent”</b> as if nothing had ever been agreed. The deposit they paid disappears out of our confirmed figures and back into “still just an enquiry”. Nothing anywhere remembers that the money arrived. And two extra guests is the most normal change in the world.',
+        shipped: { build:'2026-07-17.1', in:'1827a80', what:'Adding guests to a signed, paid booking now keeps it confirmed and keeps the deposit — only the agreement needs re-signing.', check:'On a signed, paid booking change the guest count — it says it stays confirmed and the deposit is kept.' },
         label: 'Signed + paid then +2 guests — booking falls back to \'proposal sent\', deposit vanishes' },
       { said: '“Can we have the burrata from the à la carte menu?”',
         today: 'You can get the <b>price</b> right — but a dish added that way never reaches the <b>kitchen\'s prep list</b>. So the money is correct and the kitchen doesn\'t know about it.',
+        shipped: { build:'2026-07-17.1', in:'ed3682b', what:'An a la carte dish added to an event is now an off-menu line that reaches the kitchen list.', check:'Add an a la carte dish to an event — it shows as an off-menu item for the kitchen.' },
         label: 'À la carte dish on an event — priced right but never reaches the kitchen list' },
       { said: '“Show me the price per person, not the total.”',
         today: 'One switch, and the guest\'s proposal reads per person instead. Nothing to fix.',
@@ -306,6 +314,7 @@ var FB_ROUNDS = {
         label: 'Price per person instead of the total' },
       { said: 'They cancel three weeks out — deposit already paid.',
         today: 'You can mark it lost and give a reason, and that part works. But there\'s <b>nowhere to say what happened to the deposit</b> — kept, refunded, or moved to another date. That story ends in a free-text note.',
+        shipped: { build:'2026-07-17.1', in:'1827a80', what:'When a booking is lost you now record what happened to the deposit — kept, refunded, or moved to another date.', check:'Mark a booking lost — you are asked what happened to the deposit.' },
         label: 'Cancels after paying — nowhere to say what happened to the deposit' },
       { said: '“Six in the evening until one in the morning.”',
         today: 'Late finishes are normal picks in the time list. Nothing to fix.',
@@ -349,4 +358,15 @@ function fbClosedBy(topic, qkey){
     }
   }
   return null;
+}
+
+// A round's item may declare it was fixed by SHIPPED CODE rather than by a
+// follow-up round — used when the person who asked has no second round to
+// confirm in (Valentina's events-20). It carries the same evidence a recorded
+// fix does: what changed, the build it shipped in, and how to check it. Returns
+// that object or null. See admFbStateOf (Admin) and statusState (the team page).
+function fbShipped(topic, qkey){
+  var r = FB_ROUNDS[topic]; if(!r) return null;
+  var it = r.items[fbKeyPos(r, qkey)];
+  return (it && it.shipped) ? it.shipped : null;
 }

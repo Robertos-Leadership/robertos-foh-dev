@@ -54,7 +54,7 @@
 <!-- The rounds file. It carries every question's wording, so this page can name
      what they flagged without the database ever storing a word of it. Same file
      the questionnaire and the Admin screen read. -->
-<script src="foh-rounds.js?v=20260717c"></script>
+<script src="foh-rounds.js?v=20260717d"></script>
 <script>
 var SUPA = 'https://paoaivwtkzujmrgrfjuq.supabase.co';
 var KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBhb2Fpdnd0a3p1am1yZ3JmanVxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEwNzAxMzAsImV4cCI6MjA5NjY0NjEzMH0.VynG9PBeIaqRG2lkMEuzskkcB11EhR-UfO9eGYsaUxk';
@@ -63,7 +63,7 @@ var KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6
 // is LIVE — that is computed here, not claimed by anyone. It proves the code
 // shipped; it does not prove it works. Only 'verified' claims that, and only
 // because a human drove the real flow.
-var BUILD = '2026-07-17.5';
+var BUILD = '2026-07-17.6';
 
 var q = new URLSearchParams(location.search);
 var token = q.get('t') || '';
@@ -79,7 +79,8 @@ function buildRank(b){
   if(!m) return -1;
   return Number(m[1])*1e9 + Number(m[2])*1e7 + Number(m[3])*1e5 + Number(m[4]);
 }
-function isLive(w){ return buildRank(w.build) > -1 && buildRank(w.build) <= buildRank(BUILD); }
+function isLiveBuild(b){ return buildRank(b) > -1 && buildRank(b) <= buildRank(BUILD); }
+function isLive(w){ return isLiveBuild(w.build); }
 
 function ago(ts){
   var d=new Date(ts); if(isNaN(d)) return '';
@@ -99,15 +100,33 @@ function ago(ts){
 //   ship — fixed and recorded, but not in this build yet
 //   prog — picked up
 //   open — they asked, we have not started
-function stateOf(ans, work){
-  if(!work){
-    if(ans === FB_A.WAIT) return {k:'park', t:'Parked — you said not yet'};
-    return {k:'open', t:'Not started yet'};
+// Where one item has got to. This MUST agree with Admin (admFbStateOf), or the
+// person and Francesco see two different truths — the one thing this page exists
+// to prevent. So it reads the same three sources, in the same order of trust:
+//   1. a recorded work row (an explicit human fact) wins over everything;
+//   2. else the item's own shipped: declaration (fixed by shipped code);
+//   3. else a later round that CLOSED it, if this person did not say we got it
+//      wrong — and if they agreed, it is confirmed.
+// answerIn(topic,key) returns THIS person's answer in another round, or null.
+function statusState(topic, key, ans, work, answerIn){
+  if(work){
+    if(work.status === 'progress') return {k:'prog', t:'Being worked on now'};
+    if(work.status === 'verified' && isLive(work)) return {k:'live', t:'Fixed, live and checked', what:work.what_changed, check:work.check_line};
+    if(isLive(work)) return {k:'live', t:'Fixed and live', what:work.what_changed, check:work.check_line};
+    return {k:'ship', t:'Fixed — reaching the app shortly', what:work.what_changed};
   }
-  if(work.status === 'progress') return {k:'prog', t:'Being worked on now'};
-  if(work.status === 'verified' && isLive(work)) return {k:'live', t:'Fixed, live and checked'};
-  if(isLive(work)) return {k:'live', t:'Fixed and live'};
-  return {k:'ship', t:'Fixed — reaching the app shortly'};
+  var sh = (typeof fbShipped==='function') ? fbShipped(topic, key) : null;
+  if(sh && isLiveBuild(sh.build)) return {k:'live', t:'Fixed and live', what:sh.what, check:sh.check};
+  var c = (typeof fbClosedBy==='function') ? fbClosedBy(topic, key) : null;
+  if(c){
+    var a2 = answerIn(c.topic, c.qkey);
+    if(a2 !== FB_A.PROB){                              // unless they told us it is wrong
+      var what = c.item.today ? String(c.item.today).replace(/<[^>]+>/g,'') : null;
+      return { k:'live', t:(a2===FB_A.FINE ? 'Fixed and live — you confirmed it' : 'Fixed and live'), what:what };
+    }
+  }
+  if(ans === FB_A.WAIT) return {k:'park', t:'Parked — you said not yet'};
+  return {k:'open', t:'Not started yet'};
 }
 
 function render(d){
@@ -115,6 +134,17 @@ function render(d){
   // index the work rows
   var W = {};
   (d.work||[]).forEach(function(w){ W[w.topic+'|'+w.qkey] = w; });
+
+  // This person's own answer in any round they sent, so a "closed by a later
+  // round" item can tell whether they agreed with the fix or flagged it wrong.
+  var ansByRound = {};
+  (d.submissions||[]).forEach(function(s){
+    ansByRound[s.topic] = ansByRound[s.topic] || {};
+    Object.keys(s.answers||{}).forEach(function(k){
+      var a = s.answers[k] && s.answers[k].a; if(a) ansByRound[s.topic][k] = a;
+    });
+  });
+  function answerIn(topic, key){ return (ansByRound[topic]||{})[key] || null; }
 
   // Only the things they ASKED us to act on — the same rule Admin counts by, so
   // they and Francesco never see two different truths. Their "leave as is" and
@@ -129,9 +159,9 @@ function render(d){
       var isWork = !!FB_WORK_ANSWERS[a], isWait = (a === FB_A.WAIT);
       if(!isWork && !isWait) return;
       var w = W[s.topic+'|'+k];
-      var st = stateOf(a, w);
+      var st = statusState(s.topic, k, a, w, answerIn);
       n[st.k]++;
-      items.push({ k:k, label:fbLabel(s.topic,k), answer:a, note:(s.answers[k]||{}).note, w:w, st:st, pos:fbKeyPos(round,k) });
+      items.push({ k:k, label:fbLabel(s.topic,k), answer:a, note:(s.answers[k]||{}).note, st:st, pos:fbKeyPos(round,k) });
     });
     if(!items.length) return;
     // live first? No — order they answered them in. It is their list, not ours.
@@ -172,11 +202,13 @@ function render(d){
          + '<div class="yousaid">you said: <i>'+esc(it.answer)+'</i>'
          + (it.note?' — “'+esc(it.note)+'”':'') + '</div>'
          + '<span class="st s-'+it.st.k+'">'+esc(it.st.t)+'</span>';
-      if(it.w && it.w.what_changed){
-        h += '<p class="what">'+esc(it.w.what_changed)+'</p>';
+      // what changed + how to check — whatever the state carried, from a work
+      // row, a shipped: declaration, or the round that closed it.
+      if(it.st.what){
+        h += '<p class="what">'+esc(it.st.what)+'</p>';
       }
-      if(it.w && it.w.check_line && it.st.k === 'live'){
-        h += '<div class="check"><b>Check it yourself:</b> '+esc(it.w.check_line)+'</div>';
+      if(it.st.check && it.st.k === 'live'){
+        h += '<div class="check"><b>Check it yourself:</b> '+esc(it.st.check)+'</div>';
       }
       h += '</div>';
     });

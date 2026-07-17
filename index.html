@@ -2231,7 +2231,7 @@ if ('serviceWorker' in navigator) {
     <div class="foh-hero-content">
       <img class="foh-hero-logo" src="robertos-logo-white.svg" alt="Roberto's">
     </div>
-    <div id="foh-build" style="position:absolute;bottom:6px;right:10px;font-size:9px;letter-spacing:.08em;color:rgba(255,255,255,.4);z-index:3;font-variant-numeric:tabular-nums;">build 2026-07-17.5</div>
+    <div id="foh-build" style="position:absolute;bottom:6px;right:10px;font-size:9px;letter-spacing:.08em;color:rgba(255,255,255,.4);z-index:3;font-variant-numeric:tabular-nums;">build 2026-07-17.6</div>
   </div>
 
   <!-- main scroll area -->
@@ -2461,7 +2461,7 @@ if ('serviceWorker' in navigator) {
      answer on. One round, one place: see the header of foh-rounds.js.
      Loaded here, not with the foh-*.js at the foot of the body, because the
      inline Admin code below READS it rather than just calling into it. -->
-<script src="foh-rounds.js?v=20260717c"></script>
+<script src="foh-rounds.js?v=20260717d"></script>
 <script>
 const SUPABASE_URL = 'https://paoaivwtkzujmrgrfjuq.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBhb2Fpdnd0a3p1am1yZ3JmanVxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEwNzAxMzAsImV4cCI6MjA5NjY0NjEzMH0.VynG9PBeIaqRG2lkMEuzskkcB11EhR-UfO9eGYsaUxk';
@@ -3839,6 +3839,8 @@ var FB_STATE_LABEL={ ok:'verified live', ship:'fixed, live', prog:'being worked 
 // asked, not us.
 function admFbStateLabel(t,q){
   if(admFbWorkOf(t,q)) return FB_STATE_LABEL[admFbStateOf(t,q)];
+  var sh=(typeof fbShipped==='function') ? fbShipped(t,q) : null;
+  if(sh && admFbIsLive(sh)) return 'fixed, live · '+admEsc(sh.build);
   var c=admFbClosed(t,q);
   if(!c) return FB_STATE_LABEL.open;
   return c.confirmedBy
@@ -3881,6 +3883,11 @@ function admFbStateOf(t,q){
     if(w.status==='verified' && admFbIsLive(w)) return 'ok';
     return 'ship';                     // fixed, or verified-but-not-live-yet
   }
+  // Fixed by shipped code (the item declares it, verified against the source).
+  // Same shape of fact as a closed-by-round item, but with no follow-up round to
+  // confirm it — so it is "fixed, live", never "verified".
+  var sh=(typeof fbShipped==='function') ? fbShipped(t,q) : null;
+  if(sh && admFbIsLive(sh)) return 'ship';
   var c=admFbClosed(t,q);
   if(c) return c.confirmedBy ? 'ok' : 'ship';
   return 'open';
@@ -4032,6 +4039,22 @@ function admFbPanelHTML(){
           + '<span style="display:block;font-size:11px;color:#9c8a72;margin-top:4px;">&mdash; '+admEsc(x.who)+', answered &ldquo;'+admEsc(x.a)+'&rdquo;</span></div>';
       }).join('') : '<div style="font-size:12px;color:#9c8a72;">Nobody flagged this one.</div>';
 
+  // ── Already fixed by shipped code? Say so, with the evidence ──
+  // Valentina's nine were fixed in the Events module (verified in the source),
+  // but she has no follow-up round to confirm in — so this is "fixed, live" and
+  // the honest next step is to send her a round when you want her to check it.
+  var shp=admFbWorkOf(s.topic,s.qkey) ? null : ((typeof fbShipped==='function') ? fbShipped(s.topic,s.qkey) : null);
+  if(shp && admFbIsLive(shp)){
+    h+='<div style="border-top:1px solid #f1e9da;margin-top:14px;padding-top:12px;">'
+      +'<div style="background:#DCE9F6;border:1px solid #8FB6DA;border-radius:8px;padding:10px 12px;">'
+      +'<div style="font-size:12.5px;color:#12456E;font-weight:600;">Fixed in the Events module &mdash; live now ('+admEsc(shp.build)+')</div>'
+      +(shp.what?'<div style="font-size:12px;color:#4a3b2a;line-height:1.55;margin-top:5px;">'+admEsc(shp.what)+'</div>':'')
+      +(shp.check?'<div style="font-size:11.5px;color:#6b5a44;margin-top:6px;"><b style="color:#12456E;">Check it:</b> '+admEsc(shp.check)+'</div>':'')
+      +(shp.in?'<div style="font-size:10.5px;color:#9c8a72;margin-top:6px;">shipped in '+admEsc(shp.in)+'</div>':'')
+      +'</div>'
+      +'<div style="font-size:11px;color:#9c8a72;margin-top:8px;line-height:1.45;">She flagged this and it is done, but she has not been shown it. Send her an events-20 round when you want her to confirm &mdash; her answer will turn this into a confirmed tick. Set a state below only to override.</div>'
+      +'</div>';
+  }
   // ── Already closed by a later round? Say so, with THEIR words ──
   // Nine of Andrea's eleven were fixed and described to him in round 2, and he
   // agreed to each. Showing him an empty "not started" form for those was the
