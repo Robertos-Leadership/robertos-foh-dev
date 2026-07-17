@@ -15,7 +15,7 @@
    controllerchange reload), a fresh deploy reaches every screen with no manual
    tap. To force a clean cache rebuild, bump the CACHE version string below. */
 
-const CACHE = 'robertos-foh-v20260717e';
+const CACHE = 'robertos-foh-v20260717a';
 
 // Best-effort warm cache. The bare paths are precached on install; the real
 // runtime requests (some carry a ?v= cache-buster) are cached on the fly by the
@@ -25,11 +25,11 @@ const ASSETS = [
   './',
   './index.html',
   './common.js',
-  // Read by index.html and by BOTH link-only feedback pages (the questionnaire
-  // and the status page). Those pages are deliberately bypassed below — they must
-  // never open inside the installed app — but this is an ordinary subresource:
-  // network-first like everything else, so it can go stale only while genuinely
-  // offline, where those pages never worked anyway (they are not cached at all).
+  // Read by index.html AND by foh-feedback.html. The feedback page itself is
+  // deliberately bypassed below (it must never open inside the installed app),
+  // but this is an ordinary subresource: network-first like everything else, so
+  // it can go stale only while genuinely offline — where that page never worked
+  // anyway, since it is not cached at all.
   './foh-rounds.js',
   './foh-events.js',
   './foh-revenue.js',
@@ -88,13 +88,7 @@ self.addEventListener('fetch', e => {
   // foh-feedback.html is the same shape of thing and hits the same trap HARDER:
   // we send it to staff, whose phones definitely DO have the app installed, so
   // without this the feedback link opens the app and the round dies silently.
-  //
-  // The suffix group matters: this used to be a bare "foh-feedback", which does
-  // NOT match foh-feedback-status.html — the page the team open to check on us.
-  // It would have been swallowed by the app exactly like the round was, and just
-  // as silently. Any NEW foh-feedback-* page is covered automatically now; any
-  // other link-only page must still be added here by hand.
-  if (/\/(client-[a-z0-9-]+|foh-feedback(-[a-z0-9-]+)?)(\.html)?$/i.test(url.pathname)) return;
+  if (/\/(client-[a-z0-9-]+|foh-feedback)(\.html)?$/i.test(url.pathname)) return;
 
   e.respondWith(
     fetch(e.request, { cache: 'no-store' })
