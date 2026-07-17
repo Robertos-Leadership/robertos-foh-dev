@@ -63,6 +63,22 @@ function revPctClass(n){ if(n===''||n==null||!isFinite(n)) return ''; return n>=
 function revMonthLabel(p){ var a=p.split('-').map(Number); return new Date(a[0],a[1]-1,1).toLocaleDateString('en-GB',{month:'long',year:'numeric'}); }
 function revYearOf(p){ return p.split('-')[0]; }
 function revChg(c,prev){ return prev? (c-prev)/prev : ''; }
+// Which month is "now" on the Dubai operational clock. Compared as YYYY-MM strings only —
+// no Date arithmetic — so a device in another timezone can never shift the answer.
+// Fails safe: no RC → fall back to the latest month that has data.
+function revNowPeriod(){
+  var t=(typeof RC!=='undefined'&&RC.dubaiBusinessDate)?RC.dubaiBusinessDate(new Date()):null;
+  return t?t.slice(0,7):revLatestPeriod();
+}
+// 'closed'  — the month has ended: every night is due, so it is measured against its FULL budget.
+// 'current' — still in service: measured against budget-to-date, which is the honest pace comparison.
+// 'future'  — not started: nothing is due yet, so it never counts toward YTD.
+function revMonthState(p){ var now=revNowPeriod(); return p<now?'closed':(p===now?'current':'future'); }
+// The budget a month must be judged against. budgetToDate stops at the last FILED night
+// (windowDay, set in revMonthData) — so a CLOSED month missing its final nights keeps all of
+// its revenue but drops those nights' budget, and reads on-budget when it is actually short.
+// Only the month still in service has a legitimate claim to budget-to-date.
+function revBudgetBasis(m,st){ return st==='closed' ? m.budgetTotal : m.budgetToDate; }
 
 function revMonthData(p){
   var R=revInit(), map=revDailyMap(), dim=revDaysInMonth(p), days=[];
@@ -98,20 +114,53 @@ function revUnfiledNights(p){
   var out=[];
   for(var d=1; d<=Math.min(lastDay,dim); d++){
     var ds=p+'-'+String(d).padStart(2,'0');
-    if(revWeekday(ds)==='Sunday') continue;              // closed — not expected
     var row=map[ds];
+    // Sundays are normally closed, so an empty Sunday is expected, not missing. But a Sunday
+    // someone gave a budget to was PLANNED to trade (a buyout) — if it has no revenue that is
+    // a real gap, and it is chased like any other night. A Sunday that traded with no budget
+    // set and no row entered leaves NO signal anywhere in the data, so this cannot claim to
+    // catch every unfiled Sunday — only the ones that were planned.
+    var plannedSun=(row && row.budget_override!=null && Number(row.budget_override)>0);
+    if(revWeekday(ds)==='Sunday' && !plannedSun) continue;
     if(!row || row.net_actual==null) out.push(d);
   }
   return out;
 }
 // Plain-language banner naming the missing nights (empty string when nothing is missing,
 // so it is safe to drop straight into the render output).
-function revUnfiledBanner(p){
+// withMonth names the month in the banner — the Year view stacks one of these per month, so
+// without it you cannot tell which month the nights belong to. The Month view omits it.
+function revUnfiledBanner(p, withMonth){
   var u=revUnfiledNights(p); if(!u.length) return '';
   var names=u.slice(0,6).map(function(d){ return revWeekday(p+'-'+String(d).padStart(2,'0')).slice(0,3)+' '+d; });
   var extra=u.length>6?(' +'+(u.length-6)+' more'):'', n=u.length;
+  var who=withMonth?(revMonthLabel(p).split(' ')[0]+': '):'';
+  // A month that has ended is missing from its TOTAL, not from a month-to-date.
+  var what=(revMonthState(p)==='closed')?'the month total is':'month-to-date is';
   return '<div style="background:rgba(179,64,47,.08);border:1px solid rgba(179,64,47,.35);color:#b3402f;border-radius:6px;padding:10px 14px;margin:0 0 12px;font-size:13px;line-height:1.5">'
-    +'&#9888; <b>'+n+' trading night'+(n>1?'s':'')+' not yet filed</b> ('+names.join(', ')+extra+') &mdash; month-to-date is incomplete until '+(n>1?'those closing reports are':'that closing report is')+' added.</div>';
+    +'&#9888; <b>'+who+n+' trading night'+(n>1?'s':'')+' not yet filed</b> ('+names.join(', ')+extra+') &mdash; '+what+' incomplete until '+(n>1?'those closing reports are':'that closing report is')+' added.</div>';
+}
+// Nights that booked revenue against a ZERO budget — in practice a Sunday buyout, because
+// rev_rates seeds Sunday at avg_spend 0 x cover_target 0 so Sundays carry no budget at all.
+// The revenue is real and stays in the month untouched; the problem is that vs-budget compares
+// it against nothing, so the month reads better than like-for-like. This alters no figure —
+// it names the distortion and sizes it.
+function revNoBudgetNights(p){
+  var m=revMonthData(p), out=[];
+  m.days.forEach(function(x){ if(x.net!=null && x.net>0 && !x.budget) out.push(x); });
+  return out;
+}
+function revNoBudgetBanner(p){
+  var nb=revNoBudgetNights(p); if(!nb.length) return '';
+  var m=revMonthData(p), net=0; nb.forEach(function(x){ net+=x.net; });
+  var names=nb.map(function(x){ return x.weekday.slice(0,3)+' '+x.d; }), n=nb.length;
+  // Flattery in percentage points = the un-budgeted net as a share of the month's budget:
+  // vs-budget with these nights minus vs-budget without them reduces to exactly this.
+  var pts=m.budgetTotal?(net/m.budgetTotal*100):0;
+  return '<div style="background:rgba(201,168,76,.10);border:1px solid rgba(201,168,76,.45);color:#8a6d1f;border-radius:6px;padding:10px 14px;margin:0 0 12px;font-size:13px;line-height:1.5">'
+    +'&#9888; <b>'+n+' night'+(n>1?'s':'')+' traded with no budget</b> ('+names.join(', ')+') &mdash; '+revMoney(net)+' of net measured against AED 0.'
+    +(m.budgetTotal?' The month reads '+pts.toFixed(1)+' points better than a like-for-like comparison.':'')
+    +' Sundays carry no budget because they are normally closed &mdash; open the night and set its budget to compare fairly.</div>';
 }
 function revAreaMTD(p){
   var map=revDailyMap(), dim=revDaysInMonth(p);
@@ -874,6 +923,9 @@ function revRenderMonth(){
     +'</div>');
   // Trust guard: name any ended nights with no closing report, so MTD is never silently short.
   h.push(revUnfiledBanner(p));
+  // Trust guard: name any night that booked revenue against a zero budget (a Sunday buyout),
+  // so its "outperformance" is never read as real.
+  h.push(revNoBudgetBanner(p));
   // summary cards
   h.push('<div class="rev-cards">');
   h.push('<div class="rev-card"><div class="rev-k">MTD net sales</div><div class="rev-v">'+revMoney(m.mtdNet)+'</div><div class="rev-sub">'+m.tradingDays+' trading days</div></div>');
@@ -949,7 +1001,25 @@ function revRenderMonth(){
     +'<div class="rev-proj-row"><span>Actual MTD</span><b>'+revMoney(rv.mtd)+'</b></div>'
     +'<div class="rev-proj-row"><span>Projected — '+rv.remaining+' remaining days (this month\'s weekday run-rate)</span><b>'+revMoney(rv.projected)+'</b></div>'
     +'<div class="rev-proj-row rev-proj-fore"><span>Forecast — full month</span><b>'+revMoney(rv.forecast)+'</b></div>'
-    +'<div class="rev-proj-row"><span>vs Budget ('+revMoney(rv.budgetTotal)+')</span><b class="'+revPctClass(rv.vsBudgetPct)+'">'+revMoney(rv.vsBudget)+' · '+revPct(rv.vsBudgetPct)+'</b></div></div>');
+    +'<div class="rev-proj-row"><span>vs Budget ('+revMoney(rv.budgetTotal)+')</span><b class="'+revPctClass(rv.vsBudgetPct)+'">'+revMoney(rv.vsBudget)+' · '+revPct(rv.vsBudgetPct)+'</b></div>');
+  // Monthly target — the internal stretch. The BUDGET is the benchmark the board judges the
+  // month on (Francesco, 17 Jul 2026), so the target sits beneath it as a quieter second line
+  // rather than competing with it. It lives in rev_targets alongside monthly_budget, but was
+  // only ever visible in the Forecast tab and the AI chat — so a month could be running half a
+  // million short of target with the Month view showing nothing at all.
+  var T=(R.targets&&R.targets[p])||0;
+  if(T>0){
+    var vsT=rv.forecast-T, vsTPct=T?vsT/T:'';
+    h.push('<div class="rev-proj-row"><span>vs Target ('+revMoney(T)+') <span class="rev-mut">· internal</span></span><b class="'+revPctClass(vsTPct)+'">'+revMoney(vsT)+' · '+revPct(vsTPct)+'</b></div>');
+  }
+  h.push('</div>');
+  // Reconcile the two benchmarks in words. They are different numbers in the same table and
+  // nothing on screen has ever said how they relate, so the gap between them is spelled out.
+  if(T>0 && mb!=null && Math.abs(T-mb)>=1){
+    h.push('<div class="rev-alloc rev-mut" style="display:block;margin:8px 2px 0;font-size:12px">The target is <b>'+revMoney(Math.abs(T-mb)).replace('AED ','')+'</b> '+(T>mb?'above':'below')+' the monthly budget. The <b>budget</b> is the benchmark the month is judged on; the <b>target</b> is the internal stretch.</div>');
+  } else if(T>0 && mb==null){
+    h.push('<div class="rev-alloc rev-mut" style="display:block;margin:8px 2px 0;font-size:12px">No monthly budget is set, so the budget above comes from the weekday rates pattern. The <b>target</b> is the internal stretch.</div>');
+  }
   h.push('<div id="rev-ai-out" class="rev-ai-out" style="display:none"></div>');
   h.push('</div>');
   return h.join('');
@@ -959,19 +1029,52 @@ function revRenderYear(){
   h.push('<div class="rev-wrap">');
   h.push('<div class="rev-toolbar"><div class="rev-nav"><button class="rev-btn" onclick="revSetPeriod(\''+(parseInt(year)-1)+'-01\')">&#8592;</button><span class="rev-period">'+year+'</span><button class="rev-btn" onclick="revSetPeriod(\''+(parseInt(year)+1)+'-01\')">&#8594;</button></div>'
     +'<div class="rev-views"><button class="rev-vtab" onclick="revSetView(\'month\')">Month</button><button class="rev-vtab active" onclick="revSetView(\'year\')">Year</button><button class="rev-vtab" onclick="revSetView(\'forecast\')">Forecast</button></div></div>');
-  var ytdNet=0, ytdBudget=0;
+  // Trust guards, same as the Month view. This is the view leadership actually opens, so it
+  // carries the completeness warnings too: nights not yet filed, month by month.
+  // Only for months that have SOME data. A month with nothing entered is a hole — it gets a
+  // row of its own and a line under the total — and bannering all 27 of its nights here buries
+  // the case this guard is actually for: a month that looks filed but is quietly short.
+  var guards=[];
+  for(var gm=1; gm<=12; gm++){
+    var gp=year+'-'+String(gm).padStart(2,'0');
+    if(revMonthData(gp).tradingDays>0) guards.push(revUnfiledBanner(gp, true));
+  }
+  h.push(guards.join(''));
+  var ytdNet=0, ytdBudget=0, holes=[], counted=0, elapsed=0;
   h.push('<div class="rev-section-h">'+year+' — month by month</div>');
   h.push('<div class="rev-grid-wrap"><table class="rev-grid"><thead><tr><th>Month</th><th>Net sales</th><th>Budget</th><th>vs Budget</th><th>Trading days</th></tr></thead><tbody>');
   for(var mo=1; mo<=12; mo++){
-    var p=year+'-'+String(mo).padStart(2,'0'); var m=revMonthData(p);
-    if(m.tradingDays===0) continue;
-    ytdNet+=m.mtdNet; ytdBudget+=m.budgetToDate;
-    var vs=m.budgetToDate?(m.mtdNet-m.budgetToDate)/m.budgetToDate:'';
-    h.push('<tr onclick="revSetView(\'month\');revSetPeriod(\''+p+'\')"><td class="rev-day">'+new Date(parseInt(year),mo-1,1).toLocaleDateString('en-GB',{month:'long'})+'</td><td>'+revMoney(m.mtdNet)+'</td><td class="rev-mut">'+revMoney(m.budgetToDate)+'</td><td class="'+revPctClass(vs)+'">'+revPct(vs)+'</td><td>'+m.tradingDays+'</td></tr>');
+    var p=year+'-'+String(mo).padStart(2,'0'), m=revMonthData(p), st=revMonthState(p);
+    var name=new Date(parseInt(year),mo-1,1).toLocaleDateString('en-GB',{month:'long'});
+    if(st!=='future') elapsed++;
+    // EVERY month gets a row. A month with no data used to be skipped entirely — it vanished
+    // from the table AND from the YTD total, with nothing on screen to say so, and the year
+    // still called itself YTD. A hole must look like a hole.
+    if(m.tradingDays===0){
+      if(st==='future'){ h.push('<tr class="rev-sun"><td class="rev-day rev-mut">'+name+'</td><td class="rev-mut">&mdash;</td><td class="rev-mut">&mdash;</td><td class="rev-mut">not started</td><td class="rev-mut">&mdash;</td></tr>'); }
+      else { holes.push(name);
+        h.push('<tr class="rev-sun" onclick="revSetView(\'month\');revSetPeriod(\''+p+'\')"><td class="rev-day">'+name+'</td><td colspan="4" class="rev-neg">&#9888; No revenue entered &mdash; this month is missing from the YTD total below.</td></tr>'); }
+      continue;
+    }
+    counted++;
+    var bud=revBudgetBasis(m,st);   // closed month → full budget; month in service → budget to date
+    ytdNet+=m.mtdNet; ytdBudget+=bud;
+    var vs=bud?(m.mtdNet-bud)/bud:'';
+    h.push('<tr onclick="revSetView(\'month\');revSetPeriod(\''+p+'\')"><td class="rev-day">'+name+(st==='current'?' <span class="rev-mut">· in progress</span>':'')+'</td><td>'+revMoney(m.mtdNet)+'</td><td class="rev-mut">'+revMoney(bud)+(st==='current'?' <span class="rev-mut">to date</span>':'')+'</td><td class="'+revPctClass(vs)+'">'+revPct(vs)+'</td><td>'+m.tradingDays+'</td></tr>');
   }
   var ytdVs=ytdBudget?(ytdNet-ytdBudget)/ytdBudget:'';
-  h.push('<tr class="rev-total"><td>YTD</td><td>'+revMoney(ytdNet)+'</td><td>'+revMoney(ytdBudget)+'</td><td class="'+revPctClass(ytdVs)+'">'+revPct(ytdVs)+'</td><td></td></tr>');
-  h.push('</tbody></table></div></div>');
+  var ytdLbl='YTD'+(elapsed?' <span class="rev-mut">· '+counted+' of '+elapsed+' month'+(elapsed>1?'s':'')+'</span>':'');
+  h.push('<tr class="rev-total"><td>'+ytdLbl+'</td><td>'+revMoney(ytdNet)+'</td><td>'+revMoney(ytdBudget)+'</td><td class="'+revPctClass(ytdVs)+'">'+revPct(ytdVs)+'</td><td></td></tr>');
+  h.push('</tbody></table></div>');
+  // Name the holes under the total. The figure above is only the year to date if every
+  // elapsed month is in it — when it isn't, say so rather than let the label imply it.
+  if(holes.length){
+    h.push('<div style="background:rgba(179,64,47,.08);border:1px solid rgba(179,64,47,.35);color:#b3402f;border-radius:6px;padding:10px 14px;margin:12px 0 0;font-size:13px;line-height:1.5">'
+      +'&#9888; <b>YTD is missing '+holes.length+' month'+(holes.length>1?'s':'')+'</b> ('+holes.join(', ')+') &mdash; no revenue has been entered for '+(holes.length>1?'them':'it')+'. '
+      +'The YTD figure above covers '+counted+' of '+elapsed+' elapsed month'+(elapsed>1?'s':'')+' only. Read it as a '+counted+'-month total, not as the year to date.</div>');
+  }
+  h.push('<div class="rev-alloc rev-mut" style="display:block;margin:10px 0 0;font-size:12px">A month that has ended is measured against its <b>full monthly budget</b>. The month still in service is measured against <b>budget to date</b> &mdash; its pace so far.</div>');
+  h.push('</div>');
   return h.join('');
 }
 
@@ -1012,9 +1115,18 @@ function revForecastData(p, seasonPct){
     weakNights:weakNights, weakUpliftPct:(weak&&gap>0)?gap/weak:0, weakPerNight:(weakNights&&gap>0)?gap/weakNights:0};
 }
 // ── Forecast nav/state ──
-function revFcPeriod(){ var R=revInit(); if(!R.fcPeriod) R.fcPeriod=revAddMonths(revLatestPeriod(),1); return R.fcPeriod; }
+// This tab projects a month with NO actuals yet (see the header note above): its basis,
+// revFcWeekdayAvgs, reads only nights STRICTLY BEFORE the period. Point it at a month that has
+// already traded and it presents a projection built from pre-period data while ignoring the
+// actuals that exist — June "forecasts" 1.56M off May alone when June actually did 1.61M.
+// The month currently in service is the Month view's job (it forecasts from its own MTD), so
+// the earliest month this tab can honestly forecast is the one AFTER the current Dubai month.
+// The clamp lives in revFcPeriod, not just revFcStep: the default is latest-month-with-data + 1,
+// which lands on a PAST month on its own whenever entry has fallen behind.
+function revFcFirstPeriod(){ return revAddMonths(revNowPeriod(),1); }
+function revFcPeriod(){ var R=revInit(); if(!R.fcPeriod) R.fcPeriod=revAddMonths(revLatestPeriod(),1); var min=revFcFirstPeriod(); if(R.fcPeriod<min) R.fcPeriod=min; return R.fcPeriod; }
 function revFcSeasonVal(){ var R=revInit(); if(R.fcSeason==null) R.fcSeason=-18; return R.fcSeason; }
-function revFcStep(n){ var R=revInit(); R.fcPeriod=revAddMonths(revFcPeriod(),n); renderMain(); }
+function revFcStep(n){ var R=revInit(); var np=revAddMonths(revFcPeriod(),n), min=revFcFirstPeriod(); R.fcPeriod=(np<min)?min:np; renderMain(); }
 function revFcSeason(v){ revInit().fcSeason=Number(v)||0; renderMain(); }
 function revFcCustom(){ var el=document.getElementById('rev-fc-season'); if(el) revFcSeason(el.value.trim()===''?0:Number(el.value)); }
 async function revFcSaveTarget(){
@@ -1029,9 +1141,12 @@ async function revFcSaveTarget(){
 function revRenderForecast(){
   var R=revInit(), p=revFcPeriod(), sp=revFcSeasonVal(), fc=revForecastData(p,sp);
   var h=[]; h.push('<div class="rev-wrap">');
-  // toolbar + view tabs
-  h.push('<div class="rev-toolbar"><div class="rev-nav"><button class="rev-btn" onclick="revFcStep(-1)">&#8592;</button><span class="rev-period">'+revMonthLabel(p)+'</span><button class="rev-btn" onclick="revFcStep(1)">&#8594;</button></div>'
+  // toolbar + view tabs. Stepping back stops at the first forecastable month — an earlier
+  // month has already traded, so a "forecast" of it would ignore its own actuals.
+  var atMin=(p<=revFcFirstPeriod());
+  h.push('<div class="rev-toolbar"><div class="rev-nav"><button class="rev-btn" onclick="revFcStep(-1)"'+(atMin?' disabled title="'+revMonthLabel(p)+' is the earliest month that can be forecast. Earlier months have already traded — the Month and Year views show their real figures."':'')+'>&#8592;</button><span class="rev-period">'+revMonthLabel(p)+'</span><button class="rev-btn" onclick="revFcStep(1)">&#8594;</button></div>'
     +'<div class="rev-views"><button class="rev-vtab" onclick="revSetView(\'month\')">Month</button><button class="rev-vtab" onclick="revSetView(\'year\')">Year</button><button class="rev-vtab active" onclick="revSetView(\'forecast\')">Forecast</button><button class="rev-btn rev-ai-btn" onclick="revChatOpen()">&#9733; Ask / Reports</button></div></div>');
+  if(atMin) h.push('<div class="rev-alloc rev-mut" style="display:block;margin:0 0 10px;font-size:12px">'+revMonthLabel(p)+' is the earliest month that can be forecast &mdash; it is the first with no actuals yet. For a month that has already traded, use <b>Month</b> or <b>Year</b>: they show what it really did.</div>');
   if(!fc.window.days){ h.push('<div class="rev-setup"><p>No actual revenue is recorded before '+revMonthLabel(p)+' yet, so there is nothing to project the forecast from. Enter some daily actuals first.</p></div></div>'); return h.join(''); }
   // basis
   h.push('<div class="rev-alloc rev-mut" style="display:block;margin:0 0 10px">Projected from your <b>real till data</b> — the recent run-rate per weekday over '+fc.window.days+' trading days ('+revMonthLabel(revPeriodOf(fc.window.from)).split(' ')[0]+'&nbsp;'+Number(fc.window.from.slice(8))+' → '+revMonthLabel(revPeriodOf(fc.window.to)).split(' ')[0]+'&nbsp;'+Number(fc.window.to.slice(8))+'). Sundays closed.</div>');

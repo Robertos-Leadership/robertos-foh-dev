@@ -313,15 +313,19 @@ async function clSave(andEmail){
     var idx=R.daily.findIndex(function(x){return String(x.service_date).slice(0,10)===ds;});
     if(idx>=0) R.daily[idx]=Object.assign({},R.daily[idx],revRow); else R.daily.push(revRow);
   }
+  if(res2.error){
+    // Closing report itself saved (source of truth), but the revenue rollup did not —
+    // so the EMAIL DOES NOT GO OUT. Leadership must never receive figures the app's own
+    // Revenue page can't back up (16 Jul 2026: the email went out, rev_daily stayed empty,
+    // and the gap only surfaced on the unfiled-nights banner the next day). Keep the form
+    // open so the manager can just press the button again — nothing needs re-typing.
+    setBusy(false);
+    alert('⚠️ Your report is SAVED — nothing is lost.\n\nBut it could not be added to the Revenue page, so '+(andEmail?'the email was NOT sent yet':'Revenue was NOT updated')+'.\n\nPress '+(andEmail?'Save & Email':'Save')+' once more.\n\n(Technical detail: '+res2.error.message+')');
+    return;
+  }
   var emailMsg='';
   if(andEmail){ var em=await clEmail(crow, ds); emailMsg = em.ok ? ' · emailed to the team' : ('\n\n⚠️ Email NOT sent: '+em.msg+'\n(Deploy send-closing-report + set RESEND_API_KEY.)'); if(em.ok && clSendWho && typeof fohLogSend==='function') fohLogSend(clSendWho, 'closing_report_send', ds); }
   setBusy(false);
-  if(res2.error){
-    // Closing report itself saved (source of truth), but the revenue rollup did
-    // not. Keep the form open so the manager can fix and re-save without re-typing.
-    alert('⚠️ Closing report saved, but the REVENUE ROLLUP FAILED — revenue numbers were NOT updated.\n\n'+res2.error.message+'\n\nFix the issue and tap Save again to update Revenue.'+emailMsg);
-    return;
-  }
   clClose();
   revInit().opsRecentLoaded=false;
   if(state.currentTab==='revenue'||state.currentTab==='operations') renderMain();
