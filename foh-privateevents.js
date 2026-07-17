@@ -55,6 +55,10 @@ var PE_STATUS_COL = {
 };
 var PE_AREAS = ['Piemonte','Cortile','Restaurant terrace','Scala and Bar','Scala lounge','Scala terrace','Full venue'];
 var PE_TYPES = ['Gathering','Private gathering','Dinner','Lunch','Reception','Full buyout'];
+// Where a booking came from. Valentina (17 Jul 2026): a promoter's "table of 30,
+// my usual 10%" lived only in her phone; Andrea, same day: "lead from and handler
+// need to be there". The note field carries the promoter's name / commission.
+var PE_LEAD_SOURCES = ['Walk-in','Phone call','WhatsApp','Email','Instagram / social','Website','Referral','Promoter','Repeat guest','Call centre'];
 // G (gluten) added 17 Jul 2026 — Valentina: coeliac had nowhere to go, so it lived
 // in a free-text note the allergen check could not see, and a proposal could go out
 // reading "all clear". Existing dishes need the G tag applied in Chef Corner.
@@ -724,6 +728,15 @@ function peListRow(e){
   var val = peEventValue(e);
   var parts = [];
   if(e.event_date) parts.push(peDLabel(e.event_date)+(e.time_from?' · '+peEsc(e.time_from):''));
+  // #4 — a held date, at Valentina's request "as a option, not automatic": nothing
+  // expires by itself, the chip just turns red once the promise date has passed so
+  // she chases the client instead of the date quietly rotting in a draft.
+  if(e.hold_until && ['confirmed','deposit','done','lost'].indexOf(e.status)<0){
+    var expired = String(e.hold_until).slice(0,10) < peToday();
+    parts.push(expired
+      ? '<b style="color:#B00020">HOLD EXPIRED '+peDLabel(e.hold_until)+' — chase or release</b>'
+      : '<b style="color:#8A6400">HELD until '+peDLabel(e.hold_until)+'</b>');
+  }
   if(e.area) parts.push(peEsc(e.area));
   else if(['draft','sent'].indexOf(e.status)>=0) parts.push('<span style="color:#B00020">no area yet</span>');
   if(e.guests) parts.push(e.guests+' pax');
@@ -1018,10 +1031,28 @@ function peCalShift(n){
 }
 
 // ── event editor ─────────────────────────────────────────────────────────────
+// Insert an event, retrying without any NEW optional column the database doesn't
+// have yet (SQL not run) — a nice-to-have default must never block creating a
+// booking. Mirrors the peColMissing graceful-degradation pattern used on saves.
+var PE_OPTIONAL_INSERT_COLS = ['handled_by'];
+async function peInsertEvent(row){
+  var r = await sb.from('events_desk').insert(row).select().single();
+  if(r.error){
+    var missing = PE_OPTIONAL_INSERT_COLS.filter(function(c){ return row[c]!=null && peColMissing(r.error, c); });
+    if(missing.length){
+      var slim = Object.assign({}, row);
+      missing.forEach(function(c){ delete slim[c]; });
+      r = await sb.from('events_desk').insert(slim).select().single();
+    }
+  }
+  return r;
+}
 async function peNewEvent(){
   if(!peCanEdit()){ peToast('View only — ask Valentina, Andrea or Francesco to make changes', true); return; }
-  var row = { venue_id:'robertos-difc', status:'draft', updated_by:peActor(), payment_terms:'50% deposit to confirm, balance on the day' };
-  var r = await sb.from('events_desk').insert(row).select().single();
+  // handled_by defaults to whoever creates it (Andrea: "handler need to be there"),
+  // so the field is filled by habit, not by extra typing.
+  var row = { venue_id:'robertos-difc', status:'draft', updated_by:peActor(), handled_by:peActor(), payment_terms:'50% deposit to confirm, balance on the day' };
+  var r = await peInsertEvent(row);
   if(r.error || !r.data){ peToast('Could not create the event — check connection.', true); return; }
   peState.events.push(r.data);
   await sb.from('event_log').insert({event_id:r.data.id, action:'created', actor:peActor()});
@@ -1291,8 +1322,21 @@ function peRenderEvent(){
       peIn('Company','company',e)+peSel('Type of event','event_type',e,PE_TYPES)+peIn('Minimum spend (AED)','min_spend',e,'number')+
       peTimeField('Start time','time_from',e,'peTimeFromChange(this,\''+e.id+'\')')+peTimeField('End time','time_to',e,'peFact(this,\'time_to\',\''+e.id+'\')')+peIn('Contact name','contact_name',e)+
       peIn('Contact phone','contact_phone',e)+peIn('Contact email','contact_email',e)+
+    '</div><div class="pe-grid3" style="margin-top:10px">'+
+      // #3 + Andrea's "lead from and handler": where it came from and whose it is.
+      // The handler defaults to whoever created the event, so old habits cost nothing.
+      peSel('How it came in','lead_source',e,PE_LEAD_SOURCES)+
+      peIn('Source note (promoter, commission…)','lead_source_note',e)+
+      peIn('Handled by','handled_by',e)+
     '</div><div class="pe-grid2" style="margin-top:10px">'+
       peIn('Dietary requirements','dietary',e)+peIn('Payment terms','payment_terms',e)+
+    '</div><div class="pe-grid2" style="margin-top:10px">'+
+      // #4 — Valentina: "as a option, not automatic". Nothing happens on its own:
+      // this only shows a HELD chip on the list, turning red once the date passes.
+      peIn('Hold the date until (optional)','hold_until',e,'date')+
+      // #17 — the only channel that reaches the KITCHEN docs for off-menu items.
+      // A dish priced by hand never reached the prep list; this line always does.
+      peIn('Off-menu / à la carte for the kitchen (e.g. 2× burrata)','off_menu',e)+
     '</div>'+
       (!hasSecData ? '<div style="margin-top:8px;font-size:12px;color:#8B7355;cursor:pointer" onclick="peState.moreOpen=peState.moreOpen||{};peState.moreOpen[\''+e.id+'\']=false;renderMain()">– Show fewer details</div>' : '');
   }
@@ -2454,6 +2498,7 @@ function peSetMenuPrepHTML(e){
   });
   h += '</table>';
   if(sm.note) h += '<div style="font-family:Arial,sans-serif;font-size:12px;color:#B00020;margin-top:6px"><b>Menu changes agreed with the guest — read before prep:</b> '+peEsc(sm.note)+'</div>';
+  h += peOffMenuHTML(e);   // #17 — à la carte additions reach the set-menu prep too
   if(e.dietary) h += '<div style="font-family:Arial,sans-serif;font-size:12px;color:#B00020;margin-top:6px"><b>Dietary — read before prep:</b> '+peEsc(e.dietary)+'</div>';
   return h;
 }
@@ -2495,6 +2540,16 @@ function peProposalSetMenuHTML(e){
   if(sm.note) h += '<div class="sec">Special arrangements</div><div class="dish">'+peEsc(sm.note)+'</div>';
   return h;
 }
+// #17 — off-menu / à la carte items, rendered on EVERY kitchen-facing document.
+// Valentina (17 Jul 2026): a dish added by hand ("the burrata from the à la carte")
+// got the PRICE right but never reached the kitchen's prep list — the money was
+// correct and the kitchen didn't know. This block is the missing channel; it is
+// deliberately loud (red, "read before prep") because it is the exception list.
+function peOffMenuHTML(e, plain){
+  if(!e.off_menu) return '';
+  if(plain) return '<p style="color:#B00020;font-size:13px;margin:6px 0"><b>Off-menu / à la carte — read before prep:</b> '+peEsc(e.off_menu)+'</p>';
+  return '<div style="font-family:Arial,sans-serif;font-size:12px;color:#B00020;margin-top:6px"><b>Off-menu / à la carte — read before prep:</b> '+peEsc(e.off_menu)+'</div>';
+}
 // The chef's half of the sheet: every selected dish with the quantity to
 // prepare (pcs/guest × guests), grouped like the kitchen works — cold, hot,
 // dolci — with allergens and the dietary note in one place.
@@ -2511,7 +2566,15 @@ function peKitchenPrepRows(e){
 }
 function peKitchenPrepHTML(e, t){
   var rows = peKitchenPrepRows(e);
-  if(!rows.length) return '';
+  // No library dishes but an off-menu line: the kitchen block still renders —
+  // an à-la-carte-only event must not leave the kitchen with a blank sheet (#17).
+  // (A set-menu event shows it inside its own kitchen block instead — no doubling.)
+  if(!rows.length){
+    if(!e.off_menu || e.set_menu) return '';
+    return '<div class="fs-h" style="margin-top:16px">KITCHEN — MENU &amp; QUANTITIES TO PREPARE</div>'+
+      peOffMenuHTML(e)+
+      (e.dietary?'<div style="font-family:Arial,sans-serif;font-size:12px;color:#B00020;margin-top:6px"><b>Dietary — read before prep:</b> '+peEsc(e.dietary)+'</div>':'');
+  }
   var h = '<div class="fs-h" style="margin-top:16px">KITCHEN — MENU &amp; QUANTITIES TO PREPARE</div><table>';
   h += '<tr><td class="l">Dish</td><td class="l" style="width:18%">Per guest</td><td class="l" style="width:22%">Total to prepare</td></tr>';
   var lastServe = null;
@@ -2528,6 +2591,7 @@ function peKitchenPrepHTML(e, t){
   if(e.guests && totalPcs) h += '<tr><td style="text-align:right"><b>Total</b></td><td>'+(Math.round((t||peCalcTotals(e)).pcs*10)/10)+' pc/guest</td><td><b>'+totalPcs+' pcs</b></td></tr>';
   h += '</table>';
   if(anyDefault) h += '<div style="font-family:Arial,sans-serif;font-size:11px;color:#B08D3E;margin-top:5px">Items marked <b>default</b> are still at 1 pc/guest — confirm the real quantity with the events desk before prep.</div>';
+  h += peOffMenuHTML(e);   // #17 — à la carte additions reach the prep sheet
   if(e.dietary) h += '<div style="font-family:Arial,sans-serif;font-size:12px;color:#B00020;margin-top:6px"><b>Dietary — read before prep:</b> '+peEsc(e.dietary)+'</div>';
   return h;
 }
@@ -3837,8 +3901,9 @@ async function peWizCreate(){
                 bev_package_id: w.bev ? w.bev.id : null,
                 bev_mode: peWiz.bev==='dry' ? 'dry' : null,
                 dietary: dietParts.length ? dietParts.join(' · ') : null,
+                handled_by: peActor(),
                 payment_terms:'50% deposit to confirm, balance on the day' };
-    var r = await sb.from('events_desk').insert(row).select().single();
+    var r = await peInsertEvent(row);
     if(r.error || !r.data) throw (r.error||{message:'no data'});
     peState.events.push(r.data);
     var items = w.picked.map(function(p){ return {event_id:r.data.id, dish_id:p.dish.id, pcs_per_guest:p.pcs}; });
@@ -4320,8 +4385,12 @@ function peRenderReport(){
     list.forEach(function(e){
       var v = peEventValue(e)||0; gTot += v;
       var bo = peIsBuyout(e);
+      // Andrea: "who sold these, and where did they come from" — source · handler
+      // ride under the client name so attribution is on the page, not in his head.
+      var src = [e.lead_source, e.handled_by ? 'w/ '+String(e.handled_by).split('@')[0] : ''].filter(Boolean).join(' · ');
       h += '<tr style="cursor:pointer'+(bo?';background:#FBF0D6':'')+'" onclick="peGo(\'event\',\''+e.id+'\')"><td>'+peDLabel(e.event_date)+'</td>'+
-        '<td>'+peEsc(e.client_name||'')+(e.company?'<br><span style="color:#8B7355">'+peEsc(e.company)+'</span>':'')+'</td>'+
+        '<td>'+peEsc(e.client_name||'')+(e.company?'<br><span style="color:#8B7355">'+peEsc(e.company)+'</span>':'')+
+        (src?'<br><span style="color:#A5876B;font-size:10px">'+peEsc(src)+'</span>':'')+'</td>'+
         '<td>'+peEsc(e.area||'')+'</td>'+
         '<td>'+peEsc(e.event_type||'')+(bo?' <b style="color:#8A6400">&#9679; BUYOUT</b>':'')+'</td><td>'+peEsc(e.time_from||'')+'</td>'+
         '<td>'+(e.guests||'')+'</td><td>'+peEsc(e.package_label||'')+'</td>'+
