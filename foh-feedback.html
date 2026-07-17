@@ -79,8 +79,14 @@ var who = q.get('who') || '';
 
 var A_FIX = 'Fix this', A_NICE = 'Nice to have', A_NEVER = "Doesn't happen";
 var A_FINE = 'Agree, this is fine', A_PROB = "NO — there's a problem";
+var A_LEAVE = 'Leave as is';
 var ASK = [A_FIX, A_NICE, A_NEVER];
 var OK = [A_FINE, A_PROB];
+// A round may set its own three answers (set.ask). "Doesn't happen to me" fits
+// someone describing their own day; it doesn't fit a COO judging a report, who
+// means "leave it alone". Any value used here MUST also be listed in
+// FB_ANSWER_ORDER in index.html, or Admin counts it as a request to fix.
+var ASK_COO = [A_FIX, A_NICE, A_LEAVE];
 
 var SETS = {
   'events-20': {
@@ -154,6 +160,67 @@ var SETS = {
         works: true,
         label: 'Late finish, 6pm till 1am' }
     ]
+  },
+
+  // ── The COO round, part 1: the EVENTS module (Calendar + Monthly report).
+  // Same machinery, different chair: instead of "does this happen to you?", it
+  // asks "is this worth fixing?". Hence set.ask = ASK_COO, whose third answer is
+  // "Leave as is" rather than "Doesn't happen to me".
+  // Revenue is deliberately NOT here — it is its own round ('coo-revenue'),
+  // sent separately so each one stays short enough to actually finish.
+  'coo-events': {
+    title: 'Events — Calendar & Monthly report',
+    ask: ASK_COO,
+    intro: [
+      'An AI took your seat — a hospitality COO — and put your questions through the events <b>Calendar</b> and <b>Monthly report</b>: what is the book worth, are we converting, can I send this to the board? Not screenshots: it ran the app’s real calculations and checked what came back.',
+      '<b>11 things need your call.</b> Some are plainly wrong and we fix them either way. Others the app simply doesn’t do — they may not matter to you. <b>Revenue is a separate round, coming next.</b> Nothing gets built until you’ve been through it.'
+    ],
+    howto: 'Tap an answer on each one. <b>Leave it as it is</b> is a real answer — several here probably deserve it. The two marked <b>Works today</b> already work; they’re here so you get the whole picture, not just complaints.<br><br>Answers save on this phone as you go. Tap <b>Send my answers</b> when you’re done.',
+    lastQ: 'What do you need to see that isn’t on this list?',
+    items: [
+      { said: '“Where is the Mubadala booking? 90 covers, confirmed, 180k.”',
+        today: 'It has no date yet, so it is <b>invisible everywhere</b> — off the calendar, out of the monthly report, and out of every headline number. It counts in nothing. Meanwhile a dateless <i>enquiry</i> still counts in the pipeline. So a maybe inflates the pipeline while a confirmed booking disappears.',
+        label: 'Confirmed event with no date is invisible and counts in nothing' },
+      { said: '“Their minimum is 150k but they only ordered 60k of food. What do we book?”',
+        today: 'Two different answers from the same app. The <b>agreement</b> says AED 150,000 — the minimum they are contractually bound to pay, and the deposit is worked out from it. The <b>report</b> says AED 60,000. Every headline number under-reports that booking by 90k, and the report contradicts the contract we signed.',
+        label: 'Report values a min-spend event at 60k when the contract says 150k' },
+      { said: '“What have events done year to date?”',
+        today: 'The card says “2026 to date” but it counts the <b>whole year</b>, including bookings that have not happened yet. Ours read AED 670,000 — it included a confirmed December buyout. The true year-to-date was AED 110,000. Reconcile that against finance and you are over by every forward booking.',
+        label: '"2026 to date" includes future bookings that have not happened' },
+      { said: '“Is that 350,000 net or gross?”',
+        today: 'Gross — and <b>nothing on the report says so</b>. Every value here is the price the client is quoted, carrying 23.585% of service charge, DIFC fee and VAT. So it is not the number finance books, and it cannot be compared against a net figure without stripping that out first. AED 350,000 here is about AED 283,000 net.',
+        label: 'Every value on the report is gross — nothing says so' },
+      { said: '“How much money is on the calendar in July?”',
+        today: 'The calendar shows the client’s name and the number of covers — <b>never the value</b>. The header counts events but never adds them up. A 400k full buyout looks exactly like a 45k gathering.',
+        label: 'Calendar shows names and covers — never money' },
+      { said: '“I clicked through to August — did the whole page move?”',
+        today: 'Only half of it. The <b>headline cards stay on today’s month</b> while the tables below move to August. One screen showing two different months, with nothing saying so.',
+        label: 'Monthly report shows August tables under July headline numbers' },
+      { said: '“What percentage of enquiries do we convert, and what did we walk away from?”',
+        today: 'Unanswerable. The report counts how many were lost but <b>never what they were worth</b>, and nothing works out a win rate. All the information is already there — including the reason each one was lost.',
+        label: 'No conversion rate, no win/loss, no value of what we lost' },
+      { said: '“Is that 585k pipeline real?”',
+        today: 'It counts a <b>rough draft and a sent proposal at the same full value</b>, with no weighting and no split. A 55k draft that might be nothing and a 400k proposal sitting on the client’s desk are the same money in that number.',
+        label: 'Pipeline counts a rough draft the same as a sent proposal' },
+      { said: '“Is 350,000 a good July?”',
+        today: 'Nothing on the page can tell you. It is a snapshot — <b>no last month, no last year, no trend</b>. It states a number and never a verdict.',
+        label: 'Monthly report compares to nothing — no last month, no last year' },
+      { said: '“What were events supposed to deliver this month?”',
+        today: 'There is <b>no events target or budget at all</b> — no field, nowhere to put one. So every figure in this report is an absolute with nothing to measure it against. It can state a number, never a verdict.',
+        label: 'No events budget or target exists at all' },
+      { said: '“Who sold these, and where did they come from?”',
+        today: 'Not recorded. There is <b>no owner and no source</b> on a booking — walk-in, referral, the call centre, a promoter, all the same. So you cannot see where the business comes from or who is performing, and the CRM has nothing to match against.',
+        label: 'No record of who sold a booking or where it came from' },
+
+      { said: '“What is confirmed between October and December, and what is still only hopeful?”',
+        today: 'Pick any two dates and it splits confirmed from pipeline, lists every booking behind the number, and will <b>print it or email it</b> from the same screen. Nothing to fix — this is the strongest thing in the module.',
+        works: true,
+        label: 'Forecast any period — confirmed vs pipeline, prints and emails' },
+      { said: 'You open the calendar on your phone between meetings.',
+        today: 'Every booking is <b>colour-coded by status</b> with the legend always on screen, and on a phone it becomes a clean day-by-day list instead of an unreadable grid. Nothing to fix.',
+        works: true,
+        label: 'Calendar reads at a glance, and works on a phone' }
+    ]
   }
 };
 
@@ -215,15 +282,18 @@ function render(){
   var h = '<div class="brand">R O B E R T O ’ S</div>'
         + '<div class="sub">'+esc(set.title)+'</div>'
         + '<div class="intro">'+set.intro.map(function(p){ return '<p>'+p+'</p>'; }).join('')+'</div>'
-        + '<div class="howto">Read each one and ask yourself: <i>does this happen to me?</i> Then tap an answer. '
-        + 'There are no wrong answers — if something here never comes up in your work, say so and we’ll leave it alone. '
-        + 'The ones marked <b>Works today</b> are already fine; they’re here so you can see the whole picture.<br><br>'
-        + 'Your answers are kept on this phone as you go, so you can stop and come back. '
-        + 'Tap <b>Send my answers</b> when you’re done — you’ll see it confirmed on screen.</div>';
+        // A round may bring its own how-to (set.howto). The default below is
+        // written for someone describing their own working day.
+        + '<div class="howto">' + (set.howto ||
+            ('Read each one and ask yourself: <i>does this happen to me?</i> Then tap an answer. '
+           + 'There are no wrong answers — if something here never comes up in your work, say so and we’ll leave it alone. '
+           + 'The ones marked <b>Works today</b> are already fine; they’re here so you can see the whole picture.<br><br>'
+           + 'Your answers are kept on this phone as you go, so you can stop and come back. '
+           + 'Tap <b>Send my answers</b> when you’re done — you’ll see it confirmed on screen.')) + '</div>';
 
   set.items.forEach(function(it, i){
     var n = String(i+1);
-    var opts = it.works ? OK : ASK;
+    var opts = it.works ? OK : (set.ask || ASK);
     var cur = (answers[n] && answers[n].a) || '';
     h += '<div class="q"><div class="qh"><span class="qn">'+n+'</span><p class="said">'+it.said+'</p></div>'
        + (it.works ? '<div style="margin-top:8px"><span class="ok">Works today</span></div>' : '')
@@ -231,7 +301,10 @@ function render(){
        + '<div class="opts" data-opts="'+n+'">'
        + opts.map(function(o){
            var on = cur === o;
-           var lbl = o === A_PROB ? 'Actually, there’s a problem' : (o === A_NEVER ? 'Doesn’t happen to me' : (o === A_FIX ? 'Yes — fix this' : o));
+           var lbl = o === A_PROB ? 'Actually, there’s a problem'
+                   : o === A_NEVER ? 'Doesn’t happen to me'
+                   : o === A_LEAVE ? 'Leave it as it is'
+                   : o === A_FIX   ? 'Yes — fix this' : o;
            return '<label class="opt'+(on?' on':'')+'"><input type="radio" name="q'+n+'" value="'+esc(o)+'"'+(on?' checked':'')
                 + ' onchange="pick(\''+n+'\', this.value)"> '+lbl+'</label>';
          }).join('')
@@ -242,7 +315,7 @@ function render(){
   });
 
   h += '<div class="last"><b>Anything we missed?</b>'
-     + '<p>These are the '+set.items.length+' we thought of. You’re the one living it — what lands in your inbox that isn’t on this list, and what does the app make you fight with that we haven’t spotted?</p>'
+     + '<p>' + (set.lastQ || ('These are the '+set.items.length+' we thought of. You’re the one living it — what lands in your inbox that isn’t on this list, and what does the app make you fight with that we haven’t spotted?')) + '</p>'
      + '<textarea class="nin" id="extra" rows="4" placeholder="Tell us here…" oninput="extraSet(this.value)">'+esc(extra)+'</textarea></div>'
      + '<div class="ft">Roberto’s DIFC · this goes straight to Francesco</div>';
 

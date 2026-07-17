@@ -3405,14 +3405,19 @@ function admUsageHTML(){
    and within a round the "fix this" answers are counted first, because that
    count IS the work list. Needs foh-app-feedback.sql run once.
    =================================================================== */
-var FB_TOPIC_NAMES={'events-20':'Events — the 20 enquiries we tested'};
-// Order = how loudly it asks for work. Anything unknown sorts last.
-var FB_ANSWER_ORDER=['Fix this',"NO — there's a problem",'Nice to have','Agree, this is fine',"Doesn't happen"];
+var FB_TOPIC_NAMES={'events-20':'Events — the 20 enquiries we tested',
+  'coo-events':'Events — Calendar & Monthly report (COO review)'};
+// Order = how loudly it asks for work. EVERY answer a round can produce must be
+// listed here: the tally below treats "not in this list" as needing work
+// (indexOf → -1, which is not > 1), so an unlisted answer would be counted as a
+// request to fix. "Leave as is" is the COO round's version of "Doesn't happen".
+var FB_ANSWER_ORDER=['Fix this',"NO — there's a problem",'Nice to have','Agree, this is fine',"Doesn't happen",'Leave as is'];
 var FB_ANSWER_COL={'Fix this':{bg:'#F7DED9',t:'#8A2A1A',b:'#D89C90'},
   "NO — there's a problem":{bg:'#F7DED9',t:'#8A2A1A',b:'#D89C90'},
   'Nice to have':{bg:'#FBF0D6',t:'#7A5500',b:'#DFC680'},
   'Agree, this is fine':{bg:'#E7F0E4',t:'#2E6B34',b:'#A8C6A4'},
-  "Doesn't happen":{bg:'#EDE7DC',t:'#7A6B55',b:'#CBBBA2'}};
+  "Doesn't happen":{bg:'#EDE7DC',t:'#7A6B55',b:'#CBBBA2'},
+  'Leave as is':{bg:'#EDE7DC',t:'#7A6B55',b:'#CBBBA2'}};
 function admFbTopicName(t){ return FB_TOPIC_NAMES[t]||t||'—'; }
 // ── Send a round ──
 // The link is the whole product: foh-feedback.html?topic=<set>&who=<Name>. The
