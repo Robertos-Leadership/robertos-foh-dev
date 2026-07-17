@@ -2231,7 +2231,7 @@ if ('serviceWorker' in navigator) {
     <div class="foh-hero-content">
       <img class="foh-hero-logo" src="robertos-logo-white.svg" alt="Roberto's">
     </div>
-    <div id="foh-build" style="position:absolute;bottom:6px;right:10px;font-size:9px;letter-spacing:.08em;color:rgba(255,255,255,.4);z-index:3;font-variant-numeric:tabular-nums;">build 2026-07-17.1</div>
+    <div id="foh-build" style="position:absolute;bottom:6px;right:10px;font-size:9px;letter-spacing:.08em;color:rgba(255,255,255,.4);z-index:3;font-variant-numeric:tabular-nums;">build 2026-07-17.5</div>
   </div>
 
   <!-- main scroll area -->
@@ -2461,7 +2461,7 @@ if ('serviceWorker' in navigator) {
      answer on. One round, one place: see the header of foh-rounds.js.
      Loaded here, not with the foh-*.js at the foot of the body, because the
      inline Admin code below READS it rather than just calling into it. -->
-<script src="foh-rounds.js?v=20260717a"></script>
+<script src="foh-rounds.js?v=20260717c"></script>
 <script>
 const SUPABASE_URL = 'https://paoaivwtkzujmrgrfjuq.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBhb2Fpdnd0a3p1am1yZ3JmanVxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEwNzAxMzAsImV4cCI6MjA5NjY0NjEzMH0.VynG9PBeIaqRG2lkMEuzskkcB11EhR-UfO9eGYsaUxk';
@@ -3090,6 +3090,19 @@ async function adminDeleteUser(email){
 function adminRefresh(){ state.adminLoaded=false; loadAdminUsers(); }
 function adminOpenSupabase(){ window.open(SUPA_USERS_URL,'_blank','noopener'); }
 var ADM_CSS='.adm-wrap{max-width:1100px;margin:0 auto;padding:18px 16px 90px;}'
+  // Feedback: the list and the open item sit side by side once there is room
+  // for both. On a phone the panel simply follows the list.
+  //
+  // minmax(0,1fr), NOT 1fr. "1fr" means minmax(AUTO,1fr), and that auto minimum
+  // is the column's min-content — so one unshrinkable row sets the floor for the
+  // whole column. Andrea's note ("Assuming Valentina is teh only one handling…")
+  // is previewed with white-space:nowrap, which made the list demand 913px and
+  // crushed the panel to a 139px strip showing nothing but its own scrollbar.
+  // minmax(0,…) lets the column shrink, and the ellipsis does its job.
+  +'@media(min-width:900px){.fb-split{grid-template-columns:minmax(0,1fr) minmax(0,1fr) !important;}}'
+  // Same trap one level down: a grid/flex child will not shrink past its content
+  // unless it is told it may.
+  +'.fb-split>*{min-width:0;}'
   +'.adm-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:6px;}'
   +'.adm-head h2{font-family:Georgia,serif;color:#400207;margin:0;font-size:22px;}'
   +'.adm-note{font-size:13px;color:#6b5a44;line-height:1.5;margin:6px 0 14px;}'
@@ -3597,12 +3610,12 @@ async function admFbLoad(){
     if(r.error) throw r.error;
     state.fbRows=r.data||[];
   }catch(err){ state.fbErr=(err&&err.message)||'Could not load the feedback.'; }
-  // The tick list and the send log are EXTRAS: if foh-app-feedback-actions.sql
+  // The work state and the send log are EXTRAS: if foh-app-feedback-status.sql
   // has not been run, the replies above still render exactly as they always did.
   // A missing table must never take the answers down with it.
   state.fbDone=null; state.fbSent=null; state.fbActionsErr=null;
   try{
-    var d=await sb.from('app_feedback_done').select('topic,qkey');
+    var d=await sb.from('app_feedback_work').select('topic,qkey,status,what_changed,commit_sha,build,check_line,verified_at,verified_by,verified_what,updated_at');
     if(d.error) throw d.error;
     state.fbDone=d.data||[];
     var s=await sb.from('app_feedback_sent').select('topic,who,email,sent_at').order('sent_at',{ascending:false});
@@ -3611,30 +3624,168 @@ async function admFbLoad(){
   }catch(err){ state.fbActionsErr=(err&&err.message)||'not available'; }
   if(state.currentTab==='admin' && state.adminView==='feedback') renderMain();
 }
-function admFbDoneKey(t,q){ return t+' '+q; }
-function admFbDoneSet(){
-  var m={}; (state.fbDone||[]).forEach(function(d){ m[admFbDoneKey(d.topic,d.qkey)]=1; }); return m;
+function admFbDoneKey(t,q){ return t+'|'+q; }
+function admFbWorkOf(t,q){
+  var m=null;
+  (state.fbDone||[]).forEach(function(d){ if(d.topic===t && String(d.qkey)===String(q)) m=d; });
+  return m;
 }
-// Tick / untick one line of the work list. This writes ONLY to app_feedback_done
-// — an answer anyone sent is theirs and is never edited or deleted here.
-async function admFbTick(topic, qkey, on){
-  if(state.fbActionsErr){ toast('Run foh-app-feedback-actions.sql once in Supabase first — then this works.', true); return; }
-  var m=admFbDoneSet();
-  // paint immediately, reconcile after — this is a tick, it must feel instant
-  if(on) state.fbDone=(state.fbDone||[]).concat([{topic:topic,qkey:qkey}]);
-  else state.fbDone=(state.fbDone||[]).filter(function(d){ return !(d.topic===topic && String(d.qkey)===String(qkey)); });
-  renderMain();
+// ── "Done" was a claim ──────────────────────────────────────────────────────
+// The old control was a tick: it asserted a thing was fixed and carried nothing
+// behind it. Nothing else on this platform accepts a claim, and the team have no
+// reason to believe this one either. So a fix now brings evidence, and the
+// database refuses it otherwise (app_feedback_work_evidence_ck).
+//
+// What each state means, and what actually proves it:
+//   progress — picked up. Claims nothing, so it needs nothing.
+//   fixed    — shipped. Must say WHAT changed, WHICH build, and HOW to check it.
+//              The app then compares that build against the one it is running,
+//              so "live" is COMPUTED here, not claimed. That proves the code
+//              SHIPPED. It does not prove the code WORKS.
+//   verified — someone drove the real flow and saw it work. The only state that
+//              claims it works, and it records what was driven so the claim can
+//              be re-checked instead of taken on faith.
+var FB_BUILD = (function(){
+  var e = document.getElementById('foh-build');
+  var m = e && /build\s+([0-9A-Za-z.\-]+)/.exec(e.textContent||'');
+  return m ? m[1] : '';
+})();
+// "2026-07-17.2" -> comparable. Anything unparseable ranks lowest, so a bad
+// stamp reads as "not live yet" rather than falsely claiming it is.
+function admFbBuildRank(b){
+  var m=/^(\d{4})-(\d{2})-(\d{2})\.(\d+)$/.exec(String(b||'').trim());
+  return m ? (Number(m[1])*1e9+Number(m[2])*1e7+Number(m[3])*1e5+Number(m[4])) : -1;
+}
+function admFbIsLive(w){
+  return !!w && admFbBuildRank(w.build)>-1 && admFbBuildRank(w.build)<=admFbBuildRank(FB_BUILD);
+}
+function admFbStatusPill(w){
+  if(!w) return '';
+  var st='font-size:10.5px;border-radius:10px;padding:2px 8px;white-space:nowrap;';
+  if(w.status==='progress') return '<span style="'+st+'background:#FBF0D6;color:#7A5500;border:1px solid #DFC680;">in progress</span>';
+  if(w.status==='verified') return admFbIsLive(w)
+    ? '<span style="'+st+'background:#E7F0E4;color:#2E6B34;border:1px solid #A8C6A4;">&#10003; verified live &middot; '+admEsc(w.build)+'</span>'
+    : '<span style="'+st+'background:#FBF0D6;color:#7A5500;border:1px solid #DFC680;">verified &middot; build '+admEsc(w.build||'?')+' not live yet</span>';
+  return admFbIsLive(w)
+    ? '<span style="'+st+'background:#DCE9F6;color:#12456E;border:1px solid #8FB6DA;">fixed &amp; live &middot; '+admEsc(w.build)+'</span>'
+    : '<span style="'+st+'background:#EDE7DC;color:#7A6B55;border:1px solid #CBBBA2;">fixed &middot; build '+admEsc(w.build||'?')+' not live yet</span>';
+}
+function admFbNeedsSQL(){
+  if(state.fbActionsErr){ toast('Run foh-app-feedback-status.sql once in Supabase first — then this works.', true); return true; }
+  return false;
+}
+// Recording a fix is a FORM in the panel (admFbPanelHTML), not a chain of three
+// window.prompt boxes. The prompts asked for evidence about a question they did
+// not show you, in a dialog you could not go back in, and told you off only
+// after you had answered. The form keeps the question and their note on screen
+// while you type, and Save says what is missing before you press it.
+// Back to not-started. Our record of the work goes; what they said never does.
+async function admFbReopen(topic, qkey, fromForm){
+  if(admFbNeedsSQL()) return;
+  if(!confirm('Put this back on the list as not started?\n\nWhat they said is untouched — only our record of the work goes, and it disappears from their status page.')) return;
   try{
-    if(on){
-      var r=await sb.from('app_feedback_done').upsert({topic:topic,qkey:String(qkey),done_by:(state.userEmail||null)},{onConflict:'topic,qkey'});
-      if(r.error) throw r.error;
-    }else{
-      var r2=await sb.from('app_feedback_done').delete().eq('topic',topic).eq('qkey',String(qkey));
-      if(r2.error) throw r2.error;
-    }
+    var r=await sb.from('app_feedback_work').delete().eq('topic',topic).eq('qkey',String(qkey));
+    if(r.error) throw r.error;
+    toast('Back on the list');
+  }catch(err){ toast('Could not save that — '+String(err&&err.message||err).slice(0,90), true); }
+  admFbLoad();
+}
+async function admFbSaveWork(row){
+  row.done_by = state.userEmail||null;
+  row.updated_at = new Date().toISOString();
+  try{
+    var r=await sb.from('app_feedback_work').upsert(row,{onConflict:'topic,qkey'});
+    if(r.error) throw r.error;
+    toast(row.status==='verified' ? 'Verified ✓ — they can see it, and how to check it'
+        : row.status==='fixed' ? 'Recorded ✓ — it is on their status page now, with how to check it'
+        : 'Marked as being worked on ✓');
   }catch(err){
-    toast('Couldn’t save that — '+String(err&&err.message||err).slice(0,90), true);
-    admFbLoad();   // put the screen back to what the database actually says
+    // The evidence constraint is the database refusing a claim. Say that, not a
+    // Postgres string.
+    var m=String(err&&err.message||err);
+    toast(/evidence_ck/.test(m)
+      ? 'Not saved — a fix needs what changed, the build, and how to check it. That is the whole point of it.'
+      : 'Could not save that — '+m.slice(0,90), true);
+  }
+  admFbLoad();
+}
+// ── The fix brief ───────────────────────────────────────────────────────────
+// Everything needed to DO the work already exists: the round, what they were
+// asked, what the app does today, their note in their own words, and who asked.
+// This assembles it into a brief that pastes straight to Claude, instead of
+// Francesco retyping it out of two files.
+// Notes go in VERBATIM, typos and all — the meaning is in their words.
+function admFbBrief(topic, qkey){
+  var round=FB_ROUNDS[topic];
+  if(!round){ toast('That round is not in foh-rounds.js any more, so there is nothing to brief from.', true); return; }
+  var it=round.items[fbKeyPos(round,qkey)];
+  if(!it){ toast('That question is not in the round any more.', true); return; }
+  var strip=function(s){ return String(s||'').replace(/<[^>]+>/g,''); };
+  var says=[];
+  (state.fbRows||[]).forEach(function(r){
+    if(r.topic!==topic) return;
+    var a=(r.answers||{})[qkey];
+    if(!a || !a.a || !FB_WORK_ANSWERS[a.a]) return;
+    says.push('  - ' + (r.who||'someone') + ' answered "' + a.a + '"' + (a.note ? ' and wrote: "' + a.note + '"' : ''));
+  });
+  var cur=admFbWorkOf(topic,qkey);
+  var out=[
+    "Roberto's FOH — a fix the team asked for.",
+    '',
+    'ROUND: ' + (round.name||topic) + '   (' + topic + ', item ' + qkey + ')',
+    'ITEM:  ' + strip(it.label),
+    '',
+    'WHAT THEY WERE ASKED ABOUT:',
+    '  ' + strip(it.said),
+    '',
+    'WHAT THE APP DOES TODAY (as the round describes it):',
+    '  ' + strip(it.today),
+    '',
+    'WHAT THEY SAID (verbatim — their words, their spelling):',
+    says.length ? says.join('\n') : '  (nobody flagged this one)',
+    ''
+  ];
+  if(cur && cur.status){
+    out.push('ALREADY RECORDED: ' + cur.status + (cur.build?' in build '+cur.build:'')
+      + (cur.what_changed?' — "'+cur.what_changed+'"':''), '');
+  }
+  out.push(
+    'DONE MEANS:',
+    '  1. Fixed, and proven by driving the real flow — not by a test that mocks it.',
+    '  2. Live, with the build recorded against ' + topic + ' / ' + qkey + ' in',
+    '     Admin -> Feedback (it refuses to save without it).',
+    '  3. One line saying how THEY can check it themselves in the app. That line',
+    '     is what they see on their status page, and it is what earns the trust.',
+    '',
+    'HOUSE RULES: read the code and cite file:line; never ship an unverified',
+    'number; never delete working capability to satisfy an audit.'
+  );
+  var txt=out.join('\n');
+  (navigator.clipboard ? navigator.clipboard.writeText(txt) : Promise.reject())
+    .then(function(){ toast('Fix brief copied — paste it to Claude'); })
+    .catch(function(){ window.prompt('Copy this brief:', txt); });
+}
+// ── Their status link ───────────────────────────────────────────────────────
+// One unguessable token per person, so they can look any time, without asking
+// and without a login. Needs foh-app-feedback-status.sql.
+async function admFbStatusLink(who){
+  if(!who){ toast('No name on that reply, so there is nobody to give a link to.', true); return; }
+  try{
+    var g=await sb.from('app_feedback_people').select('token').eq('who',who).limit(1);
+    if(g.error) throw g.error;
+    var tok=(g.data&&g.data[0]&&g.data[0].token)||null;
+    if(!tok){
+      var ins=await sb.from('app_feedback_people').insert({who:who}).select('token');
+      if(ins.error) throw ins.error;
+      tok=ins.data&&ins.data[0]&&ins.data[0].token;
+    }
+    if(!tok) throw new Error('no token came back');
+    var url=admFbBase()+'foh-feedback-status.html?t='+encodeURIComponent(tok);
+    (navigator.clipboard ? navigator.clipboard.writeText(url) : Promise.reject())
+      .then(function(){ toast(who+'’s status link copied — it stays current, they can keep it'); })
+      .catch(function(){ window.prompt('Their status link:', url); });
+  }catch(err){
+    toast('Could not make that link — run foh-app-feedback-status.sql once, then try again.', true);
   }
 }
 function admFbPill(a){
@@ -3659,26 +3810,306 @@ function admFbLatest(rows){
     if(seen[k]){ out.push({row:r, latest:false, dupOf:seen[k]}); }
     else { seen[k]=r; out.push({row:r, latest:true, again:0}); }
   });
-  // count how many times each person answered, for the note on their row
   var n={};
   out.forEach(function(o){ var k=(o.row.who&&String(o.row.who).trim())?String(o.row.who).trim().toLowerCase():null; if(k) n[k]=(n[k]||0)+1; });
   out.forEach(function(o){ var k=(o.row.who&&String(o.row.who).trim())?String(o.row.who).trim().toLowerCase():null; o.again = k?n[k]:1; });
   return out;
 }
-function admFbHTML(){
-  var head='<div class="adm-head"><h2>Feedback — what the team sent back</h2><button class="btn btn-sm" onclick="admFbLoad()">Refresh</button></div>'
-    +'<div class="ppl-sum">Answers from the feedback rounds we send the team. A row here means it arrived &mdash; nothing is waiting on anyone&rsquo;s phone.</div>';
-  // The send card shows in EVERY state — the first time he opens this tab there are
-  // no replies yet, and that is exactly when he needs to send one.
-  var send = admFbSendHTML();
-  if(state.fbErr) return '<div class="adm-wrap">'+head+send+'<div class="ppl-empty">Couldn&rsquo;t load the replies &mdash; '+admEsc(state.fbErr)+'<br><br>If this is the first time, run <b>foh-app-feedback.sql</b> once in Supabase, then tap Refresh.</div></div>';
-  if(!state.fbRows) return '<div class="adm-wrap">'+head+send+'<div class="loading">Loading&hellip;</div></div>';
 
-  var done=admFbDoneSet();
+/* ── The screen ──────────────────────────────────────────────────────────────
+   Two jobs, and they were fighting each other: SCAN (what does the team need
+   from me?) and ACT (work one item). Everything used to be on one plane — every
+   row carried four shouting buttons, forty on screen, and recording a fix meant
+   three window.prompt boxes with the question you were answering about nowhere
+   in sight.
+
+   Now: a quiet list you read at a glance — the colour down the left IS the
+   state, and there is not a single button on a row — and one item at a time in
+   a panel, with a real form. Same pattern the Control Centre already uses for
+   people: the row is a door, not a control surface.
+
+   "Send a round" is a button, not a permanent card: he sends rarely and reads
+   constantly, and that card was pushing the actual work below the fold.
+   ────────────────────────────────────────────────────────────────────────── */
+var FB_STATE_LABEL={ ok:'verified live', ship:'fixed, live', prog:'being worked on', open:'not started' };
+// What the row says, in the words that are actually true for THIS item. A state
+// derived from a follow-up round has no build behind it, so it must never
+// borrow "verified live" — that would be the unearned claim we just removed.
+// It says who confirmed it instead, which is stronger anyway: the person who
+// asked, not us.
+function admFbStateLabel(t,q){
+  if(admFbWorkOf(t,q)) return FB_STATE_LABEL[admFbStateOf(t,q)];
+  var c=admFbClosed(t,q);
+  if(!c) return FB_STATE_LABEL.open;
+  return c.confirmedBy
+    ? '✓ '+admEsc(String(c.confirmedBy).split(' ')[0])+' confirmed it'
+    : 'fixed — told them';
+}
+var FB_STATE_COL={ ok:'#5C9463', ship:'#7FA6CC', prog:'#D9B45B', open:'#C9BBA3' };
+// What the person who ASKED said about the item that closed this one. Their
+// latest submission only — the same rule everything else counts by.
+function admFbAnswerTo(topic, qkey){
+  var rows=(state.fbRows||[]).filter(function(r){ return r.topic===topic; });
+  for(var i=0;i<rows.length;i++){                      // newest first
+    var a=(rows[i].answers||{})[qkey];
+    if(a && a.a) return { a:a.a, who:rows[i].who };
+  }
+  return null;
+}
+// Was this closed by a later round saying so — and did they agree?
+// Nine of Andrea's eleven were fixed, shipped and described to him in round 2,
+// and he answered "Agree, this is fine" on every one. The screen still called
+// them "not started", because nothing linked the rounds. It does now (fixes:).
+// The claim is never ours alone: if they answered "NO — there's a problem" it
+// goes straight back to open, because they are the only ones who can say.
+function admFbClosed(t,q){
+  var c=(typeof fbClosedBy==='function') ? fbClosedBy(t,q) : null;
+  if(!c) return null;
+  var ans=admFbAnswerTo(c.topic, c.qkey);
+  if(ans && ans.a===FB_A.PROB) return null;            // they say we got it wrong
+  c.confirmedBy = (ans && ans.a===FB_A.FINE) ? (ans.who||'they') : null;
+  return c;
+}
+// One item's state. This is the ONLY place the four states are decided, so the
+// list, the bar and the panel can never disagree.
+// A recorded work row always WINS over what a round claims — an explicit fact
+// beats an inferred one.
+function admFbStateOf(t,q){
+  var w=admFbWorkOf(t,q);
+  if(w){
+    if(w.status==='progress') return 'prog';
+    if(w.status==='verified' && admFbIsLive(w)) return 'ok';
+    return 'ship';                     // fixed, or verified-but-not-live-yet
+  }
+  var c=admFbClosed(t,q);
+  if(c) return c.confirmedBy ? 'ok' : 'ship';
+  return 'open';
+}
+function admFbSel(){ return state.fbSel||null; }
+function admFbOpen(t,q){
+  state.fbSel={topic:t, qkey:String(q)};
+  var w=admFbWorkOf(t,q)||{};
+  // The form is a draft held in state, so a repaint never loses what he typed.
+  state.fbForm={
+    status: w.status || 'open',
+    what_changed: w.what_changed||'', check_line: w.check_line||'',
+    build: w.build||'', verified_what: w.verified_what||''
+  };
+  renderMain();
+}
+function admFbClose(){ state.fbSel=null; state.fbForm=null; renderMain(); }
+function admFbSetFilter(f){ state.fbFilter=f; state.fbSel=null; renderMain(); }
+function admFbToggleSend(){ state.fbSendOpen=!state.fbSendOpen; renderMain(); }
+// Move the item between states. Not typing, so a repaint is safe here.
+function admFbSetStatus(k){
+  var f=state.fbForm; if(!f) return;
+  // Default the build to the one we are RUNNING the moment it is claimed fixed.
+  // Without this the box shows a build while the value behind it is empty, so
+  // Save says "needs the build" pointing at a filled-in field — the screen
+  // arguing with itself. What is displayed and what is checked must be one value.
+  if((k==='fixed'||k==='verified') && !String(f.build||'').trim()) f.build=FB_BUILD;
+  f.status=k;
+  renderMain();
+}
+// Typing must NEVER re-render the panel — it would throw him out of the box
+// mid-sentence. Only the Save button and its reason repaint.
+function admFbFormSet(field, v){
+  if(!state.fbForm) return;
+  state.fbForm[field]=v;
+  admFbPaintSave();
+}
+// What is still missing before this stops being a claim. Returns [] when the
+// evidence is complete — the same rule the database enforces, said in advance
+// instead of after the fact.
+function admFbMissing(){
+  var f=state.fbForm||{}, m=[];
+  if(f.status==='progress' || f.status==='open') return m;
+  if(!String(f.what_changed||'').trim()) m.push('what changed');
+  if(!String(f.check_line||'').trim()) m.push('how they check it');
+  if(!String(f.build||'').trim()) m.push('the build');
+  if(f.status==='verified' && !String(f.verified_what||'').trim()) m.push('what you drove');
+  return m;
+}
+// Whether Save can do anything, and what to say either way. One place, so the
+// button and its reason can never disagree — and so "Not started" on an item we
+// never started means there is nothing to save, rather than a Save that fires a
+// confirm dialog about removing work that does not exist.
+function admFbSaveState(){
+  var f=state.fbForm||{}, s=admFbSel();
+  var w=s?admFbWorkOf(s.topic,s.qkey):null;
+  if(f.status==='open'){
+    return w ? {ok:true, why:'Saving puts it back on the list &mdash; what they said is untouched.'}
+             : {ok:false, why:'Nothing to save yet &mdash; say where it&rsquo;s got to.'};
+  }
+  var m=admFbMissing();
+  if(m.length) return {ok:false, why:'Needs '+admEsc(m.join(', '))+' &mdash; without it this is the tick we just removed.'};
+  return {ok:true, why:'They see this the moment you save.'};
+}
+function admFbPaintSave(){
+  var b=document.getElementById('fb-save'), why=document.getElementById('fb-why-save');
+  if(!b) return;
+  var v=admFbSaveState();
+  b.disabled = !v.ok;
+  b.title = v.ok ? '' : v.why.replace(/&[a-z]+;/g,'');
+  if(why) why.innerHTML = '<span style="color:'+(v.ok?'#9c8a72':'#7A2430')+';">'+v.why+'</span>';
+}
+async function admFbSaveForm(){
+  var s=admFbSel(), f=state.fbForm;
+  if(!s || !f) return;
+  if(admFbMissing().length) return;                 // the button is already off
+  if(admFbNeedsSQL()) return;
+  if(f.status==='open'){ await admFbReopen(s.topic, s.qkey, true); return; }
+  var row={ topic:s.topic, qkey:s.qkey, status:f.status };
+  if(f.status!=='progress'){
+    row.what_changed=String(f.what_changed).trim();
+    row.check_line=String(f.check_line).trim();
+    row.build=String(f.build).trim();
+  }
+  if(f.status==='verified'){
+    row.verified_what=String(f.verified_what).trim();
+    row.verified_by=state.userEmail||null;
+    row.verified_at=new Date().toISOString();
+  }
+  await admFbSaveWork(row);
+}
+function admFbBar(items){
+  var n={ok:0,ship:0,prog:0,open:0}, t=items.length;
+  items.forEach(function(i){ n[i.st]++; });
+  if(!t) return {n:n, html:''};
+  var bar='<div style="display:flex;height:7px;border-radius:4px;overflow:hidden;margin:13px 0 8px;background:#EDE7DC;">'
+    + ['ok','ship','prog','open'].map(function(k){
+        return n[k] ? '<i style="display:block;width:'+(n[k]/t*100)+'%;background:'+FB_STATE_COL[k]+';"></i>' : '';
+      }).join('')
+    + '</div>'
+    + '<div style="display:flex;gap:13px;flex-wrap:wrap;font-size:11px;color:#9c8a72;">'
+    + ['ok','ship','prog','open'].map(function(k){
+        return '<span style="display:inline-flex;align-items:center;gap:5px;"><i style="width:8px;height:8px;border-radius:2px;background:'+FB_STATE_COL[k]+';display:inline-block;"></i>'+FB_STATE_LABEL[k]+'</span>';
+      }).join('')
+    + '</div>';
+  return {n:n, html:bar};
+}
+function admFbPanelHTML(){
+  var s=admFbSel(); if(!s) return '';
+  var round=FB_ROUNDS[s.topic], f=state.fbForm||{};
+  var it=round ? round.items[fbKeyPos(round,s.qkey)] : null;
+  var strip=function(x){ return String(x||''); };
+  var lbl='font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#9c8a72;margin:15px 0 4px;';
+  var inp='width:100%;box-sizing:border-box;border:1.5px solid #e3d5c2;border-radius:8px;padding:8px 10px;font-family:Arial,sans-serif;font-size:12.5px;background:#fff;color:#2c1810;resize:vertical;';
+  var hint='font-size:11px;color:#9c8a72;margin-top:4px;line-height:1.45;';
+
+  // Everyone who flagged it, and what they wrote.
+  var says=[];
+  (state.fbRows||[]).forEach(function(r){
+    if(r.topic!==s.topic) return;
+    var a=(r.answers||{})[s.qkey];
+    if(!a||!a.a||!FB_WORK_ANSWERS[a.a]) return;
+    says.push({who:r.who||'someone', a:a.a, note:a.note});
+  });
+
+  // top:64px clears the app's own sticky .topbar (52px, z-index 100) — at
+  // top:12px the panel slid UNDER it and the item's title and close button were
+  // hidden behind the nav. max-height + overflow keep a long panel on screen
+  // and scrolling inside itself instead of running off the bottom.
+  var h='<div style="background:#fbf7f1;border:1px solid #e3d5c2;border-radius:12px;padding:16px;align-self:start;position:sticky;top:64px;max-height:calc(100vh - 80px);overflow-y:auto;">'
+    +'<div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;">'
+      +'<div><div style="font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:#9c8a72;">'+admEsc(admFbTopicName(s.topic))+' &middot; item '+admEsc(s.qkey)+'</div>'
+      +'<h3 style="font-size:16.5px;color:#400207;margin:5px 0 0;font-weight:600;line-height:1.35;">'+admEsc((it&&it.label)||('Question '+s.qkey))+'</h3></div>'
+      +'<button class="btn btn-sm" style="background:transparent;border-color:transparent;color:#9c8a72;" onclick="admFbClose()" aria-label="Close">&#10005;</button>'
+    +'</div>';
+
+  if(it){
+    h+='<div style="'+lbl+'">What they were asked</div><p style="font-size:13px;color:#2c1810;line-height:1.5;margin:0;">'+strip(it.said)+'</p>'
+      +'<div style="'+lbl+'">What the app does today</div><p style="font-size:12.5px;color:#4a3b2a;line-height:1.6;margin:0;">'+strip(it.today)+'</p>';
+  }else{
+    h+='<div style="'+lbl+'">This round is no longer in foh-rounds.js</div>'
+      +'<p style="font-size:12.5px;color:#9c8a72;line-height:1.6;margin:0;">Their answer is kept, but we can&rsquo;t say what the question was.</p>';
+  }
+
+  h+='<div style="'+lbl+'">What they said</div>';
+  h+= says.length ? says.map(function(x){
+        return '<div style="background:#f7f2e8;border-radius:8px;padding:9px 11px;margin-bottom:6px;font-size:12.5px;color:#4a3b2a;line-height:1.55;">'
+          + (x.note?'&ldquo;'+admEsc(x.note)+'&rdquo;':'<i style="color:#9c8a72;">No note.</i>')
+          + '<span style="display:block;font-size:11px;color:#9c8a72;margin-top:4px;">&mdash; '+admEsc(x.who)+', answered &ldquo;'+admEsc(x.a)+'&rdquo;</span></div>';
+      }).join('') : '<div style="font-size:12px;color:#9c8a72;">Nobody flagged this one.</div>';
+
+  // ── Already closed by a later round? Say so, with THEIR words ──
+  // Nine of Andrea's eleven were fixed and described to him in round 2, and he
+  // agreed to each. Showing him an empty "not started" form for those was the
+  // screen handing Francesco work he had already done.
+  var closed=admFbWorkOf(s.topic,s.qkey) ? null : admFbClosed(s.topic,s.qkey);
+  if(closed){
+    h+='<div style="border-top:1px solid #f1e9da;margin-top:14px;padding-top:12px;">'
+      +'<div style="background:#E7F0E4;border:1px solid #A8C6A4;border-radius:8px;padding:10px 12px;">'
+      +'<div style="font-size:12.5px;color:#2E6B34;font-weight:600;">'
+      + (closed.confirmedBy
+          ? '&#10003; Done &mdash; and '+admEsc(String(closed.confirmedBy).split(' ')[0])+' confirmed it himself'
+          : 'Done &mdash; we told them in '+admEsc(admFbTopicName(closed.topic)))
+      +'</div>'
+      +'<div style="font-size:12px;color:#4a3b2a;line-height:1.55;margin-top:5px;">'+String(closed.item.today||'')+'</div>'
+      +'<div style="font-size:11px;color:#6b5a44;margin-top:6px;">Sent in <b>'+admEsc(admFbTopicName(closed.topic))+'</b>, item '+admEsc(closed.qkey)
+      + (closed.confirmedBy?' &mdash; answered &ldquo;Agree, this is fine&rdquo;.':' &mdash; no answer back on it yet.')
+      +'</div></div>'
+      +'<div style="font-size:11px;color:#9c8a72;margin-top:8px;line-height:1.45;">Nothing to record &mdash; this is already accounted for. Set a state below only if you need to override it.</div>'
+      +'</div>';
+  }
+
+  // ── Where it has got to ──
+  var seg='display:flex;border:1.5px solid #e3d5c2;border-radius:8px;overflow:hidden;';
+  var noshout='text-transform:none;letter-spacing:0;';
+  var on='background:#400207;color:#E8D9C7;', off='background:#fbf7f1;color:#9c8a72;';
+  var STATES=[['open','Not started'],['progress','Working on it'],['fixed','Fixed'],['verified','Verified']];
+  var isFixed = f.status==='fixed'||f.status==='verified';
+  h+='<div style="border-top:1px solid #f1e9da;margin-top:14px;padding-top:12px;">'
+    +'<div style="'+lbl+'margin-top:0;">Where it has got to</div>'
+    +'<div style="'+seg+'">'
+    + STATES.map(function(st,ix){
+        var sel=f.status===st[0];
+        // Verified is only reachable once a fix is recorded — it is the one state
+        // that claims the thing WORKS, and there is nothing to have driven yet.
+        var dis=(st[0]==='verified' && !isFixed);
+        return '<button class="btn" style="flex:1;border:0;border-right:'+(ix<3?'1px solid #e3d5c2':'0')+';border-radius:0;font-size:12px;padding:8px 4px;'+noshout+(sel?on:off)+(dis?'opacity:.4;':'')+'"'
+          + (dis?' disabled title="Record the fix first — there is nothing to verify yet"':'')
+          + ' onclick="admFbSetStatus(\''+st[0]+'\')">'+st[1]+'</button>';
+      }).join('')
+    +'</div>';
+
+  if(f.status==='fixed' || f.status==='verified'){
+    h+='<div style="margin-top:11px;"><div style="'+lbl+'margin-top:0;">What changed</div>'
+      +'<textarea style="'+inp+'" rows="2" placeholder="In the words you&rsquo;d say to them&hellip;" oninput="admFbFormSet(\'what_changed\',this.value)">'+admEsc(f.what_changed||'')+'</textarea></div>'
+      +'<div style="margin-top:11px;"><div style="'+lbl+'margin-top:0;">How they check it themselves</div>'
+      +'<textarea style="'+inp+'" rows="2" placeholder="Open the Monthly report and click to August&hellip;" oninput="admFbFormSet(\'check_line\',this.value)">'+admEsc(f.check_line||'')+'</textarea>'
+      +'<div style="'+hint+'">This is the line they see. It&rsquo;s what lets them catch us being wrong &mdash; which is the point.</div></div>'
+      +'<div style="margin-top:11px;"><div style="'+lbl+'margin-top:0;">Shipped in build</div>'
+      +'<input style="'+inp+'" value="'+admEsc(f.build||'')+'" oninput="admFbFormSet(\'build\',this.value)">'
+      +'<div style="'+hint+'">Compared against the build the app is running, so &ldquo;live&rdquo; is worked out &mdash; never claimed.</div></div>';
+    if(f.status==='verified'){
+      h+='<div style="margin-top:11px;"><div style="'+lbl+'margin-top:0;">What you drove, and what you saw</div>'
+        +'<textarea style="'+inp+'" rows="3" placeholder="Not &ldquo;it works&rdquo; &mdash; what you opened and what it showed&hellip;" oninput="admFbFormSet(\'verified_what\',this.value)">'+admEsc(f.verified_what||'')+'</textarea>'
+        +'<div style="'+hint+'">The only state that claims it <b>works</b>. Everything else only proves the code shipped.</div></div>';
+    }
+  }
+
+  var v=admFbSaveState();
+  h+='<div style="display:flex;gap:8px;margin-top:13px;flex-wrap:wrap;align-items:center;">'
+    +'<button class="btn btn-sm" id="fb-save" style="text-transform:none;letter-spacing:0;background:#400207;color:#E8D9C7;border-color:#400207;"'+(v.ok?'':' disabled title="'+admEsc(v.why.replace(/&[a-z]+;/g,''))+'"')+' onclick="admFbSaveForm()">Save</button>'
+    +'<button class="btn btn-sm" style="text-transform:none;letter-spacing:0;" onclick="admFbBrief(\''+admEsc(s.topic)+'\',\''+admEsc(s.qkey)+'\')">Copy fix brief</button>'
+    +'<span id="fb-why-save" style="font-size:11.5px;line-height:1.45;"><span style="color:'+(v.ok?'#9c8a72':'#7A2430')+';">'+v.why+'</span></span>'
+    +'</div>';
+
+  var w=admFbWorkOf(s.topic,s.qkey);
+  if(w && w.status==='fixed'){
+    h+='<div style="'+hint+'border-top:1px solid #f1e9da;margin-top:11px;padding-top:9px;">Shipped, but nobody has driven it yet &mdash; it still only has our word for it.</div>';
+  }
+  h+='</div></div>';
+  return h;
+}
+function admFbHTML(){
+  var head='<div class="ppl-sum" style="margin:0;"></div>';
+  if(state.fbErr) return '<div class="adm-wrap"><div class="adm-head"><h2>Feedback</h2><button class="btn btn-sm" onclick="admFbLoad()">Refresh</button></div>'
+    +'<div class="ppl-empty">Couldn&rsquo;t load the replies &mdash; '+admEsc(state.fbErr)+'<br><br>If this is the first time, run <b>foh-app-feedback.sql</b> once in Supabase, then tap Refresh.</div></div>';
+  if(!state.fbRows) return '<div class="adm-wrap"><div class="adm-head"><h2>Feedback</h2></div><div class="loading">Loading&hellip;</div></div>';
+
   var sentRows=state.fbSent||[];
-  // Rounds that have replies, newest reply first (rows already arrive newest-first),
-  // then any round that has only been SENT — so a round out with nobody back yet
-  // still appears, instead of looking like it was never sent.
   var byTopic={}, order=[];
   state.fbRows.forEach(function(r){
     if(!byTopic[r.topic]){ byTopic[r.topic]=[]; order.push(r.topic); }
@@ -3686,111 +4117,142 @@ function admFbHTML(){
   });
   sentRows.forEach(function(s){ if(!byTopic[s.topic]){ byTopic[s.topic]=[]; order.push(s.topic); } });
 
-  if(!order.length) return '<div class="adm-wrap">'+head+send+'<div class="ppl-empty">Nothing back yet &mdash; send a round above and their answers land here the moment they tap Send.</div></div>';
-
-  var out=order.map(function(t){
-    var rows=byTopic[t];
-    var marked=admFbLatest(rows);
-    var counted=marked.filter(function(m){ return m.latest; });
-    var dupes=marked.length-counted.length;
-
-    // Across everyone in this round: how many PEOPLE flagged each question for work?
+  // Every item anyone asked us to act on, across every round — flattened, so the
+  // one line of truth at the top can be true across the whole screen.
+  var items=[], perTopic={};
+  order.forEach(function(t){
+    var marked=admFbLatest(byTopic[t]), counted=marked.filter(function(m){ return m.latest; });
     var tally={};
     counted.forEach(function(m){
-      var r=m.row, a=r.answers||{};
+      var a=m.row.answers||{};
       Object.keys(a).forEach(function(q){
-        var v=a[q]&&a[q].a; if(!v) return;
-        if(!FB_WORK_ANSWERS[v]) return;                     // only answers that ask us to act
+        var v=a[q]&&a[q].a; if(!v || !FB_WORK_ANSWERS[v]) return;
         tally[q]=tally[q]||{n:0,notes:[]};
         tally[q].n++;
-        if(a[q].note) tally[q].notes.push({who:r.who||'someone',note:a[q].note});
+        if(a[q].note) tally[q].notes.push({who:m.row.who||'someone', note:a[q].note});
       });
     });
     var round=FB_ROUNDS[t];
-    // Order: still-open first, then done; within each, loudest first, then the
-    // order the questions appear in the round itself.
-    var flagged=Object.keys(tally).sort(function(x,y){
-      var dx=done[admFbDoneKey(t,x)]?1:0, dy=done[admFbDoneKey(t,y)]?1:0;
-      return (dx-dy) || (tally[y].n-tally[x].n) || (fbKeyPos(round,x)-fbKeyPos(round,y));
+    Object.keys(tally).sort(function(x,y){ return (tally[y].n-tally[x].n) || (fbKeyPos(round,x)-fbKeyPos(round,y)); })
+      .forEach(function(q){
+        items.push({ topic:t, qkey:q, n:tally[q].n, notes:tally[q].notes,
+                     label:fbLabel(t,q), st:admFbStateOf(t,q), pos:fbKeyPos(round,q) });
+      });
+    perTopic[t]={ marked:marked, counted:counted, dupes:marked.length-counted.length };
+  });
+
+  var bar=admFbBar(items), n=bar.n, total=items.length;
+  var filter=state.fbFilter||'all';
+  var match=function(i){
+    if(filter==='all') return true;
+    if(filter==='done') return i.st==='ok'||i.st==='ship';
+    return i.st===filter;
+  };
+  var shown=items.filter(match);
+
+  // ── header + the one line of truth ──
+  var who=(function(){ var s={}; (state.fbRows||[]).forEach(function(r){ if(r.who) s[r.who]=1; }); return Object.keys(s); })();
+  var truth = total
+    ? (who.length===1?who[0]+' asked':'The team asked')+' for <b>'+total+'</b> thing'+(total===1?'':'s')+'. '
+      + (n.ok+n.ship)+' fixed and live, '+n.prog+' being worked on, '+n.open+' not started.'
+    : 'Nothing asked for yet.';
+  var h='<div class="adm-wrap">'
+    +'<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:14px;flex-wrap:wrap;">'
+      +'<div><h2 style="font-size:19px;color:#400207;margin:0;font-weight:600;">Feedback</h2>'
+      +'<div style="font-size:12.5px;color:#9c8a72;margin-top:3px;">'+truth+'</div></div>'
+      +'<div style="display:flex;gap:8px;">'
+        +'<button class="btn btn-sm" onclick="admFbToggleSend()">'+(state.fbSendOpen?'Close':'Send a round')+'</button>'
+        +'<button class="btn btn-sm" style="background:transparent;border-color:transparent;color:#9c8a72;" onclick="admFbLoad()">Refresh</button>'
+      +'</div>'
+    +'</div>'
+    + bar.html
+    + (state.fbSendOpen ? admFbSendHTML() : '');
+
+  if(!total && !state.fbRows.length){
+    return h+'<div class="ppl-empty">Nothing back yet &mdash; send a round above and their answers land here the moment they tap Send.</div></div>';
+  }
+
+  // ── filters ──
+  var F=[['all','Everything',total],['open','Needs you',n.open],['prog','In progress',n.prog],['done','Done',n.ok+n.ship]];
+  h+='<div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:14px;">'
+    + F.map(function(f){
+        var on=filter===f[0];
+        return '<button class="btn btn-sm" style="border-radius:20px;'+(on?'background:#400207;color:#E8D9C7;border-color:#400207;':'')+'" onclick="admFbSetFilter(\''+f[0]+'\')">'
+          + f[1]+' <b style="font-weight:400;opacity:.7;">'+f[2]+'</b></button>';
+      }).join('')
+    +'</div>';
+
+  // ── the list ──
+  var sel=admFbSel();
+  var list='', lastTopic=null;
+  if(!shown.length){
+    list='<div class="ppl-empty" style="padding:24px 8px;">Nothing here &mdash; try another filter.</div>';
+  }else{
+    shown.forEach(function(i){
+      if(i.topic!==lastTopic){
+        lastTopic=i.topic;
+        var cnt=shown.filter(function(x){ return x.topic===i.topic; }).length;
+        var round=FB_ROUNDS[i.topic];
+        var follows=(round&&round.follows&&FB_ROUNDS[round.follows])?' &middot; follows '+admEsc(FB_ROUNDS[round.follows].name):'';
+        list+='<div class="ppl-grp" style="margin-top:18px;">'+admEsc(admFbTopicName(i.topic))+' <span>&middot; '+cnt+follows+'</span></div>';
+      }
+      var isSel = sel && sel.topic===i.topic && sel.qkey===i.qkey;
+      var note = i.notes.length ? i.notes[0].note : '';
+      list+='<button style="display:flex;align-items:center;gap:11px;width:100%;text-align:left;background:'+(isSel?'#fbf7f1':'transparent')+';border:0;border-bottom:1px solid #f1e9da;padding:11px 8px 11px 0;cursor:pointer;font-family:inherit;" onclick="admFbOpen(\''+admEsc(i.topic)+'\',\''+admEsc(i.qkey)+'\')">'
+        +'<span style="width:3px;align-self:stretch;border-radius:2px;flex:none;background:'+FB_STATE_COL[i.st]+';"></span>'
+        +'<span style="font-size:11.5px;color:#9c8a72;min-width:18px;">'+admEsc(i.qkey)+'.</span>'
+        +'<span style="flex:1;min-width:0;font-size:13.5px;color:#4a3b2a;line-height:1.4;">'+admEsc(i.label||('Question '+i.qkey))
+        + (note?'<span style="display:block;font-size:11.5px;color:#9c8a72;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">&ldquo;'+admEsc(note)+'&rdquo;</span>':'')
+        +'</span>'
+        + (i.n>1?'<span style="font-size:11px;color:#9c8a72;white-space:nowrap;">'+i.n+' people</span>':'')
+        +'<span style="font-size:11px;white-space:nowrap;color:'+(i.st==='ok'?'#2E6B34':'#9c8a72')+';">'+admFbStateLabel(i.topic,i.qkey)+'</span>'
+        +'<span style="color:#e3d5c2;font-size:15px;flex:none;">&rsaquo;</span>'
+        +'</button>';
     });
-    var nOpen=flagged.filter(function(q){ return !done[admFbDoneKey(t,q)]; }).length;
-    var nDone=flagged.length-nOpen;
+  }
+  h+='<div style="display:grid;grid-template-columns:1fr;gap:16px;margin-top:6px;" class="'+(sel?'fb-split':'')+'">'
+    +'<div>'+list+'</div>'
+    + (sel?admFbPanelHTML():'')
+    +'</div>';
 
-    var work=flagged.length
-      ? '<div style="padding:6px 4px 13px;">'+flagged.map(function(q){
-          var isDone=!!done[admFbDoneKey(t,q)];
-          var notes=tally[q].notes.map(function(nn){ return '<div style="font-size:11.5px;color:#6b5a44;padding:3px 0 0;">&ldquo;'+admEsc(nn.note)+'&rdquo; <span style="color:#9c8a72;">&mdash; '+admEsc(nn.who)+'</span></div>'; }).join('');
-          // The question in his own words. The label is written on the item in
-          // foh-rounds.js; before that file existed Admin could not see it and
-          // printed the bare number, which told him nothing.
-          var lab=fbLabel(t,q);
-          var text=lab ? admEsc(lab)
-                       : '<span style="color:#9c8a72;">question '+admEsc(q)+' &mdash; this round is no longer in foh-rounds.js, so we can&rsquo;t say what it was</span>';
-          return '<div style="display:flex;gap:11px;align-items:flex-start;padding:7px 0;border-bottom:1px solid #f1e9da;'+(isDone?'opacity:.45;':'')+'">'
-            +'<span style="min-width:20px;font-weight:600;color:#400207;font-size:13px;padding-top:1px;">'+admEsc(q)+'.</span>'
-            +'<div style="flex:1;min-width:0;">'
-              +'<div style="font-size:13.5px;color:#4a3b2a;line-height:1.45;'+(isDone?'text-decoration:line-through;':'')+'">'+text+'</div>'
-              +'<div style="font-size:11.5px;color:#9c8a72;margin-top:2px;">flagged by <b>'+tally[q].n+'</b>'+(isDone?' · done':'')+'</div>'
-              +notes
-            +'</div>'
-            +'<button class="btn btn-sm" style="flex:none;'+(isDone?'background:#E7F0E4;border-color:#A8C6A4;color:#2E6B34;':'')+'" onclick="admFbTick(\''+admEsc(t)+'\',\''+admEsc(q)+'\','+(isDone?'false':'true')+')">'+(isDone?'✓ Done':'Mark done')+'</button>'
-            +'</div>';
-        }).join('')
-        +(nDone?'<div style="font-size:11px;color:#9c8a72;padding:8px 0 0;">Done items stay on the list, struck through — what they asked for never disappears.</div>':'')
-        +'</div>'
-      : '<div class="ppl-empty" style="padding:10px 4px;">Nobody asked for anything in this round.</div>';
-
-    // Each person's own submission.
-    var people=marked.map(function(m){
+  // ── who replied, and who has gone quiet ──
+  var people='';
+  order.forEach(function(t){
+    var P=perTopic[t]; if(!P) return;
+    var rows=P.marked.map(function(m){
       var r=m.row, a=r.answers||{}, counts={};
       Object.keys(a).forEach(function(q){ var v=a[q]&&a[q].a; if(v) counts[v]=(counts[v]||0)+1; });
-      var pills=FB_ANSWER_ORDER.filter(function(k){ return counts[k]; })
-        .map(function(k){ return admFbPill(k+' · '+counts[k]); }).join(' ');
+      var pills=FB_ANSWER_ORDER.filter(function(k){ return counts[k]; }).map(function(k){ return admFbPill(k+' · '+counts[k]); }).join(' ');
       var sub=admEsc(admUsageAgo(r.created_at))
-        + (m.again>1 ? (m.latest ? ' · answered '+(m.again===2?'twice':m.again+' times')+', this is the latest'
-                                 : ' · an earlier answer, not counted') : '');
-      return '<div style="display:flex;align-items:center;gap:10px 14px;flex-wrap:wrap;padding:11px 4px;border-bottom:1px solid #f1e9da;'+(m.latest?'':'opacity:.5;')+'">'
-        +'<div style="min-width:150px;flex:1;"><div style="font-weight:600;color:#2c1810;font-size:14.5px;">'+admEsc(r.who||'Anonymous')+'</div>'
-        +'<div style="font-size:11.5px;color:#9c8a72;">'+sub+'</div></div>'
+        + (m.again>1 ? (m.latest?' · answered '+(m.again===2?'twice':m.again+' times')+', this is the latest':' · an earlier answer, not counted') : '');
+      return '<div style="display:flex;align-items:center;gap:10px 14px;flex-wrap:wrap;padding:10px 4px;border-bottom:1px solid #f1e9da;'+(m.latest?'':'opacity:.5;')+'">'
+        +'<div style="min-width:150px;flex:1;"><div style="font-weight:600;color:#2c1810;font-size:13.5px;">'+admEsc(r.who||'Anonymous')+'</div>'
+        +'<div style="font-size:11.5px;color:#9c8a72;">'+sub+'</div>'
+        + (m.latest&&r.who?'<button class="btn btn-sm" style="font-size:10.5px;padding:3px 7px;margin-top:4px;text-transform:none;letter-spacing:0;" onclick="admFbStatusLink(\''+admEsc(r.who)+'\')">Copy their status link</button>':'')
+        +'</div>'
         +'<div style="flex:2;min-width:180px;display:flex;gap:5px;flex-wrap:wrap;">'+(pills||'<span style="font-size:12px;color:#9c8a72;">no answers, note only</span>')+'</div>'
-        +(r.extra?'<div style="flex-basis:100%;font-size:12.5px;color:#4a3b2a;background:#f7f2e8;border-radius:8px;padding:8px 10px;"><b style="color:#400207;">What we missed:</b> '+admEsc(r.extra)+'</div>':'')
+        + (r.extra?'<div style="flex-basis:100%;font-size:12.5px;color:#4a3b2a;background:#f7f2e8;border-radius:8px;padding:8px 10px;"><b style="color:#400207;">What we missed:</b> '+admEsc(r.extra)+'</div>':'')
         +'</div>';
     }).join('');
-
-    // Sent, nothing back yet — who has gone quiet. Needs the actions SQL; without
-    // it this section simply does not appear and nothing else changes.
-    var replied={}; rows.forEach(function(r){ if(r.who) replied[String(r.who).trim().toLowerCase()]=1; });
-    var quietSeen={}, quiet=[];
+    var replied={}; byTopic[t].forEach(function(r){ if(r.who) replied[String(r.who).trim().toLowerCase()]=1; });
+    var qs={}, quiet=[];
     sentRows.filter(function(s){ return s.topic===t; }).forEach(function(s){
       var k=String(s.who||'').trim().toLowerCase();
-      if(!k || replied[k] || quietSeen[k]) return;
-      quietSeen[k]=1; quiet.push(s);
+      if(!k||replied[k]||qs[k]) return; qs[k]=1; quiet.push(s);
     });
-    var quietHTML = quiet.length
-      ? '<div style="font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:#9c8a72;padding:11px 4px 0;">Sent, nothing back yet</div>'
-        + quiet.map(function(s){
-            return '<div style="display:flex;align-items:center;gap:10px;padding:9px 4px;border-bottom:1px solid #f1e9da;">'
-              +'<div style="flex:1;font-size:13.5px;color:#9c8a72;">'+admEsc(s.who)+' &mdash; sent '+admEsc(admUsageAgo(s.sent_at))+'</div>'
-              +'</div>';
-          }).join('')
-      : '';
+    var quietHTML=quiet.map(function(s){
+      return '<div style="padding:8px 4px;border-bottom:1px solid #f1e9da;font-size:12.5px;color:#9c8a72;">'+admEsc(s.who)+' &mdash; sent '+admEsc(admUsageAgo(s.sent_at))+', nothing back yet</div>';
+    }).join('');
+    if(!rows && !quietHTML) return;
+    people+='<div class="ppl-grp" style="margin-top:16px;">'+admEsc(admFbTopicName(t))+' <span>&middot; who replied</span></div>'
+      + (P.dupes?'<div style="background:#F7DED9;border:1px solid #D89C90;border-radius:8px;padding:8px 11px;font-size:12px;color:#8A2A1A;line-height:1.5;margin:8px 4px 0;">'
+        +(P.dupes===1?'Someone answered this round twice.':P.dupes+' answers here are repeats.')
+        +' Counting each person once, using their latest &mdash; the earlier ones are still below, just not counted.</div>':'')
+      + rows + quietHTML;
+  });
+  if(people) h+='<div style="margin-top:26px;border-top:1px solid #e3d5c2;padding-top:4px;">'+people+'</div>';
 
-    var follows = (round && round.follows && FB_ROUNDS[round.follows])
-      ? ' &middot; follows: '+admEsc(FB_ROUNDS[round.follows].name) : '';
-    var nPeople = counted.length;
-    var sum = nPeople ? (nPeople===1?'1 person answered':nPeople+' people answered') : 'sent, nobody back yet';
-
-    return '<div class="ppl-grp">'+admEsc(admFbTopicName(t))+' <span>&middot; '+sum+follows+'</span></div>'
-      +(dupes?'<div style="background:#F7DED9;border:1px solid #D89C90;border-radius:8px;padding:8px 11px;font-size:12px;color:#8A2A1A;line-height:1.5;margin:9px 4px 0;">'
-        +(dupes===1?'Someone answered this round twice.':dupes+' answers here are repeats.')
-        +' Counting each person once, using their latest answers — the earlier ones are still listed below, just not counted.</div>':'')
-      +'<div style="font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:#9c8a72;padding:10px 4px 0;">Flagged for action'
-        +(flagged.length?'<span style="text-transform:none;letter-spacing:0;"> &middot; '+nOpen+' still open'+(nDone?', '+nDone+' done':'')+'</span>':'')
-      +'</div>'+work
-      +(marked.length?'<div style="font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:#9c8a72;padding:6px 4px 0;">Who replied</div>'+people:'')
-      +quietHTML;
-  }).join('');
-  return '<div class="adm-wrap">'+head+send+out+'</div>';
+  return h+'</div>';
 }
 
 /* ===================================================================

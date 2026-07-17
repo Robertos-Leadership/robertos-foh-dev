@@ -31,12 +31,19 @@ async function loadRevenue(){
     var res=await Promise.all([
       sb.from('rev_rates').select('*'),
       revFetchAllDaily(),
-      sb.from('rev_targets').select('*')
+      sb.from('rev_targets').select('*'),
+      // Monthly history. One row per MONTH, so 1000 rows is 83 years — this one
+      // cannot silently truncate the way an unpaged daily read can.
+      sb.from('rev_monthly').select('*')
     ]);
     R.tablesMissing = !!(res[0].error||res[1].error||res[2].error);
     R.rates={}; (res[0].data||[]).forEach(function(r){ R.rates[r.weekday]=r; });
     R.daily=res[1].data||[];
     R.targets={}; R.budgets={}; (res[2].data||[]).forEach(function(t){ R.targets[t.period]=Number(t.monthly_target)||0; if(t.monthly_budget!=null) R.budgets[t.period]=Number(t.monthly_budget); });
+    // rev_monthly is OPTIONAL — its absence is not a broken module, just no history.
+    // Deliberately kept out of tablesMissing so the whole Revenue tab does not fall
+    // back to the setup screen on an app that shipped before rev-monthly-schema.sql ran.
+    R.monthly={}; if(!res[3].error) (res[3].data||[]).forEach(function(m){ R.monthly[String(m.period).slice(0,7)]=m; });
     if(!R.period) R.period=revLatestPeriod();
     R.loaded=true;
   }catch(e){ R.tablesMissing=true; R.loaded=true; }
@@ -79,6 +86,61 @@ function revMonthState(p){ var now=revNowPeriod(); return p<now?'closed':(p===no
 // its revenue but drops those nights' budget, and reads on-budget when it is actually short.
 // Only the month still in service has a legitimate claim to budget-to-date.
 function revBudgetBasis(m,st){ return st==='closed' ? m.budgetTotal : m.budgetToDate; }
+// ── Monthly history (rev_monthly) ──
+// Months before the app existed have no nightly detail — only the finance file's monthly
+// total. They live one-row-per-month and are NEVER expanded into invented nights.
+// rev_daily always wins: a month with real nights ignores its monthly row completely.
+function revMonthlyRow(p){ var R=revInit(); return (R.monthly&&R.monthly[p])||null; }
+function revIsClosedMonth(p){ var r=revMonthlyRow(p); return !!(r&&r.status==='closed'); }
+// The one place that decides what a month IS. Everything downstream reads this, so the
+// Year view, the Month view and the AI briefing can never disagree about a month.
+//   'daily'   — real nights entered; the normal case, full detail
+//   'monthly' — a finance total only, no nightly detail
+//   'closed'  — the venue did not trade; NOT missing data
+//   'future'  — not started
+//   'hole'    — elapsed, and nothing at all is recorded. This is the one that must shout.
+function revMonthKind(p){
+  var m=revMonthData(p);
+  if(m.tradingDays>0) return 'daily';
+  var r=revMonthlyRow(p);
+  if(r&&r.status==='closed') return 'closed';
+  if(r&&r.net_actual!=null) return 'monthly';
+  return revMonthState(p)==='future' ? 'future' : 'hole';
+}
+// Food/Beverage/Tobacco ACTUALLY ENTERED for a month with nights. Never the estimated
+// 48/51/1 mix (revFnbSplit) — an estimate must not sit in a table of finance figures.
+// Returns null when no night has a split entered.
+function revFnbEntered(p){
+  var map=revDailyMap(), dim=revDaysInMonth(p), o={food:0,bev:0,tob:0}, any=false;
+  for(var d=1; d<=dim; d++){
+    var row=map[p+'-'+String(d).padStart(2,'0')]; if(!row) continue;
+    if(row.food_net!=null||row.bev_net!=null||row.tobacco_net!=null){
+      any=true; o.food+=Number(row.food_net||0); o.bev+=Number(row.bev_net||0); o.tob+=Number(row.tobacco_net||0);
+    }
+  }
+  return any?o:null;
+}
+// One row of the Year table, whatever the month's kind. net is the figure to trust;
+// budget is null unless a REAL monthly budget was set for that period — the weekday rates
+// pattern describes today's trading, so applying it to 2019 would invent a benchmark.
+function revYearRow(p){
+  var kind=revMonthKind(p), m=revMonthData(p), st=revMonthState(p);
+  if(kind==='daily'){
+    return {kind:kind, net:m.mtdNet, budget:revBudgetBasis(m,st), toDate:(st==='current'),
+            days:m.tradingDays, fnb:revFnbEntered(p), source:null};
+  }
+  if(kind==='monthly'||kind==='closed'){
+    var r=revMonthlyRow(p), mb=revMonthlyBudget(p);
+    // trading_days is only ever a KNOWN count (Jan 2026 = the single reopening night).
+    // Null stays null — it is never inferred from the calendar, and never used to derive
+    // a per-night average from a monthly total.
+    return {kind:kind, net:Number(r.net_actual)||0, budget:mb, toDate:false,
+            days:(r.trading_days!=null?Number(r.trading_days):null),
+            fnb:(r.food_net!=null||r.bev_net!=null)?{food:Number(r.food_net||0),bev:Number(r.bev_net||0),tob:Number(r.tobacco_net||0)}:null,
+            source:r.source||null, note:r.note||null};
+  }
+  return {kind:kind, net:null, budget:null, toDate:false, days:null, fnb:null, source:null, note:null};
+}
 
 function revMonthData(p){
   var R=revInit(), map=revDailyMap(), dim=revDaysInMonth(p), days=[];
@@ -438,7 +500,44 @@ function revBriefing(){
       L.push('    '+wd2+': '+b.n+' days, avg net '+Math.round(b.net/b.n)+(b.cd?(', avg covers '+(b.cov/b.cd).toFixed(1)+(b.cd<b.n?' ('+b.cd+' of '+b.n+' days have covers)':'')):', covers not entered'));
     });
   });
+  // Monthly history. Without this the model is blind to everything before the app existed and
+  // would tell the board "there is no data for 2025" while the Year view shows 14.7M.
+  var MO=R.monthly||{}, mks=Object.keys(MO).sort();
+  if(mks.length){
+    L.push('\nMONTHLY HISTORY (months that pre-date the app — ONE finance figure each, NO nightly detail).');
+    L.push('These are real Simphony net sales (Food+Beverage+Tobacco) from the finance record. Rules for these months:');
+    L.push('  - Quote the monthly figure verbatim. NEVER divide it by days to invent a daily average, and never state covers or spend-per-cover for them — none was recorded.');
+    L.push('  - A month marked CLOSED did not trade. It is not missing data; say the venue was closed.');
+    L.push('  - A note in [square brackets] is the RECORDED reason that month reads as it does. When a month is far off trend, quote its note as the reason — never invent an explanation, and never call it a performance problem when the note says otherwise.');
+    L.push('  - compute_stats and compute_scenario work on NIGHTLY data only, so they return nothing for these months. That is correct, not an error.');
+    var byY={};
+    mks.forEach(function(k){ (byY[k.slice(0,4)]=byY[k.slice(0,4)]||[]).push(k); });
+    Object.keys(byY).sort().forEach(function(y){
+      var yn=0, ct=0, cl=0, line=[];
+      byY[y].forEach(function(k){
+        var r=MO[k], mn=revMonthLabel(k).split(' ')[0].slice(0,3);
+        // The note is why the month reads as it does. Without it the model is left to
+        // invent a reason for a figure far off trend — exactly what it must never do.
+        var nt=r.note?(' [' + r.note + ']'):'';
+        if(r.status==='closed'){ cl++; line.push(mn+' CLOSED'+nt); return; }
+        var n=Number(r.net_actual)||0; yn+=n; ct++;
+        line.push(mn+' '+Math.round(n)+(r.trading_days!=null?(' over '+r.trading_days+' trading night'+(Number(r.trading_days)===1?'':'s')):'')
+          +(r.food_net!=null?(' (food '+Math.round(r.food_net)+', bev '+Math.round(r.bev_net||0)+', tob '+Math.round(r.tobacco_net||0)+')'):'')+nt);
+      });
+      L.push('  '+y+': '+line.join(' | '));
+      L.push('    '+y+' recorded total '+Math.round(yn)+' over '+ct+' trading month'+(ct===1?'':'s')+(cl?(', '+cl+' month'+(cl===1?'':'s')+' closed'):'')+'.');
+    });
+    L.push('  NOTE: a year here is only complete if all 12 months appear above. Any month absent from this list AND absent from the daily actuals has no figure at all — say so rather than implying the year total is the full year.');
+  }
   var rv=revReview(p), m=revMonthData(p);
+  var pk=revMonthKind(p);
+  if(pk==='monthly'||pk==='closed'){
+    var mr=revMonthlyRow(p);
+    L.push('\nANALYSIS — '+revMonthLabel(p)+': this is a MONTHLY-TOTAL month'+(pk==='closed'?' (CLOSED — the venue did not trade)':'')+'.');
+    if(pk!=='closed') L.push('  Net sales '+Math.round(Number(mr.net_actual)||0)+'. No nightly detail, no covers, no budget, no forecast exists for it. Do not compute a daily average or a projection from it.');
+    var od0=revOpsDigest(); if(od0) L.push(od0);
+    return L.join('\n');
+  }
   L.push('\nANALYSIS — '+revMonthLabel(p)+' (through day '+rv.windowDay+'):');
   L.push('  MTD net '+Math.round(rv.mtd)+' over '+rv.tradingDays.cur+' trading days; budget-to-date '+Math.round(m.budgetToDate)+'.');
   L.push('  Vs '+revMonthLabel(rv.prevPeriod)+' matched window: net '+revPct(rv.net.chg)+', covers '+revPct(rv.covers.chg)+', avg spend/cover '+revPct(rv.spendCover.chg)+'.');
@@ -521,7 +620,18 @@ function revStats(q){
 }
 // Model-facing payload: every derived figure pre-computed so the model only quotes.
 function revStatsRound(r){
-  if(!r.n) return { period:r.periodLabel, filter:{weekday:r.weekday, venue:r.venue}, trading_days:0, note:'No entered days match this filter — say the data is not entered; do NOT estimate.' };
+  if(!r.n){
+    // "No nightly rows" and "no data" are different answers. A pre-app month HAS a real
+    // figure, just not a nightly one — saying the data isn't entered would be false.
+    var mk=revMonthKind(r.period), mr=revMonthlyRow(r.period);
+    if(mk==='closed') return { period:r.periodLabel, filter:{weekday:r.weekday, venue:r.venue}, trading_days:0,
+      note:'The venue was CLOSED this month and did not trade. This is not missing data — say the venue was closed.' };
+    if(mk==='monthly') return { period:r.periodLabel, filter:{weekday:r.weekday, venue:r.venue}, trading_days:0,
+      month_net_sales:Math.round(Number(mr.net_actual)||0),
+      food_net:(mr.food_net!=null?Math.round(mr.food_net):null), bev_net:(mr.bev_net!=null?Math.round(mr.bev_net):null), tobacco_net:(mr.tobacco_net!=null?Math.round(mr.tobacco_net):null),
+      note:'This month pre-dates the app: it has a MONTHLY TOTAL only (shown above, a real Simphony net figure) and NO nightly detail. Quote month_net_sales verbatim. There are no covers, no per-day or per-weekday figures and no spend-per-cover for it — do NOT divide by days or estimate any of them.' };
+    return { period:r.periodLabel, filter:{weekday:r.weekday, venue:r.venue}, trading_days:0, note:'No entered days match this filter — say the data is not entered; do NOT estimate.' };
+  }
   return { period:r.periodLabel, filter:{weekday:r.weekday, venue:r.venue},
     days_used:r.days.map(function(x){ return {date:x.date, weekday:x.weekday, net:Math.round(x.net), covers:(x.covers!=null?x.covers:'not entered')}; }),
     trading_days:r.n, days_with_covers:r.covDays, days_missing_covers:r.n-r.covDays,
@@ -901,8 +1011,56 @@ function renderRevenue(){
   return revRenderMonth();
 }
 function revBar(pct){ var w=Math.max(0,Math.min(100,Math.round(pct))); return '<div class="rev-bar"><div class="rev-bar-fill" style="width:'+w+'%"></div></div>'; }
+// A month with no nights but a finance total. The normal Month view is built entirely out of
+// nightly rows — MTD, the grid, the review, the projection, the charts — so rendering it here
+// would print "AED 0" over a month that really took millions, and a forecast built from
+// nothing. It gets its own panel: the figures we have, named for exactly what they are.
+function revRenderMonthlyOnly(p){
+  var r=revMonthlyRow(p), h=[];
+  h.push('<div class="rev-wrap">');
+  h.push('<div class="rev-toolbar"><div class="rev-nav"><button class="rev-btn" onclick="revStep(-1)">&#8592;</button><span class="rev-period">'+revMonthLabel(p)+'</span><button class="rev-btn" onclick="revStep(1)">&#8594;</button></div>'
+    +'<div class="rev-views"><button class="rev-vtab active" onclick="revSetView(\'month\')">Month</button><button class="rev-vtab" onclick="revSetView(\'year\')">Year</button><button class="rev-vtab" onclick="revSetView(\'forecast\')">Forecast</button><button class="rev-btn rev-ai-btn" onclick="revChatOpen()">&#9733; Ask / Reports</button></div></div>');
+  if(r.status==='closed'){
+    h.push('<div class="rev-setup"><div class="rev-h">'+revMonthLabel(p)+' &mdash; closed</div>'
+      +'<p>The venue did not trade this month, so there is no revenue to show. This is not missing data.</p>'
+      +(r.note?'<p>'+clEsc(r.note)+'</p>':'')
+      +(r.source?'<p class="rev-mut" style="font-size:12px">Source: '+clEsc(r.source)+'</p>':'')+'</div></div>');
+    return h.join('');
+  }
+  var net=Number(r.net_actual)||0, f=Number(r.food_net||0), b=Number(r.bev_net||0), t=Number(r.tobacco_net||0);
+  var hasSplit=(r.food_net!=null||r.bev_net!=null);
+  // The reason first — before the figure, so it is read before the number is judged.
+  if(r.note) h.push('<div style="background:rgba(107,31,42,.06);border-left:3px solid #6B1F2A;border-radius:4px;padding:10px 14px;margin:0 0 12px;font-size:13px;line-height:1.5"><b>'+clEsc(r.note)+'</b></div>');
+  h.push('<div style="background:rgba(201,168,76,.10);border:1px solid rgba(201,168,76,.45);color:#8a6d1f;border-radius:6px;padding:10px 14px;margin:0 0 12px;font-size:13px;line-height:1.5">'
+    +'&#9888; <b>Monthly total only &mdash; no night-by-night detail.</b> This month pre-dates the app, so it has one figure from the finance record rather than a filed closing report for each night. '
+    +'There is no daily grid, no covers, no average spend and no forecast for it, because none of that was ever recorded.</div>');
+  h.push('<div class="rev-cards">');
+  h.push('<div class="rev-card"><div class="rev-k">Net sales &mdash; month</div><div class="rev-v">'+revMoney(net)+'</div><div class="rev-sub">'+revMonthLabel(p)+(r.trading_days!=null?(' &middot; '+r.trading_days+' trading night'+(Number(r.trading_days)===1?'':'s')):'')+'</div></div>');
+  if(hasSplit){
+    h.push('<div class="rev-card"><div class="rev-k">Food</div><div class="rev-v">'+revMoney(f)+'</div><div class="rev-sub">'+(net?Math.round(f/net*100):0)+'% of net</div></div>');
+    h.push('<div class="rev-card"><div class="rev-k">Beverage</div><div class="rev-v">'+revMoney(b)+'</div><div class="rev-sub">'+(net?Math.round(b/net*100):0)+'% of net</div></div>');
+    h.push('<div class="rev-card"><div class="rev-k">Tobacco</div><div class="rev-v">'+revMoney(t)+'</div><div class="rev-sub">'+(net?(t/net*100).toFixed(1):0)+'% of net</div></div>');
+  }
+  h.push('</div>');
+  if(hasSplit){
+    h.push('<div class="rev-section-h">Sales mix &mdash; '+revMonthLabel(p)+'</div>');
+    h.push('<div class="rev-grid-wrap"><table class="rev-grid"><thead><tr><th>Category</th><th>Net sales</th><th>Share</th></tr></thead><tbody>');
+    [['Food',f],['Beverage',b],['Tobacco',t]].forEach(function(x){
+      h.push('<tr><td class="rev-day">'+x[0]+'</td><td>'+revMoney(x[1])+'</td><td>'+(net?Math.round(x[1]/net*100)+'%':'&mdash;')+'</td></tr>');
+    });
+    h.push('<tr class="rev-total"><td>Total net</td><td>'+revMoney(f+b+t)+'</td><td>100%</td></tr>');
+    h.push('</tbody></table></div>');
+  }
+  h.push('<div class="rev-alloc rev-mut" style="display:block;margin:10px 0 0;font-size:12px">Source: <b>'+clEsc(r.source||'not recorded')+'</b>. Net sales are Simphony\'s VAT-exclusive figure &mdash; the same basis as the months the app records itself.</div>');
+  h.push('</div>');
+  return h.join('');
+}
 function revRenderMonth(){
   var R=revInit(), p=R.period, m=revMonthData(p), rv=revReview(p);
+  // No nights, but a finance total exists → the monthly panel. Checked before anything else,
+  // because everything below this line assumes nightly rows.
+  var kind=revMonthKind(p);
+  if(kind==='monthly'||kind==='closed') return revRenderMonthlyOnly(p);
   var toBudget = m.budgetToDate? Math.round(m.mtdNet/m.budgetToDate*100):0;
   var h=[];
   h.push('<div class="rev-wrap">');
@@ -1040,31 +1198,70 @@ function revRenderYear(){
     if(revMonthData(gp).tradingDays>0) guards.push(revUnfiledBanner(gp, true));
   }
   h.push(guards.join(''));
-  var ytdNet=0, ytdBudget=0, holes=[], counted=0, elapsed=0;
+  var ytdNet=0, ytdBudget=0, ytdBudgetedNet=0, holes=[], counted=0, elapsed=0;
+  var closedCount=0, monthlyCount=0, budgetedCount=0, anyFnb=false;
   h.push('<div class="rev-section-h">'+year+' — month by month</div>');
-  h.push('<div class="rev-grid-wrap"><table class="rev-grid"><thead><tr><th>Month</th><th>Net sales</th><th>Budget</th><th>vs Budget</th><th>Trading days</th></tr></thead><tbody>');
+  h.push('<div class="rev-grid-wrap"><table class="rev-grid"><thead><tr><th>Month</th><th>Net sales</th><th>Food</th><th>Beverage</th><th>Budget</th><th>vs Budget</th><th>Trading days</th></tr></thead><tbody>');
   for(var mo=1; mo<=12; mo++){
-    var p=year+'-'+String(mo).padStart(2,'0'), m=revMonthData(p), st=revMonthState(p);
+    var p=year+'-'+String(mo).padStart(2,'0'), st=revMonthState(p), row=revYearRow(p);
     var name=new Date(parseInt(year),mo-1,1).toLocaleDateString('en-GB',{month:'long'});
     if(st!=='future') elapsed++;
+    var click=' onclick="revSetView(\'month\');revSetPeriod(\''+p+'\')"';
     // EVERY month gets a row. A month with no data used to be skipped entirely — it vanished
     // from the table AND from the YTD total, with nothing on screen to say so, and the year
     // still called itself YTD. A hole must look like a hole.
-    if(m.tradingDays===0){
-      if(st==='future'){ h.push('<tr class="rev-sun"><td class="rev-day rev-mut">'+name+'</td><td class="rev-mut">&mdash;</td><td class="rev-mut">&mdash;</td><td class="rev-mut">not started</td><td class="rev-mut">&mdash;</td></tr>'); }
-      else { holes.push(name);
-        h.push('<tr class="rev-sun" onclick="revSetView(\'month\');revSetPeriod(\''+p+'\')"><td class="rev-day">'+name+'</td><td colspan="4" class="rev-neg">&#9888; No revenue entered &mdash; this month is missing from the YTD total below.</td></tr>'); }
+    if(row.kind==='future'){
+      h.push('<tr class="rev-sun"><td class="rev-day rev-mut">'+name+'</td><td colspan="5" class="rev-mut">not started</td><td class="rev-mut">&mdash;</td></tr>');
+      continue;
+    }
+    if(row.kind==='hole'){
+      holes.push(name);
+      h.push('<tr class="rev-sun"'+click+'><td class="rev-day">'+name+'</td><td colspan="6" class="rev-neg">&#9888; No revenue entered &mdash; this month is missing from the YTD total below.</td></tr>');
+      continue;
+    }
+    // A closed month is ACCOUNTED FOR, not missing: it belongs in the count so the YTD
+    // coverage line does not accuse the team of failing to file a month that never traded.
+    if(row.kind==='closed'){
+      counted++; closedCount++;
+      h.push('<tr class="rev-sun"'+click+'><td class="rev-day rev-mut">'+name+'</td><td colspan="6" class="rev-mut">Closed &mdash; the venue did not trade'+(row.note?' &middot; '+clEsc(row.note):'')+'</td></tr>');
       continue;
     }
     counted++;
-    var bud=revBudgetBasis(m,st);   // closed month → full budget; month in service → budget to date
-    ytdNet+=m.mtdNet; ytdBudget+=bud;
-    var vs=bud?(m.mtdNet-bud)/bud:'';
-    h.push('<tr onclick="revSetView(\'month\');revSetPeriod(\''+p+'\')"><td class="rev-day">'+name+(st==='current'?' <span class="rev-mut">· in progress</span>':'')+'</td><td>'+revMoney(m.mtdNet)+'</td><td class="rev-mut">'+revMoney(bud)+(st==='current'?' <span class="rev-mut">to date</span>':'')+'</td><td class="'+revPctClass(vs)+'">'+revPct(vs)+'</td><td>'+m.tradingDays+'</td></tr>');
+    if(row.kind==='monthly') monthlyCount++;
+    ytdNet+=row.net;
+    // vs Budget only where a REAL budget exists. Summing net for 12 months against a budget
+    // that covers 3 of them would be the exact lie this module was cleaned up to kill.
+    var vs='';
+    if(row.budget){ ytdBudget+=row.budget; ytdBudgetedNet+=row.net; budgetedCount++; vs=(row.net-row.budget)/row.budget; }
+    if(row.fnb) anyFnb=true;
+    var tag = row.kind==='monthly' ? ' <span class="rev-mut">· monthly total</span>'
+            : (st==='current' ? ' <span class="rev-mut">· in progress</span>' : '');
+    // The reason a month reads the way it does, on the row itself. Jan-Mar 2026 look like a
+    // collapse next to 2025 and are nothing of the sort — a reopening, a soft opening and a
+    // war. A figure this far off trend without its reason beside it misleads by omission.
+    if(row.note) tag += '<div class="rev-mut" style="font-size:11px;font-weight:400;margin-top:2px;white-space:normal">'+clEsc(row.note)+'</div>';
+    h.push('<tr'+click+'><td class="rev-day">'+name+tag+'</td>'
+      +'<td>'+revMoney(row.net)+'</td>'
+      +'<td class="rev-mut">'+(row.fnb?revMoney(row.fnb.food):'&mdash;')+'</td>'
+      +'<td class="rev-mut">'+(row.fnb?revMoney(row.fnb.bev):'&mdash;')+'</td>'
+      +'<td class="rev-mut">'+(row.budget?(revMoney(row.budget)+(row.toDate?' <span class="rev-mut">to date</span>':'')):'&mdash;')+'</td>'
+      +'<td class="'+revPctClass(vs)+'">'+(row.budget?revPct(vs):'&mdash;')+'</td>'
+      +'<td>'+(row.days!=null?row.days:'<span class="rev-mut">&mdash;</span>')+'</td></tr>');
   }
-  var ytdVs=ytdBudget?(ytdNet-ytdBudget)/ytdBudget:'';
+  // The YTD vs-budget compares ONLY the months that have a budget — against those same
+  // months' net, never against the full-year net.
+  var ytdVs=ytdBudget?(ytdBudgetedNet-ytdBudget)/ytdBudget:'';
   var ytdLbl='YTD'+(elapsed?' <span class="rev-mut">· '+counted+' of '+elapsed+' month'+(elapsed>1?'s':'')+'</span>':'');
-  h.push('<tr class="rev-total"><td>'+ytdLbl+'</td><td>'+revMoney(ytdNet)+'</td><td>'+revMoney(ytdBudget)+'</td><td class="'+revPctClass(ytdVs)+'">'+revPct(ytdVs)+'</td><td></td></tr>');
+  var ytdFood=0, ytdBev=0, ytdFnbOk=true;
+  for(var fm=1; fm<=12; fm++){
+    var fr=revYearRow(year+'-'+String(fm).padStart(2,'0'));
+    if(fr.kind==='daily'||fr.kind==='monthly'){ if(fr.fnb){ ytdFood+=fr.fnb.food; ytdBev+=fr.fnb.bev; } else ytdFnbOk=false; }
+  }
+  h.push('<tr class="rev-total"><td>'+ytdLbl+'</td><td>'+revMoney(ytdNet)+'</td>'
+    +'<td>'+(ytdFnbOk&&ytdFood?revMoney(ytdFood):'<span class="rev-mut">&mdash;</span>')+'</td>'
+    +'<td>'+(ytdFnbOk&&ytdBev?revMoney(ytdBev):'<span class="rev-mut">&mdash;</span>')+'</td>'
+    +'<td>'+(ytdBudget?revMoney(ytdBudget):'<span class="rev-mut">&mdash;</span>')+'</td>'
+    +'<td class="'+revPctClass(ytdVs)+'">'+(ytdBudget?revPct(ytdVs):'<span class="rev-mut">&mdash;</span>')+'</td><td></td></tr>');
   h.push('</tbody></table></div>');
   // Name the holes under the total. The figure above is only the year to date if every
   // elapsed month is in it — when it isn't, say so rather than let the label imply it.
@@ -1073,7 +1270,16 @@ function revRenderYear(){
       +'&#9888; <b>YTD is missing '+holes.length+' month'+(holes.length>1?'s':'')+'</b> ('+holes.join(', ')+') &mdash; no revenue has been entered for '+(holes.length>1?'them':'it')+'. '
       +'The YTD figure above covers '+counted+' of '+elapsed+' elapsed month'+(elapsed>1?'s':'')+' only. Read it as a '+counted+'-month total, not as the year to date.</div>');
   }
-  h.push('<div class="rev-alloc rev-mut" style="display:block;margin:10px 0 0;font-size:12px">A month that has ended is measured against its <b>full monthly budget</b>. The month still in service is measured against <b>budget to date</b> &mdash; its pace so far.</div>');
+  // Say plainly what the reader is looking at. A monthly total and a month built from filed
+  // nights are both true, but they are not the same thing, and the difference has to be on
+  // the screen rather than in someone's head.
+  var notes=[];
+  if(monthlyCount) notes.push('<b>'+monthlyCount+' month'+(monthlyCount>1?'s are':' is')+' a monthly total</b> from the finance record (Simphony net sales, Food + Beverage + Tobacco) &mdash; real figures, but with no night-by-night detail behind them, so they carry no trading-day count.');
+  if(closedCount) notes.push('<b>'+closedCount+' month'+(closedCount>1?'s were':' was')+' closed</b> &mdash; the venue did not trade. That is not missing data, so '+(closedCount>1?'they are':'it is')+' counted as accounted for.');
+  if(ytdBudget && budgetedCount<counted) notes.push('<b>vs Budget covers the '+budgetedCount+' month'+(budgetedCount>1?'s':'')+' that '+(budgetedCount>1?'have':'has')+' a budget</b>, compared against '+(budgetedCount>1?'their':'its')+' own net &mdash; not against the full-year net above. The other months pre-date the budget, and the weekday rates describe today\'s trading, so applying them backwards would invent a benchmark.');
+  else if(!ytdBudget && counted) notes.push('<b>No budget exists for this year</b>, so there is nothing to measure against &mdash; the net sales are shown on their own.');
+  notes.push('A month that has ended is measured against its <b>full monthly budget</b>. The month still in service is measured against <b>budget to date</b> &mdash; its pace so far.');
+  h.push('<div class="rev-alloc rev-mut" style="display:block;margin:10px 0 0;font-size:12px;line-height:1.6">'+notes.join('<br>')+'</div>');
   h.push('</div>');
   return h.join('');
 }

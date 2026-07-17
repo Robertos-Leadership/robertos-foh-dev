@@ -20,6 +20,16 @@
    ORDER MATTERS: newest round FIRST. The "Which round" dropdown and the round
    it defaults to both follow the order of this object.
 
+   ── fixes: ──────────────────────────────────────────────────────────────────
+   A follow-up round's item may declare which earlier item it CLOSED:
+   fixes:'coo-events/3'. Without it, Admin showed nine things as "not started"
+   that we had already fixed, shipped, and TOLD Andrea about in round 2 — he
+   answered "Agree, this is fine" on every one. The screen was handing Francesco
+   a to-do list he had already done, because the two rounds could not see each
+   other. The claim is not ours either: it is only counted as confirmed when the
+   person who asked says so, and if they answer "NO — there's a problem" it goes
+   straight back to open. See admFbStateOf in index.html.
+
    ── Answer keys, and why old rounds have no ids ──────────────────────────────
    Answers are stored as {"<key>": {a:'…', note:'…'}}. The key is item.id when
    an item has one, else its 1-based position. The three rounds below have real
@@ -107,22 +117,27 @@ var FB_ROUNDS = {
       { said: 'You said: “unconfirmed prospect without a date should be recorded under leads … not included in the pipeline yet”.',
         today: 'Done. An undated, unconfirmed enquiry is now a <b>Lead</b> — its own list under the calendar, flagged to be chased, and <b>out of the pipeline</b>. Before, an undated maybe inflated the pipeline while an undated <i>confirmed</i> booking counted in nothing at all and showed on no screen. That one is now named too, so it can’t go missing.',
         works: true,
+        fixes: 'coo-events/1',
         label: 'Leads bucket, out of pipeline — DONE' },
       { said: 'You said: “year to date should reflect year to date only, future confirmed event on the book are converted pipeline”.',
         today: 'Done, exactly as you put it. <b>Year to date</b> now stops at today. Future confirmed bookings have their own figure called <b>Converted pipeline</b>. Before, a December buyout was sitting inside “2026 to date”.',
         works: true,
+        fixes: 'coo-events/3',
         label: 'YTD is to-date only; future confirmed = converted pipeline — DONE' },
       { said: 'You said: “we need to know whats a prospect, tentative and converted”.',
         today: 'Done. The report now splits and names them: <b>Prospect</b> (dated, not yet quoted), <b>Tentative</b> (quoted, waiting on the client), <b>Converted</b> (confirmed, deposit or delivered). Leads sit outside. <i>One thing to check:</i> we read “prospect” as an enquiry with a date that we haven’t quoted yet. If you meant something else, tell us — we guessed.',
         works: true,
+        fixes: 'coo-events/8',
         label: 'Prospect / tentative / converted named and split — DONE (check our reading)' },
       { said: 'You said the minimum-spend balance “is to be billed as venue rental”.',
         today: 'Half done. A minimum-spend booking is now valued at <b>its minimum</b> everywhere — the report used to say 60k while the contract said 150k. So the money is right. <b>Splitting</b> that balance into F&B, extras and rental is the third decision at the bottom of this list.',
         works: true,
+        fixes: 'coo-events/2',
         label: 'Min-spend valued at the contract — DONE (the split is below)' },
       { said: 'You said: “should have both numbers”.',
         today: 'Done. Every total now shows <b>gross and net</b> together, and says which is which. Gross is what the client is quoted; net is what finance books.',
         works: true,
+        fixes: 'coo-events/4',
         label: 'Gross and net side by side — DONE' },
       { said: 'You said: “Buy out … should be better monitored by highlighting them”.',
         today: 'Done. A full buyout is now marked on the calendar with a heavy border and a dot, and flagged in the report table, so it never reads like a normal booking in one room.',
@@ -131,14 +146,17 @@ var FB_ROUNDS = {
       { said: 'The report showed August’s bookings under July’s headline numbers.',
         today: 'Done. Every figure now follows the month you are actually looking at.',
         works: true,
+        fixes: 'coo-events/6',
         label: 'Headline numbers follow the month you are viewing — DONE' },
       { said: 'You asked what we convert and what we walked away from.',
         today: 'Done. The report now shows a <b>conversion rate</b> (won against everything decided) and what we <b>lost as a value</b>, not just a count.',
         works: true,
+        fixes: 'coo-events/7',
         label: 'Conversion rate + value of what we lost — DONE' },
       { said: 'You asked whether a month’s number was any good.',
         today: 'Done. Each month is now shown <b>against the month before</b>, with the change as a percentage. The group tables also add up to their own totals now — before, the column shown and the total underneath were two different numbers.',
         works: true,
+        fixes: 'coo-events/9',
         label: 'Month vs previous month + tables that add up — DONE' },
 
       { said: 'You said: “lead from and handler need to be there”.',
@@ -318,4 +336,17 @@ function fbLabel(topic, key){
   var r = FB_ROUNDS[topic]; if(!r) return null;
   var i = fbKeyPos(r, key);
   return (i < 9999 && r.items[i]) ? (r.items[i].label || null) : null;
+}
+
+// Did a later round declare that one of its items closed this one? Returns the
+// closing round + item, or null. Cheap: three rounds, a few dozen items.
+function fbClosedBy(topic, qkey){
+  var want = topic + '/' + qkey;
+  for(var k in FB_ROUNDS){
+    var r = FB_ROUNDS[k];
+    for(var i = 0; i < r.items.length; i++){
+      if(r.items[i].fixes === want) return { topic:k, qkey:fbKey(r,i), item:r.items[i] };
+    }
+  }
+  return null;
 }

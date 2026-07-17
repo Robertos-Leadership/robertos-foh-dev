@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Roberto's — where your feedback got to</title>
+<style>
+  /* Deliberately the same clothes as foh-feedback.html: they answered there and
+     they check here, and it must read as one thing, not two apps. */
+  body{margin:0;background:#F3EBDF;font-family:Georgia,'Times New Roman',serif;color:#3A2A1E}
+  .wrap{max-width:560px;margin:0 auto;padding:18px 14px 40px}
+  .card{background:#FBF7F1;border:1px solid #E3D5C2;border-radius:16px;overflow:hidden}
+  .brand{font-size:20px;letter-spacing:6px;color:#400207;text-align:center;padding:26px 20px 4px}
+  .sub{font-size:15px;color:#8A6A4F;text-align:center;padding:0 22px}
+  .intro{margin:16px 22px 0;font-size:13.5px;line-height:1.6;color:#4A3628}
+  .intro p{margin:0 0 9px}
+
+  .tot{display:flex;gap:8px;flex-wrap:wrap;margin:14px 22px 0}
+  .tot div{flex:1;min-width:86px;background:#F3E9DA;border-radius:10px;padding:10px 8px;text-align:center}
+  .tot .n{font-size:22px;color:#400207;line-height:1.1;font-variant-numeric:tabular-nums}
+  .tot .l{font-family:Arial,sans-serif;font-size:10.5px;color:#8A6A4F;margin-top:3px;line-height:1.3}
+
+  .grp{margin:22px 22px 0;border-top:1px solid #E3D5C2;padding-top:14px}
+  .grp h3{font-size:15px;color:#400207;font-weight:normal;margin:0 0 2px;line-height:1.35}
+  .grp .when{font-family:Arial,sans-serif;font-size:11px;color:#A5876B}
+
+  .it{border-top:1px solid #EFE4D3;padding:12px 0}
+  .it:first-of-type{border-top:0}
+  .lab{font-size:14px;color:#2C1810;line-height:1.45;margin:0}
+  .yousaid{font-family:Arial,sans-serif;font-size:11.5px;color:#8A6A4F;margin-top:4px}
+  .yousaid i{font-style:normal;color:#4A3628}
+
+  .st{display:inline-block;border-radius:20px;font-family:Arial,sans-serif;font-size:11px;padding:3px 10px;margin-top:8px;border:1px solid}
+  .s-live{background:#E7F0E4;color:#2E6B34;border-color:#A8C6A4}
+  .s-ship{background:#DCE9F6;color:#12456E;border-color:#8FB6DA}
+  .s-prog{background:#FBF0D6;color:#7A5500;border-color:#DFC680}
+  .s-open{background:#EDE7DC;color:#7A6B55;border-color:#CBBBA2}
+  .s-park{background:#F7EEE2;color:#7A2430;border-color:#D8B39A}
+
+  .what{font-family:Arial,sans-serif;font-size:12.5px;line-height:1.6;color:#4A3628;margin:8px 0 0}
+  .check{margin:8px 0 0;background:#F3E9DA;border-radius:8px;padding:9px 11px;font-family:Arial,sans-serif;font-size:12px;line-height:1.55;color:#4A3628}
+  .check b{color:#400207}
+
+  .ft{text-align:center;font-size:10.5px;color:#A5876B;margin:18px 22px 22px;line-height:1.7;font-family:Arial,sans-serif}
+  .msg{text-align:center;padding:60px 24px;font-size:14px;color:#6B4A33;line-height:1.7}
+</style>
+</head>
+<body>
+<div class="wrap"><div class="card" id="card">
+  <div class="msg">Loading…</div>
+</div></div>
+
+<!-- The rounds file. It carries every question's wording, so this page can name
+     what they flagged without the database ever storing a word of it. Same file
+     the questionnaire and the Admin screen read. -->
+<script src="foh-rounds.js?v=20260717c"></script>
+<script>
+var SUPA = 'https://paoaivwtkzujmrgrfjuq.supabase.co';
+var KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBhb2Fpdnd0a3p1am1yZ3JmanVxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEwNzAxMzAsImV4cCI6MjA5NjY0NjEzMH0.VynG9PBeIaqRG2lkMEuzskkcB11EhR-UfO9eGYsaUxk';
+
+// This page's build. An item that says it shipped in a build we are at or past
+// is LIVE — that is computed here, not claimed by anyone. It proves the code
+// shipped; it does not prove it works. Only 'verified' claims that, and only
+// because a human drove the real flow.
+var BUILD = '2026-07-17.5';
+
+var q = new URLSearchParams(location.search);
+var token = q.get('t') || '';
+
+function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function el(id){ return document.getElementById(id); }
+function fail(msg){ el('card').innerHTML = '<div class="brand">R O B E R T O ’ S</div><div class="msg">'+esc(msg)+'</div>'; }
+
+// "2026-07-17.2" → comparable. Any unparseable build sorts lowest, so a bad
+// stamp reads as "not live yet" rather than falsely claiming it is.
+function buildRank(b){
+  var m = /^(\d{4})-(\d{2})-(\d{2})\.(\d+)$/.exec(String(b||'').trim());
+  if(!m) return -1;
+  return Number(m[1])*1e9 + Number(m[2])*1e7 + Number(m[3])*1e5 + Number(m[4]);
+}
+function isLive(w){ return buildRank(w.build) > -1 && buildRank(w.build) <= buildRank(BUILD); }
+
+function ago(ts){
+  var d=new Date(ts); if(isNaN(d)) return '';
+  var days=Math.floor((Date.now()-d.getTime())/86400000);
+  if(days<1) return 'today';
+  if(days===1) return 'yesterday';
+  if(days<14) return days+' days ago';
+  return d.toLocaleDateString('en-GB',{day:'numeric',month:'short'});
+}
+
+// What this person is looking at, per item.
+//   park — THEY said not yet. They already made that call, so this is not
+//          something we owe them and it is not "waiting on" them either — it is
+//          parked because they asked for it to be. It stays visible so the
+//          record of their decision does not quietly vanish.
+//   live — fixed, shipped, and this build has it
+//   ship — fixed and recorded, but not in this build yet
+//   prog — picked up
+//   open — they asked, we have not started
+function stateOf(ans, work){
+  if(!work){
+    if(ans === FB_A.WAIT) return {k:'park', t:'Parked — you said not yet'};
+    return {k:'open', t:'Not started yet'};
+  }
+  if(work.status === 'progress') return {k:'prog', t:'Being worked on now'};
+  if(work.status === 'verified' && isLive(work)) return {k:'live', t:'Fixed, live and checked'};
+  if(isLive(work)) return {k:'live', t:'Fixed and live'};
+  return {k:'ship', t:'Fixed — reaching the app shortly'};
+}
+
+function render(d){
+  var who = String(d.who||'').split(' ')[0];
+  // index the work rows
+  var W = {};
+  (d.work||[]).forEach(function(w){ W[w.topic+'|'+w.qkey] = w; });
+
+  // Only the things they ASKED us to act on — the same rule Admin counts by, so
+  // they and Francesco never see two different truths. Their "leave as is" and
+  // "agree, this is fine" answers are not a to-do list and are not shown here.
+  var rows = [], n = {live:0, prog:0, open:0, park:0, ship:0};
+  (d.submissions||[]).forEach(function(s){
+    var round = FB_ROUNDS[s.topic];
+    if(!round) return;                      // a round we no longer ship: stay quiet rather than guess
+    var items = [];
+    Object.keys(s.answers||{}).forEach(function(k){
+      var a = s.answers[k] && s.answers[k].a; if(!a) return;
+      var isWork = !!FB_WORK_ANSWERS[a], isWait = (a === FB_A.WAIT);
+      if(!isWork && !isWait) return;
+      var w = W[s.topic+'|'+k];
+      var st = stateOf(a, w);
+      n[st.k]++;
+      items.push({ k:k, label:fbLabel(s.topic,k), answer:a, note:(s.answers[k]||{}).note, w:w, st:st, pos:fbKeyPos(round,k) });
+    });
+    if(!items.length) return;
+    // live first? No — order they answered them in. It is their list, not ours.
+    items.sort(function(x,y){ return x.pos-y.pos; });
+    rows.push({ round:round, when:s.created_at, items:items });
+  });
+
+  if(!rows.length){
+    el('card').innerHTML = '<div class="brand">R O B E R T O ’ S</div>'
+      + '<div class="sub">Where your feedback got to</div>'
+      + '<div class="msg">Nothing to show yet — once you send a round back, everything you flag appears here with where it has got to.</div>';
+    return;
+  }
+
+  // What they ASKED us for. A "not yet" is a decision they already made, not a
+  // thing we owe them, so it is counted separately and never inflates the ask.
+  var asked = n.live + n.prog + n.open + n.ship;
+
+  var h = '<div class="brand">R O B E R T O ’ S</div>'
+        + '<div class="sub">Where your feedback got to</div>'
+        + '<div class="intro"><p>Ciao '+esc(who)+' — you asked for <b>'+asked+'</b> thing'+(asked===1?'':'s')+'.'
+        +   (n.park?' You parked '+n.park+' more.':'')
+        +   ' This page is live: it always shows where each one actually is, so you never have to ask.</p>'
+        + '<p>Anything marked fixed tells you <b>how to check it yourself</b>. If we got one wrong, say so — that is the point of it.</p></div>'
+        + '<div class="tot">'
+        +   '<div><div class="n">'+n.live+'</div><div class="l">fixed<br>and live</div></div>'
+        +   '<div><div class="n">'+(n.prog+n.ship)+'</div><div class="l">being worked<br>on now</div></div>'
+        +   '<div><div class="n">'+n.open+'</div><div class="l">not started<br>yet</div></div>'
+        +   (n.park?'<div><div class="n">'+n.park+'</div><div class="l">parked at<br>your request</div></div>':'')
+        + '</div>';
+
+  rows.forEach(function(r){
+    h += '<div class="grp"><h3>'+esc(r.round.name || r.round.title)+'</h3>'
+       + '<div class="when">you answered '+esc(ago(r.when))+'</div>';
+    r.items.forEach(function(it){
+      h += '<div class="it">'
+         + '<p class="lab">'+esc(it.label || ('Question '+it.k))+'</p>'
+         + '<div class="yousaid">you said: <i>'+esc(it.answer)+'</i>'
+         + (it.note?' — “'+esc(it.note)+'”':'') + '</div>'
+         + '<span class="st s-'+it.st.k+'">'+esc(it.st.t)+'</span>';
+      if(it.w && it.w.what_changed){
+        h += '<p class="what">'+esc(it.w.what_changed)+'</p>';
+      }
+      if(it.w && it.w.check_line && it.st.k === 'live'){
+        h += '<div class="check"><b>Check it yourself:</b> '+esc(it.w.check_line)+'</div>';
+      }
+      h += '</div>';
+    });
+    h += '</div>';
+  });
+
+  h += '<div class="ft">Roberto’s DIFC · this page updates itself — keep the link<br>Something wrong here? Message Francesco.</div>';
+  el('card').innerHTML = h;
+}
+
+async function boot(){
+  // The rounds file carries every question's wording. Without it we would be
+  // showing numbers, which is the very thing this work exists to kill — so say
+  // so plainly rather than render a page full of "Question 7".
+  if(typeof FB_ROUNDS === 'undefined'){
+    fail('This page didn’t load properly — please close it and tap the link again. If it keeps happening, tell Francesco.');
+    return;
+  }
+  if(!token){
+    fail('This link is incomplete — please use the link Roberto’s sent you.');
+    return;
+  }
+  try{
+    // A security-definer function is the ONLY way anon reaches any of this: it
+    // takes the token, resolves it to one person, and returns their rows alone.
+    // Nothing here can read the table directly.
+    var r = await fetch(SUPA+'/rest/v1/rpc/feedback_status', {
+      method:'POST',
+      headers:{ apikey:KEY, Authorization:'Bearer '+KEY, 'Content-Type':'application/json' },
+      body: JSON.stringify({ p_token: token })
+    });
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    var d = await r.json();
+    if(!d || !d.ok){
+      fail('This link isn’t working any more — ask Francesco for a fresh one.');
+      return;
+    }
+    render(d);
+  }catch(e){
+    fail('Couldn’t load this just now — check your connection and open the link again.');
+  }
+}
+boot();
+</script>
+</body>
+</html>
