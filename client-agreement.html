@@ -75,8 +75,17 @@ function render(data){
     row('Date', esc(dLabel(ev.event_date)))+
     row('Timing', esc([ev.time_from, ev.time_to].filter(Boolean).join(' – ')))+
     row('Area', esc(ev.area))+
-    row('Guests reserved for', esc(ev.guests))+
-    row('Minimum guaranteed guests', esc(ev.guests_min))+
+    // One explained guests line, not two bare numbers. Valentina, 17 Jul 2026:
+    // "minimum 25, expecting 30" used to print "Guests reserved for 30" and
+    // "Minimum guaranteed guests 25" side by side, unexplained, so the client saw
+    // two different numbers for one booking. Now the expected count is the headline
+    // and the minimum is named as the floor it is.
+    (function(){
+      var g = ev.guests, gm = ev.guests_min;
+      if(gm!=null && gm!=='' && Number(gm) && Number(g) && Number(gm) < Number(g))
+        return row('Guests', esc(g)+' expected <span class="ds">— billed for a minimum of '+esc(gm)+' guests even if fewer attend</span>');
+      return row('Guests reserved for', esc(g));
+    })()+
     '</table></div>';
 
   // menu
@@ -133,7 +142,7 @@ function render(data){
       '<div class="err" id="sg-err"></div></div>';
   }
 
-  h += '<div class="ft">Roberto’s Club LTD · Gate Village No. 1, DIFC, Dubai<br>All prices are in AED and inclusive of 5% VAT, 7% DIFC authority fee and 10% service charge.<br>D - Dairy | E - Egg | H - Homemade | N - Nuts | R - Raw | S - Shellfish | V - Vegetarian</div>';
+  h += '<div class="ft">Roberto’s Club LTD · Gate Village No. 1, DIFC, Dubai<br>All prices are in AED and inclusive of 5% VAT, 7% DIFC authority fee and 10% service charge.<br>D - Dairy | E - Egg | G - Gluten | H - Homemade | N - Nuts | R - Raw | S - Shellfish | V - Vegetarian</div>';
   el('card').innerHTML = h;
 }
 

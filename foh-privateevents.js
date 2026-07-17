@@ -55,8 +55,11 @@ var PE_STATUS_COL = {
 };
 var PE_AREAS = ['Piemonte','Cortile','Restaurant terrace','Scala and Bar','Scala lounge','Scala terrace','Full venue'];
 var PE_TYPES = ['Gathering','Private gathering','Dinner','Lunch','Reception','Full buyout'];
-var PE_ALL_CODES = ['D','E','H','N','R','S','V'];
-var PE_ALLERGEN_WORDS = {D:'dairy', E:'egg', H:'homemade', N:'nuts', R:'raw', S:'shellfish', V:'vegetarian'};
+// G (gluten) added 17 Jul 2026 — Valentina: coeliac had nowhere to go, so it lived
+// in a free-text note the allergen check could not see, and a proposal could go out
+// reading "all clear". Existing dishes need the G tag applied in Chef Corner.
+var PE_ALL_CODES = ['D','E','G','H','N','R','S','V'];
+var PE_ALLERGEN_WORDS = {D:'dairy', E:'egg', G:'gluten', H:'homemade', N:'nuts', R:'raw', S:'shellfish', V:'vegetarian'};
 // A plain-language allergen line for staff-facing screens — never a bare "(–)"
 // or a lone "(S)". "Allergens: shellfish, nuts" / "Allergens: none".
 function peAllergenText(alg){
@@ -1565,8 +1568,8 @@ async function peFact(el, field, id){
   var breaks = !!e.signed_at && PE_CONTRACT_FIELDS.indexOf(field)>=0;
   if(breaks){
     if(!(await peConfirm({title:'This event is already signed',
-        html:'Changing the '+peEsc((PE_AUDIT_FIELDS[field]||field).toLowerCase())+' voids the signed agreement — the client will need to sign again.<br><br>Proceed and reset it to “Proposal sent”?',
-        ok:'Proceed &amp; reset', cancel:'Keep it signed', danger:true}))){
+        html:'Changing the '+peEsc((PE_AUDIT_FIELDS[field]||field).toLowerCase())+' voids the signed agreement — the client will need to sign again.<br><br>The booking <b>stays confirmed and the deposit is kept</b>; you’ll just need to re-send it for signature. Proceed?',
+        ok:'Proceed', cancel:'Keep it signed', danger:true}))){
       renderMain(); return;   // revert the field on screen
     }
   }
@@ -1575,8 +1578,12 @@ async function peFact(el, field, id){
   var autoMin = false;
   if(field==='min_spend' && v!=null && e.pricing_type!=='min_spend'){ patch.pricing_type = 'min_spend'; autoMin = true; }
   if(breaks){
+    // Void the signature only — the booking KEEPS its status and deposit.
+    // Valentina, 17 Jul 2026: a signed + paid booking that gained +2 guests used to
+    // fall back to "Proposal sent", so the deposit dropped out of confirmed figures
+    // (and out of Andrea's converted total) as if the money had never arrived. It
+    // stays confirmed now; only the paperwork needs re-signing (the banner says so).
     patch.signed_at = null; patch.signed_name = null; patch.signed_designation = null; patch.contract_snapshot = null;
-    if(['confirmed','deposit','done'].indexOf(e.status)>=0) patch.status = 'sent';
   }
   var r = await sb.from('events_desk').update(patch).eq('id', id);
   if(r.error){
@@ -1608,10 +1615,10 @@ async function peFact(el, field, id){
 async function peConfirmSignedEdit(id, label){
   var e = peEvById(id); if(!e || !e.signed_at) return true;
   if(!(await peConfirm({title:'This event is already signed',
-      html:'Changing '+peEsc(label)+' voids the signed agreement — the client will need to sign again.<br><br>Proceed and reset it to “Proposal sent”?',
-      ok:'Proceed &amp; reset', cancel:'Keep it signed', danger:true}))) return false;
+      html:'Changing '+peEsc(label)+' voids the signed agreement — the client will need to sign again.<br><br>The booking <b>stays confirmed and the deposit is kept</b>; you’ll just need to re-send it for signature. Proceed?',
+      ok:'Proceed', cancel:'Keep it signed', danger:true}))) return false;
+  // Void the signature only — keep the status and deposit (see peSaveField).
   var patch = { signed_at:null, signed_name:null, signed_designation:null, contract_snapshot:null, updated_at:new Date().toISOString(), updated_by:peActor() };
-  if(['confirmed','deposit','done'].indexOf(e.status)>=0) patch.status = 'sent';
   var r = await sb.from('events_desk').update(patch).eq('id', id);
   if(r.error){ peToast('NOT saved — '+(r.error.message||'check connection'), true); return false; }
   Object.keys(patch).forEach(function(k){ e[k] = patch[k]; });
@@ -1626,13 +1633,42 @@ function peEventOfItem(itemId){
   });
   return found;
 }
-// #3 — other live events sharing this date + area (a real double-booking risk).
+// #3 — other live events that genuinely collide: same date, overlapping times,
+// AND the same space (or a full-venue booking, which takes everything).
+// Valentina, 17 Jul 2026, flagged two failures of the old rule (date + exact area,
+// time never checked):
+//   #6 — lunch and dinner in one room, two clients, warned as a clash that isn't;
+//   #7 — a full-venue buyout over a Piemonte booking, no warning at all.
+// Francesco's rule (17 Jul 2026): ONLY a full-venue booking blocks everything;
+// every other area is independent, so a real clash needs the SAME area and an
+// overlapping time. A missing time is treated as a possible clash (better a false
+// nudge than a silent double-booking); a finish past midnight is handled.
+function peTimeWindow(e){
+  var a = peParseTimeMin(e.time_from); if(a==null) return null;   // no start → unknown
+  var b = peParseTimeMin(e.time_to);
+  if(b==null) b = a + 240;            // no end entered → assume a 4-hour block
+  if(b <= a) b += 1440;               // finishes after midnight (e.g. 8pm–1am)
+  return [a, b];
+}
+function peTimesOverlap(e, x){
+  var A = peTimeWindow(e), B = peTimeWindow(x);
+  if(!A || !B) return true;           // can't tell → warn to be safe
+  return A[0] < B[1] && B[0] < A[1];
+}
 function peConflicts(e){
-  if(!e || !e.event_date || !e.area) return [];
+  if(!e || !e.event_date) return [];
   var d = String(e.event_date).slice(0,10);
   return peState.events.filter(function(x){
-    return x.id!==e.id && ['lost','done'].indexOf(x.status)<0 &&
-      String(x.event_date||'').slice(0,10)===d && x.area===e.area;
+    if(x.id===e.id || ['lost','done'].indexOf(x.status)>=0) return false;
+    if(String(x.event_date||'').slice(0,10)!==d) return false;
+    // A full-venue booking (either side) takes the whole place for the day — set-up
+    // and breakdown included — so it clashes with ANYTHING else booked that date,
+    // whatever the times (Francesco: "only Full venue blocks everything").
+    if(peIsBuyout(e) || peIsBuyout(x)) return true;
+    // Otherwise the two must be in the SAME named area AND overlap in time — so
+    // lunch and dinner in one room, two clients, is NOT a clash (#6).
+    if(!(e.area && x.area && x.area===e.area)) return false;
+    return peTimesOverlap(e, x);
   });
 }
 // P0 — the first set-menu "choose" course whose per-option split doesn't add up
@@ -1780,15 +1816,30 @@ async function peSetStatus(id, status){
   }
 }
 var PE_LOST_REASONS = ['Price too high','Date not available','Chose another venue','No response','Guest cancelled'];
+// Valentina, 17 Jul 2026: when a client cancels after paying, there was nowhere to
+// record what happened to the deposit — it ended in a free-text note, so nothing
+// could total up what we kept vs refunded. When (and only when) the booking is in a
+// paid state, the lost modal now asks — Kept / Refunded / Moved to another date.
+var PE_DEPOSIT_OUTCOMES = ['Deposit kept','Deposit refunded','Deposit moved to another date'];
+function peHadDeposit(e){ return !!e && ['deposit','done'].indexOf(e.status)>=0; }
+function peChipGroupHTML(list){
+  return list.map(function(r){
+    return '<span class="pe-chip" onclick="var p=this.parentNode;p.querySelectorAll(\'.pe-chip\').forEach(function(c){c.classList.remove(\'on\')});this.classList.add(\'on\')">'+r+'</span>';
+  }).join('');
+}
 function peAskLostReason(id){
+  var e = peEvById(id);
+  var askDeposit = peHadDeposit(e);
   var bg = document.createElement('div'); bg.className='pe-modal-bg';
   bg.addEventListener('click', function(ev){ if(ev.target===bg) bg.remove(); });
   bg.innerHTML = '<div class="pe-modal" style="max-width:440px">'+
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px"><b style="color:#400207">Mark as lost — what happened?</b><span class="pe-x" onclick="this.closest(\'.pe-modal-bg\').remove()">✕</span></div>'+
     '<div style="font-size:11.5px;color:#8B7355;margin-bottom:8px">This moves the event out of your open pipeline. You can reopen it later from the “Lost” filter.</div>'+
-    '<div style="margin-bottom:8px">'+PE_LOST_REASONS.map(function(r){
-      return '<span class="pe-chip" onclick="var p=this.parentNode;p.querySelectorAll(\'.pe-chip\').forEach(function(c){c.classList.remove(\'on\')});this.classList.add(\'on\')">'+r+'</span>';
-    }).join('')+'</div>'+
+    '<div id="pe-lost-reasons" style="margin-bottom:8px">'+peChipGroupHTML(PE_LOST_REASONS)+'</div>'+
+    (askDeposit
+      ? '<div class="pe-lbl" style="color:#8A2A1A">A deposit was paid — what happened to it?</div>'+
+        '<div id="pe-lost-deposit" style="margin-bottom:8px">'+peChipGroupHTML(PE_DEPOSIT_OUTCOMES)+'</div>'
+      : '')+
     '<div class="pe-lbl">More detail (optional when a reason above is picked)</div>'+
     '<textarea class="pe-in" id="pe-lost-note" rows="2" placeholder="e.g. their budget was AED 150 per guest"></textarea>'+
     '<div style="display:flex;gap:8px;margin-top:10px"><button class="pe-btn" onclick="peConfirmLost(\''+id+'\')">Mark as lost</button>'+
@@ -1798,10 +1849,15 @@ function peAskLostReason(id){
 async function peConfirmLost(id){
   if(!peCanEdit()){ peToast('View only — ask Valentina, Andrea or Francesco to make changes', true); return; }
   var bg = document.querySelector('.pe-modal-bg'); if(!bg) return;
-  var chip = bg.querySelector('.pe-chip.on');
+  var chip = (bg.querySelector('#pe-lost-reasons .pe-chip.on'));
+  var depBox = bg.querySelector('#pe-lost-deposit');
+  var depChip = depBox ? depBox.querySelector('.pe-chip.on') : null;
   var note = (bg.querySelector('#pe-lost-note')||{value:''}).value.trim();
   var reason = [chip?chip.textContent:'', note].filter(Boolean).join(' — ');
   if(!reason){ peToast('Pick a reason or write one — it helps us learn', true); return; }
+  // If a deposit was paid, its outcome is required — the money story must be complete.
+  if(depBox && !depChip){ peToast('A deposit was paid — say what happened to it', true); return; }
+  if(depChip) reason += ' · ' + depChip.textContent;
   var e = peEvById(id); var was = e ? e.status : '';
   var r = await sb.from('events_desk').update({status:'lost', updated_by:peActor(), updated_at:new Date().toISOString()}).eq('id', id);
   if(r.error){ peToast('Status NOT changed — check connection', true); return; }
@@ -2351,7 +2407,7 @@ function peProposalHTML(e){
   }
   body += '<div class="ft">Our Chefs will do their best to accommodate your dietary requirements, please inform your waiter.<br>'+
     'All prices are in AED inclusive of 5% VAT, 7% DIFC Authority Fee and 10% Service Charge.<br>'+
-    'D - Dairy | E - Egg | H - Homemade | N - Nuts | R - Raw | S - Shellfish | V - Vegetarian</div>';
+    'D - Dairy | E - Egg | G - Gluten | H - Homemade | N - Nuts | R - Raw | S - Shellfish | V - Vegetarian</div>';
   return peDocShell('Roberto\'s proposal', body);
 }
 function pePrintProposal(id){ var e = peEvById(id); if(e) pePrintHTML(peProposalHTML(e)); }
@@ -3027,7 +3083,7 @@ function peRenderDishLib(){
       '</div>'+
       '<div style="margin-top:8px"><div class="pe-lbl">Allergens</div>'+PE_ALL_CODES.map(function(c){
         return '<span class="pe-chip'+(alg.indexOf(c)>=0?' on':'')+'" data-code="'+c+'" onclick="this.classList.toggle(\'on\')">'+c+'</span>';
-      }).join('')+'<span style="font-size:10.5px;color:#8B7355;margin-left:6px">D dairy · E egg · H homemade · N nuts · R raw · S shellfish · V vegetarian</span></div>'+
+      }).join('')+'<span style="font-size:10.5px;color:#8B7355;margin-left:6px">D dairy · E egg · G gluten · H homemade · N nuts · R raw · S shellfish · V vegetarian</span></div>'+
       '<div style="margin-top:8px"><div class="pe-lbl">What\'s in it (helps the menu line)</div><input class="pe-in" id="pe-d-notes" placeholder="e.g. burrata from Puglia, confit datterino, aged balsamic" value=""></div>'+
       '<div style="margin-top:10px;background:#F7EEE2;border-radius:10px;padding:11px 12px">'+
       '<div class="pe-lbl" style="color:#8A6A4F">Menu line — written for you</div>'+
@@ -4412,7 +4468,7 @@ function peQuickPrint(){
   });
   body += '<div class="ft">Our Chefs will do their best to accommodate your dietary requirements, please inform your waiter.<br>'+
     'All prices are in AED inclusive of 5% VAT, 7% DIFC Authority Fee and 10% Service Charge.<br>'+
-    'D - Dairy | E - Egg | H - Homemade | N - Nuts | R - Raw | S - Shellfish | V - Vegetarian</div>';
+    'D - Dairy | E - Egg | G - Gluten | H - Homemade | N - Nuts | R - Raw | S - Shellfish | V - Vegetarian</div>';
   pePrintHTML(peDocShell(peQuick.title, body));
 }
 async function peQuickSave(){

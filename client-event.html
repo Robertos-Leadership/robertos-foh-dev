@@ -102,7 +102,7 @@ function render(data){
     '<input class="fld" id="cl-gcount" type="number" min="15" placeholder="Number of guests" value="'+(guestCount||'')+'" oninput="onGuests(this.value)" style="margin-bottom:4px">'+
     '<div id="cl-allow" style="font-size:12.5px;color:#400207;font-family:Arial,sans-serif;min-height:17px"></div>'+
     '<div id="cl-total" style="font-size:12.5px;color:#400207;font-family:Arial,sans-serif;margin-top:4px"></div></div>';
-  h += '<div class="smallnote" style="font-size:11px;color:#A5876B">The letters after each dish are allergens: D dairy · E egg · H homemade · N nuts · R raw · S shellfish · V vegetarian.</div>';
+  h += '<div class="smallnote" style="font-size:11px;color:#A5876B">The letters after each dish are allergens: D dairy · E egg · G gluten · H homemade · N nuts · R raw · S shellfish · V vegetarian.</div>';
   var catOrder = ['Vegetarian','Fish','Beef','Chicken','Dessert'];
   groups.forEach(function(g){
     var list = (data.dishes||[]).filter(function(d){ return d.serve===g[0]; });
@@ -137,7 +137,7 @@ function render(data){
        '<textarea id="cl-note" maxlength="900">'+esc(data.selection&&data.selection.note||'')+'</textarea></div>';
   h += '<div class="btnrow"><button class="btn" id="cl-send" onclick="send()">Send selection to Roberto’s</button>'+
        '<div class="ft">Valentina will come back to you to confirm availability and final details.<br>'+
-       'D dairy · E egg · H homemade · N nuts · R raw · S shellfish · V vegetarian</div></div>';
+       'D dairy · E egg · G gluten · H homemade · N nuts · R raw · S shellfish · V vegetarian</div></div>';
   el('card').innerHTML = h;
   document.body.classList.toggle('nogc', guestCount < 15);
   onGuests(String(guestCount||''));
