@@ -63,7 +63,15 @@ var KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6
 // is LIVE — that is computed here, not claimed by anyone. It proves the code
 // shipped; it does not prove it works. Only 'verified' claims that, and only
 // because a human drove the real flow.
-var BUILD = '2026-07-17.8';
+//
+// ⚠ BUMP THIS WITH THE BUILD STAMP IN index.html, IN THE SAME COMMIT.
+// This page is standalone — it has no app shell to read the stamp off, so the
+// build lives here twice by necessity. Leave it behind and a shipped: item
+// silently reads as "Not started yet" on the asker's own status page: newer
+// than this constant means "not live yet", which falls through to open. That is
+// the exact failure this page exists to prevent — them and Francesco looking at
+// two different truths — and it fails SILENTLY, in their favour to complain.
+var BUILD = '2026-07-18.1';
 
 var q = new URLSearchParams(location.search);
 var token = q.get('t') || '';
