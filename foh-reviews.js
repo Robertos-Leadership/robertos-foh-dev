@@ -278,7 +278,11 @@ function grDeltaPill(v, hero){
                 : '<span class="gr-mut-sm">from today</span>';
   }
   var big = (v.delta||0) >= 60;
-  var txt = '+'+grNum(v.delta)+(hero?(' ratings since '+grDate(v.since)):'');
+  // Pick the sign first, then print the absolute number — otherwise a negative
+  // delta renders as "+-1" (the "+" glued in front of grNum's own "-"). The race
+  // chart already does it this way; the board must match, sign for sign.
+  var neg = (v.delta||0) < 0;
+  var txt = (neg?'−':'+')+grNum(Math.abs(v.delta||0))+(hero?(' ratings since '+grDate(v.since)):'');
   return hero ? '<div class="gr-delta">'+txt+'</div>'
               : '<span class="gr-vel'+(big?' gr-vel-hot':'')+'">'+txt+'</span>';
 }
