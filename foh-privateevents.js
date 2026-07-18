@@ -436,6 +436,16 @@ async function peLoadAll(force){
     peState.targets = {};
     peState.targetsOk = !!(res[8] && !res[8].error);
     if(peState.targetsOk) (res[8].data||[]).forEach(function(r){ peState.targets[r.month] = r; });
+    // Which of the new columns actually EXIST. select('*') returns a missing
+    // column as an absent key and a set-but-empty one as null, so `in` tells the
+    // two apart — which matters, because otherwise the only way to find out is
+    // for Valentina to build a whole evening and lose it on the next reload.
+    // She is told BEFORE she types, not after. No rows to look at → assume fine
+    // rather than warn about nothing.
+    var probe = peState.events[0];
+    peState.colsOk = probe
+      ? { spaces:('spaces' in probe), options:('options' in probe), alt_dates:('alt_dates' in probe) }
+      : { spaces:true, options:true, alt_dates:true };
     peState.loaded = true;
   }catch(e){
     console.warn('[peLoadAll]', e);
@@ -1736,6 +1746,14 @@ function peQuietAdd(prompt, act, ce, why){
     '<span style="font-size:12.5px;color:#8B7355">'+prompt+'</span>'+
     '<span style="font-size:12px;color:#6B1F2A;font-weight:600;white-space:nowrap">'+why+' ›</span></div></div>';
 }
+// Said BEFORE she builds something the database cannot keep. Everything still
+// works on screen — it just will not survive a reload until the file is run.
+function peNeedsSqlHTML(col){
+  if(!peState.colsOk || peState.colsOk[col] !== false) return '';
+  return '<div style="margin-top:8px;background:#FBF0D6;border:1px solid #DFC680;border-radius:9px;padding:9px 12px;font-size:12.5px;color:#7A5500">'+
+    '&#9888; <b>This will not save yet.</b> It works on screen, but it is lost when the page reloads until '+
+    '<b>foh-events-oneevening.sql</b> has been run once in Supabase. Ask Francesco — it takes a minute.</div>';
+}
 var PE_SUBCARD = 'background:#FBF7F0;border:1px solid rgba(107,31,42,0.16);border-radius:9px;padding:10px 12px;margin-top:8px';
 
 // #5 — "Canapés in the Cortile first, then dinner in Piemonte." Valentina's
@@ -1751,7 +1769,7 @@ function peEveningCardHTML(e, ce){
   var h = '<div class="pe-card"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">'+
     '<b style="font-size:14px;color:#400207">The run of the evening</b>'+
     (ce?'<button class="pe-btn sec sm" onclick="peAddSpace(\''+e.id+'\')">+ Add another space</button>':'')+'</div>'+
-    '<div style="font-size:11.5px;color:#8B7355;margin-top:3px">One booking, one price — the guest is never quoted twice for one evening.</div>';
+    '<div style="font-size:11.5px;color:#8B7355;margin-top:3px">One booking, one price — the guest is never quoted twice for one evening.</div>'+peNeedsSqlHTML('spaces');
   // The first leg is the event's own area and time, edited above. Shown here
   // read-only so the evening reads in order, rather than starting mid-way.
   h += '<div style="'+PE_SUBCARD+';background:#F3E9DA">'+
@@ -1792,7 +1810,7 @@ function peAltDatesCardHTML(e, ce){
   var h = '<div class="pe-card"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">'+
     '<b style="font-size:14px;color:#400207">Dates we are holding</b>'+
     (ce?'<button class="pe-btn sec sm" onclick="peAddAltDate(\''+e.id+'\')">+ Add another</button>':'')+'</div>'+
-    '<div style="font-size:11.5px;color:#8B7355;margin-top:3px">One booking, not two drafts — so neither date gets forgotten. It shows on the calendar on every date below, and still counts <b>once</b> in the report.</div>';
+    '<div style="font-size:11.5px;color:#8B7355;margin-top:3px">One booking, not two drafts — so neither date gets forgotten. It shows on the calendar on every date below, and still counts <b>once</b> in the report.</div>'+peNeedsSqlHTML('alt_dates');
   h += '<div style="'+PE_SUBCARD+';background:#F3E9DA;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">'+
     '<span><span style="font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#8B7355">First choice</span><br>'+
     '<b style="font-size:13.5px;color:#400207">'+peEsc(peDLabel(e.event_date))+'</b></span>'+
@@ -1827,7 +1845,7 @@ function peOptionsCardHTML(e, ce, t){
   var h = '<div class="pe-card"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">'+
     '<b style="font-size:14px;color:#400207">Options for the guest</b>'+
     (ce?'<button class="pe-btn sec sm" onclick="peAddOption(\''+e.id+'\')">+ Add an option</button>':'')+'</div>'+
-    '<div style="font-size:11.5px;color:#8B7355;margin-top:3px">One enquiry and <b>one email</b> with all of them — not three bookings and three emails to tidy up afterwards.</div>';
+    '<div style="font-size:11.5px;color:#8B7355;margin-top:3px">One enquiry and <b>one email</b> with all of them — not three bookings and three emails to tidy up afterwards.</div>'+peNeedsSqlHTML('options');
   opts.forEach(function(o, i){
     var tot = peOptionTotal(e, o);
     var isChosen = chosen && chosen.key === o.key;
