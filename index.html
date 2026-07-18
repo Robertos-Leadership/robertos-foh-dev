@@ -2231,7 +2231,7 @@ if ('serviceWorker' in navigator) {
     <div class="foh-hero-content">
       <img class="foh-hero-logo" src="robertos-logo-white.svg" alt="Roberto's">
     </div>
-    <div id="foh-build" style="position:absolute;bottom:6px;right:10px;font-size:9px;letter-spacing:.08em;color:rgba(255,255,255,.4);z-index:3;font-variant-numeric:tabular-nums;">build 2026-07-17.7</div>
+    <div id="foh-build" style="position:absolute;bottom:6px;right:10px;font-size:9px;letter-spacing:.08em;color:rgba(255,255,255,.4);z-index:3;font-variant-numeric:tabular-nums;">build 2026-07-17.8</div>
   </div>
 
   <!-- main scroll area -->
@@ -2461,7 +2461,7 @@ if ('serviceWorker' in navigator) {
      answer on. One round, one place: see the header of foh-rounds.js.
      Loaded here, not with the foh-*.js at the foot of the body, because the
      inline Admin code below READS it rather than just calling into it. -->
-<script src="foh-rounds.js?v=20260717e"></script>
+<script src="foh-rounds.js?v=20260717f"></script>
 <script>
 const SUPABASE_URL = 'https://paoaivwtkzujmrgrfjuq.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBhb2Fpdnd0a3p1am1yZ3JmanVxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEwNzAxMzAsImV4cCI6MjA5NjY0NjEzMH0.VynG9PBeIaqRG2lkMEuzskkcB11EhR-UfO9eGYsaUxk';
@@ -3715,11 +3715,13 @@ async function admFbSaveWork(row){
 // This assembles it into a brief that pastes straight to Claude, instead of
 // Francesco retyping it out of two files.
 // Notes go in VERBATIM, typos and all — the meaning is in their words.
-function admFbBrief(topic, qkey){
+// One item's part of a brief. Shared by the single-item and the many-item
+// versions so they can never drift into describing the same work differently.
+function admFbBriefBlock(topic, qkey, n){
   var round=FB_ROUNDS[topic];
-  if(!round){ toast('That round is not in foh-rounds.js any more, so there is nothing to brief from.', true); return; }
+  if(!round) return null;
   var it=round.items[fbKeyPos(round,qkey)];
-  if(!it){ toast('That question is not in the round any more.', true); return; }
+  if(!it) return null;
   var strip=function(s){ return String(s||'').replace(/<[^>]+>/g,''); };
   var says=[];
   (state.fbRows||[]).forEach(function(r){
@@ -3729,11 +3731,11 @@ function admFbBrief(topic, qkey){
     says.push('  - ' + (r.who||'someone') + ' answered "' + a.a + '"' + (a.note ? ' and wrote: "' + a.note + '"' : ''));
   });
   var cur=admFbWorkOf(topic,qkey);
+  var head = n ? ('--- ' + n + '. ' + strip(it.label) + ' ---')
+               : ('ITEM:  ' + strip(it.label));
   var out=[
-    "Roberto's FOH — a fix the team asked for.",
-    '',
-    'ROUND: ' + (round.name||topic) + '   (' + topic + ', item ' + qkey + ')',
-    'ITEM:  ' + strip(it.label),
+    head,
+    'ROUND: ' + (round.name||topic) + '   (record the fix against ' + topic + ' / ' + qkey + ')',
     '',
     'WHAT THEY WERE ASKED ABOUT:',
     '  ' + strip(it.said),
@@ -3742,28 +3744,93 @@ function admFbBrief(topic, qkey){
     '  ' + strip(it.today),
     '',
     'WHAT THEY SAID (verbatim — their words, their spelling):',
-    says.length ? says.join('\n') : '  (nobody flagged this one)',
-    ''
+    says.length ? says.join('\n') : '  (nobody flagged this one)'
   ];
   if(cur && cur.status){
-    out.push('ALREADY RECORDED: ' + cur.status + (cur.build?' in build '+cur.build:'')
-      + (cur.what_changed?' — "'+cur.what_changed+'"':''), '');
+    out.push('', 'ALREADY RECORDED: ' + cur.status + (cur.build?' in build '+cur.build:'')
+      + (cur.what_changed?' — "'+cur.what_changed+'"':''));
   }
-  out.push(
-    'DONE MEANS:',
+  return out.join('\n');
+}
+// The rules every brief ends with — said once, however many items it carries.
+function admFbBriefRules(){
+  return ['DONE MEANS, for each one:',
     '  1. Fixed, and proven by driving the real flow — not by a test that mocks it.',
-    '  2. Live, with the build recorded against ' + topic + ' / ' + qkey + ' in',
-    '     Admin -> Feedback (it refuses to save without it).',
-    '  3. One line saying how THEY can check it themselves in the app. That line',
-    '     is what they see on their status page, and it is what earns the trust.',
+    '  2. Live, with the build recorded against the round/item named above in',
+    '     Admin -> Feedback (it refuses to save without what changed, the build,',
+    '     and one line saying how they can check it).',
+    '  3. That check-it line is what the person who asked sees on their status',
+    '     page — it is what lets them catch us being wrong, so write it for them.',
     '',
     'HOUSE RULES: read the code and cite file:line; never ship an unverified',
-    'number; never delete working capability to satisfy an audit.'
-  );
-  var txt=out.join('\n');
+    'number; never delete working capability to satisfy an audit.'].join('\n');
+}
+function admFbCopy2(txt, msg){
+  (navigator.clipboard ? navigator.clipboard.writeText(txt) : Promise.reject())
+    .then(function(){ toast(msg); })
+    .catch(function(){ window.prompt('Copy this:', txt); });
+}
+function admFbBrief(topic, qkey){
+  var b=admFbBriefBlock(topic, qkey, 0);
+  if(!b){ toast('That round is not in foh-rounds.js any more, so there is nothing to brief from.', true); return; }
+  var txt=["Roberto's FOH — a fix the team asked for.", '', b, '', admFbBriefRules()].join('\n');
   (navigator.clipboard ? navigator.clipboard.writeText(txt) : Promise.reject())
     .then(function(){ toast('Fix brief copied — paste it to Claude'); })
     .catch(function(){ window.prompt('Copy this brief:', txt); });
+}
+// ── Ticking several at once ─────────────────────────────────────────────────
+// He fixes in batches, so briefing one item at a time meant pasting the same
+// preamble over and over. Tick what you are taking on and get ONE prompt.
+function admFbPickKey(t,q){ return t+'|'+q; }
+function admFbPicked(){ state.fbPick = state.fbPick || {}; return state.fbPick; }
+function admFbPickToggle(t,q,on){
+  var p=admFbPicked(), k=admFbPickKey(t,q);
+  if(on) p[k]={topic:t, qkey:q}; else delete p[k];
+  admFbPaintPick();                    // NEVER renderMain() — see admFbPaintPick
+}
+function admFbPickClear(){
+  state.fbPick={};
+  var boxes=document.querySelectorAll('#fb-list input[type="checkbox"]');
+  for(var i=0;i<boxes.length;i++) boxes[i].checked=false;
+  admFbPaintPick();
+}
+// One builder, used both when the whole screen renders and when a tick updates
+// the bar in place — so the two can never disagree about what is selected.
+function admFbPickBarHTML(){
+  var n=admFbPickList().length;
+  if(!n) return '';
+  return '<span style="font-size:13px;flex:1;min-width:150px;"><b>'+n+'</b> ticked'
+      +(n===1?'':' &mdash; one brief, '+n+' separate fixes')+'</span>'
+    +'<button class="btn btn-sm" style="text-transform:none;letter-spacing:0;background:#E8D9C7;color:#400207;border-color:#E8D9C7;" onclick="admFbBriefMany()">Copy one brief for all '+n+'</button>'
+    +'<button class="btn btn-sm" style="text-transform:none;letter-spacing:0;background:transparent;color:#E8D9C7;border-color:rgba(232,217,199,.4);" onclick="admFbPickClear()">Clear</button>';
+}
+// Repaint ONLY the bar. Re-rendering the list on every tick threw away the
+// checkbox the user was about to click next, so ticking two in a row registered
+// one — the same trap as typing in the panel form.
+function admFbPaintPick(){
+  var bar=document.getElementById('fb-pickbar'); if(!bar) return;
+  var inner=admFbPickBarHTML();
+  bar.innerHTML=inner;
+  bar.style.display = inner ? 'flex' : 'none';
+}
+function admFbPickList(){
+  var p=admFbPicked(); return Object.keys(p).map(function(k){ return p[k]; });
+}
+function admFbBriefMany(){
+  var list=admFbPickList();
+  if(!list.length) return;
+  // Same order as the screen, so the brief reads the way he ticked it.
+  var blocks=[], n=0;
+  list.forEach(function(x){
+    var b=admFbBriefBlock(x.topic, x.qkey, n+1);
+    if(b){ n++; blocks.push(b); }
+  });
+  if(!n){ toast('Nothing to brief — those rounds are no longer in foh-rounds.js.', true); return; }
+  var txt=["Roberto's FOH — " + n + (n===1?" fix":" fixes") + " the team asked for, in one go.", '',
+           'Each one below is a separate request with its own round and item. Fix them',
+           'independently; do not merge them into one change.', '',
+           blocks.join('\n\n'), '', admFbBriefRules()].join('\n');
+  admFbCopy2(txt, n+' items copied as one brief — paste it to Claude');
 }
 // ── Their status link ───────────────────────────────────────────────────────
 // One unguessable token per person, so they can look any time, without asking
@@ -4235,6 +4302,13 @@ function admFbHTML(){
       }).join('')
     +'</div>';
 
+  // Only on screen when it can actually do something, and it says what and
+  // how many. Ticking is for briefing a batch — it never changes a status.
+  // Painted from state here too, so a full re-render (opening an item, changing
+  // filter) never loses what is already ticked.
+  var pickInner=admFbPickBarHTML();
+  h+='<div id="fb-pickbar" style="display:'+(pickInner?'flex':'none')+';align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px;background:#400207;color:#E8D9C7;border-radius:10px;padding:9px 13px;">'+pickInner+'</div>';
+
   // ── the list ──
   var sel=admFbSel();
   var list='', lastTopic=null;
@@ -4251,7 +4325,14 @@ function admFbHTML(){
       }
       var isSel = sel && sel.topic===i.topic && sel.qkey===i.qkey;
       var note = i.notes.length ? i.notes[0].note : '';
-      list+='<button style="display:flex;align-items:center;gap:11px;width:100%;text-align:left;background:'+(isSel?'#fbf7f1':'transparent')+';border:0;border-bottom:1px solid #f1e9da;padding:11px 8px 11px 0;cursor:pointer;font-family:inherit;" onclick="admFbOpen(\''+admEsc(i.topic)+'\',\''+admEsc(i.qkey)+'\')">'
+      var ticked = !!admFbPicked()[admFbPickKey(i.topic,i.qkey)];
+      // The tick sits OUTSIDE the row button — a checkbox inside a button is
+      // unreachable by keyboard and fights the click that opens the item.
+      list+='<div style="display:flex;align-items:center;border-bottom:1px solid #f1e9da;background:'+(isSel?'#fbf7f1':'transparent')+';">'
+        +'<label style="display:flex;align-items:center;padding:0 9px 0 3px;cursor:pointer;" title="Tick to brief this one with others">'
+        +'<input type="checkbox"'+(ticked?' checked':'')+' style="width:15px;height:15px;accent-color:#400207;cursor:pointer;" onchange="admFbPickToggle(&#39;'+admEsc(i.topic)+'&#39;,&#39;'+admEsc(i.qkey)+'&#39;,this.checked)">'
+        +'</label>'
+        +'<button style="display:flex;align-items:center;gap:11px;flex:1;min-width:0;text-align:left;background:transparent;border:0;padding:11px 8px 11px 0;cursor:pointer;font-family:inherit;" onclick="admFbOpen(\''+admEsc(i.topic)+'\',\''+admEsc(i.qkey)+'\')">'
         +'<span style="width:3px;align-self:stretch;border-radius:2px;flex:none;background:'+FB_STATE_COL[i.st]+';"></span>'
         +'<span style="font-size:11.5px;color:#9c8a72;min-width:18px;">'+admEsc(admFbItemNo(i.topic,i.qkey))+'.</span>'
         +'<span style="flex:1;min-width:0;font-size:13.5px;color:#4a3b2a;line-height:1.4;">'+admEsc(i.label||('Question '+i.qkey))
@@ -4260,11 +4341,11 @@ function admFbHTML(){
         + (i.n>1?'<span style="font-size:11px;color:#9c8a72;white-space:nowrap;">'+i.n+' people</span>':'')
         +'<span style="font-size:11px;white-space:nowrap;color:'+(i.st==='ok'?'#2E6B34':'#9c8a72')+';">'+admFbStateLabel(i.topic,i.qkey)+'</span>'
         +'<span style="color:#e3d5c2;font-size:15px;flex:none;">&rsaquo;</span>'
-        +'</button>';
+        +'</button></div>';
     });
   }
   h+='<div style="display:grid;grid-template-columns:1fr;gap:16px;margin-top:6px;" class="'+(sel?'fb-split':'')+'">'
-    +'<div>'+list+'</div>'
+    +'<div id="fb-list">'+list+'</div>'
     + (sel?admFbPanelHTML():'')
     +'</div>';
 

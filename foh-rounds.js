@@ -229,6 +229,7 @@ var FB_ROUNDS = {
 
       { said: 'You said: “lead from and handler need to be there”.',
         today: '<b>Not done — this needs Valentina.</b> There is nowhere to record where a booking came from or who is handling it, so it means <b>two new fields she must fill on every enquiry</b>. We would make them dropdowns and default the handler to whoever created it, but it is still two more things to complete on every single booking, and she would need training on it. <b>Cost to her:</b> small but permanent — every enquiry, forever.',
+        shipped: { build:'2026-07-17.1', in:'ed3682b', what:'Done — and it is the same work that answered Valentina, so it cost her once, not twice. Every booking records where it came from and who is handling it, and the handler <b>defaults to whoever created it</b>, so it is one dropdown rather than two chores on every enquiry.', check:'Open any enquiry — Lead source and Handler sit with the client details.' },
         label: 'Lead source + handler — 2 new fields on every enquiry (Valentina)' },
       { said: 'You said: “minimum target sale expressed in number of events and revenue”.',
         today: '<b>Not done — but this one is free.</b> There is no events target at all today, so nothing can say whether a month is on plan. Setting it is an admin screen: <b>Valentina is not affected</b> and does not touch it. We only need the numbers from you — how many events and what revenue, per month.',
