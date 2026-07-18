@@ -54,7 +54,7 @@
 <!-- The rounds file. It carries every question's wording, so this page can name
      what they flagged without the database ever storing a word of it. Same file
      the questionnaire and the Admin screen read. -->
-<script src="foh-rounds.js?v=20260717d"></script>
+<script src="foh-rounds.js?v=20260717e"></script>
 <script>
 var SUPA = 'https://paoaivwtkzujmrgrfjuq.supabase.co';
 var KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBhb2Fpdnd0a3p1am1yZ3JmanVxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEwNzAxMzAsImV4cCI6MjA5NjY0NjEzMH0.VynG9PBeIaqRG2lkMEuzskkcB11EhR-UfO9eGYsaUxk';
@@ -63,7 +63,7 @@ var KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6
 // is LIVE — that is computed here, not claimed by anyone. It proves the code
 // shipped; it does not prove it works. Only 'verified' claims that, and only
 // because a human drove the real flow.
-var BUILD = '2026-07-17.6';
+var BUILD = '2026-07-17.7';
 
 var q = new URLSearchParams(location.search);
 var token = q.get('t') || '';
@@ -115,15 +115,23 @@ function statusState(topic, key, ans, work, answerIn){
     if(isLive(work)) return {k:'live', t:'Fixed and live', what:work.what_changed, check:work.check_line};
     return {k:'ship', t:'Fixed — reaching the app shortly', what:work.what_changed};
   }
+  // THEIR verdict on our fix outranks anything we declare about ourselves.
+  var c = (typeof fbClosedBy==='function') ? fbClosedBy(topic, key) : null;
+  var a2 = c ? answerIn(c.topic, c.qkey) : null;
+  if(c && a2 === FB_A.PROB){
+    // They told us we got it wrong, so it is open again — and the page says so
+    // in their favour, not ours.
+    return { k:'open', t:'Back with us — you said we got this wrong' };
+  }
+  if(c && a2 === FB_A.FINE){
+    return { k:'live', t:'Fixed and live — you confirmed it',
+             what:(c.item.today ? String(c.item.today).replace(/<[^>]+>/g,'') : null) };
+  }
   var sh = (typeof fbShipped==='function') ? fbShipped(topic, key) : null;
   if(sh && isLiveBuild(sh.build)) return {k:'live', t:'Fixed and live', what:sh.what, check:sh.check};
-  var c = (typeof fbClosedBy==='function') ? fbClosedBy(topic, key) : null;
   if(c){
-    var a2 = answerIn(c.topic, c.qkey);
-    if(a2 !== FB_A.PROB){                              // unless they told us it is wrong
-      var what = c.item.today ? String(c.item.today).replace(/<[^>]+>/g,'') : null;
-      return { k:'live', t:(a2===FB_A.FINE ? 'Fixed and live — you confirmed it' : 'Fixed and live'), what:what };
-    }
+    return { k:'live', t:'Fixed and live',
+             what:(c.item.today ? String(c.item.today).replace(/<[^>]+>/g,'') : null) };
   }
   if(ans === FB_A.WAIT) return {k:'park', t:'Parked — you said not yet'};
   return {k:'open', t:'Not started yet'};

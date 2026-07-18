@@ -2231,7 +2231,7 @@ if ('serviceWorker' in navigator) {
     <div class="foh-hero-content">
       <img class="foh-hero-logo" src="robertos-logo-white.svg" alt="Roberto's">
     </div>
-    <div id="foh-build" style="position:absolute;bottom:6px;right:10px;font-size:9px;letter-spacing:.08em;color:rgba(255,255,255,.4);z-index:3;font-variant-numeric:tabular-nums;">build 2026-07-17.6</div>
+    <div id="foh-build" style="position:absolute;bottom:6px;right:10px;font-size:9px;letter-spacing:.08em;color:rgba(255,255,255,.4);z-index:3;font-variant-numeric:tabular-nums;">build 2026-07-17.7</div>
   </div>
 
   <!-- main scroll area -->
@@ -2461,7 +2461,7 @@ if ('serviceWorker' in navigator) {
      answer on. One round, one place: see the header of foh-rounds.js.
      Loaded here, not with the foh-*.js at the foot of the body, because the
      inline Admin code below READS it rather than just calling into it. -->
-<script src="foh-rounds.js?v=20260717d"></script>
+<script src="foh-rounds.js?v=20260717e"></script>
 <script>
 const SUPABASE_URL = 'https://paoaivwtkzujmrgrfjuq.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBhb2Fpdnd0a3p1am1yZ3JmanVxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEwNzAxMzAsImV4cCI6MjA5NjY0NjEzMH0.VynG9PBeIaqRG2lkMEuzskkcB11EhR-UfO9eGYsaUxk';
@@ -3839,13 +3839,13 @@ var FB_STATE_LABEL={ ok:'verified live', ship:'fixed, live', prog:'being worked 
 // asked, not us.
 function admFbStateLabel(t,q){
   if(admFbWorkOf(t,q)) return FB_STATE_LABEL[admFbStateOf(t,q)];
+  var c=admFbClosed(t,q);
+  if(c && c.rejected) return '⚠ '+admEsc(String(c.rejectedBy).split(' ')[0])+' says we got it wrong';
+  if(c && c.confirmedBy) return '✓ '+admEsc(String(c.confirmedBy).split(' ')[0])+' confirmed it';
   var sh=(typeof fbShipped==='function') ? fbShipped(t,q) : null;
   if(sh && admFbIsLive(sh)) return 'fixed, live · '+admEsc(sh.build);
-  var c=admFbClosed(t,q);
-  if(!c) return FB_STATE_LABEL.open;
-  return c.confirmedBy
-    ? '✓ '+admEsc(String(c.confirmedBy).split(' ')[0])+' confirmed it'
-    : 'fixed — told them';
+  if(c) return 'fixed — told them';
+  return FB_STATE_LABEL.open;
 }
 var FB_STATE_COL={ ok:'#5C9463', ship:'#7FA6CC', prog:'#D9B45B', open:'#C9BBA3' };
 // What the person who ASKED said about the item that closed this one. Their
@@ -3868,8 +3868,11 @@ function admFbClosed(t,q){
   var c=(typeof fbClosedBy==='function') ? fbClosedBy(t,q) : null;
   if(!c) return null;
   var ans=admFbAnswerTo(c.topic, c.qkey);
-  if(ans && ans.a===FB_A.PROB) return null;            // they say we got it wrong
   c.confirmedBy = (ans && ans.a===FB_A.FINE) ? (ans.who||'they') : null;
+  // They looked at our fix and said we got it wrong. That outranks everything,
+  // including a shipped: declaration — we do not get to keep calling it fixed.
+  c.rejected    = !!(ans && ans.a===FB_A.PROB);
+  c.rejectedBy  = c.rejected ? (ans.who||'they') : null;
   return c;
 }
 // One item's state. This is the ONLY place the four states are decided, so the
@@ -3883,14 +3886,28 @@ function admFbStateOf(t,q){
     if(w.status==='verified' && admFbIsLive(w)) return 'ok';
     return 'ship';                     // fixed, or verified-but-not-live-yet
   }
+  // What the person who ASKED said about our fix outranks anything we declare
+  // about ourselves. If they confirmed it, that is the strongest state there is;
+  // if they told us we got it wrong, it goes back to open no matter what the
+  // code claims. Only then do we fall back to our own shipped: declaration.
+  var c=admFbClosed(t,q);
+  if(c && c.rejected) return 'open';
+  if(c && c.confirmedBy) return 'ok';
   // Fixed by shipped code (the item declares it, verified against the source).
-  // Same shape of fact as a closed-by-round item, but with no follow-up round to
-  // confirm it — so it is "fixed, live", never "verified".
+  // No follow-up round has confirmed it yet — so "fixed, live", never "verified".
   var sh=(typeof fbShipped==='function') ? fbShipped(t,q) : null;
   if(sh && admFbIsLive(sh)) return 'ship';
-  var c=admFbClosed(t,q);
-  if(c) return c.confirmedBy ? 'ok' : 'ship';
+  if(c) return 'ship';                                 // told them, no answer yet
   return 'open';
+}
+// The number a HUMAN reads for an item. The answer key may be a stable id like
+// "lead-source" on newer rounds — that is plumbing and must never reach a screen.
+// Falls back to the key itself for a round we no longer ship.
+function admFbItemNo(topic, qkey){
+  var r=FB_ROUNDS[topic];
+  if(!r) return qkey;
+  var i=fbKeyPos(r, qkey);
+  return (i<9999) ? (i+1) : qkey;
 }
 function admFbSel(){ return state.fbSel||null; }
 function admFbOpen(t,q){
@@ -4019,7 +4036,7 @@ function admFbPanelHTML(){
   // and scrolling inside itself instead of running off the bottom.
   var h='<div style="background:#fbf7f1;border:1px solid #e3d5c2;border-radius:12px;padding:16px;align-self:start;position:sticky;top:64px;max-height:calc(100vh - 80px);overflow-y:auto;">'
     +'<div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;">'
-      +'<div><div style="font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:#9c8a72;">'+admEsc(admFbTopicName(s.topic))+' &middot; item '+admEsc(s.qkey)+'</div>'
+      +'<div><div style="font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:#9c8a72;">'+admEsc(admFbTopicName(s.topic))+' &middot; item '+admEsc(admFbItemNo(s.topic,s.qkey))+'</div>'
       +'<h3 style="font-size:16.5px;color:#400207;margin:5px 0 0;font-weight:600;line-height:1.35;">'+admEsc((it&&it.label)||('Question '+s.qkey))+'</h3></div>'
       +'<button class="btn btn-sm" style="background:transparent;border-color:transparent;color:#9c8a72;" onclick="admFbClose()" aria-label="Close">&#10005;</button>'
     +'</div>';
@@ -4043,7 +4060,11 @@ function admFbPanelHTML(){
   // Valentina's nine were fixed in the Events module (verified in the source),
   // but she has no follow-up round to confirm in — so this is "fixed, live" and
   // the honest next step is to send her a round when you want her to check it.
-  var shp=admFbWorkOf(s.topic,s.qkey) ? null : ((typeof fbShipped==='function') ? fbShipped(s.topic,s.qkey) : null);
+  // Once they have answered on it, THEIR verdict is the story — not our
+  // declaration — so the shipped box stands down and the box below takes over.
+  var verdict=admFbWorkOf(s.topic,s.qkey) ? null : admFbClosed(s.topic,s.qkey);
+  var answered=!!(verdict && (verdict.confirmedBy || verdict.rejected));
+  var shp=(admFbWorkOf(s.topic,s.qkey) || answered) ? null : ((typeof fbShipped==='function') ? fbShipped(s.topic,s.qkey) : null);
   if(shp && admFbIsLive(shp)){
     h+='<div style="border-top:1px solid #f1e9da;margin-top:14px;padding-top:12px;">'
       +'<div style="background:#DCE9F6;border:1px solid #8FB6DA;border-radius:8px;padding:10px 12px;">'
@@ -4059,17 +4080,26 @@ function admFbPanelHTML(){
   // Nine of Andrea's eleven were fixed and described to him in round 2, and he
   // agreed to each. Showing him an empty "not started" form for those was the
   // screen handing Francesco work he had already done.
-  var closed=admFbWorkOf(s.topic,s.qkey) ? null : admFbClosed(s.topic,s.qkey);
-  if(closed){
+  var closed=verdict;
+  // They looked at our fix and said it is wrong. That is the most important
+  // thing on the screen — never a green tick, and never buried.
+  if(closed && closed.rejected){
+    h+='<div style="border-top:1px solid #f1e9da;margin-top:14px;padding-top:12px;">'
+      +'<div style="background:#F7DED9;border:1px solid #D89C90;border-radius:8px;padding:10px 12px;">'
+      +'<div style="font-size:12.5px;color:#8A2A1A;font-weight:600;">'+admEsc(String(closed.rejectedBy).split(' ')[0])+' says we got this wrong</div>'
+      +'<div style="font-size:12px;color:#4a3b2a;line-height:1.55;margin-top:5px;">We told them this was fixed in <b>'+admEsc(admFbTopicName(closed.topic))+'</b> and they answered &ldquo;'+admEsc(FB_A.PROB)+'&rdquo;. It is back on the list until we sort it out.</div>'
+      +'<div style="font-size:11px;color:#6b5a44;margin-top:6px;">Read their note under &ldquo;What they said&rdquo; above &mdash; that is what to fix.</div>'
+      +'</div></div>';
+  } else if(closed){
     h+='<div style="border-top:1px solid #f1e9da;margin-top:14px;padding-top:12px;">'
       +'<div style="background:#E7F0E4;border:1px solid #A8C6A4;border-radius:8px;padding:10px 12px;">'
       +'<div style="font-size:12.5px;color:#2E6B34;font-weight:600;">'
       + (closed.confirmedBy
-          ? '&#10003; Done &mdash; and '+admEsc(String(closed.confirmedBy).split(' ')[0])+' confirmed it himself'
-          : 'Done &mdash; we told them in '+admEsc(admFbTopicName(closed.topic)))
+          ? '&#10003; Done &mdash; and '+admEsc(String(closed.confirmedBy).split(' ')[0])+' confirmed it'
+          : 'Done &mdash; we told them in '+admEsc(admFbTopicName(closed.topic))+', waiting on their answer')
       +'</div>'
       +'<div style="font-size:12px;color:#4a3b2a;line-height:1.55;margin-top:5px;">'+String(closed.item.today||'')+'</div>'
-      +'<div style="font-size:11px;color:#6b5a44;margin-top:6px;">Sent in <b>'+admEsc(admFbTopicName(closed.topic))+'</b>, item '+admEsc(closed.qkey)
+      +'<div style="font-size:11px;color:#6b5a44;margin-top:6px;">Sent in <b>'+admEsc(admFbTopicName(closed.topic))+'</b>, item '+admEsc(admFbItemNo(closed.topic,closed.qkey))
       + (closed.confirmedBy?' &mdash; answered &ldquo;Agree, this is fine&rdquo;.':' &mdash; no answer back on it yet.')
       +'</div></div>'
       +'<div style="font-size:11px;color:#9c8a72;margin-top:8px;line-height:1.45;">Nothing to record &mdash; this is already accounted for. Set a state below only if you need to override it.</div>'
@@ -4223,7 +4253,7 @@ function admFbHTML(){
       var note = i.notes.length ? i.notes[0].note : '';
       list+='<button style="display:flex;align-items:center;gap:11px;width:100%;text-align:left;background:'+(isSel?'#fbf7f1':'transparent')+';border:0;border-bottom:1px solid #f1e9da;padding:11px 8px 11px 0;cursor:pointer;font-family:inherit;" onclick="admFbOpen(\''+admEsc(i.topic)+'\',\''+admEsc(i.qkey)+'\')">'
         +'<span style="width:3px;align-self:stretch;border-radius:2px;flex:none;background:'+FB_STATE_COL[i.st]+';"></span>'
-        +'<span style="font-size:11.5px;color:#9c8a72;min-width:18px;">'+admEsc(i.qkey)+'.</span>'
+        +'<span style="font-size:11.5px;color:#9c8a72;min-width:18px;">'+admEsc(admFbItemNo(i.topic,i.qkey))+'.</span>'
         +'<span style="flex:1;min-width:0;font-size:13.5px;color:#4a3b2a;line-height:1.4;">'+admEsc(i.label||('Question '+i.qkey))
         + (note?'<span style="display:block;font-size:11.5px;color:#9c8a72;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">&ldquo;'+admEsc(note)+'&rdquo;</span>':'')
         +'</span>'

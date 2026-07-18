@@ -75,7 +75,7 @@
      This page stays link-only and login-free: this is a plain same-origin
      script, no app shell, no Supabase client, nothing to sign in to. If it ever
      fails to load, boot() says so plainly rather than showing a blank card. -->
-<script src="foh-rounds.js?v=20260717d"></script>
+<script src="foh-rounds.js?v=20260717e"></script>
 <script>
 var SUPA = 'https://paoaivwtkzujmrgrfjuq.supabase.co';
 var KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBhb2Fpdnd0a3p1am1yZ3JmanVxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEwNzAxMzAsImV4cCI6MjA5NjY0NjEzMH0.VynG9PBeIaqRG2lkMEuzskkcB11EhR-UfO9eGYsaUxk';
@@ -169,9 +169,13 @@ function render(){
     // The answer key: the item's stable id if the round gives it one, else its
     // position — which is what every answer already in app_feedback is keyed by.
     var n = fbKey(set, i);
+    // n is the ANSWER KEY, which on a new round is a stable id like
+    // "lead-source". She must never see that — it is plumbing. What she reads is
+    // simply where she is in the list.
+    var num = i + 1;
     var opts = it.works ? OK : (set.ask || ASK);
     var cur = (answers[n] && answers[n].a) || '';
-    h += '<div class="q"><div class="qh"><span class="qn">'+n+'</span><p class="said">'+it.said+'</p></div>'
+    h += '<div class="q"><div class="qh"><span class="qn">'+num+'</span><p class="said">'+it.said+'</p></div>'
        // A round may rename the green badge — "Works today" is right when we are
        // showing what already worked, "Fixed — live now" when we are showing what
        // we changed because of the last round.
