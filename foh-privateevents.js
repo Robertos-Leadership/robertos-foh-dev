@@ -14,6 +14,7 @@ var peState = {
   libTab:'dishes',        // dishes | bev | packages
   filter:'open',          // open | all | draft | sent | confirmed | deposit | done
   focus:null,             // null | 'send' | 'sign' | 'week' — a summary-pill spotlight on the list
+  lead:'all',             // all | mine | <handled_by value> — separate the book by who took the lead
   q:'',                   // search text on the events list
   fcFrom:null, fcTo:null, fcRun:false,
   currentId:null,
@@ -164,6 +165,14 @@ function peEsc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</
 function peMoney(n){ return n==null||isNaN(n) ? '—' : Math.round(Number(n)).toLocaleString('en-US'); }
 function peToast(msg, bad){ if(typeof toast==='function') toast(msg, !!bad); else alert(msg); }
 function peActor(){ return (state.access && state.access.name) || state.userEmail || 'unknown'; }
+// The human name for the email From line, so the guest sees "Katarina · Roberto's
+// DIFC Events" — the person who sent it, not a faceless desk. Prefer the real
+// name; fall back to the login's local part; never put the raw email on show.
+function peSenderName(){
+  if(state.access && state.access.name) return state.access.name;
+  var e = state.userEmail || '';
+  return e ? e.split('@')[0] : '';
+}
 // Events-desk view/edit lock — only these 3 may create/edit/send/confirm/delete
 // on the desk itself. Everyone else sees it fully, read-only. Chef Corner
 // (dishes) and Beverage Corner (bev packages) are NOT locked — those stay
@@ -659,10 +668,39 @@ function peFocusMatch(e){
   if(f==='sign') return ns.label==='Chase the signature';
   return true;
 }
+// ── "Who took the lead" — every booking carries handled_by (defaults to whoever
+// created it). These let the desk be read one person at a time without changing
+// the record: it's a view, not an edit. ──
+function peLeadLabel(h){ h = String(h||''); return h.indexOf('@')>=0 ? h.split('@')[0] : h; }
+// The signed-in person, as they appear in handled_by (name if we have it, else email).
+function peMyLeadVals(){
+  var v = [];
+  if(state.access && state.access.name) v.push(String(state.access.name).toLowerCase());
+  if(state.userEmail) v.push(String(state.userEmail).toLowerCase());
+  return v;
+}
+function peIsMine(e){
+  var h = String(e.handled_by||'').toLowerCase(); if(!h) return false;
+  var hl = h.indexOf('@')>=0 ? h.split('@')[0] : h;
+  return peMyLeadVals().some(function(m){ var ml = m.indexOf('@')>=0 ? m.split('@')[0] : m; return m===h || ml===hl; });
+}
+function peMatchesLead(e){
+  var L = peState.lead || 'all';
+  if(L==='all') return true;
+  if(L==='mine') return peIsMine(e);
+  return String(e.handled_by||'') === L;
+}
+// The distinct leads present in the book, most-used first — drives the chip row.
+function peLeadKeys(){
+  var counts = {};
+  (peState.events||[]).forEach(function(e){ var h = e.handled_by ? String(e.handled_by) : ''; if(h) counts[h] = (counts[h]||0)+1; });
+  return Object.keys(counts).sort(function(a,b){ return peLeadLabel(a).localeCompare(peLeadLabel(b)); });
+}
+function peSetLead(i){ var d = (peState._leadDefs||[])[i]; peState.lead = d ? d.k : 'all'; renderMain(); }
 function peFilteredEvents(){
   var f = peState.filter, q = (peState.q||'').toLowerCase();
   return peState.events.filter(function(e){
-    return peEventMatchesQuery(e, q) && pePassesStatus(e, f) && peFocusMatch(e);
+    return peEventMatchesQuery(e, q) && pePassesStatus(e, f) && peFocusMatch(e) && peMatchesLead(e);
   });
 }
 // Tapping a summary pill spotlights those events (tap again to clear). We widen
@@ -769,6 +807,9 @@ function peListRow(e){
 function peRenderList(){
   var filters = [['open','Open'],['draft','Draft'],['sent','Sent'],['confirmed','Confirmed'],['deposit','Deposit paid'],['done','Done'],['lost','Lost'],['all','All']];
   var filterName = {open:'Open',draft:'Draft',sent:'Sent',confirmed:'Confirmed',deposit:'Deposit paid',done:'Done',lost:'Lost',all:'All'};
+  // If the book is back down to a single lead, drop any leftover lead filter BEFORE
+  // filtering, so a stale "Mine"/person selection can never silently hide events.
+  if(peLeadKeys().length < 2 && (peState.lead||'all')!=='all') peState.lead = 'all';
   var all = peFilteredEvents();
   var collapse = (peState.filter==='open' || peState.filter==='all') && !(peState.q && peState.q.trim());
   var empties = collapse ? all.filter(peIsEmptyDraft) : [];
@@ -800,8 +841,28 @@ function peRenderList(){
   }).join('')+
   '<input class="pe-in" style="width:210px;margin-left:auto" placeholder="Search name, company, date or area\u2026" value="'+peEsc(peState.q||'')+'" oninput="peState.q=this.value;renderMain();var el=document.querySelectorAll(\'input[placeholder^=Search]\')[0];if(el){el.focus();el.setSelectionRange(el.value.length,el.value.length);}">'+
   '</div>';
+  // ── Lead filter — only when more than one person has taken a lead, so a
+  // single-handler desk never grows a chip row that just says "Everyone". ──
+  var leadKeys = peLeadKeys();
+  if(leadKeys.length >= 2){
+    var leadDefs = [{k:'all',n:'Everyone'},{k:'mine',n:'Mine'}].concat(leadKeys.map(function(hk){ return {k:hk, n:peLeadLabel(hk)}; }));
+    peState._leadDefs = leadDefs;
+    var curLead = peState.lead || 'all';
+    h += '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:8px 0 2px"><span style="font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:#A88930;margin-right:2px">Lead</span>'+
+      leadDefs.map(function(d,i){
+        return '<span class="pe-tab'+(curLead===d.k?' on':'')+'" style="font-size:11px;padding:4px 11px" onclick="peSetLead('+i+')">'+peEsc(d.n)+'</span>';
+      }).join('')+'</div>';
+  } else if((peState.lead||'all')!=='all'){
+    peState.lead = 'all';  // was filtered to a person who no longer has events — reset so nothing hides
+  }
   if(!all.length){
     var qNow = (peState.q||'').toLowerCase();
+    if((peState.lead||'all')!=='all'){
+      var lname = peState.lead==='mine' ? 'you' : peLeadLabel(peState.lead);
+      h += '<div style="text-align:center;padding:22px;color:#8B7355;font-size:13px">No events here for <b>'+peEsc(lname)+'</b>. <span style="color:#400207;text-decoration:underline;cursor:pointer" onclick="peState.lead=\'all\';renderMain()">Show everyone</span></div>';
+      h += '</div>';
+      return h+PE_FOOT;
+    }
     var inAll = peState.events.filter(function(e){ return peEventMatchesQuery(e, qNow); }).length;
     if(peState.focus){
       h += '<div style="text-align:center;padding:22px;color:#8B7355;font-size:13px">Nothing here right now — everything in this group is handled. <span style="color:#400207;text-decoration:underline;cursor:pointer" onclick="peState.focus=null;renderMain()">Show all events</span></div>';
@@ -3281,7 +3342,7 @@ async function peDoSendCoord(id, list){
   if(sv.error){ e.brief_token = null; }
   var subject = "Event brief — "+(e.client_name||'event')+(e.event_date?' · '+peDLabel(e.event_date):'');
   try{
-    var r = await sb.functions.invoke('send-event-email', { body:{ to:list, subject:subject, html:peCoordEmailHTML(e) } });
+    var r = await sb.functions.invoke('send-event-email', { body:{ to:list, from_name:peSenderName(), subject:subject, html:peCoordEmailHTML(e) } });
     if(r.error || (r.data&&r.data.error)) throw (r.error||r.data.error);
     peToast('Event brief sent to '+list.length+' '+(list.length>1?'people':'person')+' ✓');
     // Flip the chip/banner to "sent ✓" now rather than on the next full reload —
@@ -3304,6 +3365,7 @@ async function peEmailProposal(id){
   try{
     var r = await sb.functions.invoke('send-event-email', { body:{
       to:[e.contact_email, sender],
+      from_name: peSenderName(),
       reply_to: sender,
       subject: 'Your canap\u00e9 proposal \u2014 Roberto\u2019s'+(e.event_date?' \u00b7 '+peDLabel(e.event_date):''),
       html: peProposalHTML(e)
@@ -3369,7 +3431,7 @@ async function peEmailAgreement(id){
   var intro = 'Thank you for choosing Roberto’s'+(e.event_date?' for '+peDLabel(e.event_date):'')+'. Your proposal and event agreement are ready — the button below opens everything on one page, where you can review and sign electronically.';
   try{
     var r = await sb.functions.invoke('send-event-email', { body:{
-      to:[e.contact_email, sender], reply_to:sender,
+      to:[e.contact_email, sender], reply_to:sender, from_name:peSenderName(),
       subject: 'Your event proposal & agreement — Roberto’s'+(e.event_date?' · '+peDLabel(e.event_date):''),
       html: peGuestEmailHTML('Your Event Agreement', intro, e.contact_name||e.client_name, null, inner)
     }});
@@ -3402,7 +3464,7 @@ async function peSendPaymentLink(id){
     '<p style="font-size:12px;color:#8B7355;text-align:center">This opens Roberto’s secure card payment page. Your balance is settled on the day of the event.</p>';
   try{
     var r = await sb.functions.invoke('send-event-email', { body:{
-      to:[e.contact_email, sender], reply_to:sender,
+      to:[e.contact_email, sender], reply_to:sender, from_name:peSenderName(),
       subject:'Your deposit payment link — Roberto’s'+(e.event_date?' · '+peDLabel(e.event_date):''),
       html: peGuestEmailHTML('Your Deposit Payment', intro, e.contact_name||e.client_name, null, inner)
     }});
@@ -3636,7 +3698,7 @@ async function peSendMenuPack(){
   var btn = document.getElementById('pe-mp-send'); if(btn){ btn.disabled=true; btn.textContent='Sending…'; }
   try{
     var r = await sb.functions.invoke('send-event-email', { body:{
-      to:[email, sender], reply_to:sender, subject:subject,
+      to:[email, sender], reply_to:sender, from_name:peSenderName(), subject:subject,
       html: peMenuPackEmailHTML(food, bev, name, note)
     }});
     if(r.error || (r.data&&r.data.error)) throw (r.error||r.data.error);
@@ -4951,7 +5013,7 @@ async function peDoEmailForecast(fc, list){
   if(!fc || !list.length) return;
   try{
     var r = await sb.functions.invoke('send-event-email', { body:{
-      to:list, subject:'Roberto\u2019s DIFC \u2014 Events forecast '+fc.from+' to '+fc.to,
+      to:list, from_name:peSenderName(), subject:'Roberto\u2019s DIFC \u2014 Events forecast '+fc.from+' to '+fc.to,
       html: peDocShell('Events forecast', peForecastHTML(fc))
     }});
     if(r.error || (r.data&&r.data.error)) throw (r.error||r.data.error);
