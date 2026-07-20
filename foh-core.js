@@ -2054,6 +2054,7 @@ function admDetailFull(p){
   if(p.login){
     var email=p.login.email, ee=admEsc(email);
     var acc=ADMIN_MODULES.map(function(m){ return admPill(m.n,(p.login.modules||[]).indexOf(m.k)>-1,'adminToggle(\''+ee+'\',\''+m.k+'\')'); }).join('');
+    acc+=admPill('Events: create & send',admIsEventsEditor(p.login),'adminToggleEventsEdit(\''+ee+'\')');
     acc+=admPill('Admin',p.login.is_admin,'adminToggleAdmin(\''+ee+'\')');
     var notif=ADMIN_NOTIFY.map(function(nt){ return admPill(nt.n,(p.login.notify||[]).indexOf(nt.k)>-1,'adminToggleNotify(\''+ee+'\',\''+nt.k+'\')'); }).join('');
     loginSec='<div class="px-psec"><div class="px-pslbl">App access · '+ee+'</div><div>'+acc+'</div><div class="px-pslbl" style="margin-top:11px;">Email alerts</div><div>'+notif+'</div><div style="margin-top:11px;"><button class="px-prm" onclick="adminDeleteUser(\''+ee+'\')">Remove login</button></div></div>';
