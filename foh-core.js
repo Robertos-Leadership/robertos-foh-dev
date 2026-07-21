@@ -4108,20 +4108,22 @@ function fohKrtUndoLast(){
   fohSchedPlanOverlay(); fohKrtRender(); fohSchedPlanUpdateBadge();
   fohKrtRenderUndoBtn();
 }
+// Excel-style: the Undo button lives permanently in the tool's top bar (part of
+// FOH_KRT_SHELL). Always visible while planning — enabled with the last action in
+// its tooltip when there's something to undo, greyed/disabled when there isn't.
 function fohKrtRenderUndoBtn(){
-  var host = document.getElementById('foh-kpl-full');
-  var show = host && host.style.display!=='none' && fohSchedPlanMode && fohKrtUndoStack.length>0;
   var btn = document.getElementById('foh-krt-undo-btn');
-  if(!show){ if(btn) btn.style.display='none'; return; }
-  if(!btn){
-    btn=document.createElement('button'); btn.id='foh-krt-undo-btn'; btn.type='button'; btn.onclick=fohKrtUndoLast;
-    btn.style.cssText='position:fixed;left:14px;bottom:20px;z-index:4600;background:#fff;color:var(--vino,#410207);border:1.5px solid var(--vino,#410207);padding:9px 14px;border-radius:10px;box-shadow:0 6px 20px rgba(0,0,0,.28);font-family:var(--font-sans),sans-serif;font-size:13px;font-weight:700;cursor:pointer;max-width:60vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
-    host.appendChild(btn);
-  } else if(btn.parentElement!==host){ host.appendChild(btn); }
-  var last=fohKrtUndoStack[fohKrtUndoStack.length-1];
-  btn.title='Undo: '+last.label+(fohKrtUndoStack.length>1?('  ('+fohKrtUndoStack.length+' changes can be undone)'):'');
-  btn.innerHTML='&#8630; Undo'+(fohKrtUndoStack.length>1?(' ('+fohKrtUndoStack.length+')'):'')+' &middot; '+last.label;
-  btn.style.display='block';
+  if(!btn) return;
+  var has = fohSchedPlanMode && fohKrtUndoStack.length>0;
+  btn.disabled = !has;
+  if(has){
+    var last = fohKrtUndoStack[fohKrtUndoStack.length-1];
+    btn.title = 'Undo: '+last.label+(fohKrtUndoStack.length>1?('  ('+fohKrtUndoStack.length+' changes can be undone)'):'');
+    btn.innerHTML = '&#8630; Undo'+(fohKrtUndoStack.length>1?(' ('+fohKrtUndoStack.length+')'):'');
+  } else {
+    btn.title = 'Nothing to undo yet';
+    btn.innerHTML = '&#8630; Undo';
+  }
 }
 // Ctrl/Cmd+Z inside the FOH Roster tool — text fields keep native undo.
 document.addEventListener('keydown', function(e){
@@ -4743,6 +4745,8 @@ function FOH_KRT_SHELL(){
   #foh-kpl-full .krt-changed-chip{margin-left:auto;display:inline-flex;align-items:center;gap:7px;background:rgba(0,0,0,.16);color:#f6ece0;font-size:11.5px;padding:6px 11px;border-radius:20px;white-space:nowrap}
   #foh-kpl-full .krt-changed-chip::before{content:'';width:8px;height:8px;border-radius:50%;background:var(--gold)}
   #foh-kpl-full .krt-bring{background:var(--gold);color:#2a1a10;border:0;border-radius:8px;padding:9px 17px;font-size:13.5px;font-weight:700;cursor:pointer;letter-spacing:.3px}
+  #foh-kpl-full .krt-undo{background:#fff;color:var(--vino);border:1.5px solid rgba(255,255,255,.55);border-radius:8px;padding:8px 14px;font-size:13.5px;font-weight:700;cursor:pointer;white-space:nowrap}
+  #foh-kpl-full .krt-undo:disabled{background:rgba(255,255,255,.10);color:rgba(246,236,224,.38);border-color:rgba(255,255,255,.16);cursor:default}
   #foh-kpl-full .krt-bring:hover{filter:brightness(1.06)}
   #foh-kpl-full .sch-plan-changed{position:relative}
   #foh-kpl-full .sch-plan-changed .sch-shift{box-shadow:0 0 0 2px var(--gold)}
@@ -4814,6 +4818,7 @@ function FOH_KRT_SHELL(){
     </div>
     <span class="krt-stepper" id="foh-krt-stepper">weeks&nbsp;<select onchange="fohKrtSetWeeks(this.value)"><option value="2">2</option><option value="3">3</option><option value="4" selected>4</option><option value="6">6</option></select></span>
     <span class="krt-changed-chip" id="foh-krt-changecount">No changes yet</span>
+    <button class="krt-undo" id="foh-krt-undo-btn" onclick="fohKrtUndoLast()" disabled title="Nothing to undo yet">&#8630; Undo</button>
     <button class="krt-bring" id="foh-krt-bringlive" onclick="fohSchedPlanOpenPublish()" title="Put the week(s) you pick onto the real schedule the team sees">Bring live</button>
     <div class="krt-act-wrap">
       <button class="krt-act-btn" onclick="fohKrtToggleActions(event)">Actions &#9660;</button>
