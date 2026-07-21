@@ -420,7 +420,7 @@ async function peLoadAll(force){
       peFetchAllPaged(function(){ return sb.from('event_set_menus').select('*').order('name').order('id'); }),
       sb.from('event_menu_choices').select('token,created_at').eq('applied', false).order('created_at',{ascending:false}),
       sb.from('event_log').select('event_id,created_at').eq('action','email').like('detail','event brief%').order('created_at',{ascending:true}),
-      sb.from('event_targets').select('month,target_events,target_revenue'),
+      sb.from('event_targets').select('*'),
       sb.from('event_log').select('event_id,actor,created_at').eq('action','email').like('detail','proposal%').order('created_at',{ascending:true})
     ]);
     // event_set_menus (res[5]) is loaded non-fatally: if the table isn't there
@@ -454,7 +454,9 @@ async function peLoadAll(force){
     // which are two completely different things to put in front of a COO.
     peState.targets = {};
     peState.targetsOk = !!(res[8] && !res[8].error);
-    if(peState.targetsOk) (res[8].data||[]).forEach(function(r){ peState.targets[r.month] = r; });
+    // Keyed by month + lead ('' = the Everyone/overall budget). Rows from before the
+    // per-person migration have no lead, so they land on '' and stay the overall one.
+    if(peState.targetsOk) (res[8].data||[]).forEach(function(r){ peState.targets[r.month + '|' + (r.lead||'')] = r; });
     // res[9] (non-fatal): who sent the proposal, per event — the fallback "lead" when
     // no one is set in Handled by. Ascending order → the last send per event wins.
     peState.proposalBy = {};
@@ -4915,24 +4917,29 @@ function peReportData(mk){
 //
 // This is an admin screen: it is set once a month by whoever sets budgets and
 // Valentina never touches it, exactly as he was told when he approved it.
-function peTargetOf(mk){ return (peState.targets || {})[mk] || null; }
+// Targets are keyed by month AND person (the report's current scope). The empty
+// string is the "Everyone" / overall budget; a name is that person's own budget.
+function peCurLeadKey(){ var L = peState.reportLead || 'all'; return L==='all' ? '' : L; }
+function peTargetKey(mk){ return mk + '|' + peCurLeadKey(); }
+function peTargetOf(mk){ return (peState.targets || {})[peTargetKey(mk)] || null; }
 async function peSaveTarget(el, mk, field){
   if(!peCanEdit()){ peToast('View only — ask Andrea or Francesco to set the target', true); return; }
   var raw = String(el.value||'').trim();
   var v = raw === '' ? null : Number(raw);
   if(v != null && (isNaN(v) || v < 0)){ peInlineErr(el, 'That needs to be a number.'); return; }
   peInlineErr(el, '');
-  var row = { month:mk, updated_by:peActor(), updated_at:new Date().toISOString() };
+  var lead = peCurLeadKey();
+  var row = { month:mk, lead:lead, updated_by:peActor(), updated_at:new Date().toISOString() };
   var cur = peTargetOf(mk) || {};
   row.target_events  = (field==='target_events')  ? (v==null?null:Math.round(v)) : (cur.target_events==null?null:cur.target_events);
   row.target_revenue = (field==='target_revenue') ? v : (cur.target_revenue==null?null:cur.target_revenue);
-  var r = await sb.from('event_targets').upsert(row, {onConflict:'month'});
+  var r = await sb.from('event_targets').upsert(row, {onConflict:'month,lead'});
   if(r.error){
-    peToast('NOT saved — run foh-events-oneevening.sql once in Supabase, then this saves.', true);
+    peToast('NOT saved — run foh-events-target-per-person.sql once in Supabase, then this saves.', true);
     return;
   }
   peState.targets = peState.targets || {};
-  peState.targets[mk] = row;
+  peState.targets[peTargetKey(mk)] = row;
   peState.targetsOk = true;
   peToast('Target saved ✓');
   renderMain();
@@ -4951,7 +4958,7 @@ function peTargetCardHTML(mk, K){
     '<b style="font-size:14px;color:#400207">Target for '+peEsc(mLbl)+'</b>'+
     '<span style="font-size:11px;color:#8B7355">Set once a month — nothing on the events desk changes</span></div>';
   if(peState.reportLead && peState.reportLead!=='all'){
-    h += '<div style="margin-top:6px;font-size:11.5px;color:#6B4A33">Progress below is <b>'+peEsc(peLeadLabel(peState.reportLead))+'</b>’s bookings only, measured against this month’s budget.</div>';
+    h += '<div style="margin-top:6px;font-size:11.5px;color:#6B4A33">This is <b>'+peEsc(peLeadLabel(peState.reportLead))+'</b>’s own budget and their bookings only. Switch to <b>Everyone</b> for the overall month target.</div>';
   }
   if(peState.targetsOk === false){
     h += '<div style="margin-top:8px;font-size:12.5px;color:#7A5500;background:#FBF0D6;border:1px solid #DFC680;border-radius:9px;padding:9px 12px">'+
@@ -4987,8 +4994,9 @@ function peTargetCardHTML(mk, K){
   }
   // The count he was asked for and did not give. Named as missing rather than
   // filled in with a guess — see the block comment above.
+  var whoLbl = (peState.reportLead && peState.reportLead!=='all') ? ' — '+peEsc(peLeadLabel(peState.reportLead)) : '';
   h += '<div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:end">'+
-    '<div style="flex:1;min-width:160px"><div class="pe-lbl">Revenue target for '+peEsc(mLbl)+' (AED, net)</div>'+
+    '<div style="flex:1;min-width:160px"><div class="pe-lbl">Revenue target for '+peEsc(mLbl)+whoLbl+' (AED, net)</div>'+
       '<input class="pe-in" type="number" value="'+peEsc(tv==null?'':tv)+'" placeholder="not set" onchange="peSaveTarget(this,\''+mk+'\',\'target_revenue\')"'+(ce?'':' disabled')+'></div>'+
     '<div style="flex:1;min-width:160px"><div class="pe-lbl">Number of events</div>'+
       '<input class="pe-in" type="number" value="'+peEsc(tn==null?'':tn)+'" placeholder="not set" onchange="peSaveTarget(this,\''+mk+'\',\'target_events\')"'+(ce?'':' disabled')+'></div>'+
