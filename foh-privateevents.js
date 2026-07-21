@@ -736,6 +736,14 @@ function peNextStep(e){
   var name = e.client_name || e.company;
   if(e.status==='lost') return {label:'Lost', kind:'neutral'};
   if(e.status==='done') return {label:'Done', kind:'success'};
+  // A sent team brief is the strongest signal the event is real and ON — the team
+  // already has it, so never nag for a client email once the brief has gone out
+  // (e.g. a direct booking with no guest email). But if the booking was never marked
+  // Confirmed/Deposit, say so and nudge it: a paid, briefed event left as a draft
+  // drops out of the revenue figures, so this must not look "all done".
+  if(peBriefSent(e)) return (e.status==='confirmed' || e.status==='deposit')
+    ? {label:'Team brief sent ✓', kind:'success'}
+    : {label:'Team brief sent — confirm it', kind:'warn'};
   if(e.status==='draft' || e.status==='sent'){
     if(!name && !e.event_date) return {label:'Add a name and date', kind:'danger'};
     if(!e.event_date) return {label:'Add a date', kind:'danger'};
