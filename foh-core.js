@@ -3382,7 +3382,7 @@ async function fohSchedSaveShift(){
   var prevRow=fohSchedRoster[key];   // snapshot for revert on failure
   fohSchedRoster[key]=payload;
   fohRenderSchedWeek();
-  if(fohSchedPlanMode){ fohSchedEditTarget=null; return; }   // planning: the render above captured it into the draft — no DB write
+  if(fohSchedPlanMode){ var _nm=(fohSchedStaff.find(function(x){return x.id===staffId;})||{}).name||'staff'; fohKrtNextLabel='edit '+_nm; fohSchedEditTarget=null; return; }   // planning: the render above captured it into the draft — no DB write
   var res=await sb.from('foh_roster').upsert(payload,{onConflict:'staff_id,work_date'});
   if(res.error){
     // Put the grid back to the saved value so it never shows an unsaved shift as real.
@@ -4052,7 +4052,8 @@ function fohSchedPlanRowFromEntry(sid, ds, e){
   return Object.assign({ staff_id: sid, work_date: ds }, e);
 }
 
-function fohSchedPlanSaveDraft(){
+function fohSchedPlanSaveDraft(){ fohKrtScheduleCheckpoint(); fohSchedPlanPersist(); }
+function fohSchedPlanPersist(){
   fohKplDirty = true;
   try{
     localStorage.setItem(FOH_SCHED_PLAN_LS, JSON.stringify({
@@ -4063,6 +4064,77 @@ function fohSchedPlanSaveDraft(){
   }catch(e){ console.warn('plan draft save failed', e); }
   fohSchedPlanUpdateBadge();
 }
+
+// ── Comprehensive Excel-style undo for the Roster PLANNING tool ───────────────
+// The tool is the sched grid in plan mode; every draft change — cell edit, paste,
+// paint, fill, week copy/paste/clear, section add/rename/delete/move, add/move/
+// remove person — funnels through fohSchedPlanSaveDraft. Snapshot the WHOLE draft
+// there (coalesced to ONE step per action via a next-tick checkpoint) and undo
+// restores it. Draft-only: nothing here touches the live DB (that's Bring live).
+var fohKrtUndoStack = [];      // [{label, state}] newest last
+var fohKrtUndoBase  = null;    // JSON snapshot as of the last checkpoint
+var fohKrtUndoPending = false;
+var fohKrtNextLabel = null;    // optional friendly label for the next checkpoint
+function fohKrtStateSnap(){
+  return JSON.stringify({
+    d:fohKplDraft||{}, sec:fohKplDraftSec||{}, ord:fohKplDraftOrd||{},
+    ns:fohKplNewStaff||[], nseq:fohKplNewSeq||0,
+    sr:fohKplSecRename||{}, sn:fohKplSecNew||[], so:fohKplSecOrder||[]
+  });
+}
+function fohKrtUndoReset(){ fohKrtUndoStack=[]; fohKrtUndoBase=fohKrtStateSnap(); fohKrtNextLabel=null; fohKrtUndoPending=false; fohKrtRenderUndoBtn(); }
+function fohKrtUndoCheckpoint(){
+  var cur = fohKrtStateSnap();
+  if(fohKrtUndoBase===null){ fohKrtUndoBase=cur; fohKrtNextLabel=null; return; }
+  if(cur!==fohKrtUndoBase){
+    fohKrtUndoStack.push({ label: fohKrtNextLabel||'change', state: fohKrtUndoBase });
+    if(fohKrtUndoStack.length>60) fohKrtUndoStack.shift();
+    fohKrtUndoBase = cur;
+  }
+  fohKrtNextLabel = null;
+  fohKrtRenderUndoBtn();
+}
+function fohKrtScheduleCheckpoint(){ if(fohKrtUndoPending) return; fohKrtUndoPending=true; setTimeout(function(){ fohKrtUndoPending=false; fohKrtUndoCheckpoint(); }, 0); }
+function fohKrtUndoLast(){
+  if(!fohKrtUndoStack.length) return;
+  var u = fohKrtUndoStack.pop();
+  var s; try{ s=JSON.parse(u.state); }catch(e){ return; }
+  fohKplDraft=s.d||{}; fohKplDraftSec=s.sec||{}; fohKplDraftOrd=s.ord||{};
+  fohKplNewStaff=s.ns||[]; fohKplNewSeq=s.nseq||0;
+  fohKplSecRename=s.sr||{}; fohKplSecNew=s.sn||[]; fohKplSecOrder=s.so||[];
+  fohKrtUndoBase = u.state;                 // baseline is now the restored state
+  fohSchedPlanPersist();                    // persist WITHOUT re-checkpointing
+  if(typeof fohSchedPlanApplySections==='function') fohSchedPlanApplySections();
+  fohSchedPlanOverlay(); fohKrtRender(); fohSchedPlanUpdateBadge();
+  fohKrtRenderUndoBtn();
+}
+function fohKrtRenderUndoBtn(){
+  var host = document.getElementById('foh-kpl-full');
+  var show = host && host.style.display!=='none' && fohSchedPlanMode && fohKrtUndoStack.length>0;
+  var btn = document.getElementById('foh-krt-undo-btn');
+  if(!show){ if(btn) btn.style.display='none'; return; }
+  if(!btn){
+    btn=document.createElement('button'); btn.id='foh-krt-undo-btn'; btn.type='button'; btn.onclick=fohKrtUndoLast;
+    btn.style.cssText='position:fixed;left:14px;bottom:20px;z-index:4600;background:#fff;color:var(--vino,#410207);border:1.5px solid var(--vino,#410207);padding:9px 14px;border-radius:10px;box-shadow:0 6px 20px rgba(0,0,0,.28);font-family:var(--font-sans),sans-serif;font-size:13px;font-weight:700;cursor:pointer;max-width:60vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
+    host.appendChild(btn);
+  } else if(btn.parentElement!==host){ host.appendChild(btn); }
+  var last=fohKrtUndoStack[fohKrtUndoStack.length-1];
+  btn.title='Undo: '+last.label+(fohKrtUndoStack.length>1?('  ('+fohKrtUndoStack.length+' changes can be undone)'):'');
+  btn.innerHTML='&#8630; Undo'+(fohKrtUndoStack.length>1?(' ('+fohKrtUndoStack.length+')'):'')+' &middot; '+last.label;
+  btn.style.display='block';
+}
+// Ctrl/Cmd+Z inside the FOH Roster tool — text fields keep native undo.
+document.addEventListener('keydown', function(e){
+  if ((e.key === 'z' || e.key === 'Z') && (e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey){
+    if(!fohSchedPlanMode) return;
+    var host = document.getElementById('foh-kpl-full');
+    if(!host || host.style.display==='none') return;
+    var el = document.activeElement;
+    if (el && /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)) return;
+    if(!fohKrtUndoStack.length) return;
+    e.preventDefault(); fohKrtUndoLast();
+  }
+});
 function fohSchedPlanLoadDraft(){ try{ return JSON.parse(localStorage.getItem(FOH_SCHED_PLAN_LS)||'null'); }catch(e){ return null; } }
 
 function fohSchedPlanSnapshotLive(){
@@ -4132,6 +4204,7 @@ function fohSchedPlanEnter(){
   fohKplSecLive   = FOH_SECTIONS.map(function(s){ return { key:s.key, label:s.label }; });  // live baseline
   fohSchedPlanReseedFromLive();
   fohSchedPlanUpdateBadge();
+  fohKrtUndoReset();   // comprehensive draft undo — fresh baseline for this planning session
 }
 
 // ── Sections manager (in the tool) ──
@@ -4232,6 +4305,7 @@ function fohKrtWeekPaste(tgtMon){
     });
   }
   fohKrtWeekClip = null;
+  fohKrtNextLabel = 'paste week of '+srcLabel+' → '+tLabel;
   fohSchedPlanSaveDraft(); fohSchedPlanApplySections(); fohSchedPlanOverlay(); fohKrtRender(); fohSchedPlanUpdateBadge();
 }
 function fohKrtClearWeek(mon){
@@ -4248,6 +4322,7 @@ function fohKrtClearWeek(mon){
     });
   }
   fohKrtWeekClip = null;
+  fohKrtNextLabel = 'clear week '+mLabel;
   fohSchedPlanSaveDraft(); fohSchedPlanApplySections(); fohSchedPlanOverlay(); fohKrtRender(); fohSchedPlanUpdateBadge();
 }
 
@@ -4636,6 +4711,7 @@ function fohKrtCloseActions(){ var m=document.getElementById('foh-krt-actmenu');
 function fohKrtClose(){
   fohSchedPlanMode = false;                 // back to live editing on the real schedule
   fohSchedPlanRestoreLiveSections();        // drop any draft section add/rename from the live list
+  fohKrtUndoStack = []; fohKrtUndoBase = null; if(typeof fohKrtRenderUndoBtn==='function') fohKrtRenderUndoBtn();   // drop draft undo history + hide button
   var el=document.getElementById('foh-kpl-full'); if(el) el.style.display='none';
   var sview=document.getElementById('foh-sched-fullscreen'); if(sview) sview.style.display='flex';
   // Reload the untouched live data so the real schedule never shows the draft.
