@@ -462,8 +462,8 @@ async function peLoadAll(force){
     // rather than warn about nothing.
     var probe = peState.events[0];
     peState.colsOk = probe
-      ? { spaces:('spaces' in probe), options:('options' in probe), alt_dates:('alt_dates' in probe) }
-      : { spaces:true, options:true, alt_dates:true };
+      ? { spaces:('spaces' in probe), options:('options' in probe), alt_dates:('alt_dates' in probe), actual_revenue:('actual_revenue' in probe) }
+      : { spaces:true, options:true, alt_dates:true, actual_revenue:true };
     peState.loaded = true;
   }catch(e){
     console.warn('[peLoadAll]', e);
@@ -953,6 +953,11 @@ async function peTidyDeleteAll(){
 // rental" — so the whole minimum is ours either way. Splitting that balance into
 // its parts is a separate piece of work; this only makes the TOTAL honest.
 function peEventValue(e){
+  // Real revenue, typed after the night ran (more guests than quoted, extra bar or
+  // off-menu spend). Once set, it IS this booking's value everywhere it is reported
+  // — list, calendar, monthly report, pipeline. The deposit and signed agreement
+  // are unaffected: those read peAgBase, which stays on the quoted price.
+  if(e.actual_revenue!=null && e.actual_revenue!=='') return Math.max(0, Number(e.actual_revenue));
   // Valentina, 17 Jul 2026 (#12): "Send me three options and I'll pick one."
   // Three options are ONE enquiry, so this returns ONE number — never the sum,
   // which would book the same guest three times over. Until they pick, we count
@@ -1323,8 +1328,12 @@ function peCalcTotals(e){
   var discount = subtotal!=null ? Math.min(Math.max(0, Number(e.discount)||0), subtotal) : Math.max(0, Number(e.discount)||0);
   var total = subtotal!=null ? Math.max(0, subtotal - discount) : null;
   var foodCostPct = foodPP ? (cost/(foodPP/PE_GROSS))*100 : null;
+  // The real total charged once the night ran (more guests / extra bar / off-menu),
+  // typed by hand after the event. When set it is what the report counts — but the
+  // quoted `total` above (and the signed agreement + deposit) never move.
+  var actual = (e.actual_revenue!=null && e.actual_revenue!=='') ? Math.max(0, Number(e.actual_revenue)) : null;
   return { foodComputed:foodComputed, foodPP:foodPP, bevPP:bevPP, perGuest:perGuest,
-           subtotal:subtotal, discount:discount, total:total,
+           subtotal:subtotal, discount:discount, total:total, actual:actual,
            pcs:pcs, foodCostPct:foodCostPct, missingAllergens:missing, items:items };
 }
 // The agreement's quoted base and deposit — one place, so the editor card, the
@@ -1537,10 +1546,12 @@ function peRenderEvent(){
   // #2 — a compact running total pinned at the top, so she never scrolls three
   // cards down to read a number to a guest on the phone.
   h += '<div style="display:flex;justify-content:space-between;align-items:center;background:#F3E9DA;border-radius:8px;padding:9px 13px;margin-bottom:12px">'+
-    '<span style="font-size:11.5px;color:#8B7355">Running total</span>'+
-    '<b style="font-size:14px;color:#400207">'+(t.total!=null
-      ? 'AED '+peMoney(t.total)+' <span style="font-size:10.5px;font-weight:400;color:#8B7355">· '+peMoney(t.perGuest)+'/guest</span>'
-      : (e.min_spend ? 'Min spend AED '+peMoney(e.min_spend) : 'AED — <span style="font-size:10.5px;font-weight:400;color:#8B7355">set food + guests</span>'))+'</b></div>';
+    '<span style="font-size:11.5px;color:#8B7355">'+(t.actual!=null?'Real total':'Running total')+'</span>'+
+    '<b style="font-size:14px;color:#400207">'+(t.actual!=null
+      ? 'AED '+peMoney(t.actual)+' <span style="font-size:10.5px;font-weight:400;color:#8B7355">· actual on the night</span>'
+      : (t.total!=null
+        ? 'AED '+peMoney(t.total)+' <span style="font-size:10.5px;font-weight:400;color:#8B7355">· '+peMoney(t.perGuest)+'/guest</span>'
+        : (e.min_spend ? 'Min spend AED '+peMoney(e.min_spend) : 'AED — <span style="font-size:10.5px;font-weight:400;color:#8B7355">set food + guests</span>')))+'</b></div>';
 
   // facts — a new event shows only the 4 essentials; the rest live under
   // "More details" and auto-open the moment any of them holds real data.
@@ -1746,6 +1757,28 @@ function peRenderEvent(){
     h += '<div class="pe-flag" style="color:#B00020">▲ Allergens missing: '+peEsc(t.missingAllergens.join(', '))+'</div>';
   }
   h += '</div>';
+  // After the event — the real revenue. Once a booking is confirmed onward, more
+  // guests than quoted or extra bar / off-menu spend can lift what was actually
+  // charged. One box: type the REAL final total and it becomes this event's revenue
+  // in the monthly report. Left blank, the quoted total stands. The signed
+  // agreement and the deposit never move — this is actuals, not the quote.
+  if(peIsConverted(e)){
+    var actSet = (e.actual_revenue!=null && e.actual_revenue!=='');
+    var actVal = actSet ? Math.max(0, Number(e.actual_revenue)) : null;
+    var colMissing = !!(peState.colsOk && peState.colsOk.actual_revenue===false);
+    h += '<div class="pe-card" style="margin-top:12px;border-color:rgba(201,168,76,0.55);background:#FDFBF6">'+
+      '<b style="font-size:14px;color:#400207">After the event — real revenue</b>'+
+      '<div style="font-size:11.5px;color:#8B7355;margin:4px 0 9px">More guests showed up, or extra bar / off-menu spend? Put the <b>real final total</b> here — it becomes this event’s revenue in the monthly report. You can also just raise the guest count above. Leave this blank to keep the quoted '+(t.total!=null?'AED '+peMoney(t.total):'amount')+'.</div>'+
+      '<div class="pe-lbl">Real total charged (AED)</div>'+
+      '<input class="pe-in" type="number" min="0" step="50" value="'+(actSet?peEsc(actVal):'')+'" placeholder="'+(t.total!=null?peMoney(t.total):'quoted total')+'" onchange="peFact(this,\'actual_revenue\',\''+e.id+'\')"'+(ce?'':' disabled')+'>'+
+      (actSet
+        ? '<div style="margin-top:8px;font-size:12.5px;color:#2E6B34">✓ The report counts <b>AED '+peMoney(actVal)+'</b> for this event'+((t.total!=null && Math.round(actVal)!==Math.round(t.total))?' <span style="color:#8B7355">(quoted was AED '+peMoney(t.total)+')</span>':'')+'.</div>'
+        : '')+
+      (colMissing
+        ? '<div style="margin-top:8px;font-size:11.5px;color:#7A5500;background:#FBF0D6;border:1px solid #DFC680;border-radius:8px;padding:8px 10px">Run <b>foh-events-actualrev.sql</b> once in Supabase before this saves permanently — until then it holds for this session only.</div>'
+        : '')+
+    '</div>';
+  }
   // documents & actions — grouped: what the guest gets, then the team side.
   // Disabled sends stay tappable but explain themselves (toast + jump to field)
   // and carry a visible reason line, never a hover-only tooltip.
@@ -1975,12 +2008,12 @@ function peSel(lbl, field, e, opts){
 }
 // Fields whose change is money-relevant / contract-relevant — logged for
 // Andrea's audit trail, and (for guests/date) guarded when already signed.
-var PE_AUDIT_FIELDS = { guests:'Guests', event_date:'Date', food_price_pp:'Food price/guest', min_spend:'Minimum spend', area:'Area', time_from:'Start time', time_to:'End time', discount:'Discount' };
+var PE_AUDIT_FIELDS = { guests:'Guests', event_date:'Date', food_price_pp:'Food price/guest', min_spend:'Minimum spend', area:'Area', time_from:'Start time', time_to:'End time', discount:'Discount', actual_revenue:'Real total charged' };
 // Which fields, when changed on a SIGNED event, void the agreement (they change
 // what the client actually agreed to). Menu changes are guarded separately.
 var PE_CONTRACT_FIELDS = ['guests','event_date','area','food_price_pp','min_spend','discount'];
 var PE_FACT_INT = { guests:1 };
-var PE_FACT_NUM = { min_spend:1, food_price_pp:1, discount:1 };
+var PE_FACT_NUM = { min_spend:1, food_price_pp:1, discount:1, actual_revenue:1 };
 // One auto-save handler for every facts-card field: coerces the value, keeps the
 // contract-void guard + Andrea's audit log, and always shows "Saved ✓".
 async function peFact(el, field, id){
