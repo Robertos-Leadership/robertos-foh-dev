@@ -4745,8 +4745,8 @@ function FOH_KRT_SHELL(){
   #foh-kpl-full .krt-changed-chip{margin-left:auto;display:inline-flex;align-items:center;gap:7px;background:rgba(0,0,0,.16);color:#f6ece0;font-size:11.5px;padding:6px 11px;border-radius:20px;white-space:nowrap}
   #foh-kpl-full .krt-changed-chip::before{content:'';width:8px;height:8px;border-radius:50%;background:var(--gold)}
   #foh-kpl-full .krt-bring{background:var(--gold);color:#2a1a10;border:0;border-radius:8px;padding:9px 17px;font-size:13.5px;font-weight:700;cursor:pointer;letter-spacing:.3px}
-  #foh-kpl-full .krt-undo{background:#fff;color:var(--vino);border:1.5px solid rgba(255,255,255,.55);border-radius:8px;padding:8px 14px;font-size:13.5px;font-weight:700;cursor:pointer;white-space:nowrap}
-  #foh-kpl-full .krt-undo:disabled{background:rgba(255,255,255,.10);color:rgba(246,236,224,.38);border-color:rgba(255,255,255,.16);cursor:default}
+  #foh-kpl-full .krt-undo{background:#fff;color:var(--vino);border:1.5px solid #fff;border-radius:8px;padding:8px 14px;font-size:13.5px;font-weight:700;cursor:pointer;white-space:nowrap}
+  #foh-kpl-full .krt-undo:disabled{background:rgba(255,255,255,.5);color:rgba(65,2,7,.45);border-color:rgba(255,255,255,.55);cursor:default}
   #foh-kpl-full .krt-bring:hover{filter:brightness(1.06)}
   #foh-kpl-full .sch-plan-changed{position:relative}
   #foh-kpl-full .sch-plan-changed .sch-shift{box-shadow:0 0 0 2px var(--gold)}
