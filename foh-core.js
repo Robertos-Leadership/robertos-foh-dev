@@ -2876,6 +2876,7 @@ function fohSchedLockNow(){
   fohSchedUnlocked = false;
   if(fohSchedLockTimer){ clearTimeout(fohSchedLockTimer); fohSchedLockTimer=null; }
   fohSchedUpdateLockBtn();
+  fohSchedUndoStack = []; if(typeof fohSchedRenderUndoBtn==='function') fohSchedRenderUndoBtn();   // locking ends the edit session — no stale undo
 }
 function fohSchedUpdateLockBtn(){
   var b = document.getElementById('foh-sch-lock-btn');
@@ -2907,6 +2908,7 @@ function fohSchedSubmitPin(){
   var v = document.getElementById('foh-sch-pin-inp').value.trim();
   if(v === FOH_SCHED_PIN){
     fohSchedUnlocked = true; fohSchedTouchLock(); fohSchedUpdateLockBtn();
+    if(typeof fohSchedRenderUndoBtn==='function') fohSchedRenderUndoBtn();
     document.getElementById('foh-sch-pin-modal').style.display = 'none';
     var fn = fohSchedPendingAction; fohSchedPendingAction = null;
     if(fn) fn();
@@ -3380,9 +3382,10 @@ async function fohSchedSaveShift(){
     notes:notes||null, updated_at:new Date().toISOString()
   });
   var prevRow=fohSchedRoster[key];   // snapshot for revert on failure
+  fohSchedPushUndo([{staffId:staffId, date:date}], 'edit '+((fohSchedStaff.find(function(x){return x.id===staffId;})||{}).name||'staff')+', '+fohSchedDayLabel(date));   // snapshot BEFORE the write so this edit is undoable
   fohSchedRoster[key]=payload;
   fohRenderSchedWeek();
-  if(fohSchedPlanMode){ var _nm=(fohSchedStaff.find(function(x){return x.id===staffId;})||{}).name||'staff'; fohKrtNextLabel='edit '+_nm; fohSchedEditTarget=null; return; }   // planning: the render above captured it into the draft — no DB write
+  if(fohSchedPlanMode){ fohSchedEditTarget=null; return; }   // planning: the render above captured it into the draft (fohKrtNextLabel set by fohSchedPushUndo) — no DB write
   var res=await sb.from('foh_roster').upsert(payload,{onConflict:'staff_id,work_date'});
   if(res.error){
     // Put the grid back to the saved value so it never shows an unsaved shift as real.
@@ -3530,16 +3533,19 @@ async function fohSchedWriteClipboard(targets){
   return payloads.length;
 }
 function fohSchedPasteToCell(staffId, date){
+  fohSchedPushUndo([{staffId:staffId, date:date}], 'paste to '+fohSchedStaffName(staffId)+', '+fohSchedDayLabel(date));
   fohSchedWriteClipboard([{staffId:staffId, date:date}]).then(function(n){ if(n) fohSchedShowPasteBar(n); });
 }
 function fohSchedFillWeek(){
   if(!fohSchedClipboard) return;
   var t=[]; for(var i=0;i<7;i++) t.push({staffId:fohSchedClipboard.srcStaff, date:formatDate(addDays(fohSchedWeekStart,i))});
+  fohSchedPushUndo(t, 'fill '+fohSchedStaffName(fohSchedClipboard.srcStaff)+'’s week');
   fohSchedWriteClipboard(t).then(function(n){ if(n) fohSchedShowPasteBar(n); });
 }
 function fohSchedFillDay(){
   if(!fohSchedClipboard) return;
   var t=fohSchedStaff.map(function(s){ return {staffId:s.id, date:fohSchedClipboard.srcDate}; });
+  fohSchedPushUndo(t, 'fill whole day '+fohSchedDayLabel(fohSchedClipboard.srcDate));
   fohSchedWriteClipboard(t).then(function(n){ if(n) fohSchedShowPasteBar(n); });
 }
 function fohSchedShowPasteBar(pastedCount){
@@ -3564,6 +3570,75 @@ function fohSchedEndPaste(){
   var bar=document.getElementById('foh-paste-bar'); if(bar) bar.style.display='none';
 }
 document.addEventListener('keydown', function(e){ if(e.key==='Escape' && fohSchedPasteMode) fohSchedEndPaste(); });
+
+// ── Excel-style undo for the LIVE FOH schedule (direct grid) ──────────────────
+// Mirrors the Kitchen schedule undo. Snapshots each cell's PRIOR foh_roster row
+// before an edit / paste; undo restores it on screen AND in the DB (re-upsert the
+// old shift, or delete a newly-created one). Clock-ins live in a SEPARATE
+// 'attendance' table, so this only ever touches shift data — never attendance.
+// In the planning tool the draft undo (fohKrtUndo) handles changes, so this
+// no-ops there. Multi-level, newest-first, capped so memory can't grow forever.
+var fohSchedUndoStack = [];
+function fohSchedStaffName(id){ var s=(fohSchedStaff||[]).find(function(x){return x.id===id;}); return s?s.name:'staff'; }
+function fohSchedDayLabel(ds){ try{ return new Date(ds+'T12:00:00').toLocaleDateString('en-GB',{weekday:'short',day:'numeric'}); }catch(e){ return ds; } }
+function fohSchedPushUndo(targets, label){
+  if(fohSchedPlanMode){ fohKrtNextLabel = label || fohKrtNextLabel; return; }   // in the tool, fohKrtUndo handles it
+  var cells = targets.map(function(t){
+    var key = fohSchedRosterKey(t.staffId, t.date);
+    return { staffId:t.staffId, date:t.date, key:key, prev: fohSchedRoster[key] ? JSON.parse(JSON.stringify(fohSchedRoster[key])) : null };
+  });
+  fohSchedUndoStack.push({ label: label || 'last change', cells: cells });
+  if(fohSchedUndoStack.length>25) fohSchedUndoStack.shift();
+  fohSchedRenderUndoBtn();
+}
+async function fohSchedUndoLast(){
+  if(!fohSchedUndoStack.length) return;
+  var u = fohSchedUndoStack.pop();
+  var upserts=[], deletes=[];
+  u.cells.forEach(function(c){
+    if(c.prev){ fohSchedRoster[c.key]=c.prev; upserts.push(c.prev); }
+    else { delete fohSchedRoster[c.key]; deletes.push(c); }
+  });
+  fohRenderSchedWeek();
+  fohSchedRenderUndoBtn();
+  if(!FOH_DEV_READ_ONLY && !fohSchedPlanMode){
+    try{
+      if(upserts.length){ var r=await sb.from('foh_roster').upsert(upserts,{onConflict:'staff_id,work_date'}); if(r.error) throw r.error; }
+      for(var i=0;i<deletes.length;i++){ var d=deletes[i]; var dr=await sb.from('foh_roster').delete().eq('staff_id',d.staffId).eq('work_date',d.date); if(dr.error) throw dr.error; }
+    }catch(e){ console.error('Undo sync error',e); alert('Undo could not reach the server: '+(e.message||e)+'\nReopen the schedule to be sure it matches.'); }
+  }
+}
+// Permanent toolbar button (in the schedule toolbar). Always visible — enabled with
+// the last action in its tooltip when there's something to undo, clearly greyed when
+// there isn't. Style is toggled inline so no extra CSS file is needed.
+function fohSchedRenderUndoBtn(){
+  var btn = document.getElementById('foh-sch-undo-btn');
+  if(!btn) return;
+  var unlocked = (typeof fohSchedUnlocked==='undefined' || fohSchedUnlocked);
+  var has = fohSchedUndoStack.length>0 && unlocked;
+  btn.disabled = !has;
+  if(has){
+    var last = fohSchedUndoStack[fohSchedUndoStack.length-1];
+    btn.title = 'Undo: '+last.label+(fohSchedUndoStack.length>1?('  ('+fohSchedUndoStack.length+' changes can be undone)'):'');
+    btn.innerHTML = '&#8630; Undo'+(fohSchedUndoStack.length>1?(' ('+fohSchedUndoStack.length+')'):'');
+    btn.style.background='#fff'; btn.style.color='var(--vino,#6B1F2A)'; btn.style.cursor='pointer';
+  } else {
+    btn.title = unlocked ? 'Nothing to undo yet' : 'Unlock the schedule to edit, then Undo appears here';
+    btn.innerHTML = '&#8630; Undo';
+    btn.style.background='rgba(255,255,255,.5)'; btn.style.color='rgba(65,2,7,.45)'; btn.style.cursor='default';
+  }
+}
+document.addEventListener('keydown', function(e){
+  if((e.key==='z'||e.key==='Z') && (e.ctrlKey||e.metaKey) && !e.shiftKey && !e.altKey){
+    if(fohSchedPlanMode) return;                        // the tool handles its own Ctrl+Z
+    var btn = document.getElementById('foh-sch-undo-btn');
+    if(!btn || btn.offsetParent===null) return;         // schedule not the visible surface
+    var el = document.activeElement;
+    if(el && /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)) return;
+    if(!fohSchedUndoStack.length) return;
+    e.preventDefault(); fohSchedUndoLast();
+  }
+});
 
 // ── Inline edit emp_id ──
 function fohSchedEditEmpId(event, staffId){
@@ -5127,6 +5202,7 @@ async function openFohSchedule(){
           <button class="sch-delweek-btn" onclick="fohSchedDeleteWeek()">&#128465; Delete week</button>
           <button class="sch-copy-btn" id="foh-svt-dl" onclick="fohSchedDownloadXlsx()" title="Download this week as an Excel file to print or share">&#11015; Excel</button>
           <button class="sch-copy-btn" id="foh-svt-hr" onclick="fohSchedSendToHR()" style="background:rgba(201,168,76,.2);border-color:rgba(201,168,76,.5);color:#e4c97a">&#128231; Send to HR</button>
+          <button id="foh-sch-undo-btn" onclick="fohSchedUndoLast()" disabled title="Nothing to undo yet" style="padding:6px 12px;border-radius:4px;border:1.5px solid #fff;background:rgba(255,255,255,.5);color:rgba(65,2,7,.45);font-size:11px;letter-spacing:1px;text-transform:uppercase;font-family:var(--font-sans);font-weight:700;cursor:default">&#8630; Undo</button>
           <button class="sch-lock-btn" id="foh-sch-lock-btn" onclick="fohSchedToggleLock()">&#128274; Locked</button>
         </div>
       </div>
