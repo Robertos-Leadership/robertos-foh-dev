@@ -284,7 +284,7 @@ function renderNav(){
   const active = resolveTab(state.currentTab);
   // Module-scoped nav: Revenue and Operations are single pages reached from the Manager
   // landing — no cross-module links there. Only the Events module keeps its own sub-tabs.
-  if(active==='revenue' || active==='operations' || active==='stocktake' || active==='admin' || active==='privateevents' || active==='reviews'){ nav.innerHTML=''; return; }
+  if(active==='revenue' || active==='operations' || active==='stocktake' || active==='admin' || active==='privateevents' || active==='reviews' || active==='reservations'){ nav.innerHTML=''; return; }
   const eventTabs = state.events.slice().sort(eventSort).map(ev=>
     `<div class="nav-tab ${active===eventTab(ev)?'active':''}" data-tab="${eventTab(ev)}" onclick="switchTab('${eventTab(ev)}')">${ev.name}</div>`
   ).join('');
@@ -311,7 +311,7 @@ function currentStageForTasks(tasks){
 // ── Per-user module access — driven by the app_users table (managed in the Admin module). ──
 // state.access = { modules:[...], isAdmin:bool } for the logged-in user; loaded on sign-in.
 function moduleOf(t){
-  if(t==='revenue'||t==='operations'||t==='stocktake'||t==='admin'||t==='privateevents'||t==='reviews') return t;
+  if(t==='revenue'||t==='operations'||t==='stocktake'||t==='admin'||t==='privateevents'||t==='reviews'||t==='reservations') return t;
   return 'events';   // dashboard, event_*, events => the Events module
 }
 // DEFAULT-DENY: a signed-in user with no app_users row (or whose access hasn't
@@ -357,6 +357,23 @@ function applyFohAccess(){
   if(col3) col3.style.display = guests ? '' : 'none';
   var nb=document.getElementById('mod-new-reviews');
   if(nb) nb.style.display = fohNewSeen('reviews') ? 'none' : '';
+  // ── The Live-now strip doubles as the way into the Reservations module.
+  // Deliberately NOT a hub tile: the strip is already the "what's happening
+  // tonight" object on this page, so the full book belongs behind it rather
+  // than behind a second card saying the same thing. Users without the
+  // 'reservations' permission see the strip exactly as before — no link, no
+  // pointer, no hint that a screen they can't open exists.
+  var lb=document.getElementById('live-tonight');
+  if(lb){
+    var canRes = !fohBlocked('reservations');
+    lb.classList.toggle('livebar-open', canRes);
+    lb.onclick = canRes ? function(){ enterApp('reservations'); } : null;
+    lb.setAttribute('role', canRes ? 'button' : 'presentation');
+    if(canRes) lb.setAttribute('tabindex','0'); else lb.removeAttribute('tabindex');
+    lb.onkeydown = canRes ? function(e){ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); enterApp('reservations'); } } : null;
+    var lc=document.getElementById('lt-cta');
+    if(lc) lc.style.display = canRes ? '' : 'none';
+  }
   var hd=document.getElementById('hub-date');
   if(hd) hd.textContent = new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'});
   try{ fohLoadHubStats(); }catch(e){}
@@ -557,7 +574,7 @@ async function loadFohAccess(){
 //  ADMIN MODULE — manage logins + module access (notifications: phase 2). Admin-only.
 // ══════════════════════════════════════════════
 var SUPA_USERS_URL='https://supabase.com/dashboard/project/paoaivwtkzujmrgrfjuq/auth/users';
-var ADMIN_MODULES=[{k:'events',n:'Activations'},{k:'privateevents',n:'Events'},{k:'operations',n:'Closing Report'},{k:'revenue',n:'Revenue'},{k:'stocktake',n:'Stock Take'},{k:'reviews',n:'Guest Reviews'}];
+var ADMIN_MODULES=[{k:'events',n:'Activations'},{k:'privateevents',n:'Events'},{k:'operations',n:'Closing Report'},{k:'revenue',n:'Revenue'},{k:'stocktake',n:'Stock Take'},{k:'reviews',n:'Guest Reviews'},{k:'reservations',n:'Reservations'}];
 var ADMIN_NOTIFY=[{k:'closing_report',n:'Closing-report email'}];
 function admEsc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 function loadAdminUsers(){
@@ -2424,7 +2441,7 @@ function enterApp(module){
   // Land in the chosen module — Revenue/Operations go straight there; Events keeps the
   // current Events-family tab (Leaders or an event) but NEVER another module's tab.
   var cur=state.currentTab;
-  var target=(module==='revenue'||module==='operations'||module==='stocktake'||module==='admin'||module==='privateevents'||module==='reviews') ? module
+  var target=(module==='revenue'||module==='operations'||module==='stocktake'||module==='admin'||module==='privateevents'||module==='reviews'||module==='reservations') ? module
     : ((cur==='dashboard' || (cur && cur.indexOf('event_')===0)) ? cur : 'dashboard');
   switchTab(target);
 }

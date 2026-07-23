@@ -400,6 +400,16 @@
   }
   .livebar-src { font-size: 9px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--gold-dim); }
   .livebar-note { margin-left: auto; font-size: 10px; color: #8B7355; font-style: italic; }
+  /* Only added when the user holds the 'reservations' permission — the strip
+     then behaves like a card: pointer, lift on hover, keyboard focus ring. */
+  .livebar-open { cursor: pointer; transition: box-shadow .18s ease, transform .18s ease, border-color .18s ease; }
+  .livebar-open:hover { box-shadow: 0 10px 26px rgba(74,21,32,0.14); transform: translateY(-1px); border-color: rgba(107,31,42,0.4); }
+  .livebar-open:focus-visible { outline: 2px solid var(--vino); outline-offset: 3px; }
+  .livebar-cta {
+    margin-left: auto; font-size: 10px; font-weight: 700; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--vino); white-space: nowrap;
+  }
+  .livebar-note:not(:empty) ~ .livebar-cta { margin-left: 12px; }
   .livebar-figs { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
   .livefig { padding: 2px 4px; }
   .livefig + .livefig { border-left: 1px solid rgba(107,31,42,0.14); padding-left: 14px; }
@@ -2427,4 +2437,91 @@
     .gr-rank{margin-left:0;text-align:left}
     .gr-table{font-size:12.5px}
     .gr-table td,.gr-table th{padding-left:4px;padding-right:4px}
+  }
+
+  /* ── RESERVATIONS module (foh-reservations.js) ──
+     A read-only replica of the SevenRooms day view. Laid out as a CSS grid so
+     the header row and the data rows can never drift apart, and so the whole
+     table can collapse to stacked cards on a phone without a second markup. */
+  .res-wrap{max-width:1180px;margin:0 auto;padding:8px 4px 60px}
+  .res-head{display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap;margin-bottom:14px}
+  .res-head-l{min-width:0}
+  .res-kicker{font-size:9px;letter-spacing:.22em;text-transform:uppercase;color:var(--gold-dim);font-weight:700}
+  .res-title{font-family:'Playfair Display',serif;font-size:clamp(22px,3vw,30px);color:var(--vino-dark);line-height:1.15;margin-top:4px}
+  .res-tonight{font-family:Inter,system-ui,sans-serif;font-size:10px;letter-spacing:.16em;text-transform:uppercase;
+    color:#2E6B34;background:rgba(46,107,52,.10);border:1px solid rgba(46,107,52,.28);border-radius:11px;padding:3px 9px;vertical-align:middle}
+  .res-head-r{display:flex;align-items:center;gap:7px;margin-left:auto;flex-wrap:wrap}
+  .res-nav{width:30px;height:30px;border-radius:8px;border:1px solid rgba(107,31,42,.25);background:var(--surface);
+    color:var(--vino);font-size:16px;line-height:1;cursor:pointer}
+  .res-nav:hover{background:var(--surface3)}
+  .res-date{border:1px solid rgba(107,31,42,.25);border-radius:8px;background:var(--surface);color:var(--ink);
+    font:500 12.5px/1 Inter,system-ui,sans-serif;padding:7px 9px;cursor:pointer}
+  .res-btn{border:1px solid rgba(107,31,42,.28);border-radius:8px;background:var(--surface);color:var(--vino);
+    font:600 12px/1 Inter,system-ui,sans-serif;padding:8px 13px;cursor:pointer}
+  .res-btn:hover:not(:disabled){background:var(--vino);color:#fff}
+  .res-btn:disabled{opacity:.55;cursor:default}
+
+  .res-tot{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;background:linear-gradient(135deg,#F1E8DB 0%,#E8D9C7 100%);
+    border:1px solid rgba(107,31,42,.2);border-radius:13px;padding:14px 18px;margin-bottom:14px}
+  .res-tot-i{padding:0 2px}
+  .res-tot-i+.res-tot-i{border-left:1px solid rgba(107,31,42,.14);padding-left:14px}
+  .res-tot-i b{display:block;font-family:'Playfair Display',serif;font-weight:400;font-size:clamp(19px,2.4vw,25px);color:var(--vino-dark);line-height:1}
+  .res-tot-i span{display:block;margin-top:6px;font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--gold-dim);font-weight:600}
+
+  .res-tools{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+  .res-chips{display:flex;gap:6px;flex-wrap:wrap}
+  .res-chip{border:1px solid rgba(107,31,42,.22);border-radius:14px;background:var(--surface);color:var(--vino);
+    font:600 11.5px/1 Inter,system-ui,sans-serif;padding:7px 13px;cursor:pointer}
+  .res-chip.on{background:var(--vino);color:#fff;border-color:var(--vino)}
+  .res-srch{flex:1;min-width:220px;border:1px solid rgba(107,31,42,.22);border-radius:9px;background:var(--surface);
+    font:400 13px/1 Inter,system-ui,sans-serif;padding:9px 12px;color:var(--ink)}
+  .res-srch:focus{outline:none;border-color:var(--vino)}
+
+  .res-area{font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--vino);font-weight:700;
+    margin:18px 0 7px;display:flex;align-items:baseline;gap:10px}
+  .res-area span{letter-spacing:.04em;text-transform:none;font-weight:500;font-size:11.5px;color:var(--gold-dim)}
+  .res-tbl{background:var(--surface);border:1px solid rgba(107,31,42,.13);border-radius:11px;overflow:hidden}
+  .res-r{display:grid;grid-template-columns:60px 78px minmax(150px,1.4fr) 92px 128px minmax(150px,1.6fr) 112px;
+    gap:10px;align-items:center;padding:11px 15px;font-size:13px;color:var(--ink);border-top:1px solid rgba(107,31,42,.08)}
+  .res-money .res-r{grid-template-columns:60px 78px minmax(150px,1.4fr) 92px 128px minmax(140px,1.5fr) 112px 96px}
+  .res-r:first-child{border-top:none}
+  .res-hdr{background:var(--surface3);font-size:9px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--gold-dim);font-weight:700;padding-top:9px;padding-bottom:9px}
+  .res-right{text-align:right}
+  .res-time{font-family:'Playfair Display',serif;font-size:15px;color:var(--vino-dark)}
+  .res-pax{font-weight:600}
+  .res-pax i{font-style:normal;font-weight:400;color:var(--gold-dim);font-size:11.5px}
+  .res-name{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .res-phone{display:block;font-style:normal;font-weight:400;font-size:11px;color:var(--gold-dim);letter-spacing:.04em}
+  .res-vip{font-size:8.5px;font-weight:700;letter-spacing:.1em;color:#fff;background:var(--vino);border-radius:4px;padding:2px 5px;vertical-align:1px}
+  .res-tbls{font-variant-numeric:tabular-nums}
+  .res-tbls i{font-style:italic;color:#B0A18F;font-size:11.5px}
+  .res-note,.res-by{font-size:11.5px;color:#6B5B4A;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .res-by i{display:block;font-style:normal;font-size:10.5px;color:#A99887}
+  .res-pill{display:inline-block;font-size:10px;font-weight:600;letter-spacing:.03em;border-radius:11px;padding:4px 9px;white-space:nowrap}
+  .res-pill-due{background:rgba(168,137,48,.12);color:#8A6F1E;border:1px solid rgba(168,137,48,.3)}
+  .res-pill-seated{background:rgba(46,107,52,.12);color:#2E6B34;border:1px solid rgba(46,107,52,.32)}
+  .res-pill-done{background:rgba(107,31,42,.07);color:#8B7E72;border:1px solid rgba(107,31,42,.16)}
+  /* Seated parties are the ones a manager is looking for on a busy floor. */
+  .res-r.res-seated{background:rgba(46,107,52,.045)}
+  .res-r.res-done{color:#8B7E72}
+
+  .res-loading,.res-empty{padding:34px 8px;text-align:center;color:var(--gold-dim);font-size:13.5px;font-style:italic}
+  .res-problem{background:var(--surface);border:1px solid rgba(107,31,42,.16);border-radius:11px;padding:22px;text-align:center}
+  .res-problem-t{font-weight:600;color:var(--vino-dark);margin-bottom:6px}
+  .res-problem-s{font-size:12.5px;color:#6B5B4A;margin-bottom:14px}
+  .res-foot{margin-top:20px;font-size:11px;color:#A99887;text-align:center}
+
+  @media(max-width:860px){
+    .res-tot{grid-template-columns:1fr 1fr 1fr;gap:14px 10px}
+    .res-tot-i:nth-child(3n+1){border-left:none;padding-left:2px}
+    /* Stacked cards: the 8-column grid can't survive a phone, and a sideways
+       scroll on the floor is worse than a taller card. */
+    .res-hdr{display:none}
+    .res-r,.res-money .res-r{grid-template-columns:60px 1fr auto;gap:4px 10px;padding:12px 14px}
+    .res-name{grid-column:2;white-space:normal}
+    .res-pax{grid-column:3;grid-row:1;text-align:right}
+    .res-time{grid-column:1;grid-row:1}
+    .res-tbls,.res-note,.res-by,.res-right{grid-column:1/-1;white-space:normal}
+    .res-r>div:nth-child(5){grid-column:1/-1}
   }
