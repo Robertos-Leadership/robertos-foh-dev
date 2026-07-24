@@ -156,6 +156,15 @@ function peSetMenusPick(){
     return !(/-sharing$/.test(m.key) && peSmFamily(m.key));
   });
 }
+// Like peSetMenusPick, but keeps unpriced menus too. Used only by the guest
+// menu-send screen: a minimum-spend client is sent the menu WITHOUT a price, so
+// a menu with "price pending" (e.g. a bespoke confidential-price menu) must still
+// be tickable there. The per-guest price never appears — the send hides it.
+function peSetMenusPickInc(){
+  return peSetMenusAll().filter(function(m){
+    return m.active!==false && !(/-sharing$/.test(m.key) && peSmFamily(m.key));
+  });
+}
 function peSmSummary(courses){
   return (courses||[]).map(function(c){
     if(c.choose) return 'choice of '+((c.options||[]).join(' / '));
@@ -3609,9 +3618,9 @@ function peRenderPacksView(){
   h += '<div style="font-size:12px;color:#8B7355;margin-bottom:10px">Tick anything from either section — one set menu, a few beverage packages, or a mix — the guest receives it all in ONE branded email.</div>';
   h += '<div class="pe-card"><div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap"><b style="color:#400207">Food packages — the set menus</b>'+peSelLinks('food')+'</div>'+
     '<div style="font-size:11px;color:#8B7355;margin:2px 0 8px">Open any menu to see the designed PDF — the email carries a button to each ticked menu.</div>'+
-    peSetMenusSel().map(function(m){
+    peSetMenusPickInc().map(function(m){
       return '<div class="pe-dishrow"><span><label style="cursor:pointer"><input type="checkbox" class="pe-mp-check" data-kind="food" data-key="'+m.key+'" onchange="peMpCount()" style="accent-color:#400207;margin-right:8px;vertical-align:-2px">'+
-        '<b>'+peEsc(m.name)+'</b> · AED '+m.price+' / person</label><br>'+
+        '<b>'+peEsc(m.name)+'</b>'+(m.price!=null?' · AED '+m.price+' / person':' · <span style="background:#FAEEDA;color:#854F0B;font-size:10.5px;padding:1px 8px;border-radius:20px">price on the proposal</span>')+'</label><br>'+
         '<span style="font-size:11px;color:#8B7355">'+peEsc(m.line||peSmSummary(m.courses))+'</span></span>'+
         '<span style="display:flex;gap:6px;flex-shrink:0">'+
         '<button class="pe-btn sec sm" onclick="peWaShareMenu(\''+peSmEsc(m.key)+'\')">WhatsApp</button>'+
@@ -3622,7 +3631,8 @@ function peRenderPacksView(){
     (bevs.length?bevs.map(function(b){
       return '<div class="pe-dishrow"><span><label style="cursor:pointer"><input type="checkbox" class="pe-mp-check" data-kind="bev" data-key="'+b.id+'" onchange="peMpCount()" style="accent-color:#400207;margin-right:8px;vertical-align:-2px">'+
         '<b>'+peEsc(b.name)+'</b>'+(b.duration_hours?' · '+b.duration_hours+'h':'')+' · AED '+peMoney(b.price_pp)+' / guest</label><br>'+
-        '<span style="font-size:11px;color:#8B7355">'+peEsc(b.includes||'')+'</span></span></div>';
+        '<span style="font-size:11px;color:#8B7355">'+peEsc(b.includes||'')+'</span></span>'+
+        (b.pdf?'<span style="display:flex;gap:6px;flex-shrink:0"><button class="pe-btn sec sm" onclick="window.open(\''+b.pdf+'\',\'_blank\')">Open PDF</button></span>':'')+'</div>';
     }).join(''):'<div style="font-size:12px;color:#8B7355">No packages yet — Manuel adds them in the Beverage corner.</div>')+'</div>';
   h += peMenuPackEmailForm();
   return h+PE_FOOT;
@@ -3661,6 +3671,9 @@ function peMenuPackEmailForm(){
     '<div style="margin-top:8px"><div class="pe-lbl">Guest mobile (for WhatsApp)</div><input class="pe-in" id="pe-mp-phone" type="tel" placeholder="e.g. 050 123 4567 — a UAE number needs no +971"></div>'+
     '<div style="margin-top:8px"><div class="pe-lbl">Personal note (optional — appears in the email and the WhatsApp message)</div>'+
     '<input class="pe-in" id="pe-mp-note" placeholder="e.g. It was lovely speaking with you today — as promised…"></div>'+
+    '<div style="margin-top:10px;background:#F4EEE1;border:1px dashed #C9B48E;border-radius:10px;padding:10px 12px"><label style="font-size:12.5px;color:#6B4A33;cursor:pointer;display:inline-flex;align-items:center;gap:8px">'+
+      '<input type="checkbox" id="pe-mp-noprice" style="accent-color:#400207"> <b style="color:#400207">Send without prices</b> — menu &amp; beverage only</label>'+
+      '<div style="font-size:11px;color:#8B7355;margin-top:4px">For minimum-spend clients: the guest sees the dishes and packages, no per-person price. The price lives in the proposal / contract.</div></div>'+
     '<div style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">'+
     '<button class="pe-btn" id="pe-mp-send" onclick="peSendMenuPack()" disabled>Send email</button>'+
     '<button class="pe-btn sec" id="pe-mp-wa" onclick="peSendMenuPackWa()" disabled>Send by WhatsApp</button></div>'+
@@ -3683,11 +3696,12 @@ function peMpSummary(t){
 }
 // The ONE guest link: a branded page carrying every ticked menu and package.
 // One link, however many she ticked — never one WhatsApp per menu.
-function peMenuPackUrl(t, name){
+function peMenuPackUrl(t, name, noPrice){
   var p = [];
   if(t.food.length) p.push('food='+t.food.map(encodeURIComponent).join(','));
   if(t.bev.length)  p.push('bev='+t.bev.map(encodeURIComponent).join(','));
   if(name) p.push('n='+encodeURIComponent(name));
+  if(noPrice) p.push('np=1');
   return peBaseUrl()+'client-menus.html?'+p.join('&');
 }
 // A UAE mobile typed the way people actually type it (050…, 00971…, +971…) all
@@ -3708,12 +3722,14 @@ function peSendMenuPackWa(){
   var digits = peWaDigits(phone);
   if(!digits){ peToast('That mobile looks too short — check the number', true); peInlineErr(pEl,'That doesn’t look like a full mobile number.'); return; }
   peInlineErr(pEl,'');
+  var noPriceElW = document.getElementById('pe-mp-noprice');
+  var noPrice = !!(noPriceElW && noPriceElW.checked);
   var t = peMpTicked();
   if(!t.food.length && !t.bev.length){ peToast('Tick at least one menu or package to send', true); return; }
   var msg = 'Ciao'+(name?' '+name.split(' ')[0]:'')+'! Thank you for thinking of Roberto’s for your occasion.'+
     (note?'\n\n'+note:'')+
     '\n\nHere is everything for your occasion ('+peMpSummary(t)+'), on one page:\n'+
-    peMenuPackUrl(t, name)+
+    peMenuPackUrl(t, name, noPrice)+
     '\n\nIt will be our pleasure — Valentina';
   window.open('https://wa.me/'+digits+'?text='+encodeURIComponent(msg), '_blank');
   // WhatsApp opens with the message written — she still presses send there, so
@@ -3721,7 +3737,7 @@ function peSendMenuPackWa(){
   peToast('WhatsApp opened for '+phone+' with '+peMpSummary(t)+' — press send in WhatsApp to deliver it');
 }
 function peBaseUrl(){ return location.origin + location.pathname.replace(/[^\/]*$/, ''); }
-function peGuestEmailHTML(title, intro, name, note, inner){
+function peGuestEmailHTML(title, intro, name, note, inner, noPrice){
   var body = '<div class="brand">R O B E R T O ’ S</div><div class="rule"></div>'+
     '<h2>'+peEsc(title)+'</h2>'+
     '<div class="sub">DIFC, Dubai · private dining &amp; events</div>'+
@@ -3730,15 +3746,17 @@ function peGuestEmailHTML(title, intro, name, note, inner){
     '<p style="font-size:13.5px">'+intro+'</p>'+
     inner+
     '<p style="font-size:13.5px;margin-top:26px">Simply reply to this email to check availability or tailor anything to your occasion — it will be our pleasure.</p>'+
-    '<div class="ft">All prices are in AED and inclusive of 5% VAT, 7% DIFC Authority Fee and 10% Service Charge.<br>'+
+    '<div class="ft">'+(noPrice?'':'All prices are in AED and inclusive of 5% VAT, 7% DIFC Authority Fee and 10% Service Charge.<br>')+
     'Our Chefs will do their best to accommodate your dietary requirements.</div>';
   return peDocShell(title, body);
 }
 function peMailSection(label){
   return '<div style="text-align:center;margin:30px 0 2px"><span style="font-size:11px;letter-spacing:3px;color:#B99C03;text-transform:uppercase">'+label+'</span></div>';
 }
-function peMenuPackEmailHTML(foodKeys, bevKeys, name, note){
-  var menus = peSetMenusSel().filter(function(m){ return foodKeys.indexOf(m.key)>=0; });
+function peMenuPackEmailHTML(foodKeys, bevKeys, name, note, noPrice){
+  // Include unpriced menus too — a no-price send (minimum-spend client) needs them,
+  // and a priced send simply omits the price line for any that has none.
+  var menus = peSetMenusPickInc().filter(function(m){ return foodKeys.indexOf(m.key)>=0; });
   var bevs = bevKeys.map(peBevById).filter(Boolean);
   var both = menus.length && bevs.length;
   var title = both ? 'Menus & Beverage Packages' : (menus.length ? 'Set Menus' : 'Beverage Packages');
@@ -3758,18 +3776,23 @@ function peMenuPackEmailHTML(foodKeys, bevKeys, name, note){
             var b = c.choose ? ('choice of '+((c.options||[]).join(' / '))) : ((c.items||[]).join(', '));
             return '<div class="dish"><span class="d"><b>'+peEsc(c.name)+'</b> — '+peEsc(b)+'</span></div>';
           }).join('');
-      return '<div class="sec">'+peEsc(m.name)+' — AED '+m.price+' / person</div>'+
+      var priceTag = (noPrice || m.price==null) ? '' : ' — AED '+m.price+' / person';
+      return '<div class="sec">'+peEsc(m.name)+priceTag+'</div>'+
         '<div class="dish"><span class="d">'+peEsc(m.line||peSmSummary(m.courses))+'</span></div>'+extra;
     }).join('');
   }
   if(bevs.length){
     if(both) inner += peMailSection('The beverages — packages');
     inner += bevs.map(function(b){
-      return '<div class="sec">'+peEsc(b.name)+(b.duration_hours?' — '+b.duration_hours+' hours':'')+' · AED '+peMoney(b.price_pp)+' / person</div>'+
-        (b.includes?'<div class="dish"><span class="d">'+peEsc(b.includes)+'</span></div>':'');
+      var priceTag = noPrice ? '' : ' · AED '+peMoney(b.price_pp)+' / person';
+      var extra = b.pdf
+        ? '<div style="text-align:center;margin:10px 0 20px"><a href="'+(/^https?:/i.test(b.pdf)?b.pdf:peBaseUrl()+b.pdf)+'" style="display:inline-block;background:#400207;color:#E8D9C7;padding:9px 24px;border-radius:20px;text-decoration:none;font-size:12.5px;letter-spacing:1px">View the beverage package</a></div>'
+        : '';
+      return '<div class="sec">'+peEsc(b.name)+(b.duration_hours?' — '+b.duration_hours+' hours':'')+priceTag+'</div>'+
+        (b.includes?'<div class="dish"><span class="d">'+peEsc(b.includes)+'</span></div>':'')+extra;
     }).join('');
   }
-  return peGuestEmailHTML(title, intro, name, note, inner);
+  return peGuestEmailHTML(title, intro, name, note, inner, noPrice);
 }
 async function peSendMenuPack(){
   if(!peCanEdit()){ peToast('View only — ask Valentina, Andrea or Francesco to make changes', true); return; }
@@ -3778,9 +3801,11 @@ async function peSendMenuPack(){
   if(!email){ peToast('Type the guest’s email first', true); peInlineErr(document.getElementById('pe-mp-email'),'Type the guest’s email first.'); return; }
   if(!peIsEmail(email)){ peToast('That email looks off — check for a missing “@”', true); peInlineErr(document.getElementById('pe-mp-email'),'That doesn’t look like an email — check for a missing “@”.'); return; }
   peInlineErr(document.getElementById('pe-mp-email'),'');
+  var noPriceEl = document.getElementById('pe-mp-noprice');
+  var noPrice = !!(noPriceEl && noPriceEl.checked);
   var t = peMpTicked(), food = t.food, bev = t.bev;
   if(!food.length && !bev.length){ peToast('Tick at least one menu or package to send', true); return; }
-  if(!(await peConfirm({title:'Send to the guest?', html:'Send <b>'+peEsc(peMpSummary(t))+'</b> to <b>'+peEsc(email)+'</b> in one email now?', ok:'Send email', cancel:'Not yet'}))) return;
+  if(!(await peConfirm({title:'Send to the guest?', html:'Send <b>'+peEsc(peMpSummary(t))+'</b> to <b>'+peEsc(email)+'</b> in one email now?'+(noPrice?'<br><span style="color:#854F0B">Without prices — the guest sees the dishes and packages only.</span>':''), ok:'Send email', cancel:'Not yet'}))) return;
   // The sender is copied and set as reply-to, same as client proposals.
   var sender = state.userEmail || 'vdetoni@robertos.ae';
   var subject = food.length && bev.length ? 'Roberto’s — menus & beverage packages for your occasion'
@@ -3790,7 +3815,7 @@ async function peSendMenuPack(){
   try{
     var r = await sb.functions.invoke('send-event-email', { body:{
       to:[email, sender], reply_to:sender, from_name:peSenderName(), subject:subject,
-      html: peMenuPackEmailHTML(food, bev, name, note)
+      html: peMenuPackEmailHTML(food, bev, name, note, noPrice)
     }});
     if(r.error || (r.data&&r.data.error)) throw (r.error||r.data.error);
     peToast('Sent to '+email+' ✓ — you are copied and replies come to you');
@@ -4259,6 +4284,7 @@ async function peToggleSetMenu(id, active){
 }
 function peRenderBevLib(){
   var ed = peState.editBevId==='new' ? {} : (peState.editBevId ? peBevById(peState.editBevId)||{} : null);
+  var curPdf = ed ? (peState.bevPdf || ed.pdf || null) : null;
   var h = '';
   if(ed){
     h += '<div class="pe-card"><b style="color:#400207">'+(ed.id?'Edit package':'Add a beverage package')+'</b>'+
@@ -4269,45 +4295,96 @@ function peRenderBevLib(){
       '<div><div class="pe-lbl">Price / guest (AED)</div><input class="pe-in" id="pe-b-price_pp" type="number" value="'+peEsc(ed.price_pp!=null?ed.price_pp:'')+'"></div>'+
       '<div><div class="pe-lbl">Cost / guest (AED) — our cost, never shown to clients</div><input class="pe-in" id="pe-b-cost_pp" type="number" step="0.01" value="'+peEsc(ed.cost_pp!=null?ed.cost_pp:'')+'"></div>'+
       '</div><div style="margin-top:8px"><div class="pe-lbl">Includes</div><input class="pe-in" id="pe-b-includes" value="'+peEsc(ed.includes||'')+'" placeholder="House wine, beers, soft drinks, water"></div>'+
+      '<div style="margin-top:10px;background:#F4EEE1;border:1px dashed #C9B48E;border-radius:10px;padding:11px">'+
+        '<div class="pe-lbl" style="color:#8A6A4F">Designed PDF for guests (optional)</div>'+
+        '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:4px">'+
+          '<label class="pe-btn sec sm" style="cursor:pointer" id="pe-b-pdf-label">'+(peState.bevBusy?'Uploading…':(curPdf?'Replace the PDF':'Upload the package PDF'))+
+            '<input type="file" accept="application/pdf,.pdf" style="display:none" onchange="peBevPdfUpload(this)"'+(peState.bevBusy?' disabled':'')+'></label>'+
+          '<span style="font-size:11px;color:#8B7355" id="pe-b-pdf-status">'+(curPdf
+            ? 'PDF attached ✓ — guests get a “View the beverage package” button'
+            : 'attach the designed package PDF the guest can open')+'</span>'+
+        '</div>'+
+      '</div>'+
       '<div style="margin-top:10px"><label style="font-size:12.5px;color:#6B4A33;cursor:pointer;display:inline-flex;align-items:center;gap:7px"><input type="checkbox" id="pe-b-non_alcoholic" '+(ed.non_alcoholic?'checked':'')+' style="accent-color:#400207"> Alcohol-free package (soft drinks / mocktails only) — can be offered on a dry event</label></div>'+
       '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">'+
       '<button class="pe-btn" onclick="peSaveBev(\''+(ed.id||'')+'\')">Save package</button>'+
-      '<button class="pe-btn sec" onclick="peState.editBevId=null;renderMain()">Cancel</button>'+
+      '<button class="pe-btn sec" onclick="peState.editBevId=null;peState.bevPdf=null;renderMain()">Cancel</button>'+
       (ed.id?'<button class="pe-btn sec" style="margin-left:auto;color:#B00020;border-color:#B00020" onclick="peToggleBev(\''+ed.id+'\','+(ed.active===false?'true':'false')+')">'+(ed.active===false?'Reactivate':'Retire package')+'</button>':'')+
       '</div></div>';
   } else {
-    h += '<div style="margin-bottom:10px"><button class="pe-btn" onclick="peState.editBevId=\'new\';renderMain()">+ Add a beverage package</button></div>';
+    h += '<div style="margin-bottom:10px"><button class="pe-btn" onclick="peState.editBevId=\'new\';peState.bevPdf=null;renderMain()">+ Add a beverage package</button></div>';
   }
   h += '<div class="pe-card">'+(peState.bevs.length?peState.bevs.map(function(b){
     var pour = (b.cost_pp!=null && Number(b.price_pp)>0) ? Math.round(Number(b.cost_pp)/Number(b.price_pp)*100) : null;
     return '<div class="pe-dishrow" style="opacity:'+(b.active===false?.45:1)+'"><span><b>'+peEsc(b.name)+'</b> · '+(b.duration_hours?b.duration_hours+'h · ':'')+'AED '+peMoney(b.price_pp)+'/guest'+
       (pour!=null?' · <span style="color:'+(pour>=30?'#B00020':'#2E6B34')+'">cost AED '+peMoney(b.cost_pp)+' → '+pour+'%</span>':' · <span style="color:#B08D3E">no cost yet</span>')+
-      '<br><span style="font-size:11px;color:#8B7355">'+peEsc(b.includes||'')+'</span></span>'+
-      '<button class="pe-btn sec sm" onclick="peState.editBevId=\''+b.id+'\';renderMain()">Edit</button></div>';
+      '<br><span style="font-size:11px;color:#8B7355">'+peEsc(b.includes||'')+'</span>'+(b.pdf?' <span style="font-size:11px;color:#2E6B34">· PDF ✓</span>':'')+'</span>'+
+      '<button class="pe-btn sec sm" onclick="peState.editBevId=\''+b.id+'\';peState.bevPdf=null;renderMain()">Edit</button></div>';
   }).join(''):'<div style="font-size:12px;color:#8B7355">No packages yet.</div>')+'</div>';
   return h;
+}
+// Upload a designed beverage-package PDF. Reuses the same event-menus bucket as
+// set menus. Deliberately does NOT renderMain — the bev form reads typed fields
+// from the DOM only at save, so a re-render here would wipe the name/price the
+// user just typed. Instead it updates the label + status text in place.
+async function peBevPdfUpload(input){
+  var f = input.files && input.files[0]; if(!f) return;
+  input.value = '';
+  if(!/pdf$/i.test(f.type||'') && !/\.pdf$/i.test(f.name||'')){ peToast('That file is not a PDF — export the package as PDF first', true); return; }
+  if(f.size > 8*1024*1024){ peToast('The PDF is over 8 MB — export a lighter version and try again', true); return; }
+  var label = document.getElementById('pe-b-pdf-label');
+  var status = document.getElementById('pe-b-pdf-status');
+  var nameEl = document.getElementById('pe-b-name');
+  peState.bevBusy = true;
+  if(label){ label.firstChild && (label.firstChild.nodeValue = 'Uploading…'); }
+  if(status){ status.textContent = 'Uploading…'; }
+  try{
+    var base = ((nameEl && nameEl.value) || f.name.replace(/\.pdf$/i,'') || 'beverage');
+    var path = 'bev-'+peSmSlug(base)+'.pdf';
+    var up = await sb.storage.from('event-menus').upload(path, f, {contentType:'application/pdf', upsert:true});
+    if(up.error) throw up.error;
+    var pub = sb.storage.from('event-menus').getPublicUrl(path);
+    peState.bevPdf = (pub && pub.data && pub.data.publicUrl) || null;
+    peState.bevBusy = false;
+    if(peState.bevPdf){
+      if(label && label.firstChild) label.firstChild.nodeValue = 'Replace the PDF';
+      if(status) status.textContent = 'PDF attached ✓ — save the package to keep it';
+      peToast('PDF attached ✓ — now press Save package');
+    }
+  }catch(err){
+    peState.bevBusy = false; peState.bevPdf = null;
+    if(label && label.firstChild) label.firstChild.nodeValue = 'Upload the package PDF';
+    if(status) status.textContent = 'Could not attach the PDF — try again';
+    peToast('PDF NOT attached — '+String(err&&err.message||'').slice(0,80), true);
+  }
 }
 async function peSaveBev(id){
   var g = function(f){ var el=document.getElementById('pe-b-'+f); return el?el.value.trim():''; };
   if(!g('name')){ peToast('Package name is required', true); return; }
   if(!g('price_pp')){ peToast('Price per guest is required', true); return; }
   var naEl = document.getElementById('pe-b-non_alcoholic');
+  var existing = id ? peBevById(id) : null;
+  var pdfUrl = peState.bevPdf || (existing && existing.pdf) || null;
   var row = { name:g('name'), duration_hours:g('duration_hours')?Number(g('duration_hours')):null,
               price_pp:Number(g('price_pp')), cost_pp:g('cost_pp')?Number(g('cost_pp')):null,
-              includes:g('includes')||null, non_alcoholic: naEl?!!naEl.checked:false, created_by:peActor() };
+              includes:g('includes')||null, non_alcoholic: naEl?!!naEl.checked:false, pdf:pdfUrl, created_by:peActor() };
   async function saveRow(rr){
     return id ? await sb.from('event_bev_packages').update(rr).eq('id', id).select().single()
               : await sb.from('event_bev_packages').insert(rr).select().single();
   }
   var r = await saveRow(row);
-  // Degrade gracefully if the alcohol-free column isn't in the DB yet — save the
-  // rest so the app never breaks before the SQL is run.
+  // Degrade gracefully if a column isn't in the DB yet — save the rest so the app
+  // never breaks before the SQL is run, and name exactly what's missing.
   if(r.error && /non_alcoholic/.test(String(r.error.message||''))){
     delete row.non_alcoholic; r = await saveRow(row);
   }
+  if(r.error && /\bpdf\b/.test(String(r.error.message||''))){
+    delete row.pdf; r = await saveRow(row);
+    if(!r.error) peToast('Saved without the PDF — the pdf field needs foh-events-bev-pdf.sql run first.', true);
+  }
   if(r.error || !r.data){ peToast('NOT saved — '+String(r.error&&r.error.message||'').slice(0,100), true); return; }
   if(id){ peState.bevs = peState.bevs.map(function(b){ return b.id===id ? r.data : b; }); } else peState.bevs.push(r.data);
-  peState.editBevId = null; peToast('Beverage package saved ✓'); renderMain();
+  peState.editBevId = null; peState.bevPdf = null; peToast('Beverage package saved ✓'); renderMain();
 }
 async function peToggleBev(id, active){
   var r = await sb.from('event_bev_packages').update({active:active==='true'||active===true}).eq('id', id);

@@ -41,6 +41,9 @@ function clean(list, re){
 var foodKeys = clean(q.get('food'), /^[a-z0-9-]{1,60}$/i);
 var bevIds   = clean(q.get('bev'),  /^[0-9a-f-]{36}$/i);
 var who      = (q.get('n')||'').slice(0, 40).trim();
+// Minimum-spend clients are sent the menu WITHOUT prices — the price lives in the
+// proposal / contract, not on this page.
+var noPrice  = q.get('np')==='1';
 
 function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function el(id){ return document.getElementById(id); }
@@ -58,12 +61,20 @@ async function load(){
   if(!foodKeys.length && !bevIds.length){
     return fail('This link is incomplete — please use the link Roberto’s sent you, or get in touch and we’ll resend it.');
   }
+  // Fetch beverage packages asking for the pdf column, but fall back to the older
+  // column set if the pdf field isn't on the view yet — so an existing link never
+  // breaks in the window between deploying this page and running the SQL.
+  async function getBevs(){
+    if(!bevIds.length) return [];
+    try{ return await get('event_bev_public?id='+inList(bevIds)+'&select=id,name,duration_hours,price_pp,includes,pdf'); }
+    catch(e){ return await get('event_bev_public?id='+inList(bevIds)+'&select=id,name,duration_hours,price_pp,includes'); }
+  }
   try{
     var res = await Promise.all([
-      foodKeys.length ? get('event_set_menus?key='+inList(foodKeys)+'&active=is.true&select=key,name,price_pp,line,pdf') : [],
       // event_bev_public is the guest-safe view: name, hours, price and what's
       // included. Our cost per guest lives on the base table and never leaves it.
-      bevIds.length ? get('event_bev_public?id='+inList(bevIds)+'&select=id,name,duration_hours,price_pp,includes') : []
+      foodKeys.length ? get('event_set_menus?key='+inList(foodKeys)+'&active=is.true&select=key,name,price_pp,line,pdf') : [],
+      getBevs()
     ]);
     render(res[0]||[], res[1]||[]);
   }catch(e){
@@ -92,7 +103,7 @@ function render(menus, bevs){
         var href = m.pdf ? (/^https?:/i.test(m.pdf) ? m.pdf : m.pdf)
                          : 'client-setmenu.html?m='+encodeURIComponent(m.key);
         return '<div class="item"><div class="nm">'+esc(m.name)+'</div>'+
-          '<div class="pr">AED '+money(m.price_pp)+' per guest</div>'+
+          ((noPrice || m.price_pp==null) ? '' : '<div class="pr">AED '+money(m.price_pp)+' per guest</div>')+
           (m.line ? '<span class="ds">'+esc(m.line)+'</span>' : '')+
           '<a class="open" href="'+esc(href)+'" target="_blank" rel="noopener">View the full menu</a></div>';
       }).join('')+'</div>';
@@ -102,14 +113,17 @@ function render(menus, bevs){
     h += '<div class="sect">'+(both ? '<div class="sect-t">Beverage packages</div>' : '')+
       bevs.map(function(b){
         return '<div class="item"><div class="nm">'+esc(b.name)+'</div>'+
-          '<div class="pr">'+(b.duration_hours ? b.duration_hours+' hours · ' : '')+'AED '+money(b.price_pp)+' per guest</div>'+
-          (b.includes ? '<span class="ds">'+esc(b.includes)+'</span>' : '')+'</div>';
+          (noPrice
+            ? (b.duration_hours ? '<div class="pr">'+b.duration_hours+' hours</div>' : '')
+            : '<div class="pr">'+(b.duration_hours ? b.duration_hours+' hours · ' : '')+'AED '+money(b.price_pp)+' per guest</div>')+
+          (b.includes ? '<span class="ds">'+esc(b.includes)+'</span>' : '')+
+          (b.pdf ? '<a class="open" href="'+esc(b.pdf)+'" target="_blank" rel="noopener">View the beverage package</a>' : '')+'</div>';
       }).join('')+'</div>';
   }
 
   h += '<div class="btnrow"><div class="ft">To book your occasion or ask us anything, simply reply to Valentina — or write to '+
     '<a href="mailto:reservations@robertos.ae" style="color:#400207">reservations@robertos.ae</a>.<br><br>'+
-    'All prices are in AED and inclusive of 5% VAT, 7% DIFC Authority Fee and 10% Service Charge.<br>'+
+    (noPrice ? '' : 'All prices are in AED and inclusive of 5% VAT, 7% DIFC Authority Fee and 10% Service Charge.<br>')+
     'Our chefs will do their best to accommodate your dietary requirements.</div></div>';
   el('card').innerHTML = h;
 }
