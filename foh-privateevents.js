@@ -3125,7 +3125,10 @@ function peProposalHTML(e){
   var bev = e.bev_package_id ? peBevById(e.bev_package_id) : null;
   if(bev){
     body += '<div class="sec">Beverage</div><div class="dish">'+peEsc(bev.name)+(bev.duration_hours?' — '+bev.duration_hours+' hours':'')+
-      (bev.includes?'<br><span class="d">'+peEsc(bev.includes)+'</span>':'')+'</div>';
+      (bev.includes?'<br><span class="d">'+peEsc(bev.includes)+'</span>':'')+'</div>'+
+      // A package built from a designed PDF (no typed "includes") still needs to
+      // reach the guest — link the PDF so the beverage selection is never missing.
+      (bev.pdf?'<div style="text-align:center;margin:8px 0 4px"><a href="'+(/^https?:/i.test(bev.pdf)?bev.pdf:peBaseUrl()+bev.pdf)+'" style="display:inline-block;background:#400207;color:#E8D9C7;padding:8px 22px;border-radius:20px;text-decoration:none;font-size:12px;letter-spacing:1px">View the beverage package</a></div>':'');
   } else if(e.bev_mode==='dry'){
     body += '<div class="sec">Beverage</div><div class="dish">A dry event — no alcohol will be served<br><span class="d">Soft drinks and water throughout</span></div>';
   }
