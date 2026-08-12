@@ -406,12 +406,15 @@ function peEditorNext(e){
   if(!e.event_date) return {label:'Add the event date', act:"peScrollToField('event_date')"};
   if(!e.guests) return {label:'Add the guest count', act:"peScrollToField('guests')"};
   if(!hasFood && !hasBev) return {label:'Add the menu or a beverage package', act:"peScrollToCard('food')"};
-  if(!hasPrice) return {label:'Set the price', act:"peScrollToField('min_spend')"};
+  // Not priced yet is no longer a dead stop. She can send the menu now and price
+  // it after — so point at the send, and let the docs card offer both.
   if((e.status==='draft' || e.status==='sent') && !e.signed_at){
-    return e.contact_email
+    if(!e.contact_email) return {label:'Add the client email, then send', act:"peScrollToField('contact_email')"};
+    return hasPrice
       ? {label:'Send the proposal to the guest', act:"peScrollToCard('docs')"}
-      : {label:'Add the client email, then send', act:"peScrollToField('contact_email')"};
+      : {label:'Send the menu, or set the price first', act:"peScrollToCard('docs')"};
   }
+  if(!hasPrice) return {label:'Set the price', act:"peScrollToField('min_spend')"};
   if(e.status==='sent' && e.signed_at) return {label:'Signed — mark it Confirmed', act:"peSetStatus('"+e.id+"','confirmed')"};
   return null;   // confirmed/deposit are handled by the green "this event is ON" banner
 }
@@ -1266,8 +1269,23 @@ function peNextStep(e){
     if(!e.guests) return {label:'Add the guest count', kind:'danger'};
     if(!e.area) return {label:'Add the area', kind:'danger'};
   }
+  // The list chip and the editor chip used to disagree on the same booking — the
+  // list promised "Send the proposal now" on a booking with no menu and no price,
+  // while the editor was still asking for both. The list is the one she reads when
+  // she is working fast, so it now knows the same two facts peEditorNext knows.
+  var pItems = peState.items[e.id]||[];
+  var pFood = pItems.length>0 || !!e.set_menu || (e.food_price_pp!=null && e.food_price_pp!=='');
+  var pBev = !!e.bev_package_id || e.bev_mode==='dry';
+  var pT = peCalcTotals(e);
+  var pPriced = !!pT.total || !!e.min_spend;
+  if((e.status==='draft' || e.status==='sent') && !pFood && !pBev)
+    return {label:'Add the menu', kind:'danger'};
   // No email = nothing to send to — the chip must ask for the email, not promise a send.
-  if(e.status==='draft') return e.contact_email ? {label:'Send the proposal now', kind:'warn'} : {label:'Add the client email', kind:'danger'};
+  // Unpriced but with a menu is not a dead end: that is exactly the menu-only send,
+  // so the chip names it rather than pointing at an agreement that would read AED 0.
+  if(e.status==='draft') return e.contact_email
+    ? (pPriced ? {label:'Send the proposal now', kind:'warn'} : {label:'Send the menu — price it later', kind:'info'})
+    : {label:'Add the client email', kind:'danger'};
   if(e.status==='sent') return e.signed_at ? {label:'Confirm the booking', kind:'warn'} : {label:'Chase the signature', kind:'info'};
   // Every other step flips the status once it's done, so its chip moves on by itself.
   // The brief doesn't — so the chip has to say, on its own, whether it's been sent.
@@ -1296,7 +1314,9 @@ function peLandingStats(){
     var d = e.event_date ? String(e.event_date).slice(0,10) : null;
     if(open && d && d>=today && d<=wkEnd) s.week++;
     var ns = peNextStep(e);
-    if(ns.label==='Send the proposal now') s.send++;
+    // Both are a booking waiting to be sent something — a menu-only send is still
+    // a send, so it must not quietly drop out of the "to send" count.
+    if(ns.label==='Send the proposal now' || ns.label==='Send the menu — price it later') s.send++;
     else if(ns.label==='Chase the signature') s.sign++;
   });
   return s;
@@ -2484,7 +2504,9 @@ function peRenderEvent(){
   // Disabled sends stay tappable but explain themselves (toast + jump to field)
   // and carry a visible reason line, never a hover-only tooltip.
   var hasMail = !!e.contact_email, hasPhone = !!e.contact_phone;
-  var mailClick = function(fn){ return hasMail ? fn+'(\''+e.id+'\')' : 'peScrollToField(\'contact_email\',\'Add the client email above to send\')'; };
+  // `arg` carries the send's own option (today: the no-price proposal) through the
+  // same disabled-explains-itself path, so it cannot drift from the priced button.
+  var mailClick = function(fn, arg){ return hasMail ? fn+'(\''+e.id+'\''+(arg?','+arg:'')+')' : 'peScrollToField(\'contact_email\',\'Add the client email above to send\')'; };
   var dim = function(ok){ return ok?'':' style="opacity:.55"'; };
   var grpLbl = 'font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#A88930;margin:2px 2px 5px';
   var sendMoreOpen = !!(peState.sendMore && peState.sendMore[e.id]);
@@ -2534,6 +2556,11 @@ function peRenderEvent(){
       '<span style="font-size:12.5px">More ways to send</span><span style="font-size:11px;color:#A5876B">price only · WhatsApp · copy link · print '+(sendMoreOpen?'▴':'▾')+'</span></div>'+
     (sendMoreOpen ?
       '<button class="pe-btn sec"'+dim(hasMail)+' onclick="'+mailClick('peEmailProposal')+'">Send price &amp; menu only (no signing)</button>'+
+      // Sending the food before the money is a normal first move on this desk, not
+      // an edge case — the previous sales lead asked for it. Her choice on every
+      // send, so it sits beside the priced one rather than replacing it or being
+      // decided for her by the booking's stage.
+      '<button class="pe-btn sec"'+dim(hasMail)+' onclick="'+mailClick('peEmailProposal','true')+'">Send the menu only — no prices</button>'+
       '<button class="pe-btn sec" onclick="peCopyClientLink(\''+e.id+'\')">Copy the guest’s menu link</button>'+
       '<div style="display:flex;gap:7px"><button class="pe-btn sec" style="flex:1"'+dim(hasPhone)+' onclick="'+(hasPhone?'peWhatsApp(\''+e.id+'\')':'peScrollToField(\'contact_phone\',\'Add the client phone for WhatsApp\')')+'">WhatsApp</button>'+
       '<button class="pe-btn sec" style="flex:1" onclick="peCopyAgreementLink(\''+e.id+'\')">Copy signing link</button>'+
@@ -2926,14 +2953,27 @@ function peSetMenuSplitGap(e){
 // Returns null when clean to send, else the first missing fact + the field to open.
 // `forSigning` is true only for the send that asks the client to sign. A menu-only
 // send has looser rules on purpose — see the note on the price block below.
-function peSendBlocks(e, forSigning){
+// `noPrice` is the deliberate menu-only send — she has chosen not to quote yet, so
+// the price block below does not apply. Everything else still does.
+function peSendBlocks(e, forSigning, noPrice){
   var t = peCalcTotals(e);
   if(!e.event_date) return {fid:'event_date', msg:'Add the event date before sending — the guest signs against it.'};
   if(!e.guests) return {fid:'guests', msg:'Add the guest count before sending — the price and the kitchen both work off it.'};
-  // Sharing a menu before the money is settled is a real thing Valentina does, and
-  // the app supports it — just on another screen. So this dead end now names the
-  // route that works instead of only refusing.
-  if((t.total==null || !t.total) && !e.min_spend) return {fid:'min_spend', msg:'Set a price or a minimum spend before sending — or use Menu packages → “Send without prices” to share just the menu.'};
+  // Nothing to read. A proposal with no food and no beverage on it is an empty
+  // document, and it used to leave on a "Send anyway". A beverage-only booking is
+  // a real event, so either one satisfies this.
+  var items = peState.items[e.id]||[];
+  var hasFood = items.length>0 || !!e.set_menu || (e.food_price_pp!=null && e.food_price_pp!=='');
+  if(!hasFood && !e.bev_package_id && e.bev_mode!=='dry')
+    return {card:'food', msg:'Add the menu or a beverage package before sending — there is nothing on this proposal for the guest to read.'};
+  // Sharing the menu before the money is settled is a real thing the desk does, so
+  // a no-price send is allowed to skip this. A send that carries prices is not:
+  // an unpriced booking would go out reading AED 0.
+  // The escape route is only named on a send that COULD have gone without prices.
+  // Offering it on the agreement would be pointing at a document nobody can sign.
+  if(!noPrice && (t.total==null || !t.total) && !e.min_spend) return {fid:'min_spend', msg: forSigning
+    ? 'Set a price or a minimum spend before sending the agreement — it carries a signature, and with no price it would read AED 0.'
+    : 'Set a price or a minimum spend before sending — or use “Send the menu only, no prices” to share the menu now and price it later.'};
   // Signing needs an amount that actually resolves. On minimum-spend pricing the
   // dish total is NOT what is charged, so clearing the minimum leaves nothing to
   // sign against even though the dishes still add up — and the check above passes.
@@ -2943,7 +2983,7 @@ function peSendBlocks(e, forSigning){
 }
 // P0 — gaps that should stop a client-facing send until the user confirms.
 // Returns an array of plain-language gap sentences (empty = clean to send).
-function peSendChecks(e){
+function peSendChecks(e, noPrice){
   var t = peCalcTotals(e);
   var msgs = [];
   var items = peState.items[e.id]||[];
@@ -2957,7 +2997,10 @@ function peSendChecks(e){
   if(t.missingAllergens && t.missingAllergens.length) msgs.push(t.missingAllergens.length+(t.missingAllergens.length>1?' dishes have':' dish has')+' no allergens recorded: '+t.missingAllergens.join(', ')+'.');
   // A dish with no price is on the quote at zero — the client would be reading a
   // number that does not cover what the kitchen is making. Named before any send.
-  if(t.noPrice && t.noPrice.length) msgs.push(t.noPrice.length+(t.noPrice.length>1?' dishes have':' dish has')+' no price, so '+(t.noPrice.length>1?'they are':'it is')+' on the quote at AED 0: '+t.noPrice.join(', ')+'.');
+  // Not worth saying on a menu-only send: no dish carries a price on that document,
+  // by design, so "it is on the quote at AED 0" would be describing a quote she is
+  // deliberately not sending.
+  if(!noPrice && t.noPrice && t.noPrice.length) msgs.push(t.noPrice.length+(t.noPrice.length>1?' dishes have':' dish has')+' no price, so '+(t.noPrice.length>1?'they are':'it is')+' on the quote at AED 0: '+t.noPrice.join(', ')+'.');
   // Double-booking — the same date + area already holds another live event. Named
   // here so a send confirm says it out loud, not only the banner she may have scrolled past.
   peClashPairs(e).forEach(function(c){
@@ -2967,13 +3010,19 @@ function peSendChecks(e){
   return msgs;
 }
 // Confirm past any send gaps, naming each one. Returns true to proceed.
-async function peConfirmSend(e, forSigning){
+async function peConfirmSend(e, forSigning, noPrice){
   // Missing facts stop the send outright and open the field to fix — the same way
   // peSendPaymentLink refuses a missing link. Only judgment calls (allergens, a
   // split gap, a double-booking) get the overridable confirm below.
-  var block = peSendBlocks(e, forSigning);
-  if(block){ peScrollToField(block.fid, block.msg); return false; }
-  var gaps = peSendChecks(e);
+  var block = peSendBlocks(e, forSigning, noPrice);
+  // Some gaps are a whole card, not one field — "no menu at all" lives on the food
+  // card, which has no single input to focus.
+  if(block){
+    if(block.card){ peToast(block.msg, true); peScrollToCard(block.card); }
+    else peScrollToField(block.fid, block.msg);
+    return false;
+  }
+  var gaps = peSendChecks(e, noPrice);
   if(!gaps.length) return true;
   return await peConfirm({
     title:'Before you send',
@@ -3866,7 +3915,13 @@ function pePrintHTML(html){
   w.document.write(html); w.document.close();
   setTimeout(function(){ try{ w.print(); }catch(e){} }, 400);
 }
-function peProposalHTML(e){
+// noPrice = the food proposal she sends before the money is settled. It is her
+// choice on every send, not a stage the app decides for her: sharing the menu
+// first and pricing after is how the desk has always worked.
+// "Without prices" means NO money anywhere — not a zero, not a blank line, not
+// the VAT footnote. A guest reading "AED 0" reads a price; a guest reading
+// nothing reads a menu, which is exactly what this document is.
+function peProposalHTML(e, noPrice){
   var t = peCalcTotals(e);
   var groups = [{k:'Cold',n:'Cold'},{k:'Hot',n:'Hot'},{k:'Dessert',n:'Dolci'}];
   var body = '<div class="brand">'+peLogoImg()+'</div><div class="rule"></div>';
@@ -3932,7 +3987,7 @@ function peProposalHTML(e){
       body += '<div class="dish" style="font-size:15px">Option '+peEsc(o.key)+(o.name?' — '+peEsc(o.name):'')+
         '<br><span class="d">'+[o.area?peEsc(o.area):'', g?g+' guests':''].filter(Boolean).join(' · ')+
         (o.note?'<br>'+peEsc(o.note):'')+'</span>'+
-        (tot!=null ? '<br>'+(o.min_spend ? 'Minimum spend AED '+peMoney(tot) : 'AED '+peMoney(tot)+' — everything included') : '')+
+        ((tot!=null && !noPrice) ? '<br>'+(o.min_spend ? 'Minimum spend AED '+peMoney(tot) : 'AED '+peMoney(tot)+' — everything included') : '')+
         '</div>';
     });
     body += '<div class="d" style="margin-top:10px">Let us know which one you would like and we will hold it for you.</div>';
@@ -3940,6 +3995,7 @@ function peProposalHTML(e){
   // A minimum-spend booking is quoted on the minimum alone — never a per-person or
   // sub-total figure, even once a priced beverage gives it a running total. The
   // menu is shown for what it is; the money lives on the "Minimum spend" line below.
+  else if(noPrice){ /* the money is not on this document at all — see peProposalHTML */ }
   else if(t.total && e.guests && e.pricing_type!=='min_spend'){
     // Valentina chooses how the price reads for this guest — the whole-event total,
     // or a per-person figure (which some groups prefer). Per person reconciles with
@@ -3956,8 +4012,11 @@ function peProposalHTML(e){
     body += '<div class="rule" style="margin-top:26px"></div><div class="sec">Your event</div>'+
       '<div class="dish" style="font-size:15px">Minimum spend AED '+peMoney(e.min_spend)+'</div>';
   }
-  body += '<div class="ft">Our Chefs will do their best to accommodate your dietary requirements, please inform your waiter.<br>'+
-    'All prices are in AED inclusive of 5% VAT, 7% DIFC Authority Fee and 10% Service Charge.'+
+  // Nothing stands in for the money on a no-price proposal — no placeholder, no
+  // "pricing to follow". The VAT sentence goes with it: it is a statement about
+  // prices, and there are none on this document.
+  body += '<div class="ft">Our Chefs will do their best to accommodate your dietary requirements, please inform your waiter.'+
+    (noPrice ? '' : '<br>All prices are in AED inclusive of 5% VAT, 7% DIFC Authority Fee and 10% Service Charge.')+
     peAlgLegend(body)+'</div>';
   return peDocShell('Roberto\'s proposal', body);
 }
@@ -3967,6 +4026,9 @@ function pePrintProposal(id){ var e = peEvById(id); if(e) pePrintHTML(peProposal
 function peBriefBodyHTML(e){
   var t = peCalcTotals(e);
   function row(l,v){ return '<tr><td class="l">'+l+'</td><td>'+peEsc(v==null||v===''?'—':v)+'</td></tr>'; }
+  // Same row, but the value is already HTML — used for the one line the kitchen
+  // must not read as a decision.
+  function rowHTML(l,v){ return '<tr><td class="l">'+l+'</td><td>'+v+'</td></tr>'; }
   var body = '<div class="brand">'+peLogoImg()+'</div><div class="rule"></div><div class="fs-h">EVENT BRIEF</div><table>';
   body += row('Booking name', e.client_name)+row('Company', e.company)+row('Contact', (e.contact_name||'')+(e.contact_phone?' · '+e.contact_phone:'')+(e.contact_email?' · '+e.contact_email:''));
   body += row('Event date', peDLabel(e.event_date))+row('Type', e.event_type)+row('Timing', (e.time_from||'')+(e.time_to?' – '+e.time_to:''));
@@ -3977,7 +4039,14 @@ function peBriefBodyHTML(e){
     ? row('Areas — the run of the evening', peRunOfEvening(e))
     : row('Area', e.area);
   body += row('Guests', e.guests);
-  body += row('Food', (e.package_label||'Bespoke selection')+(t.foodPP?' · AED '+peMoney(t.foodPP)+'/guest':'')+(t.pcs?' · '+(Math.round(t.pcs*10)/10)+' pieces/guest':''));
+  // "Bespoke selection" is the fallback label for NOTHING CHOSEN, so an empty menu
+  // reached Danilo looking like a decision — and with no KITCHEN section below it,
+  // there was nothing to contradict that. It has to say what it is.
+  var bfItems = peState.items[e.id]||[];
+  var bfHasFood = bfItems.length>0 || !!e.set_menu || (e.food_price_pp!=null && e.food_price_pp!=='');
+  body += bfHasFood
+    ? row('Food', (e.package_label||'Bespoke selection')+(t.foodPP?' · AED '+peMoney(t.foodPP)+'/guest':'')+(t.pcs?' · '+(Math.round(t.pcs*10)/10)+' pieces/guest':''))
+    : rowHTML('Food', '<b style="color:#B00020">NO MENU YET — do not prep</b>');
   var bev = e.bev_package_id ? peBevById(e.bev_package_id) : null;
   body += row('Beverage', bev ? bev.name+(bev.price_pp!=null?' · AED '+peMoney(bev.price_pp)+'/guest':' · price on the proposal') : (e.bev_mode==='dry'?'DRY EVENT — no alcohol served (soft drinks & water)':'—'));
   body += row('Estimated total', t.total ? 'AED '+peMoney(t.total) : '—')+row('Minimum spend', e.min_spend?'AED '+peMoney(e.min_spend):'—');
@@ -4322,19 +4391,23 @@ function peProposalSubject(e){
   if(e && (peState.items[e.id]||[]).length) return 'Your canapé proposal — Roberto’s';
   return 'Your event proposal — Roberto’s';
 }
-async function peEmailProposal(id){
+async function peEmailProposal(id, noPrice){
   if(!peCanEdit()){ peToast('View only — ask Katarina, Andrea or Francesco to make changes', true); return; }
   var e = peEvById(id); if(!e || !e.contact_email) return;
-  if(!(await peConfirmSend(e))) return;
+  if(!(await peConfirmSend(e, false, noPrice))) return;
   // The sender is copied (her inbox record of exactly what the client got)
   // and set as reply-to, so the client's answer reaches a person.
   var sender = state.userEmail || 'reservations@robertos.ae';
   // Say that the copy exists. The confirm used to name one recipient while the
   // email quietly went to two.
-  if(!(await peConfirm({title:'Send the proposal?',
-    html:'Send the branded proposal to <b>'+peEsc(e.contact_email)+'</b> now?'+
+  // The confirm names which of the two documents is leaving. She picks per send,
+  // so it must never be ambiguous which one she picked.
+  if(!(await peConfirm({title:noPrice?'Send the menu, without prices?':'Send the proposal?',
+    html:(noPrice
+      ? 'Send the menu to <b>'+peEsc(e.contact_email)+'</b> now, with <b>no prices on it</b>?'
+      : 'Send the branded proposal to <b>'+peEsc(e.contact_email)+'</b> now?')+
       peCopyLine(sender),
-    ok:'Send proposal', cancel:'Not yet'}))) return;
+    ok:noPrice?'Send the menu':'Send proposal', cancel:'Not yet'}))) return;
   try{
     var r = await sb.functions.invoke('send-event-email', { body:{
       to: peSendTo(e.contact_email, sender),
@@ -4342,14 +4415,18 @@ async function peEmailProposal(id){
       reply_to: sender,
       // The subject has to match what is actually inside, or a set-menu dinner
       // arrives in the client's inbox titled "canape proposal".
-      subject: peProposalSubject(e)+(e.event_date?' \u00b7 '+peDLabel(e.event_date):''),
-      html: peProposalHTML(e)
+      subject: (noPrice ? 'Your menu \u2014 Roberto\u2019s' : peProposalSubject(e))+(e.event_date?' \u00b7 '+peDLabel(e.event_date):''),
+      html: peProposalHTML(e, noPrice)
     }});
     if(r.error || (r.data&&r.data.error)) throw (r.error||r.data.error);
-    peToast('Proposal sent to '+e.contact_email+' \u2713');
+    peToast((noPrice?'Menu sent (no prices) to ':'Proposal sent to ')+e.contact_email+' \u2713');
+    // A menu-only send is a real first contact, so the booking moves off draft the
+    // same way a priced one does. The log says which document went, because "sent"
+    // on its own would leave her unable to tell whether the guest has seen a price.
     if(e.status==='draft') peSetStatus(id, 'sent');
     (peState.proposalSent = peState.proposalSent || {})[id] = new Date().toISOString();
-    sb.from('event_log').insert({event_id:id, action:'email', detail:'proposal \u2192 '+e.contact_email, actor:peActor()}).then(function(){ peLoadLog(id); });
+    (peState.proposalNoPrice = peState.proposalNoPrice || {})[id] = !!noPrice;
+    sb.from('event_log').insert({event_id:id, action:'email', detail:(noPrice?'menu, no prices':'proposal')+' \u2192 '+e.contact_email, actor:peActor()}).then(function(){ peLoadLog(id); });
   }catch(err){
     peToast('NOT sent \u2014 '+String(err&&err.message||err).slice(0,120), true);
   }
@@ -4380,6 +4457,15 @@ async function peWhatsApp(id, mode){
 function peCopyClientLink(id){
   if(!peCanEdit()){ peToast('View only — ask Katarina, Andrea or Francesco to make changes', true); return; }
   var e = peEvById(id); if(!e) return;
+  // The guest's menu page, so no price is required — but an empty one is still an
+  // empty page with our name on it. Synchronous for the same clipboard reason as
+  // the signing link above.
+  var block = peSendBlocks(e, false, true);
+  if(block){
+    if(block.card){ peToast(block.msg, true); peScrollToCard(block.card); }
+    else peScrollToField(block.fid, block.msg);
+    return;
+  }
   var base = location.origin + location.pathname.replace(/[^\/]*$/, '');
   var url = base + 'client-event.html?t=' + e.client_token;
   (navigator.clipboard ? navigator.clipboard.writeText(url) : Promise.reject()).then(function(){
@@ -4400,9 +4486,22 @@ function pePreviewClient(id){
 function peAgreementUrl(e){
   return location.origin + location.pathname.replace(/[^\/]*$/, '') + 'client-agreement.html?t=' + e.client_token;
 }
+// Copying the signing link puts the agreement in front of the guest exactly as
+// emailing it does — same page, same signature block — so it has to pass the same
+// gate. It ran no checks at all, which is how an unpriced booking could reach a
+// guest reading "AED 0" under a live signature block.
 function peCopyAgreementLink(id){
   if(!peCanEdit()){ peToast('View only — ask Katarina, Andrea or Francesco to make changes', true); return; }
   var e = peEvById(id); if(!e) return;
+  // Deliberately the synchronous hard block, not peConfirmSend: awaiting a modal
+  // spends the click's user-activation and the clipboard write is then refused by
+  // the browser. The refusals below need no confirming anyway.
+  var block = peSendBlocks(e, true);
+  if(block){
+    if(block.card){ peToast(block.msg, true); peScrollToCard(block.card); }
+    else peScrollToField(block.fid, block.msg);
+    return;
+  }
   var url = peAgreementUrl(e);
   (navigator.clipboard ? navigator.clipboard.writeText(url) : Promise.reject()).then(function(){
     peToast('Agreement link copied — the guest reads the proposal and signs on that page');
