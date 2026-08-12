@@ -777,76 +777,40 @@ function peScrollTop(){
   // Sidebar group labels. A class, not an inline style, so the mobile rule
   // below can hide them -- on a phone the sidebar becomes a row of pills and
   // these headings were left stranded between them.
-  // The sidebar stands ON the room now, so it is cream type against a hairline
-  // rather than a stack of nine identical outlined lozenges. Same links, same
-  // order, same names -- nothing to relearn.
-  '.pe-slbl{font-size:9px;letter-spacing:.18em;text-transform:uppercase;color:#EFC5A4;'+
-    'margin:20px 0 7px 12px;opacity:.85}'+
-  '.pe-side nav,.pe-side{}'+
-  '.pe-snav{display:block;font-size:14px;padding:7px 0 7px 12px;color:#F0E2D6;cursor:pointer;'+
-    'border-left:2px solid rgba(240,226,214,.22);text-align:left;border-radius:0}'+
-  '.pe-snav:hover{color:#FFF;border-left-color:rgba(240,226,214,.6)}'+
-  '.pe-snav.on{color:#FFF;font-weight:600;border-left-color:#FA4700}'+
+  '.pe-slbl{font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:#A88930;margin:9px 6px 3px}'+
+  '.pe-snav{font-size:12.5px;padding:8px 12px;border-radius:8px;border:1px solid var(--vino);text-align:center;color:var(--vino);cursor:pointer}'+
+  '.pe-snav:hover{background:rgba(107,31,42,0.07)}'+
+  '.pe-snav.on{background:var(--vino);border-color:var(--vino);color:var(--cream);font-weight:600}'+
   '.pe-main{flex:1;min-width:0}'+
-  '.pe-sheet{padding:20px 22px 26px}'+
-  '@media(max-width:820px){.pe-shell{display:block}'+
-    '.pe-side{width:auto;flex-direction:row;flex-wrap:wrap;align-items:center;margin-bottom:14px;gap:0}'+
-    '.pe-side .pe-btn{width:auto}.pe-sdiv{display:none}'+
-    '.pe-slbl{width:100%;margin:12px 0 5px 0}'+
-    '.pe-snav{display:inline-block;border-left:0;border-bottom:2px solid transparent;'+
-      'padding:5px 14px 5px 0;margin-right:4px}'+
-    '.pe-snav.on{border-bottom-color:#FA4700}'+
-    '.pe-sheet{padding:16px 14px 20px}}'+
-  // ══ the room, the paper, the book ═══════════════════════════════════════════
-  // The photograph is the GROUND, not a strip: it runs the full width of the
-  // module and the work floats on cream paper over it -- the device that is
-  // already live on the Kitchen Recipes screens and on the sign-in page.
+  '@media(max-width:820px){.pe-shell{display:block}.pe-side{width:auto;flex-direction:row;flex-wrap:wrap;align-items:center;margin-bottom:12px}.pe-side .pe-btn{width:auto}.pe-sdiv{display:none}.pe-slbl{display:none}.pe-snav{border:1px solid rgba(107,31,42,0.3);border-radius:14px;padding:6px 14px;font-size:12px}.pe-snav.on{border-color:var(--vino)}}'+
+  // ── the room band ──────────────────────────────────────────────────────────
+  // Room behind, wine wash over it, content above -- the same device that is
+  // live on the Kitchen Recipes screens. It goes ONLY on a way-in screen (the
+  // events list, Chef corner, Beverage corner); never over a screen where the
+  // work happens, because nobody reads a table off a photograph.
   //
-  // Scoped to .pe-stage, which is the module's own outermost element. Nothing
-  // is put on <body>, so there is no class to clean up when she leaves Events
-  // and no way for this to leak onto another module's screen.
-  //
-  // ⚠ NOT 100vw. The obvious way to bleed edge to edge is
-  //     width:100vw; margin-left:calc(50% - 50vw)
-  // and it puts a horizontal scrollbar on the whole app: 100vw counts the
-  // scrollbar itself, so on a 1265px client width the stage is 1280 and hangs
-  // 8px over each side. Measured in the real app shell, not guessed -- and a
-  // headless screenshot will never show it, because --hide-scrollbars removes
-  // the very thing that causes it.
-  // So the stage stays inside its container and reads as a framed panel. It
-  // gives up a 24px margin of sabbia at each edge and cannot overflow on any
-  // device, which is the better trade.
-  '.pe-stage{position:relative;padding:0 22px 34px;background:#3A0A0E;'+
-    'border-radius:16px;overflow:hidden;min-height:60vh}'+
-  '.pe-stage::before,.pe-stage::after{content:"";position:absolute;left:0;right:0;top:0;'+
-    'height:620px;pointer-events:none}'+
-  '.pe-stage::before{background:var(--pe-room) center 64%/cover}'+
-  // The wash is not decoration -- cream lettering needs it. Measured against the
-  // Cortina screen approved for Kitchen (heading 4.31:1, sub 2.82:1).
-  '.pe-stage::after{background:linear-gradient(180deg,'+
-    'rgba(43,1,4,.66) 0,rgba(43,1,4,.44) 240px,rgba(43,1,4,.52) 70%,#3A0A0E 100%)}'+
-  '.pe-stage>*{position:relative;z-index:1}'+
-  // The headline sits straight on the room.
-  '.pe-hero{padding:34px 0 26px}'+
-  '.pe-eyebrow{font-size:10.5px;letter-spacing:.26em;text-transform:uppercase;color:#EFC5A4}'+
-  '.pe-lede{font-family:\'Playfair Display\',serif;font-weight:400;color:#FDF7EF;'+
-    'font-size:clamp(26px,3.6vw,42px);line-height:1.1;margin:14px 0 0;max-width:17em}'+
-  '.pe-hrule{width:56px;height:2px;background:#FA4700;margin:18px 0 15px}'+
-  '.pe-stand{font-size:15px;color:#F0E2D6;max-width:34em;line-height:1.55}'+
-  '.pe-stand b{color:#FFF;font-weight:600}'+
-  // The work, on paper, over the room.
-  '.pe-paper{background:#FBF6EC;border-radius:14px;overflow:hidden;'+
-    'box-shadow:0 30px 60px -28px rgba(20,4,4,.85)}'+
-  '@media(max-width:640px){.pe-hero{padding:24px 0 20px}.pe-stand{font-size:14px}}'+
-  // Printed, the photograph is toner spent on something nobody reads.
-  '@media(max-width:640px){.pe-stage{padding:0 12px 24px;border-radius:12px}}'+
-  '@media print{.pe-stage{background:none;padding:0}'+
-    '.pe-stage::before,.pe-stage::after{display:none}'+
-    '.pe-lede,.pe-stand,.pe-eyebrow{color:#400207}.pe-paper{box-shadow:none}}'+
+  // The wash is not decoration: cream lettering needs it. Each room was
+  // measured against the Cortina screen (heading 4.31:1) that was approved for
+  // Kitchen, and every room used here meets or beats it at this wash.
+  '.pe-room{position:relative;background:#cdbba6;border-radius:12px;overflow:hidden;'+
+    'padding:22px 22px 24px;margin-bottom:14px}'+
+  '.pe-room::before,.pe-room::after{content:"";position:absolute;inset:0;pointer-events:none}'+
+  '.pe-room::before{background:var(--pe-room) center/cover}'+
+  '.pe-room::after{background:linear-gradient(180deg,'+
+    'rgba(43,1,4,.60) 0,rgba(43,1,4,.44) 55px,rgba(43,1,4,.36) 62%,rgba(43,1,4,.56) 100%)}'+
+  '.pe-room>*{position:relative;z-index:1}'+
+  '.pe-room .pe-eyebrow{font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:#F2D3B8}'+
+  '.pe-room .pe-lede{font-family:\'Playfair Display\',serif;font-size:25px;color:#FBF3E9;margin:5px 0 3px}'+
+  // #F0E2D6, not the softer #E6D3C6 it started as: measured over these rooms the
+  // softer cream fell to 2.65:1, under the 2.82 the approved Cortina screen gives
+  // its sub-line. Lifting the ink was the fix; darkening the room was not.
+  '.pe-room .pe-stand{font-size:12.5px;color:#F0E2D6}'+
+  '@media(max-width:520px){.pe-room{padding:18px 16px 20px}.pe-room .pe-lede{font-size:21px}}'+
+  // A slow connection should get the wine, not a grey hole, so the band is
+  // readable before the photograph arrives and readable if it never does.
+  '@media print{.pe-room{background:var(--vino)}.pe-room::before{display:none}}'+
   '.pe-top{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:14px}'+
-  // 26px, not 22. Nothing on this module used to lead -- every word was 12-12.5px
-  // and the eye had nowhere to land.
-  '.pe-title{font-family:\'Playfair Display\',serif;font-size:26px;color:var(--vino-dark);line-height:1.2}'+
+  '.pe-title{font-family:\'Playfair Display\',serif;font-size:22px;color:var(--vino-dark)}'+
   '.pe-tabs{display:flex;gap:6px;flex-wrap:wrap}'+
   '.pe-tab{font-size:12px;padding:6px 14px;border-radius:14px;border:1px solid rgba(107,31,42,0.3);color:var(--vino);cursor:pointer;background:transparent}'+
   '.pe-tab.on{background:var(--vino);color:var(--cream)}'+
@@ -858,36 +822,12 @@ function peScrollTop(){
   '.pe-primary{font-weight:700;box-shadow:0 2px 8px rgba(64,2,7,0.22)}'+
   '.pe-side .pe-primary{font-size:14px;padding:12px 14px;margin-bottom:2px}'+
   '.pe-btn:disabled{opacity:.5;cursor:default}'+
-  // On cream paper a white card with a wine outline reads as a box inside a box.
-  // Same card, now a tinted panel with a hairline -- it separates without shouting.
-  '.pe-card{background:#FFFDF8;border:1px solid #E4D9C8;border-radius:12px;padding:16px 18px;margin-bottom:14px}'+
+  '.pe-card{background:#fff;border:1px solid rgba(107,31,42,0.16);border-radius:12px;padding:14px 16px;margin-bottom:12px}'+
   '.pe-row{display:grid;grid-template-columns:1.5fr 1.2fr 0.5fr 0.9fr 1fr;gap:8px;padding:10px 4px;border-bottom:1px solid rgba(107,31,42,0.1);align-items:center;cursor:pointer}'+
   '.pe-row:hover{background:var(--cream)}'+
-  // ── a booking row ──────────────────────────────────────────────────────────
-  '.pe-lrow{display:flex;align-items:center;gap:22px;padding:18px 16px;'+
-    'border-bottom:1px solid #EDE3D2;cursor:pointer}'+
+  '.pe-lrow{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid rgba(107,31,42,0.08);cursor:pointer}'+
   '.pe-lrow:last-child{border-bottom:none}'+
-  '.pe-lrow:hover{background:#FFFDF8}'+
-  '.pe-who{font-family:\'Playfair Display\',serif;font-size:21px;color:#2A211C;line-height:1.22}'+
-  '.pe-facts{font-size:13.5px;color:#5E5045;margin-top:6px}'+
-  '.pe-sep{color:#D8C9B4;margin:0 2px}'+
-  '.pe-rowright{display:flex;flex-direction:column;align-items:flex-end;gap:10px;text-align:right}'+
-  '.pe-val{font-family:\'Playfair Display\',serif;font-size:22px;color:#2A211C;white-space:nowrap;'+
-    'line-height:1;font-variant-numeric:tabular-nums}'+
-  '.pe-val.none{font-family:inherit;font-size:13px;color:#8B7B6B;font-style:italic}'+
-  '.pe-cur{font-family:inherit;font-size:10.5px;letter-spacing:.14em;color:#8B7B6B;'+
-    'margin-right:6px;vertical-align:3px;font-style:normal}'+
-  '.pe-next{border:1px solid rgba(74,10,18,.30);color:var(--vino);border-radius:7px;'+
-    'padding:9px 17px;font-size:13px;white-space:nowrap;cursor:pointer;display:inline-block}'+
-  '.pe-next:hover{background:rgba(107,31,42,.06)}'+
-  '.pe-next.strong{background:var(--vino);color:#FBF3E9;border-color:var(--vino);'+
-    'box-shadow:0 8px 18px -10px rgba(74,10,18,.9)}'+
-  '.pe-arrow{color:#FA4700;margin-left:8px}'+
-  '.pe-next.strong .pe-arrow{color:#F2A07A}'+
-  '@media(max-width:620px){.pe-lrow{flex-direction:column;align-items:stretch;gap:12px}'+
-    '.pe-who{font-size:18px}'+
-    '.pe-rowright{flex-direction:row;align-items:center;justify-content:space-between;text-align:left}'+
-    '.pe-val{font-size:19px}}'+
+  '.pe-lrow:hover{background:var(--cream)}'+
   '.pe-pill{font-size:11px;padding:3px 10px;border-radius:10px;display:inline-block;white-space:nowrap}'+
   '.pe-p-draft{background:#E4DBCC;color:#4E4433;border:1px solid #B9A98C;font-weight:600}'+
   '.pe-p-sent{background:#F5D98A;color:#6B4A00;border:1px solid #C99A12;font-weight:600}'+
@@ -991,44 +931,32 @@ function peSetMenusBanner(){
 // same photograph twice reads as the same screen. Every room here is a daylight
 // frame, measured at this wash against the Cortina standard:
 //   dining-art 4.55 · mural 4.53 · foliage 5.09  (Cortina, approved, is 4.31)
-// Which room stands behind which screen. One room per screen and no repeats --
-// the same photograph twice reads as the same screen. Every one is a daylight
-// frame from the A&T set, measured at this wash against the Cortina screen that
-// was approved for Kitchen (heading 4.31:1).
-var PE_ROOMS = {
-  list:'venue-dining-art.jpg', calendar:'venue-planters.jpg', report:'venue-chandelier.jpg',
-  chef:'venue-mural.jpg', bev:'venue-foliage.jpg', packs:'venue-pergola.jpg',
-  packlib:'venue-pergola.jpg', event:'venue-dining-art.jpg', guidedevent:'venue-dining-art.jpg',
-  wizard:'venue-planters.jpg', guided:'venue-planters.jpg', quick:'venue-pergola.jpg',
-  table:'venue-chandelier.jpg'
-};
-function peRoomFor(active){ return PE_ROOMS[active] || PE_ROOMS.list; }
-// The headline that sits straight on the room. Screens pass it to peHeader.
-function peHero(eyebrow, lede, stand){
-  return '<div class="pe-hero">'+
+var PE_ROOMS = { list:'venue-dining-art.jpg', chef:'venue-mural.jpg', bev:'venue-foliage.jpg' };
+function peRoom(which, eyebrow, lede, stand){
+  var img = PE_ROOMS[which];
+  if(!img) return '';
+  return '<div class="pe-room" style="--pe-room:url(' + img + ')">'+
     '<div class="pe-eyebrow">'+peEsc(eyebrow)+'</div>'+
     '<div class="pe-lede">'+peEsc(lede)+'</div>'+
-    (stand ? '<div class="pe-hrule"></div><div class="pe-stand">'+stand+'</div>' : '')+
+    (stand ? '<div class="pe-stand">'+peEsc(stand)+'</div>' : '')+
   '</div>';
 }
-function peHeader(active, hero){
+function peHeader(active){
   var mine = [['list','Events'],['calendar','Calendar'],['report','Monthly report']];
   var right = [['chef','Chef corner'],['bev','Beverage corner']];
   var snav = function(k, label){ return '<span class="pe-snav'+(active===k?' on':'')+'" onclick="peGo(\''+k+'\')">'+label+'</span>'; };
   return peSetMenusBanner()+
-    '<div class="pe-stage" style="--pe-room:url('+peRoomFor(active)+')">'+
     '<div class="pe-wrap">'+
-    (hero || '')+
+    '<div class="pe-kbar">'+
+    '<span style="font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:#A88930;margin-right:2px">Kitchen &amp; bar</span>'+
+    right.map(function(t){
+      return '<span class="pe-tab staff'+(active===t[0]?' on':'')+'" onclick="peGo(\''+t[0]+'\')">'+t[1]+'</span>';
+    }).join('')+'</div>'+
     '<div class="pe-shell">'+
     '<div class="pe-side">'+
       (peCanEdit() ? '<button class="pe-btn pe-primary" onclick="peStartGuide()">+ New event</button>' : '')+
       '<div class="pe-slbl">My events</div>'+
       mine.map(function(t){ return snav(t[0], t[1]); }).join('')+
-      // Chef corner and Beverage corner move in here from the row of pills that
-      // used to float above the screen. Same two links, same names, one fewer
-      // row of furniture before she reaches a booking.
-      '<div class="pe-slbl">Kitchen &amp; bar</div>'+
-      right.map(function(t){ return snav(t[0], t[1]); }).join('')+
       '<div class="pe-slbl">Tools</div>'+
       '<span class="pe-snav" onclick="peQuickOpen()">Quick menu</span>'+
       '<span class="pe-snav'+(active==='wizard'?' on':'')+'" onclick="peWizReset();peGo(\'wizard\')">New quote from a budget</span>'+
@@ -1047,12 +975,9 @@ function peHeader(active, hero){
         '<span style="display:block;font-size:10.5px;color:#8B7355;letter-spacing:0">Updated '+peFreshLabel()+'</span>'+
       '</span>'+
     '</div>'+
-    // Every screen's content lands on cream paper. Doing it here rather than
-    // per screen is deliberate: with a photograph as the ground, any text NOT on
-    // paper would be dark ink on a dark room. One wrapper, twelve screens safe.
-    '<div class="pe-main"><div class="pe-paper pe-sheet">';
+    '<div class="pe-main">';
 }
-var PE_FOOT = '</div></div></div></div></div>';
+var PE_FOOT = '</div></div></div>';
 
 // ── list view ────────────────────────────────────────────────────────────────
 // ── tonight ──────────────────────────────────────────────────────────────────
@@ -1322,14 +1247,6 @@ function peBriefChangedSince(e, log){
   });
 }
 // The one action this booking needs next.
-// Has anything actually been chosen to eat or drink? ONE definition, used by the
-// list chip, the landing headline and the event screen alike -- they used to
-// disagree, and only the list is visible when she is working at speed.
-function peHasFoodChosen(e){
-  var items = peState.items[e.id] || [];
-  return items.length > 0 || !!e.set_menu || (e.food_price_pp != null && e.food_price_pp !== '');
-}
-function peHasAnythingChosen(e){ return peHasFoodChosen(e) || !!e.bev_package_id; }
 function peNextStep(e){
   var name = e.client_name || e.company;
   if(e.status==='lost') return {label:'Lost', kind:'neutral'};
@@ -1348,15 +1265,6 @@ function peNextStep(e){
     if(!name) return {label:'Add a name', kind:'danger'};
     if(!e.guests) return {label:'Add the guest count', kind:'danger'};
     if(!e.area) return {label:'Add the area', kind:'danger'};
-    // ⚠ THE ONE THAT MATTERED. This chip used to jump straight to "Send the
-    // proposal now" on any draft that had an email, without ever asking whether
-    // there was a menu or a price on the booking — so the list offered to send
-    // AED 0 proposals while the event screen, one tap away, correctly said
-    // "add the menu". The two screens contradicted each other on the same
-    // booking, and only the list is visible when she is working at speed.
-    // Same tests peEditorNext already applied, now applied here too.
-    if(!peHasAnythingChosen(e)) return {label:'Add a menu', kind:'danger'};
-    if(!peCalcTotals(e).total && !e.min_spend) return {label:'Add a price', kind:'danger'};
   }
   // No email = nothing to send to — the chip must ask for the email, not promise a send.
   if(e.status==='draft') return e.contact_email ? {label:'Send the proposal now', kind:'warn'} : {label:'Add the client email', kind:'danger'};
@@ -1426,23 +1334,11 @@ function peListRow(e){
   var leadRaw = peEffLead(e);
   var lead = leadRaw ? peLeadLabel(leadRaw) : '';
   var nameHtml = peEsc(e.client_name||e.company||'Unnamed')+(e.company&&e.client_name?' <span style="font-weight:400;color:#8B7355">· '+peEsc(e.company)+'</span>':'')+(lead?' <span style="font-weight:400;color:#8B7355">('+peEsc(lead)+')</span>':'');
-  // The value is the second thing anyone looks for after the name, so it is set
-  // in the display serif at 22px and reserves its column whether or not there is
-  // a figure — "not quoted yet" in its place is information, and a blank that
-  // lets the row below shift left is not.
-  var valHtml = val
-    ? '<span class="pe-val"><span class="pe-cur">AED</span>'+peMoney(val)+'</span>'
-    : '<span class="pe-val none">not quoted yet</span>';
-  // Solid ONLY where something is owed to a client (send it, chase it). The
-  // eight bookings that need a menu get the quiet outline: a solid button
-  // repeated down twelve rows is the same noise as the old yellow chip.
-  var strong = /^(Send|Chase|Confirm)/.test(ns.label || '');
   return '<div class="pe-lrow" onclick="peGo(\'event\',\''+e.id+'\')">'+
-    '<div style="flex:1;min-width:0"><div class="pe-who">'+nameHtml+'</div>'+
-    '<div class="pe-facts">'+(parts.join(' <span class="pe-sep">/</span> ')||'—')+'</div></div>'+
-    '<div class="pe-rowright">'+valHtml+
-      (ns.label?'<span class="pe-next'+(strong?' strong':'')+'" onclick="event.stopPropagation();peGo(\''+(peCanEdit()?'guidedevent':'event')+'\',\''+e.id+'\')">'+ns.label+'<span class="pe-arrow">&#8594;</span></span>':'')+
-    '</div>'+
+    '<div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:600;color:#2C1810">'+nameHtml+'</div>'+
+    '<div style="font-size:11.5px;color:#8B7355">'+(parts.join(' · ')||'—')+'</div></div>'+
+    (val?'<div class="pe-hide-m" style="font-size:13px;color:#6B4A33;white-space:nowrap">AED '+peMoney(val)+'</div>':'')+
+    (ns.label?'<span onclick="event.stopPropagation();peGo(\''+(peCanEdit()?'guidedevent':'event')+'\',\''+e.id+'\')" style="'+PE_CHIP[ns.kind]+';border-radius:9px;padding:6px 11px;font-size:12px;font-weight:600;white-space:nowrap;cursor:pointer">'+ns.label+'</span>':'')+
   '</div>';
 }
 function peRenderList(){
@@ -1459,35 +1355,13 @@ function peRenderList(){
   var pipeline = 0;
   all.forEach(function(e){ var t = peEventValue(e); if(t && ['draft','sent','confirmed','deposit'].indexOf(e.status)>=0) pipeline += t; });
   var st = peLandingStats();
-  // The headline says the thing that should change what she does this morning,
-  // not "Events" -- a word above a list of events earns nothing. Ranked by what
-  // actually costs money: something on TODAY, then bookings that cannot be quoted
-  // because no menu has been chosen, then a signature nobody has chased.
-  var live = all.filter(function(e){ return ['draft','sent','confirmed','deposit'].indexOf(e.status) >= 0; });
-  var noMenu = live.filter(function(e){ return !peHasFoodChosen(e); });
-  var pipeLive = 0; live.forEach(function(e){ pipeLive += (peEventValue(e) || 0); });
-  var worth = 'The book is worth <b>AED '+peMoney(pipeLive)+'</b> across '+live.length+
-              ' booking'+(live.length===1?'':'s')+'.';
-  var lede, stand;
-  if(st.week){
-    lede  = st.week + (st.week>1 ? ' events are on this week' : ' event is on this week');
-    stand = worth + (noMenu.length ? ' '+noMenu.length+' still '+(noMenu.length===1?'has':'have')+
-            ' no menu on '+(noMenu.length===1?'it':'them')+'.' : '');
-  } else if(noMenu.length){
-    lede  = noMenu.length + (noMenu.length===1 ? ' booking still has no menu on it'
-                                               : ' bookings still have no menu on them');
-    stand = worth + ' Until a menu is chosen '+(noMenu.length===1?'it':'they')+
-            ' cannot honestly be quoted.'+(st.sign ? ' '+st.sign+' waiting on a signature.' : '');
-  } else if(live.length){
-    lede  = live.length + (live.length===1 ? ' booking on the book' : ' bookings on the book')+
-            ', every one with a menu';
-    stand = worth + (st.send ? ' '+st.send+' still to send.' : '')+
-            (st.sign ? ' '+st.sign+' waiting on a signature.' : '');
-  } else {
-    lede  = 'Nothing on the book yet';
-    stand = peCanEdit() ? 'Start a booking and it appears here.' : 'Every booking, readable end to end.';
-  }
-  var h = peHeader('list', peHero('Roberto’s DIFC · Private events', lede, stand));
+  var h = peHeader('list');
+  // The band says what is true right now, not "Events" -- the word above a list
+  // of events earns nothing. Live = the four statuses that are still work.
+  var onBook = all.filter(function(e){ return ['draft','sent','confirmed','deposit'].indexOf(e.status) >= 0; }).length;
+  h += peRoom('list', 'Roberto’s DIFC · Private events',
+    onBook ? (onBook + ' event' + (onBook>1?'s':'') + ' on the book') : 'Nothing on the book yet',
+    peCanEdit() ? 'Create a booking, quote it, send the agreement.' : 'Every booking, readable end to end.');
   h += peViewBanner();
   h += peTonightHTML();   // what is on TODAY outranks everything else on this screen
   h += peRepliesHTML();   // then replies: a reply that waits is the costliest thing here
@@ -1912,11 +1786,9 @@ function peRenderCalendar(){
   var M = peCalMonthMap(mk);
   var y=M.y, mo=M.mo, first=M.first, startDow=M.startDow, days=M.days, byDate=M.byDate;
   var mLbl=M.mLbl, monthCount=M.monthCount, heldCount=M.heldCount, mConv=M.mConv, mPipe=M.mPipe;
-  // The month and its count go in the hero; the words that were under the old
-  // title move up with them rather than being said twice.
-  var h = peHeader('calendar', peHero('Private events · Calendar',
-    mLbl + (monthCount ? ' — ' + monthCount + ' booking' + (monthCount===1?'':'s') : ' — nothing booked'),
-    'Every booking on the day it lands. Tap one to open it.'));
+  var h = peHeader('calendar');
+  h += '<div style="margin-bottom:12px"><div class="pe-title">Calendar</div>'+
+    '<div style="font-size:12px;color:#8B7355">Every booking on the day it lands. Tap one to open it.</div></div>';
   // Month header — a calm branded bar: prev · month + count · today · next
   h += '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--vino);color:var(--cream);border-radius:12px;padding:11px 14px;margin-bottom:12px">'+
        '<button class="pe-btn sec sm" style="background:rgba(255,255,255,.14);border-color:rgba(255,255,255,.5);color:var(--cream)" onclick="peCalShift(-1)">‹ Prev</button>'+
@@ -2238,15 +2110,7 @@ function peRenderEvent(){
   var m = peStatusMeta(e.status);
   var log = peState.log[e.id]||[];
   var ce = peCanEdit();   // non-editors read everything; the edit affordances go
-  // The desk gets the room behind its heading and the whole of the work on
-  // paper below it. The booking names itself up there, so the screen says whose
-  // evening this is before any field is read.
-  var deskFacts = [e.event_date ? peDLabel(e.event_date) : null, e.area,
-                   e.guests ? e.guests+' guests' : null].filter(Boolean).join(' · ');
-  var h = '<div class="pe-stage" style="--pe-room:url('+peRoomFor('event')+')"><div class="pe-wrap">'+
-    peHero('Private events · '+m.n, e.client_name || e.company || 'Unnamed booking',
-           deskFacts || 'Nothing filled in yet.')+
-    '<div class="pe-paper pe-sheet">';
+  var h = '<div class="pe-wrap">';
   var bt = peBackTarget();
   h += '<div class="pe-top"><span style="display:flex;align-items:center;gap:8px">'+
        '<span class="pe-tab" onclick="peGo(\''+bt.view+'\')">‹ Back to '+bt.label+'</span>'+
@@ -2685,7 +2549,7 @@ function peRenderEvent(){
     '<button class="pe-btn sec" onclick="pePrintFunctionSheet(\''+e.id+'\')">Print the event brief</button>'+
     '</div></div>';
   h += '</div></div>';
-  return h+'</div></div></div>';   // sheet · wrap · stage
+  return h+'</div>';
 }
 // Facts-card fields auto-save on blur (peFact), matching the fields below — one
 // save model per screen, each with a visible "Saved ✓".
@@ -4612,9 +4476,10 @@ async function peSendPaymentLink(id){
 // ── library (chef dishes / Manuel beverage / packages) ───────────────────────
 function peRenderChefCorner(){
   var tab = peState.chefTab || 'canape';
-  // The count has to be the SAME count the library below prints, or the hero is
+  var h = peHeader('chef');
+  // The count has to be the SAME count the library below prints, or the band is
   // a second version of the truth. Dishes: peRenderDishLib's own total.
-  // The sentence that used to sit in grey under the tabs moves INTO the hero --
+  // The sentence that used to sit in grey under the tabs moves INTO the band --
   // same words, said once. Nothing is duplicated and nothing is invented.
   var lede, stand;
   if(tab==='set'){
@@ -4626,7 +4491,7 @@ function peRenderChefCorner(){
     lede  = nDish ? (nDish + ' dish' + (nDish===1?'':'es') + ' in the library') : 'The dish library';
     stand = 'The kitchen’s home: add and update canapés — everything saved here is instantly available to the events desk and the guest menu.';
   }
-  var h = peHeader('chef', peHero('Chef corner', lede, stand));
+  h += peRoom('chef', 'Chef corner', lede, stand);
   var tabs = [['canape','Canap\u00e9s'],['set','Set menus']];
   h += '<div class="pe-tabs" style="margin-bottom:12px">'+tabs.map(function(t){
     return '<span class="pe-tab'+(tab===t[0]?' on':'')+'" onclick="peState.chefTab=\''+t[0]+'\';renderMain()">'+t[1]+'</span>';
@@ -4635,18 +4500,18 @@ function peRenderChefCorner(){
   return h+PE_FOOT;
 }
 function peRenderBevCorner(){
+  var h = peHeader('bev');
   var nBev = peState.bevs.filter(function(b){ return b.active!==false; }).length;
-  var h = peHeader('bev', peHero('Beverage corner',
+  h += peRoom('bev', 'Beverage corner',
     nBev ? (nBev + ' package' + (nBev===1?'':'s')) : 'Beverage packages',
-    'Manuel\u2019s home: beverage packages for events \u2014 name, hours, price per guest and what\u2019s included.'));
+    'Manuel\u2019s home: beverage packages for events \u2014 name, hours, price per guest and what\u2019s included.');
   h += peRenderBevLib();
   return h+PE_FOOT;
 }
 function peRenderPacksView(){
   var tab = peState.packsTab || 'menus';
   var bevs = peState.bevs.filter(function(b){ return b.active!==false; });
-  var h = peHeader('packs', peHero('Private events', 'Menu packages',
-    'Tick what the guest gets — a set menu, canapés, à la carte, beverage — and it goes to them as one link.'));
+  var h = peHeader('packs');
   // #15 — canapé packages are now a first-class tab (not a grey footer link).
   // Set menus + beverage stay on ONE screen so the guest still gets everything
   // ticked — a set menu, a few beverage packages, or a mix — in ONE email, one tap.
@@ -5752,8 +5617,7 @@ function peTmDraw(){
   if(el) el.innerHTML = peTmSheetHTML(true);
 }
 function peRenderTableMenu(){
-  var t = peTmState(), h = peHeader('table', peHero('Private events', 'Print for the table',
-    'The menu the guest finds at their place.'));
+  var t = peTmState(), h = peHeader('table');
   var bookings = peTmBookings();
   var menus = peSetMenusRaw().filter(function(m){ return m.active!==false; }).map(peNormSM);
   var chk = function(k, label, sub, locked){
@@ -6078,9 +5942,9 @@ function peMpCount(){
   if(wa) wa.disabled = !n;
 }
 function peRenderPacksLibView(){
-  var h = peHeader('packlib', peHero('Private events · Menu packages', 'Canapé packages',
-    'Ready-made canapé packages (like Canape Cortile) that start a quotation with one tap.'));
-  h += '<div style="font-size:13px;color:#8B7355;margin-bottom:12px;cursor:pointer" onclick="peGo(\'packs\')">← Menu packages</div>';
+  var h = peHeader('packs');
+  h += '<div style="font-size:12px;color:#8B7355;margin-bottom:10px;cursor:pointer" onclick="peGo(\'packs\')">← Menu packages</div>';
+  h += '<div style="font-size:12px;color:#8B7355;margin-bottom:10px">Ready-made canapé packages (like Canape Cortile) that start a quotation with one tap.</div>';
   h += peRenderPackLib();
   return h+PE_FOOT;
 }
@@ -7517,8 +7381,9 @@ function peWizCalc(){
 function peRenderWizard(){
   var bevs = peState.bevs.filter(function(b){ return b.active!==false; })
     .sort(function(a,b){ return (a.name||'').localeCompare(b.name||'') || (Number(a.duration_hours)||0)-(Number(b.duration_hours)||0); });
-  var h = peHeader('wizard', peHero('Private events', 'New quote from a budget',
-    'Type the enquiry as the guest gave it — the app computes the beverage, the balance for food, and builds a canapé selection that fits. You review, then send.'));
+  var h = peHeader('wizard');
+  h += '<div class="pe-top"><div class="pe-title">New quote from a budget</div></div>';
+  h += '<div style="font-size:12px;color:#8B7355;margin-bottom:10px">Type the enquiry as the guest gave it — the app computes the beverage, the balance for food, and builds a canapé selection that fits. You review, then send.</div>';
   h += '<div class="pe-card"><div class="pe-grid3">'+
     '<div><div class="pe-lbl">Client name</div><input class="pe-in" id="pe-w-client" value="'+peEsc(peWiz.client)+'" onchange="peWiz.client=this.value" placeholder="e.g. Mrs Anna"></div>'+
     '<div><div class="pe-lbl">Event date</div><input class="pe-in" type="date" id="pe-w-date" min="'+peToday()+'" value="'+peEsc(peWiz.date)+'" onchange="peWiz.date=this.value"></div>'+
@@ -8180,8 +8045,9 @@ function peRenderReport(){
   var monthEvents = peState.events.filter(function(e){ return e.event_date && peMonthKey(e.event_date)===mk && peReportLeadMatch(e); })
     .sort(function(a,b){ return String(a.event_date).localeCompare(String(b.event_date)); });
   var secHd = function(t){ return '<div style="font-family:\'Playfair Display\',serif;font-size:16px;color:#400207;margin:24px 2px 11px">'+t+'</div>'; };
-  var h = peHeader('report', peHero('Private events', 'Monthly report',
-    'Where the events business stands \u2014 confirmed, coming and in play.'));
+  var h = peHeader('report');
+  h += '<div style="margin-bottom:14px"><div class="pe-title">Monthly report</div>'+
+    '<div style="font-size:12px;color:#8B7355">Where the events business stands \u2014 confirmed, coming and in play.</div></div>';
   // Person scope \u2014 the target/budget is set per person (e.g. Valentina), so the whole
   // report can be read one lead at a time, excluding everyone else's bookings. Only
   // appears once more than one person has events on the book.
