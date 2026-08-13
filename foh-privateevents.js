@@ -771,7 +771,34 @@ function peScrollTop(){
 // ── styles (injected once) ───────────────────────────────────────────────────
 (function(){
   var css = ''+
-  '.pe-wrap{max-width:1080px;margin:0 auto}'+
+  // ── the room, as a frame ───────────────────────────────────────────────────
+  // The venue is the ground for the whole module and the work sits on one sheet
+  // of cream paper laid over the middle of it. The wash is the SAME one the
+  // .pe-room band already uses, so the two read as one continuous photograph
+  // with paper resting on it, not as two pictures of the same place.
+  //
+  // Why it is painted from .pe-wrap and not from the shell: .pe-wrap only exists
+  // while an Events screen is rendered, so the room appears and disappears with
+  // the module. Revenue, Reservations and the rest are untouched, and there is no
+  // teardown to get wrong. Both layers are position:fixed, so the room stays still
+  // while the list scrolls over it — the device already live on Kitchen Recipes.
+  //
+  // Nothing reads off the photograph: every label, figure and control in the
+  // module sits on the sheet or on a card. That is the whole point of this
+  // treatment and the reason it needs no ink changes anywhere.
+  '.pe-wrap{max-width:1080px;margin:0 auto;position:relative;isolation:isolate}'+
+  '.pe-wrap::before,.pe-wrap::after{content:"";position:fixed;inset:0;pointer-events:none}'+
+  '.pe-wrap::before{z-index:-2;background:url(venue-dining-art.jpg) center/cover;background-color:#cdbba6}'+
+  '.pe-wrap::after{z-index:-1;background:linear-gradient(180deg,'+
+    'rgba(43,1,4,.60) 0,rgba(43,1,4,.44) 9%,rgba(43,1,4,.40) 62%,rgba(43,1,4,.58) 100%)}'+
+  // The sheet. Cream, not white, so the white cards on it still read as cards.
+  // Padding replaces the space the page used to get from the tab container, so
+  // nothing inside it moves relative to anything else.
+  '.pe-sheet{background:#F4EDE1;border-radius:14px;padding:18px 20px 22px;'+
+    'box-shadow:0 34px 76px -34px rgba(20,4,4,.94)}'+
+  // A slow connection gets the wine, not a grey hole; print gets neither.
+  '@media print{.pe-wrap::before,.pe-wrap::after{display:none}.pe-sheet{background:none;box-shadow:none;padding:0}}'+
+  '@media(max-width:520px){.pe-sheet{border-radius:10px;padding:12px 12px 16px}}'+
   '.pe-kbar{display:flex;justify-content:flex-end;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:12px}'+
   '.pe-shell{display:flex;gap:18px;align-items:flex-start}'+
   '.pe-side{width:168px;flex-shrink:0;display:flex;flex-direction:column;gap:5px}'+
@@ -948,8 +975,9 @@ function peHeader(active){
   var mine = [['list','Events'],['calendar','Calendar'],['report','Monthly report']];
   var right = [['chef','Chef corner'],['bev','Beverage corner']];
   var snav = function(k, label){ return '<span class="pe-snav'+(active===k?' on':'')+'" onclick="peGo(\''+k+'\')">'+label+'</span>'; };
-  return peSetMenusBanner()+
-    '<div class="pe-wrap">'+
+  return '<div class="pe-wrap">'+
+    '<div class="pe-sheet">'+
+    peSetMenusBanner()+
     '<div class="pe-kbar">'+
     '<span style="font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:#A88930;margin-right:2px">Kitchen &amp; bar</span>'+
     right.map(function(t){
@@ -980,7 +1008,7 @@ function peHeader(active){
     '</div>'+
     '<div class="pe-main">';
 }
-var PE_FOOT = '</div></div></div>';
+var PE_FOOT = '</div></div></div></div>';   // pe-main, pe-shell, pe-sheet, pe-wrap
 
 // ── list view ────────────────────────────────────────────────────────────────
 // ── tonight ──────────────────────────────────────────────────────────────────
