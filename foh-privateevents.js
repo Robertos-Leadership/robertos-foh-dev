@@ -908,6 +908,34 @@ function peScrollTop(){
   '.pe-side .pe-primary{font-size:14px;padding:12px 14px;margin-bottom:2px}'+
   '.pe-btn:disabled{opacity:.5;cursor:default}'+
   '.pe-card{background:#fff;border:1px solid rgba(107,31,42,0.16);border-radius:12px;padding:14px 16px;margin-bottom:12px}'+
+  // The client book is a CONTACT sheet, so the number and the address are
+  // columns, not a summary line. Four columns on a desk; on a phone the same
+  // row stacks and each value carries its own label, because a bare number
+  // under a bare address tells you nothing about which is which.
+  '.pe-crow{display:grid;grid-template-columns:1.5fr 1.15fr 1.7fr auto;gap:10px 14px;align-items:center;'+
+    'padding:10px 16px;border-bottom:1px solid rgba(107,31,42,0.10)}'+
+  '.pe-crow:last-child{border-bottom:none}'+
+  '@media(hover:hover){.pe-crow:hover{background:#FBF6EC}}'+
+  '.pe-chead{font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:#544418;font-weight:600;'+
+    'padding-top:11px;padding-bottom:7px;background:none}'+
+  '.pe-cname{font-size:13.5px;font-weight:600;color:#6B1F2A;cursor:pointer;border-bottom:1px solid rgba(107,31,42,.3)}'+
+  '@media(hover:hover){.pe-cname:hover{color:#4A1520;border-bottom-color:#4A1520}}'+
+  '.pe-csub{display:block;font-size:11px;color:#5C3D2E;font-weight:400}'+
+  '.pe-cval{font-size:12.5px;color:#2C1810;min-width:0;overflow-wrap:anywhere}'+
+  '.pe-cnum{font-size:13px;color:#2C1810;text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}'+
+  '.pe-cnum .pe-csub{text-align:right}'+
+  // A quiet copy mark beside a value. 30px of touch target on a phone, because
+  // a 12px glyph is not a control anyone can hit while holding a tray.
+  '.pe-copy{display:inline-block;margin-left:6px;color:#8A6A4F;cursor:pointer;font-size:13px;line-height:1;'+
+    'padding:4px 5px;border-radius:6px;vertical-align:middle}'+
+  '@media(hover:hover){.pe-copy:hover{background:rgba(107,31,42,.08);color:#6B1F2A}}'+
+  '@media(max-width:760px){.pe-crow{grid-template-columns:1fr;gap:4px;padding:12px 14px}'+
+    '.pe-chead{display:none}'+
+    '.pe-cval:before{content:attr(data-l);display:block;font-size:9.5px;letter-spacing:.08em;'+
+      'text-transform:uppercase;color:#544418;margin-top:4px}'+
+    '.pe-cnum{text-align:left}.pe-cnum .pe-csub{text-align:left}'+
+    '.pe-copy{padding:7px 9px;font-size:15px}}'+
+  '@media print{.pe-copy{display:none}.pe-crow{break-inside:avoid}}'+
   '.pe-row{display:grid;grid-template-columns:1.5fr 1.2fr 0.5fr 0.9fr 1fr;gap:8px;padding:10px 4px;border-bottom:1px solid rgba(107,31,42,0.1);align-items:center;cursor:pointer}'+
   '.pe-row:hover{background:var(--cream)}'+
   '.pe-lrow{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid rgba(107,31,42,0.08);cursor:pointer}'+
@@ -1948,9 +1976,13 @@ function peCalPrint(withMoney){
   pePrintHTML(peDocShell(M.mLbl+' — Roberto\'s events', h, css));
 }
 // == THE CLIENT BOOK =======================================================
-// Every person and company who has ever enquired, and every booking they made.
-// Built 13 Aug 2026 on the `event_clients` table seeded 12 Aug -- the table had
-// been created and then never surfaced anywhere, so nobody could see it.
+// Built on `event_clients`, seeded 12 Aug 2026 and surfaced 13 Aug.
+//
+// WHAT THIS SCREEN IS FOR, and it is not the same job as the book of bookings:
+// she is looking someone up to CONTACT them. So the phone number and the email
+// address are columns in their own right, readable and one tap from calling or
+// writing -- not a detail buried in a summary line. Everything else about the
+// client lives one tap deeper, in the card behind their name.
 //
 // THE ROW IS COMPUTED, NOT STORED. `events_count` sits on the table, but the
 // bookings and their value are counted here from the events already in memory,
@@ -1972,8 +2004,6 @@ function peClientRows(){
     if(d > r.last) r.last = d;
   });
   var rows = Object.keys(byId).map(function(k){ return byId[k]; });
-  // Most recent first, on the date of their latest booking -- the client who
-  // enquired this week is the one she is working on.
   rows.sort(function(a,b){
     if(a.last !== b.last) return a.last < b.last ? 1 : -1;
     return String(a.c.display_name||'').localeCompare(String(b.c.display_name||''));
@@ -1986,26 +2016,125 @@ function peClientMatches(r, q){
   return [c.display_name, c.company, c.contact_name, c.email, c.phone].join(' ').toLowerCase().indexOf(q) >= 0;
 }
 function peClientSearch(el){ peState.cq = el.value; renderMain(); }
-function peClientOpen(id){ peState.cOpen = (peState.cOpen === id) ? null : id; renderMain(); }
+function peClientShown(){
+  var q = String(peState.cq||'').trim().toLowerCase();
+  return peClientRows().filter(function(r){ return peClientMatches(r, q); });
+}
+// Copy without leaving the screen. Done synchronously off the tap: awaiting
+// anything first spends the click's user activation and the browser then
+// refuses the clipboard write -- the same trap the signing-link buttons hit.
+function peCopyText(val, what){
+  try{
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(val);
+    } else {
+      var t = document.createElement('textarea');
+      t.value = val; t.style.position='fixed'; t.style.opacity='0';
+      document.body.appendChild(t); t.select(); document.execCommand('copy'); t.remove();
+    }
+    peToast(what + ' copied');
+  }catch(err){ peToast('Could not copy — long-press the ' + what.toLowerCase() + ' instead', true); }
+}
+// One contact cell: the value is a real tel:/mailto: link so a tap calls or
+// writes, with a quiet copy beside it for pasting somewhere else. A missing
+// value says so rather than leaving an empty cell that looks like a bug.
+function peContactCell(val, kind){
+  if(!val) return '<span style="color:#8B7355">not on file</span>';
+  var href = (kind==='phone' ? 'tel:' : 'mailto:') + encodeURIComponent(val).replace(/%40/g,'@').replace(/%2B/g,'+');
+  return '<a href="'+href+'" onclick="event.stopPropagation()" style="color:#6B1F2A;text-decoration:none;border-bottom:1px solid rgba(107,31,42,.35)">'+peEsc(val)+'</a>'+
+    '<span class="pe-copy" title="Copy" onclick="event.stopPropagation();peCopyText(\''+peEsc(String(val).replace(/'/g,"\\'"))+'\',\''+(kind==='phone'?'Number':'Email')+'\')">&#10697;</span>';
+}
+// ── Extract ──────────────────────────────────────────────────────────
+// Exports exactly what is on screen, search and all -- if she has filtered to
+// one company, that is what she gets. A CSV that quietly exported everything
+// would be the sort of number that ships wrong.
+function peClientsCsv(){
+  var rows = peClientShown();
+  if(!rows.length){ peToast('Nothing to extract', true); return; }
+  var head = ['Name','Company','Contact','Phone','Email','Bookings','Value (AED)','Latest booking','First enquiry'];
+  var q = function(v){
+    v = (v===null || v===undefined) ? '' : String(v);
+    return /[",\n\r]/.test(v) ? '"' + v.replace(/"/g,'""') + '"' : v;
+  };
+  var lines = [head.join(',')];
+  rows.forEach(function(r){
+    var c = r.c;
+    lines.push([c.display_name, c.company, c.contact_name, c.phone, c.email,
+      r.evs.length, r.value || 0, r.last || '', String(c.first_enquiry_at||'').slice(0,10)].map(q).join(','));
+  });
+  // The BOM is not decoration: without it Excel opens a UTF-8 CSV as ANSI and
+  // every accented name arrives mangled. CRLF for the same reason.
+  var blob = new Blob(['\ufeff' + lines.join('\r\n')], { type:'text/csv;charset=utf-8;' });
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'robertos-event-clients-' + (localISO().slice(0,10)) + '.csv';
+  document.body.appendChild(a); a.click();
+  setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  peToast(rows.length + ' client' + (rows.length===1?'':'s') + ' extracted');
+}
+// ── The card behind the name ─────────────────────────────────────────
+function peClientCard(id){
+  var r = peClientRows().filter(function(x){ return x.c.id === id; })[0];
+  if(!r) return;
+  var c = r.c;
+  var old = document.querySelector('.pe-modal-bg'); if(old) old.remove();
+  var line = function(label, val){
+    return '<div style="display:flex;gap:10px;padding:7px 0;border-bottom:1px solid rgba(107,31,42,.10)">'+
+      '<span style="flex:0 0 132px;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#544418">'+label+'</span>'+
+      '<span style="flex:1;min-width:0;font-size:13px;color:#2C1810">'+val+'</span></div>';
+  };
+  var evs = r.evs.slice().sort(function(a,b){ return String(b.event_date||'').localeCompare(String(a.event_date||'')); });
+  var h = '<div class="pe-modal" onclick="event.stopPropagation()">'+
+    '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:10px">'+
+      '<div><b style="color:#400207;font-size:16px">'+peEsc(c.display_name||c.contact_name||'Unnamed')+'</b>'+
+        (r.evs.length>1 ? ' <span class="pe-pill pe-p-conf" style="font-size:10px;padding:1px 7px">Repeat client</span>' : '')+
+        (c.company && c.company !== c.display_name ? '<div style="font-size:12.5px;color:#5C3D2E;margin-top:2px">'+peEsc(c.company)+'</div>' : '')+
+      '</div>'+
+      '<span class="pe-x" onclick="this.closest(\'.pe-modal-bg\').remove()">&#10005;</span></div>'+
+    line('Phone', peContactCell(c.phone,'phone'))+
+    line('Email', peContactCell(c.email,'email'))+
+    (c.contact_name && c.contact_name !== c.display_name ? line('Contact', peEsc(c.contact_name)) : '')+
+    line('Bookings', r.evs.length + (r.evs.length ? ' \u00b7 AED ' + peMoney(r.value) + ' <span style="color:#5C3D2E;font-size:12px">(lost bookings excluded)</span>' : ''))+
+    (c.first_enquiry_at ? line('First enquiry', peDLabel(String(c.first_enquiry_at).slice(0,10))) : '')+
+    (r.last ? line('Latest booking', peDLabel(r.last)) : '')+
+    (c.notes ? line('Notes', peEsc(c.notes)) : '')+
+    '<div style="margin-top:14px;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#544418">Their bookings</div>'+
+    '<div style="margin-top:6px">'+ (evs.length ? evs.map(function(e){
+      var m = peStatusMeta(e.status), v = peEventValue(e);
+      return '<div style="display:flex;align-items:center;gap:10px;padding:9px 2px;border-bottom:1px solid rgba(107,31,42,.10);cursor:pointer" onclick="document.querySelector(\'.pe-modal-bg\').remove();peGo(\'event\',\''+e.id+'\')">'+
+        '<div style="flex:1;min-width:0"><div style="font-size:13px;color:#2C1810">'+peEsc(e.client_name||'Unnamed')+
+          ' <span class="pe-pill '+m.pill+'" style="font-size:10px;padding:1px 7px">'+peEsc(m.n)+'</span></div>'+
+        '<div style="font-size:11.5px;color:#5C3D2E">'+(e.event_date ? peDLabel(e.event_date) : 'no date yet')+
+          (e.area ? ' \u00b7 '+peEsc(e.area) : '')+(e.guests ? ' \u00b7 '+e.guests+' guests' : '')+'</div></div>'+
+        (v ? '<div style="font-size:12.5px;color:#5C3D2E;white-space:nowrap">AED '+peMoney(v)+'</div>' : '')+
+        '<span style="font-size:11.5px;color:#6B1F2A;white-space:nowrap">Open \u203a</span></div>';
+    }).join('') : '<div style="font-size:12.5px;color:#5C3D2E;padding:6px 2px">No bookings on file.</div>')+'</div>'+
+  '</div>';
+  var bg = document.createElement('div');
+  bg.className = 'pe-modal-bg';
+  bg.setAttribute('onclick', 'if(event.target===this)this.remove()');
+  bg.innerHTML = h;
+  document.body.appendChild(bg);
+}
 function peRenderClients(){
   var h = peHeader('clients');
   var rows = peClientRows();
-  var repeat = rows.filter(function(r){ return r.evs.length > 1; }).length;
+  var withPhone = rows.filter(function(r){ return !!r.c.phone; }).length;
+  var withEmail = rows.filter(function(r){ return !!r.c.email; }).length;
   h += peRoom('list', 'Roberto\u2019s DIFC \u00b7 Private events',
     rows.length ? (rows.length + ' client' + (rows.length===1?'':'s') + ' on the book') : 'No clients yet',
-    repeat ? (repeat + ' of them ' + (repeat===1?'has':'have') + ' booked with us more than once.')
-           : 'Everyone who has enquired, and every booking they have made.');
+    rows.length ? (withEmail + ' with an email, ' + withPhone + ' with a number.')
+                : 'Everyone who has enquired, and how to reach them.');
   h += peViewBanner();
-  // The read failed. Say so -- an empty screen here reads as "nobody has ever
-  // enquired", which is the opposite of the truth.
   if(!peState.clientsOk){
     h += '<div class="pe-card" style="border-color:#BB3A28"><b>The client book could not be read.</b><br>'+
       '<span style="font-size:12.5px;color:#5C3D2E">Everything else on this screen is fine \u2014 tap Refresh in the rail, and tell Francesco if it keeps happening.</span></div>';
     return h + PE_FOOT;
   }
-  var q = String(peState.cq||'').trim().toLowerCase();
-  var shown = rows.filter(function(r){ return peClientMatches(r, q); });
-  h += '<div class="pe-card" style="padding:12px 14px"><input class="pe-in" placeholder="Search a name, company, email or phone\u2026" value="'+peEsc(peState.cq||'')+'" oninput="peClientSearch(this)"></div>';
+  var shown = peClientShown();
+  h += '<div class="pe-card" style="padding:12px 14px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">'+
+    '<input class="pe-in" style="flex:1;min-width:200px" placeholder="Search a name, company, email or phone\u2026" value="'+peEsc(peState.cq||'')+'" oninput="peClientSearch(this)">'+
+    '<button class="pe-btn sec" onclick="peClientsCsv()"'+(shown.length?'':' disabled title="Nothing to extract"')+'>Extract to a spreadsheet</button></div>';
   if(!rows.length){
     h += '<div style="text-align:center;padding:26px;color:#4F4535;font-size:13px">No clients yet. The book fills itself as bookings are made.</div>';
     return h + PE_FOOT;
@@ -2015,47 +2144,23 @@ function peRenderClients(){
       '<span style="color:#400207;text-decoration:underline;cursor:pointer" onclick="peState.cq=\'\';renderMain()">Clear the search</span></div>';
     return h + PE_FOOT;
   }
-  h += '<div class="pe-tray">' + shown.map(function(r){
-    var c = r.c, open = (peState.cOpen === c.id);
-    var name = peEsc(c.display_name || c.contact_name || 'Unnamed');
-    if(c.company && c.company !== c.display_name) name += ' <span style="font-weight:400;color:#5C3D2E">\u00b7 '+peEsc(c.company)+'</span>';
-    var bits = [];
-    bits.push(r.evs.length + ' booking' + (r.evs.length===1?'':'s'));
-    if(r.last) bits.push('latest ' + peDLabel(r.last));
-    if(c.email) bits.push(peEsc(c.email));
-    if(c.phone) bits.push(peEsc(c.phone));
-    if(!c.email && !c.phone) bits.push('no contact details on file');
-    // The colour down the edge says one true thing: green means they have come
-    // back. A first-time enquiry keeps the same sand as everything else.
-    var sc = r.evs.length > 1 ? '#4E9E56' : '#B9A98C';
-    var body = '<div class="pe-lrow" style="--sc:'+sc+'" onclick="peClientOpen(\''+c.id+'\')">'+
-      '<span class="pe-spine"></span><span class="pe-sdot"></span>'+
-      '<div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:600;color:#2C1810">'+name+
-        (r.evs.length>1 ? ' <span class="pe-pill pe-p-conf" style="font-size:10px;padding:1px 7px">Repeat</span>' : '')+'</div>'+
-      '<div style="font-size:11.5px;color:#5C3D2E">'+bits.join(' \u00b7 ')+'</div></div>'+
-      (r.value ? '<div class="pe-hide-m" style="font-size:13px;color:#5C3D2E;white-space:nowrap">AED '+peMoney(r.value)+'</div>' : '')+
-      '<span class="pe-key" style="'+PE_KEY[open?'neutral':'info']+';border-radius:9px;padding:7px 13px;font-size:12px;font-weight:600;white-space:nowrap;cursor:pointer">'+
-        (open ? 'Hide bookings' : 'Their bookings')+'</span>'+
-    '</div>';
-    if(open){
-      body += '<div style="position:relative;z-index:1;background:#FBF6EC;border-radius:10px;margin:0 0 9px;padding:2px 10px;box-shadow:inset 0 2px 6px rgba(92,61,46,.16)">'+
-        r.evs.slice().sort(function(a,b){ return String(b.event_date||'').localeCompare(String(a.event_date||'')); }).map(function(e){
-          var m = peStatusMeta(e.status), v = peEventValue(e);
-          return '<div style="display:flex;align-items:center;gap:10px;padding:9px 4px;border-bottom:1px solid rgba(107,31,42,.10);cursor:pointer" onclick="peGo(\'event\',\''+e.id+'\')">'+
-            '<div style="flex:1;min-width:0"><div style="font-size:13px;color:#2C1810">'+peEsc(e.client_name||'Unnamed')+
-              ' <span class="pe-pill '+m.pill+'" style="font-size:10px;padding:1px 7px">'+peEsc(m.n)+'</span></div>'+
-            '<div style="font-size:11.5px;color:#5C3D2E">'+(e.event_date ? peDLabel(e.event_date) : 'no date yet')+
-              (e.area ? ' \u00b7 '+peEsc(e.area) : '')+(e.guests ? ' \u00b7 '+e.guests+' guests' : '')+'</div></div>'+
-            (v ? '<div class="pe-hide-m" style="font-size:12.5px;color:#5C3D2E;white-space:nowrap">AED '+peMoney(v)+'</div>' : '')+
-            '<span style="font-size:11.5px;color:#6B1F2A;white-space:nowrap">Open \u203a</span>'+
-          '</div>';
-        }).join('')+'</div>';
-    }
-    return body;
-  }).join('') + '</div>';
+  h += '<div class="pe-card" style="padding:4px 0">'+
+    '<div class="pe-crow pe-chead"><span>Client</span><span>Phone</span><span>Email</span><span style="text-align:right">Bookings</span></div>'+
+    shown.map(function(r){
+      var c = r.c;
+      var nm = peEsc(c.display_name || c.contact_name || 'Unnamed');
+      return '<div class="pe-crow">'+
+        '<span><span class="pe-cname" onclick="peClientCard(\''+c.id+'\')">'+nm+'</span>'+
+          (r.evs.length>1 ? ' <span class="pe-pill pe-p-conf" style="font-size:9.5px;padding:1px 6px">Repeat</span>' : '')+
+          (c.company && c.company !== c.display_name ? '<span class="pe-csub">'+peEsc(c.company)+'</span>' : '')+'</span>'+
+        '<span class="pe-cval" data-l="Phone">'+peContactCell(c.phone,'phone')+'</span>'+
+        '<span class="pe-cval" data-l="Email">'+peContactCell(c.email,'email')+'</span>'+
+        '<span class="pe-cnum">'+r.evs.length+(r.value?'<span class="pe-csub">AED '+peMoney(r.value)+'</span>':'')+'</span>'+
+      '</div>';
+    }).join('')+'</div>';
   h += '<div style="font-size:11.5px;color:#4F4535;display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px;margin-top:10px">'+
     '<span>'+shown.length+' of '+rows.length+' shown</span>'+
-    '<span>Every booking these clients have made, whatever its status.</span></div>';
+    '<span>Tap a name for everything else \u2014 bookings, value, history.</span></div>';
   return h + PE_FOOT;
 }
 
