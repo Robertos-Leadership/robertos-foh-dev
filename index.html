@@ -134,7 +134,7 @@ if ('serviceWorker' in navigator) {
 }
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<link rel="stylesheet" href="foh-styles.css?v=20260813c">
+<link rel="stylesheet" href="foh-styles.css?v=20260813d">
 </head>
 <body>
 
@@ -194,23 +194,23 @@ if ('serviceWorker' in navigator) {
     <div style="height:160px;flex-shrink:0;display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;padding:12px;background:#F5F0E8;">
 
       <div onclick="fohTab('schedule')" style="background:#fff;border:1px solid rgba(107,31,42,0.12);border-top:2px solid #6B1F2A;padding:16px 14px;cursor:pointer;display:flex;flex-direction:column;">
-        <div style="font-size:8px;letter-spacing:.24em;text-transform:uppercase;color:#755F21;font-weight:600;margin-bottom:6px;">Live</div>
+        <div style="font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:#544418;font-weight:700;margin-bottom:6px;">Live</div>
         <div style="font-family:'Playfair Display',serif;font-size:17px;color:#2C1810;margin-bottom:5px;">Schedule</div>
-        <div style="font-size:11px;color:#6E5F4A;line-height:1.4;flex:1;">Today's team, shifts &amp; attendance</div>
+        <div style="font-size:11px;color:#4F4535;line-height:1.4;flex:1;">Today's team, shifts &amp; attendance</div>
         <div style="font-size:16px;color:#6B1F2A;opacity:.4;margin-top:8px;">›</div>
       </div>
 
       <div onclick="fohTab('manager')" style="background:#fff;border:1px solid rgba(107,31,42,0.12);border-top:2px solid #6B1F2A;padding:16px 14px;cursor:pointer;display:flex;flex-direction:column;">
-        <div style="font-size:8px;letter-spacing:.24em;text-transform:uppercase;color:#755F21;font-weight:600;margin-bottom:6px;">Live</div>
+        <div style="font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:#544418;font-weight:700;margin-bottom:6px;">Live</div>
         <div style="font-family:'Playfair Display',serif;font-size:17px;color:#2C1810;margin-bottom:5px;">Management</div>
-        <div style="font-size:11px;color:#6E5F4A;line-height:1.4;flex:1;">Reports, revenue, activations &amp; events</div>
+        <div style="font-size:11px;color:#4F4535;line-height:1.4;flex:1;">Reports, revenue, activations &amp; events</div>
         <div style="font-size:16px;color:#6B1F2A;opacity:.4;margin-top:8px;">›</div>
       </div>
 
       <div onclick="openChecklists()" style="background:#fff;border:1px solid rgba(107,31,42,0.12);border-top:2px solid #6B1F2A;padding:16px 14px;cursor:pointer;display:flex;flex-direction:column;">
-        <div style="font-size:8px;letter-spacing:.24em;text-transform:uppercase;color:#755F21;font-weight:600;margin-bottom:6px;">Live</div>
+        <div style="font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:#544418;font-weight:700;margin-bottom:6px;">Live</div>
         <div style="font-family:'Playfair Display',serif;font-size:17px;color:#2C1810;margin-bottom:5px;">Checklists</div>
-        <div style="font-size:11px;color:#6E5F4A;line-height:1.4;flex:1;">Opening &amp; closing &mdash; sign off by Employee&nbsp;ID</div>
+        <div style="font-size:11px;color:#4F4535;line-height:1.4;flex:1;">Opening &amp; closing &mdash; sign off by Employee&nbsp;ID</div>
         <div style="font-size:16px;color:#6B1F2A;opacity:.4;margin-top:8px;">&rsaquo;</div>
       </div>
 
@@ -421,15 +421,15 @@ if ('serviceWorker' in navigator) {
      Loaded here, not with the foh-*.js at the foot of the body, because the
      inline Admin code below READS it rather than just calling into it. -->
 <script src="foh-rounds.js?v=20260731a"></script>
-<script src="foh-core.js?v=20260813c"></script>
+<script src="foh-core.js?v=20260813d"></script>
 <script src="foh-events.js?v=20260731a"></script>
-<script src="foh-privateevents.js?v=20260813c"></script>
-<script src="foh-revenue.js?v=20260813c"></script>
-<script src="foh-closing.js?v=20260813c"></script>
+<script src="foh-privateevents.js?v=20260813d"></script>
+<script src="foh-revenue.js?v=20260813d"></script>
+<script src="foh-closing.js?v=20260813d"></script>
 <script src="foh-ops.js?v=20260710b"></script>
-<script src="stock-take.js?v=20260813c"></script>
+<script src="stock-take.js?v=20260813d"></script>
 <script src="foh-reviews.js?v=20260812d"></script>
-<script src="foh-reservations.js?v=20260813c"></script>
+<script src="foh-reservations.js?v=20260813d"></script>
 <script src="foh-resreports.js?v=20260812a"></script>
 
 <!-- "Tell us" — the button the team press when THEY have something to say.
@@ -492,7 +492,7 @@ window.FB_INBOX = {
   }
 };
 </script>
-<script src="feedback-button.js?v=20260813c"></script>
+<script src="feedback-button.js?v=20260813d"></script>
 
 <!-- FOH Schedule: PIN modal -->
 <div id="foh-sch-pin-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9000;align-items:center;justify-content:center" onclick="fohSchedClosePin(event)">
