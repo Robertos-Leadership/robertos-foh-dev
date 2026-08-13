@@ -2094,6 +2094,38 @@ function peSrPick(c){
   if(name.length >= 4) return { value:name, kind:'name' };
   return null;
 }
+// What SevenRooms actually knows about a guest, in the same terms its own
+// Clients screen shows: visits, what they have spent, and what that is per
+// visit. `spend` comes back as a number in AED; spend-per-visit is computed
+// here rather than stored, so it can never disagree with the two numbers it
+// is derived from.
+function peSrFacts(m){
+  if(!m) return '';
+  var bits = [];
+  if(m.visits) bits.push(m.visits + ' visit' + (m.visits===1?'':'s'));
+  if(m.covers) bits.push(m.covers + ' cover' + (m.covers===1?'':'s'));
+  if(m.spend)  bits.push('AED ' + peMoney(Math.round(m.spend)));
+  // NO spend-per-visit here, though it is one line of arithmetic and SevenRooms
+  // shows one. Its figure does not equal spend / visits: on 13 Aug 2026 a guest
+  // read 71 visits, AED 92,097, AED 1,331 a visit -- and 92,097/71 is 1,297.
+  // SevenRooms divides by something else (about 69). Printing our own number
+  // beside theirs would put two different answers on two screens for the same
+  // guest, and ours would be the one nobody can defend. Show what they send.
+  if(m.last_visit) bits.push('last ' + peDLabel(m.last_visit));
+  return bits.join(' · ');
+}
+// SevenRooms tags are noisy -- "Group All Guests", "Visits = 4" and the like are
+// bookkeeping, not a fact about the guest. Only the few that would change how
+// the room is set are worth repeating here.
+var PE_SR_TAGS = ['VIP','Regular','Repeat Guest','Spender','Group Spender','Big Spender','Owner','Press','Influencer'];
+function peSrTags(m){
+  var t = (m && m.tags) || [];
+  var keep = t.filter(function(x){ return PE_SR_TAGS.indexOf(String(x)) >= 0; });
+  if(!keep.length) return '';
+  return ' ' + keep.map(function(x){
+    return '<span class="pe-pill pe-p-conf" style="font-size:9.5px;padding:1px 6px">'+peEsc(x)+'</span>';
+  }).join(' ');
+}
 // How the answer was arrived at, in words rather than a column value.
 var PE_SR_HOW = { phone:'searched on their number', email:'searched on their email', name:'searched on their name', picked:'you confirmed the profile', rejected:'you said none of them matched' };
 function peSrLine(c){
@@ -2105,9 +2137,16 @@ function peSrLine(c){
   var when = 'checked ' + peDLabel(String(c.sr_checked_at).slice(0,10));
   var body;
   if(c.sr_status === 'known'){
+    // Spend, covers and tags are only in hand for a profile checked in THIS
+    // session -- `event_clients` has columns for the verdict, the SevenRooms id,
+    // visits and the last visit, and nothing else. Rather than pretend, the card
+    // shows the full picture when it has it and the two stored numbers when it
+    // does not.
+    var picked = (peState.srPicked||{})[c.id];
     body = '<b style="color:#1C5A25">Yes — they have dined with us.</b>' +
-      (c.sr_visits ? ' <span style="color:#2C1810">'+c.sr_visits+' visit'+(c.sr_visits===1?'':'s')+'</span>' : '') +
-      (c.sr_last_visit ? ' <span style="color:#5C3D2E">· last '+peDLabel(c.sr_last_visit)+'</span>' : '');
+      (picked ? ' <span style="color:#2C1810">'+peSrFacts(picked)+'</span>'+peSrTags(picked)
+              : ((c.sr_visits ? ' <span style="color:#2C1810">'+c.sr_visits+' visit'+(c.sr_visits===1?'':'s')+'</span>' : '') +
+                 (c.sr_last_visit ? ' <span style="color:#5C3D2E">· last '+peDLabel(c.sr_last_visit)+'</span>' : '')));
   } else if(c.sr_status === 'new'){
     body = '<b style="color:#6B4A00">No match in SevenRooms</b> <span style="color:#5C3D2E">— as far as the book knows, a new guest.</span>';
   } else {
@@ -2155,10 +2194,8 @@ function peSrHitsHtml(id, matches){
     matches.map(function(m, i){
       return '<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid rgba(107,31,42,.10)">'+
         '<div style="flex:1;min-width:0"><div style="font-size:13px;color:#2C1810">'+peEsc(m.name||'Unnamed')+
-          (m.company?' <span style="color:#5C3D2E">· '+peEsc(m.company)+'</span>':'')+'</div>'+
-        '<div style="font-size:11.5px;color:#5C3D2E">'+(m.visits||0)+' visit'+(m.visits===1?'':'s')+
-          (m.covers?' · '+m.covers+' covers':'')+
-          (m.last_visit?' · last '+peDLabel(m.last_visit):'')+'</div></div>'+
+          (m.company?' <span style="color:#5C3D2E">· '+peEsc(m.company)+'</span>':'')+peSrTags(m)+'</div>'+
+        '<div style="font-size:11.5px;color:#5C3D2E">'+peSrFacts(m)+'</div></div>'+
         '<button class="pe-btn sec sm" onclick="peSrPickHit(\''+id+'\','+i+')">That’s them</button></div>';
     }).join('')+
     '<div style="margin-top:8px"><button class="pe-btn sec sm" onclick="peSrNone(\''+id+'\')">None of these</button></div>';
@@ -2166,6 +2203,8 @@ function peSrHitsHtml(id, matches){
 async function peSrPickHit(id, i){
   var m = ((peState.srHits||{})[id]||[])[i];
   if(!m) return;
+  peState.srPicked = peState.srPicked || {};
+  peState.srPicked[id] = m;   // spend, covers and tags have no column of their own
   await peSrSave(id, { sr_status:'known', sr_client_id:m.sr_client_id||null,
     sr_visits:(m.visits||null), sr_last_visit:(m.last_visit||null), sr_matched_on:'picked' });
   var box = document.getElementById('pe-sr-' + id);
