@@ -808,9 +808,29 @@ function peScrollTop(){
   // below can hide them -- on a phone the sidebar becomes a row of pills and
   // these headings were left stranded between them.
   '.pe-slbl{font-size:10.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:#544418;margin:10px 6px 4px}'+
-  '.pe-snav{font-size:12.5px;padding:8px 12px;border-radius:8px;border:1px solid var(--vino);text-align:center;color:var(--vino);cursor:pointer}'+
-  '.pe-snav:hover{background:rgba(107,31,42,0.07)}'+
-  '.pe-snav.on{background:var(--vino);border-color:var(--vino);color:var(--cream);font-weight:600}'+
+  // THE RAIL AS RAISED KEYS (13 Aug 2026). The same key that sits on every row of
+  // the book, brought to the sidebar, so the module reads as one physical object:
+  // each control sits ON the paper with a hard bottom edge and travels down when
+  // pressed. The screen you are on is the only dark mark in the rail.
+  '.pe-snav{font-size:12.5px;padding:8px 12px;border-radius:8px;text-align:center;color:var(--vino);cursor:pointer;'+
+    'border:1px solid rgba(107,31,42,0.34);background:linear-gradient(180deg,#FCF7EC 0,#F3EADA 100%);'+
+    'box-shadow:0 2px 0 rgba(107,31,42,0.30),0 4px 10px -5px rgba(60,26,20,0.40),inset 0 1px 0 rgba(255,255,255,0.9);'+
+    'transition:transform .1s ease,box-shadow .13s ease,background .13s ease}'+
+  // Hover only where there is a real pointer: on a touch screen it sticks to the
+  // last thing tapped and would leave a control looking lit after she has moved on.
+  '@media(hover:hover){.pe-snav:hover{background:linear-gradient(180deg,#FFFFFF 0,#F7F0E2 100%)}}'+
+  '.pe-snav:active{transform:translateY(2px);box-shadow:0 0 0 rgba(107,31,42,0.3),inset 0 2px 4px rgba(92,61,46,0.20)}'+
+  '.pe-snav.on{background:linear-gradient(180deg,#7D2634 0,#6B1F2A 100%);border-color:#5A1723;color:var(--cream);font-weight:600;'+
+    'box-shadow:0 3px 0 #431019,0 6px 14px -5px rgba(48,10,18,0.45),inset 0 1px 0 rgba(255,255,255,0.20)}'+
+  '.pe-snav.on:active{transform:translateY(3px);box-shadow:0 0 0 #431019,inset 0 1px 3px rgba(20,4,4,0.35)}'+
+  // + New event is the same key in wine, one size up -- it is the only control in
+  // the rail that creates something.
+  '.pe-side .pe-primary{background:linear-gradient(180deg,#7D2634 0,#6B1F2A 100%);border-color:#5A1723;'+
+    'box-shadow:0 3px 0 #431019,0 6px 14px -5px rgba(48,10,18,0.45),inset 0 1px 0 rgba(255,255,255,0.20);'+
+    'transition:transform .1s ease,box-shadow .13s ease}'+
+  '.pe-side .pe-primary:active{transform:translateY(3px);box-shadow:0 0 0 #431019,inset 0 1px 3px rgba(20,4,4,0.35)}'+
+  '@media(prefers-reduced-motion:reduce){.pe-snav,.pe-side .pe-primary{transition:none}'+
+    '.pe-snav:active,.pe-snav.on:active,.pe-side .pe-primary:active{transform:none}}'+
   '.pe-main{flex:1;min-width:0}'+
   '@media(max-width:820px){.pe-shell{display:block}.pe-side{width:auto;flex-direction:row;flex-wrap:wrap;align-items:center;margin-bottom:12px}.pe-side .pe-btn{width:auto}.pe-sdiv{display:none}.pe-slbl{display:none}.pe-snav{border:1px solid rgba(107,31,42,0.3);border-radius:14px;padding:6px 14px;font-size:12px}.pe-snav.on{border-color:var(--vino)}}'+
   // ── the room band ──────────────────────────────────────────────────────────
