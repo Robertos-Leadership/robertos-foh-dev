@@ -1099,7 +1099,7 @@ function peRoom(which, eyebrow, lede, stand){
   '</div>';
 }
 function peHeader(active){
-  var mine = [['list','Events'],['calendar','Calendar'],['clients','Clients'],['report','Monthly report']];
+  var mine = [['list','Events'],['calendar','Calendar'],['report','Monthly report']];
   var right = [['chef','Chef corner'],['bev','Beverage corner']];
   var snav = function(k, label){ return '<span class="pe-snav'+(active===k?' on':'')+'" onclick="peGo(\''+k+'\')">'+label+'</span>'; };
   return '<div class="pe-wrap">'+
@@ -1124,14 +1124,13 @@ function peHeader(active){
       '<span class="pe-snav" onclick="peGuestLinkChoose()">Guest link</span>'+
       '<span class="pe-snav'+(active==='table'?' on':'')+'" onclick="peGo(\'table\')" title="The menu the guest finds at their place">Print for the table</span>'+
       snav('packs','Menu packages')+
-      // How fresh the screen is, and a way to force it. Signatures and guest menu
-      // choices are written server-side, so nothing in her session can know they
-      // happened until the data is read again.
-      '<div class="pe-slbl" style="margin-top:14px">This screen</div>'+
-      '<span class="pe-snav" onclick="peRefreshNow()" title="Read the latest bookings, replies and signatures">'+
-        (peState.loading ? 'Refreshing…' : 'Refresh')+
-        '<span style="display:block;font-size:10.5px;color:#4F4535;letter-spacing:0">Updated '+peFreshLabel()+'</span>'+
-      '</span>'+
+      // Refresh lived here and was removed 13 Aug 2026 at his word -- "doesn't do
+      // anything honestly". Nothing is lost that anyone would notice: the module
+      // already re-reads on its own whenever the tab is returned to or the window
+      // regains focus (peAttachSync, throttled to 15s), which is how a signature or
+      // a guest's menu choice reaches the screen. The client book took the slot.
+      '<div class="pe-sdiv"></div>'+
+      snav('clients','Clients')+
     '</div>'+
     '<div class="pe-main">';
 }
@@ -2358,7 +2357,7 @@ function peRenderClients(){
   h += peViewBanner();
   if(!peState.clientsOk){
     h += '<div class="pe-card" style="border-color:#BB3A28"><b>The client book could not be read.</b><br>'+
-      '<span style="font-size:12.5px;color:#5C3D2E">Everything else on this screen is fine \u2014 tap Refresh in the rail, and tell Francesco if it keeps happening.</span></div>';
+      '<span style="font-size:12.5px;color:#5C3D2E">Everything else on this screen is fine \u2014 switch to another tab and back, which re-reads it, and tell Francesco if it keeps happening.</span></div>';
     return h + PE_FOOT;
   }
   var shown = peClientShown();
