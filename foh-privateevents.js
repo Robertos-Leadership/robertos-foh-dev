@@ -2015,7 +2015,17 @@ function peClientMatches(r, q){
   var c = r.c;
   return [c.display_name, c.company, c.contact_name, c.email, c.phone].join(' ').toLowerCase().indexOf(q) >= 0;
 }
-function peClientSearch(el){ peState.cq = el.value; renderMain(); }
+// Re-rendering the screen destroys the input the keystroke came from, so the
+// caret goes with it and only the first character ever lands -- you have to
+// click back in for every letter. Same fix the events search already uses:
+// put the focus and the caret back where they were. Reported live 13 Aug 2026.
+function peClientSearch(el){
+  var pos = el.selectionStart;
+  peState.cq = el.value;
+  renderMain();
+  var n = document.getElementById('pe-cq');
+  if(n){ n.focus(); try{ n.setSelectionRange(pos, pos); }catch(err){} }
+}
 function peClientShown(){
   var q = String(peState.cq||'').trim().toLowerCase();
   return peClientRows().filter(function(r){ return peClientMatches(r, q); });
@@ -2353,7 +2363,7 @@ function peRenderClients(){
   }
   var shown = peClientShown();
   h += '<div class="pe-card" style="padding:12px 14px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">'+
-    '<input class="pe-in" style="flex:1;min-width:200px" placeholder="Search a name, company, email or phone\u2026" value="'+peEsc(peState.cq||'')+'" oninput="peClientSearch(this)">'+
+    '<input id="pe-cq" class="pe-in" style="flex:1;min-width:200px" placeholder="Search a name, company, email or phone\u2026" value="'+peEsc(peState.cq||'')+'" oninput="peClientSearch(this)">'+
     '<button class="pe-btn sec" onclick="peClientsCsv()"'+(shown.length?'':' disabled title="Nothing to extract"')+'>Extract to a spreadsheet</button></div>';
   if(!rows.length){
     h += '<div style="text-align:center;padding:26px;color:#4F4535;font-size:13px">No clients yet. The book fills itself as bookings are made.</div>';
