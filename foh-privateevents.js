@@ -582,7 +582,12 @@ async function peLoadAll(force){
       // res[10] — the printed à la carte. Loaded the same non-fatal way as the
       // set menus: if foh-events-alacarte.sql hasn't been run the module still
       // works, the À la carte tab simply says the menu isn't loaded yet.
-      peFetchAllPaged(function(){ return sb.from('event_alacarte').select('*').order('sort_order').order('name'); })
+      peFetchAllPaged(function(){ return sb.from('event_alacarte').select('*').order('sort_order').order('name'); }),
+      // res[11] — the client book. One row per client, grown from the desk itself.
+      // Loaded non-fatally: if the read fails the module still opens and the
+      // Clients screen says so, rather than showing an empty book that looks
+      // like nobody has ever enquired.
+      peFetchAllPaged(function(){ return sb.from('event_clients').select('*').order('last_enquiry_at',{ascending:false}); })
     ]);
     // event_set_menus (res[5]) is loaded non-fatally so the module still opens if
     // the read fails — but it is NOT silently replaced by the built-in seed any
@@ -595,6 +600,8 @@ async function peLoadAll(force){
     peState.dishes = res[2].data||[];
     peState.bevs   = res[3].data||[];
     peState.packs  = res[4].data||[];
+    peState.clients   = (res[11] && !res[11].error) ? (res[11].data||[]) : [];
+    peState.clientsOk = !!(res[11] && !res[11].error);
     // ── Set menus: never quietly substitute the built-in copy ──
     // This used to be `...length) ? res[5].data : PE_SET_MENUS`, so a FAILED read
     // silently fell back to the three menus written into this file. Two of them
@@ -719,7 +726,7 @@ async function peLoadLog(eventId){
 }
 // Every screen an event can honestly be opened FROM, and what to call it.
 var PE_BACK_LABELS = {
-  list:'Events', calendar:'Calendar', report:'Monthly report',
+  list:'Events', calendar:'Calendar', report:'Monthly report', clients:'Clients',
   packs:'Menu packages', packsfood:'Menu packages', packsbev:'Menu packages',
   quick:'Quick menu', wizard:'New quote from a budget',
   chef:'Chef corner', bev:'Beverage corner'
@@ -1023,6 +1030,7 @@ function renderPrivateEvents(){
   if(v==='event')    return peRenderEvent();
   if(v==='quick')    return peRenderQuick();
   if(v==='calendar') return peRenderCalendar();
+  if(v==='clients')  return peRenderClients();
   if(v==='chef')     return peRenderChefCorner();
   if(v==='bev')      return peRenderBevCorner();
   if(v==='packs' || v==='packsfood' || v==='packsbev') return peRenderPacksView();
@@ -1063,7 +1071,7 @@ function peRoom(which, eyebrow, lede, stand){
   '</div>';
 }
 function peHeader(active){
-  var mine = [['list','Events'],['calendar','Calendar'],['report','Monthly report']];
+  var mine = [['list','Events'],['calendar','Calendar'],['clients','Clients'],['report','Monthly report']];
   var right = [['chef','Chef corner'],['bev','Beverage corner']];
   var snav = function(k, label){ return '<span class="pe-snav'+(active===k?' on':'')+'" onclick="peGo(\''+k+'\')">'+label+'</span>'; };
   return '<div class="pe-wrap">'+
@@ -1939,6 +1947,118 @@ function peCalPrint(withMoney){
     '.cal-key .pr{margin-left:auto;color:#574232}';
   pePrintHTML(peDocShell(M.mLbl+' — Roberto\'s events', h, css));
 }
+// == THE CLIENT BOOK =======================================================
+// Every person and company who has ever enquired, and every booking they made.
+// Built 13 Aug 2026 on the `event_clients` table seeded 12 Aug -- the table had
+// been created and then never surfaced anywhere, so nobody could see it.
+//
+// THE ROW IS COMPUTED, NOT STORED. `events_count` sits on the table, but the
+// bookings and their value are counted here from the events already in memory,
+// keyed on events_desk.client_id. A stored counter drifts the moment a booking
+// is deleted or re-assigned; this cannot, and it costs nothing because the book
+// is already loaded.
+function peClientRows(){
+  var byId = {};
+  (peState.clients||[]).forEach(function(c){ byId[c.id] = { c:c, evs:[], value:0, last:'' }; });
+  (peState.events||[]).forEach(function(e){
+    var r = byId[e.client_id];
+    if(!r) return;
+    r.evs.push(e);
+    var v = peEventValue(e);
+    // A lost booking still belongs to the client's history, but its money was
+    // never ours -- counting it would inflate every repeat client's value.
+    if(v && e.status !== 'lost') r.value += v;
+    var d = String(e.event_date||'');
+    if(d > r.last) r.last = d;
+  });
+  var rows = Object.keys(byId).map(function(k){ return byId[k]; });
+  // Most recent first, on the date of their latest booking -- the client who
+  // enquired this week is the one she is working on.
+  rows.sort(function(a,b){
+    if(a.last !== b.last) return a.last < b.last ? 1 : -1;
+    return String(a.c.display_name||'').localeCompare(String(b.c.display_name||''));
+  });
+  return rows;
+}
+function peClientMatches(r, q){
+  if(!q) return true;
+  var c = r.c;
+  return [c.display_name, c.company, c.contact_name, c.email, c.phone].join(' ').toLowerCase().indexOf(q) >= 0;
+}
+function peClientSearch(el){ peState.cq = el.value; renderMain(); }
+function peClientOpen(id){ peState.cOpen = (peState.cOpen === id) ? null : id; renderMain(); }
+function peRenderClients(){
+  var h = peHeader('clients');
+  var rows = peClientRows();
+  var repeat = rows.filter(function(r){ return r.evs.length > 1; }).length;
+  h += peRoom('list', 'Roberto\u2019s DIFC \u00b7 Private events',
+    rows.length ? (rows.length + ' client' + (rows.length===1?'':'s') + ' on the book') : 'No clients yet',
+    repeat ? (repeat + ' of them ' + (repeat===1?'has':'have') + ' booked with us more than once.')
+           : 'Everyone who has enquired, and every booking they have made.');
+  h += peViewBanner();
+  // The read failed. Say so -- an empty screen here reads as "nobody has ever
+  // enquired", which is the opposite of the truth.
+  if(!peState.clientsOk){
+    h += '<div class="pe-card" style="border-color:#BB3A28"><b>The client book could not be read.</b><br>'+
+      '<span style="font-size:12.5px;color:#5C3D2E">Everything else on this screen is fine \u2014 tap Refresh in the rail, and tell Francesco if it keeps happening.</span></div>';
+    return h + PE_FOOT;
+  }
+  var q = String(peState.cq||'').trim().toLowerCase();
+  var shown = rows.filter(function(r){ return peClientMatches(r, q); });
+  h += '<div class="pe-card" style="padding:12px 14px"><input class="pe-in" placeholder="Search a name, company, email or phone\u2026" value="'+peEsc(peState.cq||'')+'" oninput="peClientSearch(this)"></div>';
+  if(!rows.length){
+    h += '<div style="text-align:center;padding:26px;color:#4F4535;font-size:13px">No clients yet. The book fills itself as bookings are made.</div>';
+    return h + PE_FOOT;
+  }
+  if(!shown.length){
+    h += '<div style="text-align:center;padding:26px;color:#4F4535;font-size:13px">Nobody matches \u201c'+peEsc(peState.cq||'')+'\u201d. '+
+      '<span style="color:#400207;text-decoration:underline;cursor:pointer" onclick="peState.cq=\'\';renderMain()">Clear the search</span></div>';
+    return h + PE_FOOT;
+  }
+  h += '<div class="pe-tray">' + shown.map(function(r){
+    var c = r.c, open = (peState.cOpen === c.id);
+    var name = peEsc(c.display_name || c.contact_name || 'Unnamed');
+    if(c.company && c.company !== c.display_name) name += ' <span style="font-weight:400;color:#5C3D2E">\u00b7 '+peEsc(c.company)+'</span>';
+    var bits = [];
+    bits.push(r.evs.length + ' booking' + (r.evs.length===1?'':'s'));
+    if(r.last) bits.push('latest ' + peDLabel(r.last));
+    if(c.email) bits.push(peEsc(c.email));
+    if(c.phone) bits.push(peEsc(c.phone));
+    if(!c.email && !c.phone) bits.push('no contact details on file');
+    // The colour down the edge says one true thing: green means they have come
+    // back. A first-time enquiry keeps the same sand as everything else.
+    var sc = r.evs.length > 1 ? '#4E9E56' : '#B9A98C';
+    var body = '<div class="pe-lrow" style="--sc:'+sc+'" onclick="peClientOpen(\''+c.id+'\')">'+
+      '<span class="pe-spine"></span><span class="pe-sdot"></span>'+
+      '<div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:600;color:#2C1810">'+name+
+        (r.evs.length>1 ? ' <span class="pe-pill pe-p-conf" style="font-size:10px;padding:1px 7px">Repeat</span>' : '')+'</div>'+
+      '<div style="font-size:11.5px;color:#5C3D2E">'+bits.join(' \u00b7 ')+'</div></div>'+
+      (r.value ? '<div class="pe-hide-m" style="font-size:13px;color:#5C3D2E;white-space:nowrap">AED '+peMoney(r.value)+'</div>' : '')+
+      '<span class="pe-key" style="'+PE_KEY[open?'neutral':'info']+';border-radius:9px;padding:7px 13px;font-size:12px;font-weight:600;white-space:nowrap;cursor:pointer">'+
+        (open ? 'Hide bookings' : 'Their bookings')+'</span>'+
+    '</div>';
+    if(open){
+      body += '<div style="position:relative;z-index:1;background:#FBF6EC;border-radius:10px;margin:0 0 9px;padding:2px 10px;box-shadow:inset 0 2px 6px rgba(92,61,46,.16)">'+
+        r.evs.slice().sort(function(a,b){ return String(b.event_date||'').localeCompare(String(a.event_date||'')); }).map(function(e){
+          var m = peStatusMeta(e.status), v = peEventValue(e);
+          return '<div style="display:flex;align-items:center;gap:10px;padding:9px 4px;border-bottom:1px solid rgba(107,31,42,.10);cursor:pointer" onclick="peGo(\'event\',\''+e.id+'\')">'+
+            '<div style="flex:1;min-width:0"><div style="font-size:13px;color:#2C1810">'+peEsc(e.client_name||'Unnamed')+
+              ' <span class="pe-pill '+m.pill+'" style="font-size:10px;padding:1px 7px">'+peEsc(m.n)+'</span></div>'+
+            '<div style="font-size:11.5px;color:#5C3D2E">'+(e.event_date ? peDLabel(e.event_date) : 'no date yet')+
+              (e.area ? ' \u00b7 '+peEsc(e.area) : '')+(e.guests ? ' \u00b7 '+e.guests+' guests' : '')+'</div></div>'+
+            (v ? '<div class="pe-hide-m" style="font-size:12.5px;color:#5C3D2E;white-space:nowrap">AED '+peMoney(v)+'</div>' : '')+
+            '<span style="font-size:11.5px;color:#6B1F2A;white-space:nowrap">Open \u203a</span>'+
+          '</div>';
+        }).join('')+'</div>';
+    }
+    return body;
+  }).join('') + '</div>';
+  h += '<div style="font-size:11.5px;color:#4F4535;display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px;margin-top:10px">'+
+    '<span>'+shown.length+' of '+rows.length+' shown</span>'+
+    '<span>Every booking these clients have made, whatever its status.</span></div>';
+  return h + PE_FOOT;
+}
+
 function peRenderCalendar(){
   if(!peState.month) peState.month = peMonthKey(peToday());
   var mk = peState.month;
