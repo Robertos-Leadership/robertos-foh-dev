@@ -863,11 +863,11 @@ function peScrollTop(){
   // as a pane of glass carrying its own status colour down the left edge. The photo is
   // the same file the module already paints behind the sheet, so a slow connection
   // gets the warm ground and never a grey hole.
-  '.pe-tray{position:relative;border-radius:14px;padding:12px;margin:0 0 2px;'+
+  '.pe-tray{position:relative;border-radius:14px;padding:14px;margin:0 0 2px;'+
     'background:#cdbba6 url(venue-dining-art.jpg) center/cover;'+
     'box-shadow:0 10px 26px -14px rgba(20,4,4,.55)}'+
   '.pe-tray::before{content:"";position:absolute;inset:0;border-radius:13px;pointer-events:none;'+
-    'background:linear-gradient(180deg,rgba(43,1,4,.52) 0,rgba(43,1,4,.38) 45%,rgba(43,1,4,.55) 100%)}'+
+    'background:linear-gradient(180deg,rgba(43,1,4,.64) 0,rgba(43,1,4,.52) 45%,rgba(43,1,4,.68) 100%)}'+
   // 88%/78% and no glassier: at 80/66 the small line under each name measured 3.28:1
   // over the dark end of the photograph, which is not readable.
   '.pe-tray .pe-lrow{position:relative;z-index:1;margin-bottom:9px;padding:12px 14px 12px 0;'+
@@ -890,6 +890,9 @@ function peScrollTop(){
     '.pe-tray .pe-lrow:hover .pe-spine{box-shadow:0 0 12px var(--sc,#B9A98C)}'+
     '.pe-tray .pe-lrow:hover .pe-sdot{box-shadow:0 0 0 3px rgba(92,61,46,.10),0 0 10px var(--sc,#B9A98C)}}'+
   '.pe-tray .pe-lrow:active{transform:translateY(0);box-shadow:0 4px 10px -6px rgba(20,4,4,.6)}'+
+  '.pe-key{border:none;display:inline-block;transition:transform .1s ease,box-shadow .12s ease,filter .12s ease}'+
+  '@media(hover:hover){.pe-key:hover{filter:brightness(1.06)}}'+
+  '.pe-key:active{transform:translateY(2px);box-shadow:inset 0 1px 3px rgba(20,4,4,.35)}'+
   // On a phone the dot goes and the gap tightens, so the row spends no more width
   // than it did before: spine 5 + gap 8 replaces the 14px of left padding it lost.
   '@media(max-width:520px){.pe-sdot{display:none}.pe-tray .pe-lrow{gap:8px}.pe-tray{padding:6px;border-radius:11px}}'+
@@ -1294,6 +1297,21 @@ var PE_CHIP = {
   info:'background:#B3D2EC;color:#12456E', success:'background:#B8DEB4;color:#1C5A25',
   neutral:'background:#E4DBCC;color:#4E4433'
 };
+// The same step, as the key he picked: it sits ON the glass rather than staining it.
+// Wine is the routine step (20 of 22 rows say "Add the menu") and gold is the one
+// that must go out today, so the loudest paint is no longer also the most common.
+var PE_KEY = {
+  danger: 'background:linear-gradient(180deg,#7D2634 0,#6B1F2A 100%);color:#F9F1E4;'+
+          'box-shadow:0 2px 0 #431019,0 5px 12px -4px rgba(48,10,18,.45),inset 0 1px 0 rgba(255,255,255,.22)',
+  warn:   'background:linear-gradient(180deg,#E0BC62 0,#C9A84C 100%);color:#3A2B06;'+
+          'box-shadow:0 2px 0 #8E7422,0 5px 12px -4px rgba(58,43,6,.40),inset 0 1px 0 rgba(255,255,255,.50)',
+  info:   'background:linear-gradient(180deg,#4E8CC4 0,#3E7FBB 100%);color:#F4F9FD;'+
+          'box-shadow:0 2px 0 #23527D,0 5px 12px -4px rgba(18,69,110,.40),inset 0 1px 0 rgba(255,255,255,.28)',
+  success:'background:linear-gradient(180deg,#4E9E56 0,#3F8A47 100%);color:#F3FAF4;'+
+          'box-shadow:0 2px 0 #26602D,0 5px 12px -4px rgba(28,90,37,.40),inset 0 1px 0 rgba(255,255,255,.26)',
+  neutral:'background:linear-gradient(180deg,#D9CFBD 0,#C8BBA4 100%);color:#403729;'+
+          'box-shadow:0 2px 0 #9A8B70,0 5px 12px -4px rgba(78,68,51,.35),inset 0 1px 0 rgba(255,255,255,.6)'
+};
 // Has this event's team brief actually gone out? Read from the send log only:
 // a brief that failed to send must never show as sent, or the kitchen and the
 // hostess team reach the night not knowing about a confirmed event.
@@ -1431,7 +1449,7 @@ function peListRow(e){
     '<div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:600;color:#2C1810">'+nameHtml+'</div>'+
     '<div style="font-size:11.5px;color:#5C3D2E">'+(parts.join(' · ')||'—')+'</div></div>'+
     (val?'<div class="pe-hide-m" style="font-size:13px;color:#5C3D2E;white-space:nowrap">AED '+peMoney(val)+'</div>':'')+
-    (ns.label?'<span onclick="event.stopPropagation();peGo(\''+(peCanEdit()?'guidedevent':'event')+'\',\''+e.id+'\')" style="'+PE_CHIP[ns.kind]+';border-radius:9px;padding:6px 11px;font-size:12px;font-weight:600;white-space:nowrap;cursor:pointer">'+ns.label+'</span>':'')+
+    (ns.label?'<span onclick="event.stopPropagation();peGo(\''+(peCanEdit()?'guidedevent':'event')+'\',\''+e.id+'\')" style="'+PE_KEY[ns.kind]+';border-radius:9px;padding:7px 13px;font-size:12px;font-weight:600;white-space:nowrap;cursor:pointer" class="pe-key">'+ns.label+'</span>':'')+
   '</div>';
 }
 function peRenderList(){
