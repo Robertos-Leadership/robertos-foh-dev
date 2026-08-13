@@ -858,6 +858,46 @@ function peScrollTop(){
   '.pe-lrow{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid rgba(107,31,42,0.08);cursor:pointer}'+
   '.pe-lrow:last-child{border-bottom:none}'+
   '.pe-lrow:hover{background:var(--cream)}'+
+  // THE BOOK SITS IN THE ROOM (13 Aug 2026). Each group of bookings is a tray cut
+  // through the cream sheet onto the venue photograph, and every booking floats on it
+  // as a pane of glass carrying its own status colour down the left edge. The photo is
+  // the same file the module already paints behind the sheet, so a slow connection
+  // gets the warm ground and never a grey hole.
+  '.pe-tray{position:relative;border-radius:14px;padding:12px;margin:0 0 2px;'+
+    'background:#cdbba6 url(venue-dining-art.jpg) center/cover;'+
+    'box-shadow:0 10px 26px -14px rgba(20,4,4,.55)}'+
+  '.pe-tray::before{content:"";position:absolute;inset:0;border-radius:13px;pointer-events:none;'+
+    'background:linear-gradient(180deg,rgba(43,1,4,.52) 0,rgba(43,1,4,.38) 45%,rgba(43,1,4,.55) 100%)}'+
+  // 88%/78% and no glassier: at 80/66 the small line under each name measured 3.28:1
+  // over the dark end of the photograph, which is not readable.
+  '.pe-tray .pe-lrow{position:relative;z-index:1;margin-bottom:9px;padding:12px 14px 12px 0;'+
+    'border-bottom:none;border-radius:12px;overflow:hidden;'+
+    'background:linear-gradient(180deg,rgba(255,250,242,.88) 0,rgba(248,240,228,.78) 100%);'+
+    'border:1px solid rgba(255,255,255,.55);'+
+    'box-shadow:0 8px 20px -10px rgba(20,4,4,.6),inset 0 1px 0 rgba(255,255,255,.9);'+
+    'transition:transform .18s cubic-bezier(.2,.7,.3,1),box-shadow .18s ease,background .18s ease}'+
+  '.pe-tray .pe-lrow:last-child{margin-bottom:0}'+
+  '@supports ((-webkit-backdrop-filter:blur(2px)) or (backdrop-filter:blur(2px))){'+
+    '.pe-tray .pe-lrow{-webkit-backdrop-filter:blur(12px) saturate(140%);backdrop-filter:blur(12px) saturate(140%)}}'+
+  '.pe-spine{width:5px;align-self:stretch;flex:none;background:var(--sc,#B9A98C);transition:box-shadow .2s ease}'+
+  '.pe-sdot{width:7px;height:7px;border-radius:50%;flex:none;background:var(--sc,#B9A98C);'+
+    'box-shadow:0 0 0 3px rgba(92,61,46,.10);transition:box-shadow .2s ease}'+
+  // Hover only where there is a real pointer: on a touch screen :hover sticks to the
+  // last row tapped and would leave a booking lifted after she has moved on.
+  '@media(hover:hover){.pe-tray .pe-lrow:hover{transform:translateY(-2px);'+
+    'background:linear-gradient(180deg,rgba(255,253,248,.95) 0,rgba(251,246,237,.88) 100%);'+
+    'box-shadow:0 16px 30px -12px rgba(20,4,4,.7),inset 0 1px 0 #fff}'+
+    '.pe-tray .pe-lrow:hover .pe-spine{box-shadow:0 0 12px var(--sc,#B9A98C)}'+
+    '.pe-tray .pe-lrow:hover .pe-sdot{box-shadow:0 0 0 3px rgba(92,61,46,.10),0 0 10px var(--sc,#B9A98C)}}'+
+  '.pe-tray .pe-lrow:active{transform:translateY(0);box-shadow:0 4px 10px -6px rgba(20,4,4,.6)}'+
+  // On a phone the dot goes and the gap tightens, so the row spends no more width
+  // than it did before: spine 5 + gap 8 replaces the 14px of left padding it lost.
+  '@media(max-width:520px){.pe-sdot{display:none}.pe-tray .pe-lrow{gap:8px}.pe-tray{padding:6px;border-radius:11px}}'+
+  '@media(prefers-reduced-motion:reduce){.pe-tray .pe-lrow{transition:none}'+
+    '.pe-tray .pe-lrow:hover{transform:none}}'+
+  '@media print{.pe-tray{background:none;box-shadow:none;padding:0}.pe-tray::before{display:none}'+
+    '.pe-tray .pe-lrow{background:none;box-shadow:none;border:none;border-radius:0;margin:0;'+
+    '-webkit-backdrop-filter:none;backdrop-filter:none;border-bottom:1px solid rgba(107,31,42,0.12)}}'+
   '.pe-pill{font-size:11px;padding:3px 10px;border-radius:10px;display:inline-block;white-space:nowrap}'+
   '.pe-p-draft{background:#E4DBCC;color:#4E4433;border:1px solid #B9A98C;font-weight:600}'+
   '.pe-p-sent{background:#F5D98A;color:#6B4A00;border:1px solid #C99A12;font-weight:600}'+
@@ -1381,11 +1421,16 @@ function peListRow(e){
   // back to whoever actually sent the proposal (from the log). Name without domain.
   var leadRaw = peEffLead(e);
   var lead = leadRaw ? peLeadLabel(leadRaw) : '';
-  var nameHtml = peEsc(e.client_name||e.company||'Unnamed')+(e.company&&e.client_name?' <span style="font-weight:400;color:#8B7355">· '+peEsc(e.company)+'</span>':'')+(lead?' <span style="font-weight:400;color:#8B7355">('+peEsc(lead)+')</span>':'');
-  return '<div class="pe-lrow" onclick="peGo(\'event\',\''+e.id+'\')">'+
+  var nameHtml = peEsc(e.client_name||e.company||'Unnamed')+(e.company&&e.client_name?' <span style="font-weight:400;color:#5C3D2E">· '+peEsc(e.company)+'</span>':'')+(lead?' <span style="font-weight:400;color:#5C3D2E">('+peEsc(lead)+')</span>':'');
+  // The colour down the left edge and the dot beside the name are the booking's status,
+  // straight off PE_STATUS_COL -- the same six colours the calendar legend and the status
+  // pills already use, so the row says where it stands without spending a word on it.
+  var scol = (PE_STATUS_COL[e.status] || PE_STATUS_COL.draft).b;
+  return '<div class="pe-lrow" style="--sc:'+scol+'" title="'+peEsc(peStatusMeta(e.status).n)+'" onclick="peGo(\'event\',\''+e.id+'\')">'+
+    '<span class="pe-spine"></span><span class="pe-sdot"></span>'+
     '<div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:600;color:#2C1810">'+nameHtml+'</div>'+
-    '<div style="font-size:11.5px;color:#8B7355">'+(parts.join(' · ')||'—')+'</div></div>'+
-    (val?'<div class="pe-hide-m" style="font-size:13px;color:#6B4A33;white-space:nowrap">AED '+peMoney(val)+'</div>':'')+
+    '<div style="font-size:11.5px;color:#5C3D2E">'+(parts.join(' · ')||'—')+'</div></div>'+
+    (val?'<div class="pe-hide-m" style="font-size:13px;color:#5C3D2E;white-space:nowrap">AED '+peMoney(val)+'</div>':'')+
     (ns.label?'<span onclick="event.stopPropagation();peGo(\''+(peCanEdit()?'guidedevent':'event')+'\',\''+e.id+'\')" style="'+PE_CHIP[ns.kind]+';border-radius:9px;padding:6px 11px;font-size:12px;font-weight:600;white-space:nowrap;cursor:pointer">'+ns.label+'</span>':'')+
   '</div>';
 }
@@ -1482,7 +1527,7 @@ function peRenderList(){
       var list = (byBucket[g[0]]||[]).sort(function(a,b){ return String(a.event_date||'9999').localeCompare(String(b.event_date||'9999')); });
       if(!list.length) return;
       h += '<div style="font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#A88930;margin:14px 2px 6px">'+g[1]+'</div>'+
-        '<div class="pe-card" style="padding:2px 0">'+list.map(peListRow).join('')+'</div>';
+        '<div class="pe-tray">'+list.map(peListRow).join('')+'</div>';
     });
   }
   if(empties.length && peCanEdit()){
