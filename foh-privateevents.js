@@ -2138,7 +2138,7 @@ function peGuideEventView(){
   else if(e.status==='confirmed' || e.status==='deposit') idx = 3;
   else if(e.status==='done') idx = 4;
   var stages = ['Draft','Sent','Signed','Confirmed','Done'];
-  var h = '<div class="pe-wrap" style="max-width:520px">';
+  var h = '<div class="pe-wrap" style="max-width:520px"><div class="pe-sheet">';
   var bt = peBackTarget();
   h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">'+
     '<span class="pe-tab" onclick="peGo(\''+bt.view+'\')">‹ Back to '+bt.label+'</span>'+
@@ -2212,7 +2212,7 @@ function peGuideEventView(){
     '<div style="font-size:13px;color:#6B4A33;margin:6px 0 16px">'+sub+'</div>'+
     body + '</div>';
   h += '<div style="text-align:center;margin-top:14px"><span class="pe-tab" onclick="peGo(\'event\',\''+e.id+'\')">Open full event ›</span></div>';
-  return h+'</div>';
+  return h+'</div></div>';   // pe-sheet, pe-wrap
 }
 function peRenderEvent(){
   var e = peEvById(peState.currentId);
@@ -2221,7 +2221,7 @@ function peRenderEvent(){
   var m = peStatusMeta(e.status);
   var log = peState.log[e.id]||[];
   var ce = peCanEdit();   // non-editors read everything; the edit affordances go
-  var h = '<div class="pe-wrap">';
+  var h = '<div class="pe-wrap"><div class="pe-sheet">';
   var bt = peBackTarget();
   h += '<div class="pe-top"><span style="display:flex;align-items:center;gap:8px">'+
        '<span class="pe-tab" onclick="peGo(\''+bt.view+'\')">‹ Back to '+bt.label+'</span>'+
@@ -2667,7 +2667,7 @@ function peRenderEvent(){
     '<button class="pe-btn sec" onclick="pePrintFunctionSheet(\''+e.id+'\')">Print the event brief</button>'+
     '</div></div>';
   h += '</div></div>';
-  return h+'</div>';
+  return h+'</div></div>';   // pe-sheet, pe-wrap
 }
 // Facts-card fields auto-save on blur (peFact), matching the fields below — one
 // save model per screen, each with a visible "Saved ✓".
@@ -7804,7 +7804,7 @@ function peRenderGuided(){
   if(!peGuide) peGuide = peGuideFresh();
   var g = peGuide;
   var names = ['Who','When','Food','Review'];
-  var h = '<div class="pe-wrap" style="max-width:520px">';
+  var h = '<div class="pe-wrap" style="max-width:520px"><div class="pe-sheet">';
   h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'+
     '<span class="pe-tab" onclick="peGuideBack()">‹ '+(g.step===0?'Cancel':'Back')+'</span>'+
     '<span style="font-size:11.5px;color:#4F4535">Step '+(g.step+1)+' of 4 · '+names[g.step]+'</span></div>';
@@ -7899,7 +7899,7 @@ function peRenderGuided(){
   if(g.step<3){
     h += '<div style="margin-top:14px"><button class="pe-btn pe-primary" style="width:100%;box-sizing:border-box;padding:13px" onclick="peGuideNext()">Continue ›</button></div>';
   }
-  return h+'</div>';
+  return h+'</div></div>';   // pe-sheet, pe-wrap
 }
 async function peGuideFinish(action){
   if(!peCanEdit()){ peToast('View only — ask Katarina, Andrea or Francesco to make changes', true); return; }
@@ -8418,7 +8418,7 @@ function peQuickSetAlc(id, val){
 }
 function peRenderQuick(){
   var tt = peQuickTotals();
-  var h = '<div class="pe-wrap"><div class="pe-top"><span class="pe-tab" onclick="peGo(\'list\')">\u2039 Events</span>'+
+  var h = '<div class="pe-wrap"><div class="pe-sheet"><div class="pe-top"><span class="pe-tab" onclick="peGo(\'list\')">\u2039 Events</span>'+
     '<span style="font-size:12px;color:#4F4535">Quick menu \u2014 like the Excel, but it prints itself</span></div>';
   h += '<div class="pe-card"><div class="pe-grid3">'+
     '<div style="grid-column:1/3"><div class="pe-lbl">Menu title</div><input class="pe-in" id="pe-q-title" value="'+peEsc(peQuick.title)+'" onchange="peQuickRead()"></div>'+
@@ -8535,7 +8535,7 @@ function peRenderQuick(){
     (peCanEdit()?'<button class="pe-btn sec" onclick="peQuickWhatsApp()" '+(tt.anything?'':'disabled')+'>Send by WhatsApp</button>':'')+
     (peCanEdit()&&!peQuick.savedId?'<button class="pe-btn sec" onclick="peQuickSave()" '+(tt.anything?'':'disabled')+'>Save as event draft</button>':'')+
     '</div></div></div></div>';
-  return h+'</div>';
+  return h+'</div></div>';   // pe-sheet, pe-wrap
 }
 function peQuickRead(){
   var tEl = document.getElementById('pe-q-title'), gEl = document.getElementById('pe-q-guests');
