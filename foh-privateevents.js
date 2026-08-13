@@ -2224,6 +2224,73 @@ async function peSrSave(id, patch){
   (peState.clients||[]).forEach(function(c){ if(c.id === id) Object.keys(patch).forEach(function(k){ c[k] = patch[k]; }); });
   return true;
 }
+// ── "Have THIS person booked with us?" — for anyone, in the book or not ──
+// The search box above filters OUR 34 clients. That is the wrong question when
+// an enquiry arrives from somebody new: the useful question is whether the
+// person on the email has ever dined here, and the answer to that lives in
+// SevenRooms, not in our book. So whatever is typed can be sent straight there.
+//
+// Same classification discipline as the card check: an @ is an email, a run of
+// digits is a phone, anything else is a name -- because passing the wrong type
+// to a working filter silently returns the unfiltered first 50, which reads as
+// "matched 50 people".
+function peSrClassify(v){
+  v = String(v||'').trim();
+  if(!v) return null;
+  if(v.indexOf('@') > 0) return { value:v, kind:'email' };
+  if(v.replace(/[^0-9]/g,'').length >= 7 && !/[a-z]/i.test(v)) return { value:v, kind:'phone' };
+  if(v.length >= 4) return { value:v, kind:'name' };
+  return null;
+}
+function peSrAskBtn(){
+  var pick = peSrClassify(peState.cq);
+  if(!pick) return '';
+  return '<button class="pe-btn sec" onclick="peSrLookup()">Ask SevenRooms about this '+pick.kind+'</button>';
+}
+async function peSrLookup(){
+  var pick = peSrClassify(peState.cq);
+  if(!pick){ peToast('Type an email, a number or a name first', true); return; }
+  var old = document.querySelector('.pe-modal-bg'); if(old) old.remove();
+  var bg = document.createElement('div');
+  bg.className = 'pe-modal-bg';
+  bg.setAttribute('onclick', 'if(event.target===this)this.remove()');
+  var head = '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:10px">'+
+    '<div><b style="color:#400207;font-size:16px">Have they dined with us?</b>'+
+      '<div style="font-size:12.5px;color:#5C3D2E;margin-top:2px">Asked SevenRooms for the '+pick.kind+' <b>'+peEsc(pick.value)+'</b></div></div>'+
+    '<span class="pe-x" onclick="this.closest(\'.pe-modal-bg\').remove()">&#10005;</span></div>';
+  bg.innerHTML = '<div class="pe-modal" onclick="event.stopPropagation()">'+head+
+    '<div id="pe-srl" style="font-size:12.5px;color:#5C3D2E">Asking SevenRooms…</div></div>';
+  document.body.appendChild(bg);
+  var box = document.getElementById('pe-srl');
+  try{
+    var url = KITCHEN_URL + '/functions/v1/sevenrooms-sync?clientcheck=' + encodeURIComponent(pick.value) + '&kind=' + pick.kind;
+    var r = await fetch(url, { method:'POST', headers:{ 'Content-Type':'application/json',
+      'Authorization':'Bearer ' + KITCHEN_KEY, 'x-proxy-secret': KITCHEN_PROXY_SECRET } });
+    if(!r.ok) throw new Error('HTTP ' + r.status);
+    var j = await r.json();
+    if(!j || !j.ok || j.status === 'error') throw new Error((j && j.error) || 'the search came back unusable');
+    var matches = j.matches || [];
+    if(j.status !== 'known' || !matches.length){
+      box.innerHTML = '<b style="color:#6B4A00">No match in SevenRooms.</b>'+
+        '<div style="font-size:12.5px;color:#5C3D2E;margin-top:4px">As far as the guest book knows, this is somebody new.</div>';
+      return;
+    }
+    // SevenRooms holds duplicate profiles for one person, so this is a list and
+    // it stays a list -- nothing here picks one on his behalf.
+    box.innerHTML = '<div style="font-size:12.5px;color:#5C3D2E;margin-bottom:6px">SevenRooms found '+matches.length+
+        ' profile'+(matches.length===1?'':'s')+'.</div>'+
+      matches.map(function(m){
+        return '<div style="padding:8px 0;border-bottom:1px solid rgba(107,31,42,.10)">'+
+          '<div style="font-size:13px;color:#2C1810">'+peEsc(m.name||'Unnamed')+
+            (m.company?' <span style="color:#5C3D2E">· '+peEsc(m.company)+'</span>':'')+peSrTags(m)+'</div>'+
+          '<div style="font-size:11.5px;color:#5C3D2E">'+peSrFacts(m)+'</div></div>';
+      }).join('')+
+      '<div style="font-size:11px;color:#5C3D2E;margin-top:10px">Numbers and addresses stay in SevenRooms — this only ever returns the history.</div>';
+  }catch(err){
+    box.innerHTML = '<span style="color:#8A2A1A">Could not reach SevenRooms — '+peEsc(err.message||'unknown error')+'.</span>'+
+      '<div style="margin-top:8px"><button class="pe-btn sec sm" onclick="peSrLookup()">Try again</button></div>';
+  }
+}
 // ── The card behind the name ─────────────────────────────────────────
 function peClientCard(id){
   var r = peClientRows().filter(function(x){ return x.c.id === id; })[0];
@@ -2293,7 +2360,12 @@ function peRenderClients(){
     return h + PE_FOOT;
   }
   if(!shown.length){
-    h += '<div style="text-align:center;padding:26px;color:#4F4535;font-size:13px">Nobody matches \u201c'+peEsc(peState.cq||'')+'\u201d. '+
+    // A dead end is the wrong answer here: not being in OUR book says nothing
+    // about whether they have eaten here, which is the question actually being
+    // asked when a new enquiry arrives.
+    h += '<div style="text-align:center;padding:24px 20px;color:#4F4535;font-size:13px">'+
+      'Nobody in the client book matches \u201c'+peEsc(peState.cq||'')+'\u201d.'+
+      '<div style="margin:12px 0 6px">'+peSrAskBtn()+'</div>'+
       '<span style="color:#400207;text-decoration:underline;cursor:pointer" onclick="peState.cq=\'\';renderMain()">Clear the search</span></div>';
     return h + PE_FOOT;
   }
@@ -2314,6 +2386,7 @@ function peRenderClients(){
   h += '<div style="font-size:11.5px;color:#4F4535;display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px;margin-top:10px">'+
     '<span>'+shown.length+' of '+rows.length+' shown</span>'+
     '<span>Tap a name for everything else \u2014 bookings, value, history.</span></div>';
+  if(peSrClassify(peState.cq)) h += '<div style="text-align:center;margin-top:10px">'+peSrAskBtn()+'</div>';
   return h + PE_FOOT;
 }
 
