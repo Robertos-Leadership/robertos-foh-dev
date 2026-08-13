@@ -1298,7 +1298,7 @@ async function resPrintBrief(){
     + 'th.w7,th.w8,th.w9{padding:3px 5px;letter-spacing:0}'
     + 'td.w7,td.w8,td.w9{background:#faf7f4;padding:4px 5px}'
     + '.vip{background:#6B1F2A;color:#fff;font-size:7px;font-weight:700;padding:1px 3px;border-radius:2px;vertical-align:1px}'
-    + '.tg{color:#6B1F2A}.more{color:#999}'
+    + '.tg{color:#6B1F2A}.more{color:#6E5F4A}'
     // The flags. Read at arm's length across a pass, so: colour before words.
     // Red is only ever a dietary requirement -- if it is red, it goes to the
     // kitchen. Amber is something the table needs. Cream is a celebration.
@@ -1309,7 +1309,7 @@ async function resPrintBrief(){
     + '.fl.occ{background:#f0e6d8;color:#5a4326;border:1px solid #d8c5a8}'
     + '.fl.menu{background:#26413c;color:#fff}'
     + '.rq{color:#555}.gn{color:#444;font-style:italic}.ns{color:#B00020;font-weight:700}'
-    + '.ft{margin-top:12px;padding-top:6px;border-top:1px solid #ccc;font-size:8px;color:#666;line-height:1.5}';
+    + '.ft{margin-top:12px;padding-top:6px;border-top:1px solid #ccc;font-size:8px;color:#6E5F4A;line-height:1.5}';
 
   var doc = '<!doctype html><html><head><meta charset="utf-8"><title>Service brief — '
     + resEsc(resDateLabel(RES.date)) + '</title><style>' + css + '</style></head><body>' + h + '</body></html>';

@@ -230,7 +230,7 @@ function revUnfiledBanner(p, withMonth){
   var who=withMonth?(revMonthLabel(p).split(' ')[0]+': '):'';
   // A month that has ended is missing from its TOTAL, not from a month-to-date.
   var what=(revMonthState(p)==='closed')?'the month total is':'month-to-date is';
-  return '<div style="background:rgba(179,64,47,.08);border:1px solid rgba(179,64,47,.35);color:#b3402f;border-radius:6px;padding:10px 14px;margin:0 0 12px;font-size:13px;line-height:1.5">'
+  return '<div style="background:rgba(179,64,47,.08);border:1px solid rgba(179,64,47,.35);color:#AB3D2D;border-radius:6px;padding:10px 14px;margin:0 0 12px;font-size:13px;line-height:1.5">'
     +'&#9888; <b>'+who+n+' trading night'+(n>1?'s':'')+' not yet filed</b> ('+names.join(', ')+extra+') &mdash; '+what+' incomplete until '+(n>1?'those closing reports are':'that closing report is')+' added.</div>';
 }
 // Nights that booked revenue against a ZERO budget — in practice a Sunday buyout, because
@@ -250,7 +250,7 @@ function revNoBudgetBanner(p){
   // Flattery in percentage points = the un-budgeted net as a share of the month's budget:
   // vs-budget with these nights minus vs-budget without them reduces to exactly this.
   var pts=m.budgetTotal?(net/m.budgetTotal*100):0;
-  return '<div style="background:rgba(201,168,76,.10);border:1px solid rgba(201,168,76,.45);color:#8a6d1f;border-radius:6px;padding:10px 14px;margin:0 0 12px;font-size:13px;line-height:1.5">'
+  return '<div style="background:rgba(201,168,76,.10);border:1px solid rgba(201,168,76,.45);color:#775E1B;border-radius:6px;padding:10px 14px;margin:0 0 12px;font-size:13px;line-height:1.5">'
     +'&#9888; <b>'+n+' night'+(n>1?'s':'')+' traded with no budget</b> ('+names.join(', ')+') &mdash; '+revMoney(net)+' of net measured against AED 0.'
     +(m.budgetTotal?' The month reads '+pts.toFixed(1)+' points better than a like-for-like comparison.':'')
     +' Sundays carry no budget because they are normally closed &mdash; open the night and set its budget to compare fairly.</div>';
@@ -463,7 +463,7 @@ function revRecalc(){
   var chk=document.getElementById('rev-fnb-check');
   if(chk){
     if(fbSum===0){ chk.style.color='var(--text-light)'; chk.textContent='Not entered — AI will estimate Food 48% / Bev 51% / Tobacco 1% of net.'; }
-    else { var diff=fbSum-tot; chk.style.color=''; chk.innerHTML='F&B total '+revMoney(fbSum)+' vs net '+revMoney(tot)+' · '+(Math.abs(diff)<1?'<b style="color:#2d7a4f">matches</b>':'<b style="color:#b3402f">off by '+revMoney(Math.abs(diff)).replace('AED ','')+'</b>'); }
+    else { var diff=fbSum-tot; chk.style.color=''; chk.innerHTML='F&B total '+revMoney(fbSum)+' vs net '+revMoney(tot)+' · '+(Math.abs(diff)<1?'<b style="color:#296E48">matches</b>':'<b style="color:#AB3D2D">off by '+revMoney(Math.abs(diff)).replace('AED ','')+'</b>'); }
   }
 }
 async function revSaveDay(){
@@ -732,7 +732,7 @@ function revProposalPreview(a){
 }
 function revProposalCardHTML(id){
   var pr=revInit().proposals[id]; if(!pr) return '';
-  var rows=pr.preview.rows.map(function(r){return '<tr><td>'+clEsc(r[0])+'</td><td>'+r[1]+'</td><td style="color:#9c8a72">&rarr;</td><td><b>'+r[2]+'</b></td></tr>';}).join('');
+  var rows=pr.preview.rows.map(function(r){return '<tr><td>'+clEsc(r[0])+'</td><td>'+r[1]+'</td><td style="color:#6E5F4A">&rarr;</td><td><b>'+r[2]+'</b></td></tr>';}).join('');
   var foot;
   if(pr.status==='applied') foot='<div class="rev-prop-done rev-pos">&#10003; Applied</div>';
   else if(pr.status==='rejected') foot='<div class="rev-prop-done rev-mut">Dismissed</div>';
@@ -998,18 +998,18 @@ function revPrintCss(){
   return 'body{font-family:Inter,Arial,sans-serif;color:#2C1810;margin:0;padding:28px 32px;background:#fff}'
     +'.rep-hd{display:flex;align-items:center;justify-content:space-between;border-bottom:3px solid #6B1F2A;padding-bottom:12px;margin-bottom:18px}'
     +'.rep-hd .b{font-family:Georgia,serif;font-size:22px;font-weight:700;color:#6B1F2A;letter-spacing:.5px}'
-    +'.rep-hd .s{font-size:12px;color:#8B7355}.rep-hd .t{text-align:right;font-size:13px;color:#5C3D2E}'
+    +'.rep-hd .s{font-size:12px;color:#6E5F4A}.rep-hd .t{text-align:right;font-size:13px;color:#5C3D2E}'
     +'h2{font-size:16px;color:#6B1F2A;margin:18px 0 10px}'
     +'.rep-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:8px}'
     +'.rep-kpi{border:1px solid rgba(107,31,42,.15);border-radius:8px;padding:10px 12px}'
-    +'.rep-k{font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:#8B7355}.rep-v{font-size:18px;font-weight:700;margin:3px 0}.rep-s{font-size:11px;color:#5C3D2E}'
+    +'.rep-k{font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:#6E5F4A}.rep-v{font-size:18px;font-weight:700;margin:3px 0}.rep-s{font-size:11px;color:#5C3D2E}'
     +'.rep-charts{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:12px 0}'
     +'.rev-chart{border:1px solid rgba(107,31,42,.15);border-radius:8px;padding:10px 12px}'
     +'.rev-chart-t{font-weight:600;font-size:12px;color:#5C3D2E;margin-bottom:6px}.rev-chart-svg{width:100%;height:auto;display:block}'
-    +'.rev-chart-lg{display:flex;flex-wrap:wrap;gap:10px;margin-top:6px;font-size:10px;color:#8B7355}'
+    +'.rev-chart-lg{display:flex;flex-wrap:wrap;gap:10px;margin-top:6px;font-size:10px;color:#6E5F4A}'
     +'.rev-lg{display:inline-flex;align-items:center;gap:4px}.rev-lg i{width:10px;height:10px;border-radius:2px;display:inline-block}'
-    +'.rev-chart-empty{padding:20px;text-align:center;color:#8B7355;font-size:11px}'
-    +'table{width:100%;border-collapse:collapse;font-size:12px;margin:6px 0 14px}th,td{text-align:left;padding:6px 8px;border-bottom:1px solid rgba(107,31,42,.1)}th{color:#8B7355;font-size:10px;text-transform:uppercase;letter-spacing:.4px}'
+    +'.rev-chart-empty{padding:20px;text-align:center;color:#6E5F4A;font-size:11px}'
+    +'table{width:100%;border-collapse:collapse;font-size:12px;margin:6px 0 14px}th,td{text-align:left;padding:6px 8px;border-bottom:1px solid rgba(107,31,42,.1)}th{color:#6E5F4A;font-size:10px;text-transform:uppercase;letter-spacing:.4px}'
     +'.rev-md-h{font-weight:700;color:#6B1F2A;margin:12px 0 6px;font-size:14px}.rev-md-ul{margin:6px 0 6px 18px}.rev-md-p{margin:4px 0;font-size:13px;line-height:1.5}.rev-md-tbl td,.rev-md-tbl th{font-size:12px}'
     +'.rev-chart-embed{max-width:460px;margin:10px 0}.rev-scen-card{border:1px solid rgba(107,31,42,.15);border-radius:8px;padding:8px 10px;margin:8px 0;font-size:12px}'
     +'@media print{.rep-charts{grid-template-columns:1fr 1fr}}';
@@ -1086,7 +1086,7 @@ function revRenderMonthlyOnly(p){
   var hasSplit=(r.food_net!=null||r.bev_net!=null);
   // The reason first — before the figure, so it is read before the number is judged.
   if(r.note) h.push('<div style="background:rgba(107,31,42,.06);border-left:3px solid #6B1F2A;border-radius:4px;padding:10px 14px;margin:0 0 12px;font-size:13px;line-height:1.5"><b>'+clEsc(r.note)+'</b></div>');
-  h.push('<div style="background:rgba(201,168,76,.10);border:1px solid rgba(201,168,76,.45);color:#8a6d1f;border-radius:6px;padding:10px 14px;margin:0 0 12px;font-size:13px;line-height:1.5">'
+  h.push('<div style="background:rgba(201,168,76,.10);border:1px solid rgba(201,168,76,.45);color:#775E1B;border-radius:6px;padding:10px 14px;margin:0 0 12px;font-size:13px;line-height:1.5">'
     +'&#9888; <b>Monthly total only &mdash; no night-by-night detail.</b> This month pre-dates the app, so it has one figure from the finance record rather than a filed closing report for each night. '
     +'There is no daily grid, no covers, no average spend and no forecast for it, because none of that was ever recorded.</div>');
   h.push('<div class="rev-cards">');
@@ -1322,7 +1322,7 @@ function revRenderYear(){
   // Name the holes under the total. The figure above is only the year to date if every
   // elapsed month is in it — when it isn't, say so rather than let the label imply it.
   if(holes.length){
-    h.push('<div style="background:rgba(179,64,47,.08);border:1px solid rgba(179,64,47,.35);color:#b3402f;border-radius:6px;padding:10px 14px;margin:12px 0 0;font-size:13px;line-height:1.5">'
+    h.push('<div style="background:rgba(179,64,47,.08);border:1px solid rgba(179,64,47,.35);color:#AB3D2D;border-radius:6px;padding:10px 14px;margin:12px 0 0;font-size:13px;line-height:1.5">'
       +'&#9888; <b>YTD is missing '+holes.length+' month'+(holes.length>1?'s':'')+'</b> ('+holes.join(', ')+') &mdash; no revenue has been entered for '+(holes.length>1?'them':'it')+'. '
       +'The YTD figure above covers '+counted+' of '+elapsed+' elapsed month'+(elapsed>1?'s':'')+' only. Read it as a '+counted+'-month total, not as the year to date.</div>');
   }

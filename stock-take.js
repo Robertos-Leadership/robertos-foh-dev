@@ -581,17 +581,17 @@ function stInjectCss(){
     '.st-deptbtn{display:flex;align-items:center;justify-content:center;text-align:center;min-height:44px;padding:4px 6px;border:1px solid #c9a84c;background:#fff;color:#7a1218;font-weight:700;font-size:13px;line-height:1.15;border-radius:10px;cursor:pointer}'+
     '.st-deptbtn.active{background:#410207;color:#f5ede0;border-color:#410207}'+
     '.st-title{padding:12px 14px 0;font-family:Georgia,serif;color:#410207;font-size:20px;font-weight:700}'+
-    '.st-sub{padding:0 14px;color:#8a7a55;font-size:12px}'+
+    '.st-sub{padding:0 14px;color:#6E5F4A;font-size:12px}'+
     '.st-gate{margin:12px 14px;padding:12px;background:#fbe7d8;border:1px solid #e3c79a;border-radius:10px}'+
     '.st-gate b{color:#7a1218}'+
-    '.st-who{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:12px 14px;font-size:13px;color:#7a6a55}'+
+    '.st-who{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:12px 14px;font-size:13px;color:#6E5F4A}'+
     '.st-who b{color:#410207}'+
     '.st-cards{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:8px 14px 0}'+
     '.st-card{background:#fff;border:1px solid #e8ddc9;border-radius:12px;padding:12px}'+
     '.st-card.dark{background:#410207;border-color:#410207}'+
     '.st-card.dark .st-num{color:#f5ede0}.st-card.dark .st-label{color:#d8c7a8}'+
     '.st-num{font-size:20px;font-weight:800;color:#410207;font-variant-numeric:tabular-nums}'+
-    '.st-label{font-size:11px;color:#8a7a55;text-transform:uppercase;letter-spacing:1px;margin-top:2px}'+
+    '.st-label{font-size:11px;color:#6E5F4A;text-transform:uppercase;letter-spacing:1px;margin-top:2px}'+
     '.st-toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:10px 14px 2px}'+
     '.st-input,.st-select{height:38px;border:1px solid #c9a84c;border-radius:8px;padding:0 10px;font-size:14px;background:#fff}'+
     '.st-kindbar{display:flex;gap:8px;padding:8px 14px 0}'+
@@ -599,7 +599,7 @@ function stInjectCss(){
     '.st-kindbtn.active{background:#410207;color:#f5ede0;border-color:#410207}'+
     '.st-catbar{display:flex;align-items:center;justify-content:space-between;padding:8px 14px 2px;font-size:13px;gap:10px;flex-wrap:wrap}'+
     '.st-catbar b{color:#410207}'+
-    '.st-muted{font-size:12px;color:#8a7a55}'+
+    '.st-muted{font-size:12px;color:#6E5F4A}'+
     '.st-cat{background:#410207;color:#f5ede0;font-size:11px;letter-spacing:1.2px;text-transform:uppercase;padding:6px 14px;margin-top:6px}'+
     '.st-actions{display:flex;gap:8px;padding:8px 14px 4px;flex-wrap:wrap}'+
     '.st-btn{flex:1;min-width:108px;height:40px;border:1px solid #c9a84c;background:#fff;color:#410207;font-weight:700;font-size:13px;border-radius:9px;cursor:pointer;padding:0 12px}'+
@@ -613,18 +613,18 @@ function stInjectCss(){
     '.st-name{font-size:14px;font-weight:600;color:#2a1a10;line-height:1.25}'+
     '.st-tag{font-size:10px;font-weight:700;color:#7a4a00;background:#f6d79a;border-radius:5px;padding:1px 6px;margin-left:6px}'+
     '.st-meta{margin-top:4px}'+
-    '.st-prev{margin-top:3px;font-size:11px;color:#9a8a6a;font-style:italic}'+
-    '.st-prevtotal{padding:6px 14px 0;font-size:12px;color:#8a7a55}'+
+    '.st-prev{margin-top:3px;font-size:11px;color:#6E5F4A;font-style:italic}'+
+    '.st-prevtotal{padding:6px 14px 0;font-size:12px;color:#6E5F4A}'+
     '.st-prevtotal b{color:#410207}'+
     '.st-lockbanner{margin:10px 14px 0;padding:10px 12px;background:#f3eee6;border:1px solid #c9a84c;border-radius:10px;font-size:13px;color:#5a4a2a;line-height:1.4}'+
     '.st-qtywrap{justify-self:center;display:flex;flex-direction:column;align-items:center;gap:4px}'+
     '.st-qty{width:76px;height:38px;text-align:center;border:1px solid #c9a84c;border-radius:8px;font-size:16px;background:#fff}'+
-    '.st-add{width:76px;height:30px;text-align:center;border:1px dashed #1d7a4a;border-radius:8px;font-size:13px;color:#1d7a4a;background:#f3faf5}'+
-    '.st-add::placeholder{color:#69a883}'+
-    '.st-unit{height:30px;background:#e1d3c2;border:1px solid #cbb892;border-radius:6px;font-size:12px;color:#8a7a55;max-width:180px;padding:0 4px}'+
+    '.st-add{width:76px;height:30px;text-align:center;border:1px dashed #1d7a4a;border-radius:8px;font-size:13px;color:#1B6F44;background:#f3faf5}'+
+    '.st-add::placeholder{color:#3E6B51}'+
+    '.st-unit{height:30px;background:#e1d3c2;border:1px solid #cbb892;border-radius:6px;font-size:12px;color:#6E5F4A;max-width:180px;padding:0 4px}'+
     '.st-line{justify-self:end;min-width:96px;text-align:right;font-weight:700;color:#410207;font-size:13px;font-variant-numeric:tabular-nums}'+
     '.st-addbtn{margin:14px;width:calc(100% - 28px);height:42px;border:1px dashed #c9a84c;background:#fff;color:#410207;font-weight:700;border-radius:10px;cursor:pointer}'+
-    '.st-nodata{padding:26px 14px;text-align:center;color:#8a7a55;font-size:13px}'+
+    '.st-nodata{padding:26px 14px;text-align:center;color:#6E5F4A;font-size:13px}'+
     '.st-modal{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:99999}'+
     '.st-modal-box{background:#fff;border-radius:12px;padding:18px;width:90%;max-width:360px}'+
     '.st-modal input{width:100%;height:38px;border:1px solid #c9a84c;border-radius:8px;padding:0 10px;font-size:14px;box-sizing:border-box}'+
@@ -633,20 +633,20 @@ function stInjectCss(){
     '.st-cmp-box{background:#faf5ec;border-radius:12px;width:100%;max-width:1000px;padding:16px;box-sizing:border-box}'+
     '.st-cmp-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:12px}'+
     '.st-cmp-title{font-family:Georgia,serif;font-size:20px;color:#410207}'+
-    '.st-cmp-sub{font-size:12px;color:#7a6a55;margin-top:3px;line-height:1.45;max-width:640px}'+
+    '.st-cmp-sub{font-size:12px;color:#6E5F4A;margin-top:3px;line-height:1.45;max-width:640px}'+
     '.st-cmp-sub b{color:#410207}'+
     '.st-cmp-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:10px}'+
     '.st-cmp-card{background:#fff;border:1px solid #e3d5bb;border-radius:10px;padding:10px 12px}'+
     '.st-cmp-card.up{background:#f1f8f3;border-color:#bcd9c6}'+
     '.st-cmp-card.down{background:#fdf1f1;border-color:#e3bcbc}'+
     '.st-cmp-num{font-family:Georgia,serif;font-size:19px;color:#410207;font-variant-numeric:tabular-nums}'+
-    '.st-cmp-lbl{font-size:11px;letter-spacing:.8px;text-transform:uppercase;color:#8a7a55;margin-top:2px}'+
+    '.st-cmp-lbl{font-size:11px;letter-spacing:.8px;text-transform:uppercase;color:#6E5F4A;margin-top:2px}'+
     '.st-cmp-warn{background:#fdf6e3;border:1px solid #d9c07a;border-radius:9px;padding:9px 11px;font-size:12px;color:#5a4a2a;line-height:1.45;margin-bottom:10px}'+
     '.st-cmp-ctrl{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:6px;font-size:13px;color:#5a4a2a}'+
     '.st-cmp-ctrl label{display:flex;align-items:center;gap:6px}'+
     '.st-cmp-ctrl .st-input{width:90px;height:32px}'+
     '.st-cmp-ctrl .st-btn{flex:none}'+
-    '.st-cmp-count{font-size:12px;color:#8a7a55;margin-bottom:8px}'+
+    '.st-cmp-count{font-size:12px;color:#6E5F4A;margin-bottom:8px}'+
     '.st-cmp-scroll{overflow-x:auto;border:1px solid #e3d5bb;border-radius:10px;background:#fff}'+
     '.st-cmp-tbl{border-collapse:collapse;width:100%;font-size:13px;min-width:640px}'+
     '.st-cmp-tbl th{text-align:left;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:#f5ede0;background:#410207;padding:7px 9px;position:sticky;top:0}'+
@@ -657,11 +657,11 @@ function stInjectCss(){
     '.st-cmp-tbl tr.lvl-watch td{background:#fdf8ea}'+
     '.st-cmp-tbl tr.lvl-watch td:first-child{box-shadow:inset 4px 0 0 #c9a84c}'+
     '.st-cmp-name{font-weight:600;color:#2a1a10}'+
-    '.st-cmp-grp{font-size:11px;color:#9a8a6a;margin-top:2px}'+
+    '.st-cmp-grp{font-size:11px;color:#6E5F4A;margin-top:2px}'+
     '.st-cmp-note{color:#7a1218}'+
-    '.st-cmp-sm{font-size:11px;color:#8a7a55}'+
+    '.st-cmp-sm{font-size:11px;color:#6E5F4A}'+
     '.st-cmp-tbl td.neg b{color:#7a1218}'+
-    '.st-cmp-tbl td.pos b{color:#1d7a4a}';
+    '.st-cmp-tbl td.pos b{color:#1B6F44}';
   document.head.appendChild(s);
 }
 
@@ -740,7 +740,7 @@ function stRender(){
         '<select class="st-select" style="flex:none;height:46px" title="Voice language — set it to the section you are counting" onchange="stVoiceLang=this.value">'+
           ['en-GB','fr-FR','it-IT'].map(function(L){ var lbl={'en-GB':'EN','fr-FR':'FR','it-IT':'IT'}[L]; return '<option value="'+L+'"'+(stVoiceLang===L?' selected':'')+'>'+lbl+'</option>'; }).join('')+
         '</select></div>' : '')+
-    (stUser && !stIsLocked() ?'<div style="padding:4px 14px 0;font-size:12px;color:#8a7a55;line-height:1.4">Type the <b>total</b> you counted in the white box. Use the green <b>+ add</b> box to add onto a count someone already started (e.g. a second person or the store-room).'+(stVoiceSupported()?' Or tap <b>🎤 Count by voice</b> and say the item and how many.':'')+'</div>':'')+
+    (stUser && !stIsLocked() ?'<div style="padding:4px 14px 0;font-size:12px;color:#6E5F4A;line-height:1.4">Type the <b>total</b> you counted in the white box. Use the green <b>+ add</b> box to add onto a count someone already started (e.g. a second person or the store-room).'+(stVoiceSupported()?' Or tap <b>🎤 Count by voice</b> and say the item and how many.':'')+'</div>':'')+
     '<div id="st-rows"></div>'+
     '<button class="st-addbtn" onclick="stShowAdd()">+ Add missing item</button>';
 
@@ -977,7 +977,7 @@ function stReportHtml(){
         '<th style="text-align:right;padding:5px 8px;border-bottom:2px solid #410207">Price</th>'+
         '<th style="text-align:right;padding:5px 8px;border-bottom:2px solid #410207">Value</th></tr></thead>'+
         '<tbody>'+body+'</tbody></table>'+
-      '<div style="font-size:11px;color:#999;margin-top:14px">Sent from Roberto\'s FOH App · Stock Take</div></div>'
+      '<div style="font-size:11px;color:#6E5F4A;margin-top:14px">Sent from Roberto\'s FOH App · Stock Take</div></div>'
   };
 }
 
@@ -1031,9 +1031,9 @@ function stReviewSend(){
   box.id='st-send-modal'; box.className='st-modal';
   box.innerHTML='<div class="st-modal-box" onclick="event.stopPropagation()">'+
     '<div style="font-weight:700;color:#410207;margin-bottom:4px">Send '+stEsc(stDeptLabel())+' stock take to Aung</div>'+
-    '<div style="font-size:12px;color:#8a7a55;margin-bottom:14px">cc Asarudeen, Manuel &amp; Jad. Choose a format:</div>'+
-    '<button class="st-btn" style="width:100%;margin-bottom:10px;text-align:left;height:auto;padding:10px 12px" onclick="stSendEmail(\'excel\')"><b>Excel file</b><br><span style="font-size:11px;color:#8a7a55">attached spreadsheet — for Aung\'s system</span></button>'+
-    '<button class="st-btn" style="width:100%;margin-bottom:14px;text-align:left;height:auto;padding:10px 12px" onclick="stSendEmail(\'digital\')"><b>Digital format</b><br><span style="font-size:11px;color:#8a7a55">the in-app layout, inside the email</span></button>'+
+    '<div style="font-size:12px;color:#6E5F4A;margin-bottom:14px">cc Asarudeen, Manuel &amp; Jad. Choose a format:</div>'+
+    '<button class="st-btn" style="width:100%;margin-bottom:10px;text-align:left;height:auto;padding:10px 12px" onclick="stSendEmail(\'excel\')"><b>Excel file</b><br><span style="font-size:11px;color:#6E5F4A">attached spreadsheet — for Aung\'s system</span></button>'+
+    '<button class="st-btn" style="width:100%;margin-bottom:14px;text-align:left;height:auto;padding:10px 12px" onclick="stSendEmail(\'digital\')"><b>Digital format</b><br><span style="font-size:11px;color:#6E5F4A">the in-app layout, inside the email</span></button>'+
     '<div id="st-send-status" style="font-size:12px;min-height:16px;color:#7a1218;margin-bottom:8px"></div>'+
     '<div style="display:flex;justify-content:flex-end"><button class="st-btn" style="flex:none" onclick="document.getElementById(\'st-send-modal\').remove()">Cancel</button></div></div>';
   box.addEventListener('click', function(){ box.remove(); });
@@ -1301,7 +1301,7 @@ async function stCompareExcel(){
 // ── employee-ID gate / signed-in chip ──
 function stGateHtml(){
   return stUser
-    ? '<div class="st-who"><span><span style="color:#1d7a4a">●</span> Counting as <b>'+stEsc(stUser.name)+'</b> · #'+stEsc(stUser.emp_id)+'</span>'+
+    ? '<div class="st-who"><span><span style="color:#1B6F44">●</span> Counting as <b>'+stEsc(stUser.name)+'</b> · #'+stEsc(stUser.emp_id)+'</span>'+
       '<button class="st-btn" style="flex:none" onclick="stSignOut()">Switch</button></div>'
     : '<div class="st-gate"><div><b>Enter your employee ID to count</b></div>'+
       '<div style="display:flex;gap:8px;margin-top:8px"><input class="st-input" id="st-empid" inputmode="numeric" placeholder="e.g. 1042" style="flex:1" onkeydown="if(event.key===\'Enter\')stSignIn()">'+
@@ -1335,11 +1335,11 @@ function stShowUpload(){
   box.id='st-up-modal'; box.className='st-modal';
   box.innerHTML='<div class="st-modal-box" onclick="event.stopPropagation()">'+
     '<div style="font-weight:700;color:#410207;margin-bottom:6px">Upload '+stEsc(stDeptLabel())+' stock take</div>'+
-    '<div style="font-size:12px;color:#8a7a55;margin-bottom:10px">Pick the Excel file the cost controller sent (.xls or .xlsx). It becomes the '+stEsc(stDeptLabel())+' count for the date below.</div>'+
+    '<div style="font-size:12px;color:#6E5F4A;margin-bottom:10px">Pick the Excel file the cost controller sent (.xls or .xlsx). It becomes the '+stEsc(stDeptLabel())+' count for the date below.</div>'+
     '<input type="file" id="st-up-file" accept=".xls,.xlsx" style="margin-bottom:10px" onchange="stUploadPreview()">'+
-    '<label style="font-size:12px;color:#8a7a55">Date counted</label>'+
+    '<label style="font-size:12px;color:#6E5F4A">Date counted</label>'+
     '<input id="st-up-month" type="date" style="margin:4px 0 4px">'+
-    '<div style="font-size:11px;color:#8a7a55;margin-bottom:10px;line-height:1.4">Each date is a separate count kept for good. Counting twice in a month? Use the real date of each one — the earlier count is never touched.</div>'+
+    '<div style="font-size:11px;color:#6E5F4A;margin-bottom:10px;line-height:1.4">Each date is a separate count kept for good. Counting twice in a month? Use the real date of each one — the earlier count is never touched.</div>'+
     '<div id="st-up-status" style="font-size:12px;color:#7a1218;min-height:16px;margin-bottom:8px"></div>'+
     '<div style="display:flex;gap:8px;justify-content:flex-end"><button class="st-btn" style="flex:none" onclick="document.getElementById(\'st-up-modal\').remove()">Cancel</button>'+
     '<button class="st-btn" style="flex:none" id="st-up-go" onclick="stHandleUpload()">Upload</button></div></div>';
@@ -1616,7 +1616,7 @@ function stVoiceShowListening(mode){
   b.innerHTML='<div class="st-modal-box" style="text-align:center" onclick="event.stopPropagation()">'+
     '<div style="font-size:42px;line-height:1">🎤</div>'+
     '<div style="font-weight:700;color:#410207;margin:8px 0 4px">Listening… take your time</div>'+
-    '<div style="font-size:12px;color:#8a7a55;margin-bottom:8px">'+sub+'</div>'+
+    '<div style="font-size:12px;color:#6E5F4A;margin-bottom:8px">'+sub+'</div>'+
     '<div id="st-listen-text" style="min-height:22px;font-size:15px;color:#2a1a10;background:#f7f1e6;border-radius:8px;padding:8px;margin-bottom:12px">…</div>'+
     '<div style="display:flex;gap:8px;justify-content:center"><button class="st-btn" style="flex:none" onclick="stVoiceCancel()">Cancel</button>'+
     '<button class="st-btn" style="flex:none;background:#410207;color:#f5ede0" onclick="stVoiceStop()">Done</button></div></div>';
@@ -1639,10 +1639,10 @@ function stVoiceShowConfirm(heard, qty, cands){
   var b=document.createElement('div'); b.id='st-voice-modal'; b.className='st-modal';
   b.innerHTML='<div class="st-modal-box" onclick="event.stopPropagation()">'+
     '<div style="font-weight:700;color:#410207;margin-bottom:4px">Check before saving</div>'+
-    '<div style="font-size:12px;color:#8a7a55;margin-bottom:12px">Heard: "'+stEsc(heard)+'"</div>'+
-    '<label style="font-size:12px;color:#8a7a55">Item'+(cands.length>1?' — '+cands.length+' matches, pick the right one':'')+'</label>'+
+    '<div style="font-size:12px;color:#6E5F4A;margin-bottom:12px">Heard: "'+stEsc(heard)+'"</div>'+
+    '<label style="font-size:12px;color:#6E5F4A">Item'+(cands.length>1?' — '+cands.length+' matches, pick the right one':'')+'</label>'+
     '<select id="st-voice-item" class="st-select" style="width:100%;height:40px;margin:4px 0 12px">'+opts+'</select>'+
-    '<label style="font-size:12px;color:#8a7a55">Add this many</label>'+
+    '<label style="font-size:12px;color:#6E5F4A">Add this many</label>'+
     '<div style="display:flex;gap:8px;margin:4px 0 14px"><input id="st-voice-qty" class="st-input" inputmode="decimal" value="'+qv+'" placeholder="how many" style="flex:1;height:40px">'+
       '<button class="st-btn" style="flex:none" onclick="stVoiceStart(\'qty\')">🎤 Say number</button></div>'+
     '<div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">'+

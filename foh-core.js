@@ -835,8 +835,8 @@ var ADM_CSS='.adm-wrap{max-width:1100px;margin:0 auto;padding:18px 16px 90px;}'
     +'border-radius:12px;padding:15px 18px;margin:6px 0 18px;}'
   +'.ov-att-warn{border-left-color:#B3402F;}'
   +'.ov-att-clear{border-left-color:#5C9463;}'
-  +'.ov-att-h{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:#9c8a72;margin-bottom:10px;}'
-  +'.ov-att-h span{color:#b09a7d;letter-spacing:0;}'
+  +'.ov-att-h{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:#6E5F4A;margin-bottom:10px;}'
+  +'.ov-att-h span{color:#6E5F4A;letter-spacing:0;}'
   +'.ov-att-none{font-size:13px;color:#4a3b2a;line-height:1.55;}'
   +'.ov-att-row{display:flex;align-items:center;gap:11px;flex-wrap:wrap;'
     +'padding:10px 0;border-top:1px solid #F4EDE2;}'
@@ -865,7 +865,7 @@ var ADM_CSS='.adm-wrap{max-width:1100px;margin:0 auto;padding:18px 16px 90px;}'
   // Latest activity — a glance, so it is quieter than everything above it.
   +'.ov-act{background:#fff;border:1px solid #EADFCF;border-radius:12px;padding:14px 18px 6px;margin-top:14px;}'
   +'.ov-act-h{display:flex;align-items:center;justify-content:space-between;gap:12px;'
-    +'font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:#9c8a72;margin-bottom:4px;}'
+    +'font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:#6E5F4A;margin-bottom:4px;}'
   +'.ov-act-all{font-size:11px;letter-spacing:0;text-transform:none;padding:5px 10px;min-height:32px;'
     +'border:1px solid #e3d5c2;background:#fff;border-radius:7px;color:#6B1F2A;cursor:pointer;font-family:inherit;}'
   +'.ov-act-all:hover{border-color:#6B1F2A;background:#faf5ec;}'
@@ -873,13 +873,13 @@ var ADM_CSS='.adm-wrap{max-width:1100px;margin:0 auto;padding:18px 16px 90px;}'
     +'border-bottom:1px solid #F4EDE2;font-size:13px;color:#4a3b2a;}'
   +'.ov-act-row:last-child{border-bottom:0;}'
   +'.ov-act-row b{color:#400207;font-weight:600;}'
-  +'.ov-act-ago{color:#9c8a72;white-space:nowrap;flex:none;}'
+  +'.ov-act-ago{color:#6E5F4A;white-space:nowrap;flex:none;}'
   // ── The fold-away explainer ─────────────────────────────────────────────
   // Small, quiet, and clearly a control rather than a heading — it has to be
   // ignorable, because the whole point is that it is read once.
   +'.adm-howto{margin:2px 0 14px;}'
   +'.adm-howto-b{display:inline-flex;align-items:center;gap:6px;font-family:inherit;'
-    +'font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:#9c8a72;'
+    +'font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:#6E5F4A;'
     +'background:none;border:0;padding:6px 2px;min-height:32px;cursor:pointer;}'
   +'.adm-howto-b:hover{color:#6B1F2A;}'
   +'.adm-howto-b i{font-style:normal;font-size:14px;display:inline-block;transition:transform .14s;}'
@@ -901,16 +901,16 @@ var ADM_CSS='.adm-wrap{max-width:1100px;margin:0 auto;padding:18px 16px 90px;}'
   +'.us-stat.flag{border-color:#E9D2A6;background:#FFFDF8;}'
   +'.us-stat b{font-family:Georgia,serif;font-size:26px;line-height:1.1;color:#400207;font-weight:normal;}'
   +'.us-stat span{font-size:12.5px;color:#4a3b2a;}'
-  +'.us-stat em{font-style:normal;font-size:11.5px;color:#9c8a72;}'
-  +'.us-h{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:#9c8a72;margin-bottom:8px;}'
-  +'.us-h span{letter-spacing:0;text-transform:none;color:#b09a7d;}'
+  +'.us-stat em{font-style:normal;font-size:11.5px;color:#6E5F4A;}'
+  +'.us-h{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:#6E5F4A;margin-bottom:8px;}'
+  +'.us-h span{letter-spacing:0;text-transform:none;color:#6E5F4A;}'
   +'.us-quiet{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;'
-    +'padding:9px 0;border-bottom:1px solid #F4EDE2;font-size:13px;color:#8a7a62;}'
+    +'padding:9px 0;border-bottom:1px solid #F4EDE2;font-size:13px;color:#6E5F4A;}'
   +'.us-quiet:last-child{border-bottom:0;}'
   +'.us-quiet b{color:#2c1810;font-weight:600;margin-right:7px;}'
-  +'.us-tag{font-size:10.5px;letter-spacing:.04em;text-transform:uppercase;color:#7a6a52;'
+  +'.us-tag{font-size:10.5px;letter-spacing:.04em;text-transform:uppercase;color:#6E5F4A;'
     +'background:#F3EBDF;border:1px solid #E3D5C2;border-radius:10px;padding:2px 9px;white-space:nowrap;flex:none;}'
-  +'.us-tag-warn{color:#8A5A12;background:#FBF1DF;border-color:#E9D2A6;}'
+  +'.us-tag-warn{color:#875812;background:#FBF1DF;border-color:#E9D2A6;}'
   // One row per person. The figures are fixed-width columns on a laptop and fold
   // under the name on a phone rather than squeezing — the same rule the inbox
   // rows already follow.
@@ -919,13 +919,13 @@ var ADM_CSS='.adm-wrap{max-width:1100px;margin:0 auto;padding:18px 16px 90px;}'
   +'.us-row:last-child{border-bottom:0;}'
   +'.us-who{min-width:170px;flex:1;min-width:0;}'
   +'.us-who b{display:block;font-weight:600;color:#2c1810;font-size:14.5px;}'
-  +'.us-who span{display:block;font-size:11.5px;color:#9c8a72;word-break:break-all;}'
+  +'.us-who span{display:block;font-size:11.5px;color:#6E5F4A;word-break:break-all;}'
   +'.us-fig{min-width:104px;flex:none;font-size:12.5px;color:#6b5a44;}'
-  +'.us-fig em{display:block;font-style:normal;font-size:11px;color:#9c8a72;}'
+  +'.us-fig em{display:block;font-style:normal;font-size:11px;color:#6E5F4A;}'
   +'.us-fig b{color:#400207;}'
   +'.us-mods{flex:2;min-width:160px;display:flex;gap:5px;flex-wrap:wrap;}'
   +'.us-mod{font-size:11px;background:#E8D9C7;color:#400207;border-radius:10px;padding:2px 9px;white-space:nowrap;}'
-  +'.us-none{font-size:12px;color:#9c8a72;}'
+  +'.us-none{font-size:12px;color:#6E5F4A;}'
   // On a phone the name takes its own line: sharing one with the first figure
   // squeezed it to a column narrow enough to break "Francesco Guarracino" over
   // three lines and split the address mid-word. Figures then sit two-by-two and
@@ -937,14 +937,14 @@ var ADM_CSS='.adm-wrap{max-width:1100px;margin:0 auto;padding:18px 16px 90px;}'
   +'.rp-row:last-child{border-bottom:0;}'
   +'.rp-name{flex:1 1 230px;min-width:0;}'
   +'.rp-name b{display:block;font-weight:600;color:#2c1810;font-size:14px;line-height:1.35;}'
-  +'.rp-name span{display:block;font-size:11.5px;color:#9c8a72;line-height:1.45;margin-top:2px;}'
+  +'.rp-name span{display:block;font-size:11.5px;color:#6E5F4A;line-height:1.45;margin-top:2px;}'
   // The bar carries the comparison; the numbers beside it carry the detail.
   +'.rp-bar{flex:0 0 96px;height:7px;border-radius:4px;background:#F0E7DA;overflow:hidden;}'
   +'.rp-bar i{display:block;height:100%;background:#6B1F2A;border-radius:4px;}'
   +'.rp-figs{display:flex;gap:14px;flex:none;}'
   +'.rp-figs span{font-size:12.5px;color:#6b5a44;min-width:56px;}'
   +'.rp-figs em{display:block;font-style:normal;font-size:10.5px;letter-spacing:.04em;'
-    +'text-transform:uppercase;color:#9c8a72;}'
+    +'text-transform:uppercase;color:#6E5F4A;}'
   +'.rp-figs b{color:#400207;}'
   +'.rp-whos{flex:1 1 150px;display:flex;gap:5px;flex-wrap:wrap;}'
   +'.rp-who{font-size:11px;background:#E8D9C7;color:#400207;border-radius:10px;padding:2px 9px;white-space:nowrap;}'
@@ -952,8 +952,8 @@ var ADM_CSS='.adm-wrap{max-width:1100px;margin:0 auto;padding:18px 16px 90px;}'
   // a failure to shout about.
   +'.rp-dead{padding:9px 0;border-bottom:1px solid #F4EDE2;}'
   +'.rp-dead:last-child{border-bottom:0;}'
-  +'.rp-dead b{font-weight:600;color:#8a7a62;font-size:13.5px;}'
-  +'.rp-dead span{display:block;font-size:11.5px;color:#b09a7d;margin-top:2px;}'
+  +'.rp-dead b{font-weight:600;color:#6E5F4A;font-size:13.5px;}'
+  +'.rp-dead span{display:block;font-size:11.5px;color:#6E5F4A;margin-top:2px;}'
   +'@media(max-width:640px){.rp-bar{flex:1 1 100%;order:3;}.rp-figs{order:2;gap:12px;}.rp-whos{order:4;}}'
   // ── Emails: the who-gets-what grid ──────────────────────────────────────
   // Hidden below 900px rather than made to scroll sideways: five columns in a
@@ -965,14 +965,14 @@ var ADM_CSS='.adm-wrap{max-width:1100px;margin:0 auto;padding:18px 16px 90px;}'
   +'.ml-cnr{background:#fff;}'
   +'.ml-head{background:#FBF7F0;padding:9px 8px;text-align:center;display:flex;flex-direction:column;gap:3px;justify-content:flex-end;}'
   +'.ml-head-t{font-size:11px;color:#6b5a44;line-height:1.3;}'
-  +'.ml-head-n{font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:#9c8a72;}'
+  +'.ml-head-n{font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:#6E5F4A;}'
   // A column with nobody on it is the failure this screen exists to catch, so
   // the header says so before you read a single row.
   +'.ml-head.empty{background:#FBEDE9;}'
   +'.ml-head.empty .ml-head-n{color:#8A2A12;font-weight:700;}'
   +'.ml-who{background:#fff;padding:9px 11px;display:flex;flex-direction:column;gap:2px;justify-content:center;}'
   +'.ml-who b{font-size:13px;font-weight:600;color:#2c1810;}'
-  +'.ml-only{font-size:10px;letter-spacing:.04em;text-transform:uppercase;color:#8a7a62;}'
+  +'.ml-only{font-size:10px;letter-spacing:.04em;text-transform:uppercase;color:#6E5F4A;}'
   // The cell is the control. 38px keeps a finger-sized target even though this
   // grid only ever shows on a laptop.
   +'.ml-cell{background:#fff;border:0;min-height:38px;cursor:pointer;font-family:inherit;'
@@ -1005,22 +1005,22 @@ var ADM_CSS='.adm-wrap{max-width:1100px;margin:0 auto;padding:18px 16px 90px;}'
     +'border:1px solid #d8cbb6;background:#fff;color:#fff;font-size:11px;line-height:15px;text-align:center;}'
   +'.px-pow>span{flex:1;min-width:0;}'
   +'.px-pow b{display:block;font-size:13px;color:#2c1810;font-weight:600;}'
-  +'.px-pow em{display:block;font-style:normal;font-size:11.5px;color:#8a7a62;line-height:1.45;margin-top:2px;}'
+  +'.px-pow em{display:block;font-style:normal;font-size:11.5px;color:#6E5F4A;line-height:1.45;margin-top:2px;}'
   // The state is spelled out, not left to the tick alone — the disabled-button
   // lesson: never make someone infer a state from styling.
-  +'.px-pow-st{flex:none;font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:#9c8a72;}'
+  +'.px-pow-st{flex:none;font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:#6E5F4A;}'
   +'.px-pow.on{background:#FBF7F1;border-color:#6B1F2A;}'
   +'.px-pow.on i{background:#6B1F2A;border-color:#6B1F2A;}'
   +'.px-pow.on .px-pow-st{color:#6B1F2A;font-weight:700;}'
   +'.px-danger{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px;padding-top:14px;border-top:1px solid #F0E7DA;}'
-  +'.ov-tile-n{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#9c8a72;'
+  +'.ov-tile-n{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#6E5F4A;'
     +'display:flex;align-items:center;gap:7px;}'
   +'.ov-tile-n .ov-dot{width:7px;height:7px;}'
   // Georgia for the number: the rest of Admin already uses it for headings, and a
   // figure this size in the body face reads as a form field rather than a fact.
   +'.ov-tile-big{font-family:Georgia,serif;font-size:27px;line-height:1.1;color:#400207;}'
-  +'.ov-tile-big em{font-style:normal;font-family:inherit;font-size:12.5px;color:#8a7a62;}'
-  +'.ov-tile-sub{font-size:12px;color:#7a6a52;line-height:1.45;}'
+  +'.ov-tile-big em{font-style:normal;font-family:inherit;font-size:12.5px;color:#6E5F4A;}'
+  +'.ov-tile-sub{font-size:12px;color:#6E5F4A;line-height:1.45;}'
   // The nav chip's own marker, so "something is waiting in Emails" is visible
   // from any section without opening it.
   +'.adm-tabdot{width:6px;height:6px;border-radius:50%;background:#C9A84C;display:inline-block;margin-left:7px;vertical-align:middle;}'
@@ -1052,9 +1052,9 @@ var ADM_CSS='.adm-wrap{max-width:1100px;margin:0 auto;padding:18px 16px 90px;}'
   +'.adm-set-txt{flex:1;min-width:0;}'
   +'.adm-set-t{font-weight:700;font-size:15px;color:#400207;margin-bottom:5px;}'
   +'.adm-set-d{font-size:12.5px;color:#6B5B4A;line-height:1.55;}'
-  +'.adm-set-note{font-size:11.5px;color:#8B7A66;margin-top:12px;padding-top:11px;border-top:1px solid #F0E7DA;line-height:1.5;}'
+  +'.adm-set-note{font-size:11.5px;color:#6E5F4A;margin-top:12px;padding-top:11px;border-top:1px solid #F0E7DA;line-height:1.5;}'
   +'.adm-set-note code{background:#F5F0E8;padding:1px 5px;border-radius:4px;font-size:11px;}'
-  +'.adm-set-off{font-size:11px;font-weight:600;color:#8A5A12;background:#FBF1DF;border:1px solid #E9D2A6;'
+  +'.adm-set-off{font-size:11px;font-weight:600;color:#875812;background:#FBF1DF;border:1px solid #E9D2A6;'
     +'border-radius:5px;padding:4px 9px;white-space:nowrap;flex:none;}'
   // A dropdown rather than a switch: this setting has five sensible positions,
   // not two. Sized to the touch target the rest of Admin uses on a phone.
@@ -1072,7 +1072,7 @@ var ADM_CSS='.adm-wrap{max-width:1100px;margin:0 auto;padding:18px 16px 90px;}'
   +'.adm-mail-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;'
     +'padding:10px 0;border-bottom:1px solid #F0E7DA;}'
   +'.adm-mail-who{flex:1 1 240px;min-width:0;font-size:13.5px;color:#3A2A1E;line-height:1.45;}'
-  +'.adm-mail-em{display:block;font-size:12px;color:#8B7355;word-break:break-all;}'
+  +'.adm-mail-em{display:block;font-size:12px;color:#6E5F4A;word-break:break-all;}'
   +'.adm-mail-tag{display:inline-block;margin-top:3px;font-size:10.5px;letter-spacing:.4px;'
     +'text-transform:uppercase;color:#6B5A46;background:#F3EBDF;border:1px solid #E3D5C2;'
     +'border-radius:10px;padding:1px 8px;}'
@@ -1115,54 +1115,54 @@ var ADM_CSS='.adm-wrap{max-width:1100px;margin:0 auto;padding:18px 16px 90px;}'
   +'.adm-add{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;}'
   +'.adm-add input{flex:1;min-width:160px;padding:9px 11px;border:1px solid #d8cbb6;border-radius:8px;font-size:14px;}'
   +'.adm-row{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:12px 0;border-bottom:1px solid #e8ddc9;}'
-  +'.adm-who b{display:block;color:#2c1810;font-size:15px;}.adm-who span{font-size:12px;color:#9c8a72;}'
+  +'.adm-who b{display:block;color:#2c1810;font-size:15px;}.adm-who span{font-size:12px;color:#6E5F4A;}'
   +'.adm-ticks{display:flex;gap:14px;flex-wrap:wrap;}'
   +'.adm-tick{font-size:13px;color:#4a3b2a;display:flex;align-items:center;gap:5px;cursor:pointer;white-space:nowrap;}'
   +'.adm-tick.adm-admin{color:#8a1f2a;font-weight:bold;}'
   +'.adm-sep{flex-basis:100%;height:0;}'
-  +'.adm-emails-lbl{font-size:12px;color:#9c8a72;text-transform:uppercase;letter-spacing:.04em;align-self:center;}'
+  +'.adm-emails-lbl{font-size:12px;color:#6E5F4A;text-transform:uppercase;letter-spacing:.04em;align-self:center;}'
   +'.adm-tick.adm-notif{color:#2d6a4f;}'
-  +'.adm-del{margin-left:10px;font-size:11px;color:#b3402f;background:none;border:1px solid #e3c9c4;border-radius:6px;padding:2px 8px;cursor:pointer;}'
+  +'.adm-del{margin-left:10px;font-size:11px;color:#AB3D2D;background:none;border:1px solid #e3c9c4;border-radius:6px;padding:2px 8px;cursor:pointer;}'
   +'.adm-del:hover{background:#f7ecea;}'
   +'.adm-toggle{display:flex;flex-wrap:wrap;gap:6px;margin:2px 0 16px;}'
   +'.adm-toggle button{font-size:13px;padding:7px 15px;border:1px solid #d8cbb6;background:#fff;border-radius:20px;cursor:pointer;color:#6b5a44;}'
   +'.adm-toggle button.on{background:#400207;color:#fff;border-color:#400207;}'
   +'.ppl-sum{font-size:13px;color:#6b5a44;line-height:1.5;margin:2px 0 6px;}'
   +'.ppl-grp{margin:18px 0 2px;font-family:Georgia,serif;color:#400207;font-size:16px;font-weight:bold;border-bottom:1px solid #e8ddc9;padding-bottom:5px;}'
-  +'.ppl-grp span{color:#9c8a72;font-weight:normal;font-size:12.5px;}'
+  +'.ppl-grp span{color:#6E5F4A;font-weight:normal;font-size:12.5px;}'
   +'.ppl-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 2px;border-bottom:1px solid #f1e9da;}'
   +'.ppl-name{font-weight:bold;color:#2c1810;font-size:14px;min-width:160px;}'
   +'.ppl-code{font-size:12px;color:#6b5a44;font-family:ui-monospace,Menlo,monospace;min-width:60px;}'
   +'.ppl-role{font-size:12.5px;color:#6b5a44;flex:1;min-width:120px;}'
   +'.ppl-badge{font-size:10.5px;padding:2px 8px;border-radius:10px;white-space:nowrap;}'
   +'.ppl-login{background:#eadfcd;color:#6b4a2e;}.ppl-admin{background:#6B1F2A;color:#fff;}'
-  +'.ppl-empty{color:#9c8a72;font-size:13px;padding:14px 2px;}'
+  +'.ppl-empty{color:#6E5F4A;font-size:13px;padding:14px 2px;}'
   +'.ppl-tools{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:10px 0 10px;}'
   +'.ppl-search{flex:1;min-width:180px;padding:10px 13px;border:1px solid #d8cbb6;border-radius:9px;font-size:14px;background:#fff;}'
   +'.ppl-search:focus{outline:none;border-color:#6B1F2A;}'
   +'.ppl-chips{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:8px;}'
   +'.ppl-chip{font-size:12.5px;padding:6px 13px;border-radius:16px;border:1px solid #d8cbb6;background:#fff;color:#6b5a44;cursor:pointer;white-space:nowrap;}'
   +'.ppl-chip.on{background:#6B1F2A;color:#fff;border-color:#6B1F2A;}'
-  +'.ppl-listhead{font-size:11.5px;color:#9c8a72;text-transform:uppercase;letter-spacing:.05em;margin:6px 2px 2px;}'
+  +'.ppl-listhead{font-size:11.5px;color:#6E5F4A;text-transform:uppercase;letter-spacing:.05em;margin:6px 2px 2px;}'
   +'.ppl-row{display:flex;align-items:center;gap:8px 12px;flex-wrap:wrap;padding:10px 4px;border-bottom:1px solid #f1e9da;}'
   +'.ppl-row:hover{background:#faf5ec;}'
   +'.ppl-name{font-weight:600;color:#2c1810;font-size:14.5px;flex:1;min-width:140px;}'
   +'.ppl-code{font-size:12px;color:#6b5a44;font-family:ui-monospace,Menlo,monospace;min-width:62px;}'
-  +'.ppl-code.miss{color:#b3402f;}'
+  +'.ppl-code.miss{color:#AB3D2D;}'
   +'.ppl-role{font-size:12.5px;color:#6b5a44;min-width:110px;flex:1;}'
-  +'.ppl-where{font-size:10.5px;color:#7a6a52;background:#f0e8da;padding:2px 8px;border-radius:9px;white-space:nowrap;}'
+  +'.ppl-where{font-size:10.5px;color:#6E5F4A;background:#f0e8da;padding:2px 8px;border-radius:9px;white-space:nowrap;}'
   +'.ppl-act{display:flex;gap:6px;margin-left:auto;}'
   +'.ppl-edit,.ppl-del{font-size:11.5px;padding:4px 10px;border-radius:7px;cursor:pointer;border:1px solid #d8cbb6;background:#fff;color:#5a4a36;}'
   +'.ppl-edit:hover{border-color:#6B1F2A;color:#6B1F2A;}'
-  +'.ppl-del{border-color:#e3c9c4;color:#b3402f;}.ppl-del:hover{background:#f7ecea;}'
+  +'.ppl-del{border-color:#e3c9c4;color:#AB3D2D;}.ppl-del:hover{background:#f7ecea;}'
   +'.pm-ovl{position:fixed;inset:0;background:rgba(40,2,7,.45);z-index:100000;display:flex;align-items:center;justify-content:center;padding:16px;}'
   +'.pm-box{background:#fff;border-radius:14px;max-width:440px;width:100%;padding:22px 22px 18px;box-shadow:0 14px 50px rgba(40,2,7,.3);max-height:90vh;overflow:auto;}'
   +'.pm-box h3{font-family:Georgia,serif;color:#6B1F2A;margin:0 0 8px;font-size:20px;}'
   +'.pm-field{margin:12px 0;}'
-  +'.pm-field label{display:block;font-size:11.5px;color:#9c8a72;text-transform:uppercase;letter-spacing:.04em;margin-bottom:5px;}'
+  +'.pm-field label{display:block;font-size:11.5px;color:#6E5F4A;text-transform:uppercase;letter-spacing:.04em;margin-bottom:5px;}'
   +'.pm-field input,.pm-field select{width:100%;padding:10px 12px;border:1px solid #d8cbb6;border-radius:9px;font-size:15px;box-sizing:border-box;background:#fff;}'
   +'.pm-field input:focus,.pm-field select:focus{outline:none;border-color:#6B1F2A;}'
-  +'.pm-hint{font-size:12px;color:#8a7a62;line-height:1.5;margin-top:4px;}'
+  +'.pm-hint{font-size:12px;color:#6E5F4A;line-height:1.5;margin-top:4px;}'
   +'.pm-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:18px;}'
   /* control-centre grid (frame with space, not boxes) */
   +'.px-bar{margin:10px 0 8px;}'
@@ -1170,10 +1170,10 @@ var ADM_CSS='.adm-wrap{max-width:1100px;margin:0 auto;padding:18px 16px 90px;}'
   +'.px-bulk b{color:#6B1F2A;}'
   +'.px-mini{font-size:11.5px;padding:5px 11px;border-radius:7px;border:1px solid #d8cbb6;background:#fff;color:#5a4a36;cursor:pointer;margin-right:6px;}'
   +'.px-mini:hover{border-color:#6B1F2A;color:#6B1F2A;}'
-  +'.px-mini-red{border-color:#e3c9c4;color:#b3402f;}.px-mini-red:hover{background:#f7ecea;}'
+  +'.px-mini-red{border-color:#e3c9c4;color:#AB3D2D;}.px-mini-red:hover{background:#f7ecea;}'
   +'.px-tablewrap{overflow-x:auto;margin-top:4px;}'
   +'.px-tbl{width:100%;border-collapse:collapse;font-size:13.5px;}'
-  +'.px-tbl th{position:sticky;top:0;background:#fbf7f0;text-align:left;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:#9c8a72;padding:9px 10px;cursor:pointer;border-bottom:1px solid #e8ddc9;white-space:nowrap;user-select:none;z-index:2;}'
+  +'.px-tbl th{position:sticky;top:0;background:#fbf7f0;text-align:left;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:#6E5F4A;padding:9px 10px;cursor:pointer;border-bottom:1px solid #e8ddc9;white-space:nowrap;user-select:none;z-index:2;}'
   +'.px-tbl th.sorted{color:#6B1F2A;}'
   +'.px-tbl th.px-selcol{cursor:default;}'
   +'.px-tbl td{padding:7px 10px;border-bottom:1px solid #f1e9da;vertical-align:middle;}'
@@ -1183,62 +1183,62 @@ var ADM_CSS='.adm-wrap{max-width:1100px;margin:0 auto;padding:18px 16px 90px;}'
   +'.px-cell{display:block;min-height:20px;border-radius:6px;padding:3px 6px;margin:-3px -6px;cursor:text;outline:none;color:#5a4a36;}'
   +'.px-cell:focus{box-shadow:inset 0 0 0 2px #C9A84C;background:#fff;}'
   +'.px-cell[data-col="name"]{font-weight:600;color:#2c1810;}'
-  +'.px-cell.miss{color:#b3402f;}'
+  +'.px-cell.miss{color:#AB3D2D;}'
   +'.px-input{width:100%;box-sizing:border-box;border:1px solid #C9A84C;border-radius:6px;padding:3px 6px;font:inherit;color:#2c1810;}'
   +'.px-input:focus{outline:none;}'
-  +'.px-where{font-size:10.5px;color:#7a6a52;background:#f0e8da;padding:2px 8px;border-radius:9px;white-space:nowrap;}'
+  +'.px-where{font-size:10.5px;color:#6E5F4A;background:#f0e8da;padding:2px 8px;border-radius:9px;white-space:nowrap;}'
   +'.px-badge{font-size:10px;padding:1px 7px;border-radius:9px;margin-left:6px;white-space:nowrap;}'
   +'.px-login{background:#eadfcd;color:#6b4a2e;}.px-admin{background:#6B1F2A;color:#fff;}'
-  +'.px-chev{background:none;border:none;cursor:pointer;color:#b29f86;font-size:14px;padding:3px 7px;display:inline-block;transition:transform .12s,color .12s;}'
+  +'.px-chev{background:none;border:none;cursor:pointer;color:#6E5F4A;font-size:14px;padding:3px 7px;display:inline-block;transition:transform .12s,color .12s;}'
   +'.px-chev:hover{color:#6B1F2A;}'
   +'.px-chev.open{color:#6B1F2A;transform:rotate(90deg);}'
   +'.px-detail{background:#faf6ef;border-left:3px solid #C9A84C;padding:13px 15px;margin:3px 0;border-radius:0 9px 9px 0;}'
   +'.px-dsec{margin-bottom:11px;}.px-dsec:last-child{margin-bottom:0;}'
-  +'.px-dlbl{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:#9c8a72;margin-bottom:6px;}'
-  +'.px-dhint{font-size:12.5px;color:#7a6a52;margin-bottom:8px;line-height:1.5;}'
+  +'.px-dlbl{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:#6E5F4A;margin-bottom:6px;}'
+  +'.px-dhint{font-size:12.5px;color:#6E5F4A;margin-bottom:8px;line-height:1.5;}'
   +'.px-toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);background:#400207;color:#fff;padding:10px 18px;border-radius:11px;font-size:13px;z-index:100002;box-shadow:0 8px 30px rgba(40,2,7,.35);}'
   /* responsive control centre: cards on phone (A) → list+detail on wide (B) */
   +'.px2-flex{display:flex;gap:16px;align-items:flex-start;}'
   +'.px2-list{width:300px;flex:none;border:0.5px solid #e8ddc9;border-radius:12px;overflow:hidden;max-height:74vh;overflow-y:auto;}'
-  +'.px2-grp{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#9c8a72;padding:8px 12px 4px;background:#fbf7f0;border-bottom:0.5px solid #f3ecdd;}'
+  +'.px2-grp{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#6E5F4A;padding:8px 12px 4px;background:#fbf7f0;border-bottom:0.5px solid #f3ecdd;}'
   +'.px2-detailwrap{flex:1;min-width:0;}'
   +'.px2-row{width:100%;text-align:left;display:flex;align-items:center;gap:9px;padding:10px 11px;background:#fff;border:none;border-bottom:0.5px solid #f3ecdd;cursor:pointer;}'
   +'.px2-row:hover{background:#faf6ee;}'
   +'.px2-row.on{background:#f3ead8;}'
   +'.px2-rowtxt{min-width:0;flex:1;overflow:hidden;}'
   +'.px2-row .nm{font-size:13px;font-weight:600;color:#2c1810;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}'
-  +'.px2-row .rl{font-size:11.5px;color:#8a7a62;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}'
+  +'.px2-row .rl{font-size:11.5px;color:#6E5F4A;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}'
   +'.px-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;}'
   +'.px-card{text-align:left;background:#fff;border:0.5px solid #ece2d0;border-radius:12px;padding:12px;cursor:pointer;display:flex;flex-direction:column;gap:6px;}'
   +'.px-card:hover{border-color:#C9A84C;background:#fdfbf6;}'
   +'.px-card .nm{font-size:14px;font-weight:600;color:#2c1810;}'
-  +'.px-card .rl{font-size:12px;color:#7a6a52;}'
+  +'.px-card .rl{font-size:12px;color:#6E5F4A;}'
   +'.px-av{width:34px;height:34px;border-radius:50%;background:#E8D9C7;color:#6B1F2A;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;flex:none;}'
   +'.px-av.lg{width:48px;height:48px;font-size:16px;}'
   +'.px-av.sm{width:28px;height:28px;font-size:11px;}'
   +'.px-rb{display:flex;flex-wrap:wrap;gap:4px;align-items:center;}'
   +'.px-rb .px-badge{margin-left:0;}'
   +'.px-sig{background:#C9A84C;color:#400207;}'
-  +'.px-nc{background:#fbe9e6;color:#b3402f;}'
-  +'.px-off{background:#eee7d8;color:#7a6a52;}'
-  +'.px-venue{font-size:10.5px;color:#7a6a52;background:#f0e8da;padding:2px 8px;border-radius:9px;white-space:nowrap;}'
+  +'.px-nc{background:#fbe9e6;color:#AB3D2D;}'
+  +'.px-off{background:#eee7d8;color:#6E5F4A;}'
+  +'.px-venue{font-size:10.5px;color:#6E5F4A;background:#f0e8da;padding:2px 8px;border-radius:9px;white-space:nowrap;}'
   +'.px-back{background:none;border:none;color:#6B1F2A;font-size:14px;cursor:pointer;padding:6px 0;margin-bottom:6px;}'
-  +'.px-dempty{color:#9c8a72;font-size:13px;padding:30px 14px;text-align:center;border:0.5px dashed #e0d4bf;border-radius:12px;}'
+  +'.px-dempty{color:#6E5F4A;font-size:13px;padding:30px 14px;text-align:center;border:0.5px dashed #e0d4bf;border-radius:12px;}'
   +'.px-panel{background:#fff;border:0.5px solid #e8ddc9;border-radius:12px;padding:16px 18px;}'
   +'.px-phead{display:flex;gap:13px;align-items:center;margin-bottom:14px;}'
   +'.px-pname{font-size:18px;font-weight:600;color:#2c1810;font-family:Georgia,serif;}'
-  +'.px-prole{font-size:12.5px;color:#7a6a52;margin:3px 0 5px;}'
+  +'.px-prole{font-size:12.5px;color:#6E5F4A;margin:3px 0 5px;}'
   +'.px-flds{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;}'
-  +'.px-fld label{display:block;font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:#9c8a72;margin-bottom:5px;}'
+  +'.px-fld label{display:block;font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:#6E5F4A;margin-bottom:5px;}'
   +'.px-fld input{width:100%;box-sizing:border-box;border:1px solid #d8cbb6;border-radius:8px;padding:9px 11px;font-size:14px;color:#2c1810;background:#fff;}'
   +'.px-fld input:focus{outline:none;border-color:#6B1F2A;}'
-  +'.px-fld .ro{padding:9px 0;color:#7a6a52;font-size:14px;}'
+  +'.px-fld .ro{padding:9px 0;color:#6E5F4A;font-size:14px;}'
   +'.px-psec{margin-top:15px;}'
-  +'.px-pslbl{font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:#9c8a72;margin-bottom:8px;}'
-  +'.px-pill{font-size:12.5px;padding:7px 12px;border-radius:8px;border:1px solid #e0d4bf;background:#fff;color:#7a6a52;cursor:pointer;margin:0 6px 6px 0;display:inline-block;}'
+  +'.px-pslbl{font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:#6E5F4A;margin-bottom:8px;}'
+  +'.px-pill{font-size:12.5px;padding:7px 12px;border-radius:8px;border:1px solid #e0d4bf;background:#fff;color:#6E5F4A;cursor:pointer;margin:0 6px 6px 0;display:inline-block;}'
   +'.px-pill.on{background:#6B1F2A;color:#fff;border-color:#6B1F2A;}'
-  +'.px-prm{font-size:12.5px;padding:7px 12px;border-radius:8px;border:1px solid #e9c7c2;background:#fff;color:#b3402f;cursor:pointer;}'
-  +'.px-dhint{font-size:12.5px;color:#7a6a52;margin-bottom:8px;line-height:1.5;}';
+  +'.px-prm{font-size:12.5px;padding:7px 12px;border-radius:8px;border:1px solid #e9c7c2;background:#fff;color:#AB3D2D;cursor:pointer;}'
+  +'.px-dhint{font-size:12.5px;color:#6E5F4A;margin-bottom:8px;line-height:1.5;}';
 
 function admNorm(s){ return String(s==null?'':s).trim().toLowerCase(); }
 // Build ONE unified people list from kitchen staff + FOH staff + office logins.
@@ -2336,10 +2336,10 @@ function admFbSendHTML(){
   var people=(state.adminUsers||[]).slice().sort(function(a,b){ return String(a.name||a.email).localeCompare(String(b.name||b.email)); });
   var topics=admFbTopics();
   var inp='width:100%;box-sizing:border-box;border:1.5px solid #e3d5c2;border-radius:8px;padding:9px 10px;font-family:inherit;font-size:13.5px;background:#fff;color:#2c1810;';
-  var lbl='display:block;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:#9c8a72;margin-bottom:4px;';
+  var lbl='display:block;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:#6E5F4A;margin-bottom:4px;';
   return '<div style="background:#fbf7f1;border:1px solid #e3d5c2;border-radius:12px;padding:14px 16px;margin-bottom:18px;">'
     +'<div style="font-size:14.5px;font-weight:600;color:#400207;margin-bottom:2px;">Send a round</div>'
-    +'<div style="font-size:12px;color:#9c8a72;margin-bottom:11px;">They answer on their phone &mdash; no login. Their replies land below the moment they tap Send.</div>'
+    +'<div style="font-size:12px;color:#6E5F4A;margin-bottom:11px;">They answer on their phone &mdash; no login. Their replies land below the moment they tap Send.</div>'
     +'<div style="display:flex;gap:10px;flex-wrap:wrap;">'
       +'<div style="flex:2;min-width:180px;"><label style="'+lbl+'" for="fb-topic">Which round</label>'
       +'<select id="fb-topic" style="'+inp+'" onchange="admFbSet(\'topic\',this.value)">'
@@ -2362,12 +2362,12 @@ function admFbSendHTML(){
       +'<button class="btn btn-sm" id="fb-a-mail" onclick="admFbEmail()"'+dis+tip+'>Send by email</button>'
       +'<button class="btn btn-sm" id="fb-a-wa" onclick="admFbWa()"'+dis+tip+'>Open WhatsApp</button>'
       +'<button class="btn btn-sm" id="fb-a-cp" onclick="admFbCopy()"'+dis+tip+'>Copy the link</button>'
-      +'<span id="fb-why" style="font-size:11px;color:#9c8a72;">'
+      +'<span id="fb-why" style="font-size:11px;color:#6E5F4A;">'
         + admEsc(who ? 'Sending '+admFbTopicName(s.topic)+' to '+who+'.'
                      : 'Choose a person first — the link carries their name, so their answers arrive with it.')
       +'</span>'
     +'</div>'
-    +'<div style="margin-top:9px;font-size:11px;color:#9c8a72;word-break:break-all;" id="fb-link">'+admEsc(admFbUrl(s.topic, admFbWho()))+'</div>'
+    +'<div style="margin-top:9px;font-size:11px;color:#6E5F4A;word-break:break-all;" id="fb-link">'+admEsc(admFbUrl(s.topic, admFbWho()))+'</div>'
     +'</div>';
 }
 function admFbPickedOr(msg){
@@ -2399,7 +2399,7 @@ function admFbEmailHTML(name, url, topic){
     +'<p style="font-size:15px;color:#3A2A1E;line-height:1.6;margin:22px 0 0;">Ciao '+admEsc(String(name).split(' ')[0])+',</p>'
     + E.body.map(function(p){ return '<p style="font-size:14px;color:#3A2A1E;line-height:1.65;">'+p+'</p>'; }).join('')
     +'<div style="text-align:center;margin:24px 0 10px;"><a href="'+admEsc(url)+'" style="display:inline-block;background:#400207;color:#E8D9C7;padding:12px 30px;border-radius:22px;text-decoration:none;font-size:13.5px;letter-spacing:1px;">'+admEsc(E.cta)+'</a></div>'
-    +'<p style="font-size:12px;color:#8B7355;text-align:center;">Tap an answer on each, then Send. You can stop and come back — nothing is lost.</p>'
+    +'<p style="font-size:12px;color:#6E5F4A;text-align:center;">Tap an answer on each, then Send. You can stop and come back — nothing is lost.</p>'
     +'</div></div>';
 }
 // Record that a round went out, so the screen can tell him who has gone quiet.
@@ -2564,7 +2564,7 @@ function admFbStatusPill(w){
     : '<span style="'+st+'background:#FBF0D6;color:#7A5500;border:1px solid #DFC680;">verified &middot; build '+admEsc(w.build||'?')+' not live yet</span>';
   return admFbIsLive(w)
     ? '<span style="'+st+'background:#DCE9F6;color:#12456E;border:1px solid #8FB6DA;">fixed &amp; live &middot; '+admEsc(w.build)+'</span>'
-    : '<span style="'+st+'background:#EDE7DC;color:#7A6B55;border:1px solid #CBBBA2;">fixed &middot; build '+admEsc(w.build||'?')+' not live yet</span>';
+    : '<span style="'+st+'background:#EDE7DC;color:#6E5F4A;border:1px solid #CBBBA2;">fixed &middot; build '+admEsc(w.build||'?')+' not live yet</span>';
 }
 function admFbNeedsSQL(){
   if(state.fbActionsErr){ toast('Run foh-app-feedback-status.sql once in Supabase first — then this works.', true); return true; }
@@ -3053,7 +3053,7 @@ function admFbBar(items){
     // Only the states that actually exist, each carrying its count. Naming a
     // state that is empty teaches a word the screen never uses, and a legend
     // without numbers makes you count the bar by eye.
-    + '<div style="display:flex;gap:14px;flex-wrap:wrap;font-size:11px;color:#9c8a72;">'
+    + '<div style="display:flex;gap:14px;flex-wrap:wrap;font-size:11px;color:#6E5F4A;">'
     + ['ok','ship','prog','open'].filter(function(k){ return n[k]; }).map(function(k){
         return '<span style="display:inline-flex;align-items:center;gap:5px;"><i style="width:8px;height:8px;border-radius:2px;background:'+FB_STATE_COL[k]+';display:inline-block;"></i><b style="color:#4a3b2a;font-weight:600;">'+n[k]+'</b> '+FB_STATE_LABEL[k]+'</span>';
       }).join('')
@@ -3067,9 +3067,9 @@ function admFbPanelHTML(){
   var round=isInbox?null:FB_ROUNDS[s.topic], f=state.fbForm||{};
   var it=round ? round.items[fbKeyPos(round,s.qkey)] : null;
   var strip=function(x){ return String(x||''); };
-  var lbl='font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#9c8a72;margin:15px 0 4px;';
+  var lbl='font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#6E5F4A;margin:15px 0 4px;';
   var inp='width:100%;box-sizing:border-box;border:1.5px solid #e3d5c2;border-radius:8px;padding:8px 10px;font-family:Arial,sans-serif;font-size:12.5px;background:#fff;color:#2c1810;resize:vertical;';
-  var hint='font-size:11px;color:#9c8a72;margin-top:4px;line-height:1.45;';
+  var hint='font-size:11px;color:#6E5F4A;margin-top:4px;line-height:1.45;';
 
   // Everyone who flagged it, and what they wrote.
   var says=[];
@@ -3092,15 +3092,15 @@ function admFbPanelHTML(){
   // below — the state, the evidence, Save — is the same code, on purpose.
   if(isInbox){
     if(!ib) return '<div style="background:#fbf7f1;border:1px solid #e3d5c2;border-radius:12px;padding:16px;">'
-      +'<div style="font-size:13px;color:#9c8a72;">That message is not in the list any more. <button class="btn btn-sm" style="'+FB_NOSHOUT+'" onclick="admFbClose()">Close</button></div></div>';
+      +'<div style="font-size:13px;color:#6E5F4A;">That message is not in the list any more. <button class="btn btn-sm" style="'+FB_NOSHOUT+'" onclick="admFbClose()">Close</button></div></div>';
     var meta=[ (FB_APP_NAME[ib.app]||ib.app||'—')+' app', ib.screen||null, ib.device||null,
                ib.build?('build '+ib.build):null, admUsageAgo(ib.created_at) ].filter(Boolean);
     var hi='<div style="background:#fbf7f1;border:1px solid #e3d5c2;border-radius:12px;padding:16px;align-self:start;position:sticky;top:64px;max-height:calc(100vh - 80px);overflow-y:auto;">'
       +'<div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;">'
-        +'<div><div style="font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:#9c8a72;">'
+        +'<div><div style="font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:#6E5F4A;">'
         + (ib.kind==='problem'?'Something&rsquo;s wrong':'An idea') +' &middot; '+admEsc(ib.who||'Anonymous')+'</div>'
         +'<h3 style="font-size:15.5px;color:#400207;margin:5px 0 0;font-weight:600;line-height:1.45;white-space:pre-wrap;">'+admEsc(ib.body)+'</h3></div>'
-        +'<button class="btn btn-sm" style="background:transparent;border-color:transparent;color:#9c8a72;" onclick="admFbClose()" aria-label="Close">&#10005;</button>'
+        +'<button class="btn btn-sm" style="background:transparent;border-color:transparent;color:#6E5F4A;" onclick="admFbClose()" aria-label="Close">&#10005;</button>'
       +'</div>'
       +'<div style="'+lbl+'">Where they were</div>'
       +'<div style="font-size:12.5px;color:#4a3b2a;line-height:1.6;">'+admEsc(meta.join(' · '))+'</div>';
@@ -3111,7 +3111,7 @@ function admFbPanelHTML(){
     // a network call — the words are the point and must never wait on a picture.
     if(ib.shot){
       hi+='<div style="'+lbl+'">What they were looking at</div>'
-        +'<div id="fb-shot-box" style="font-size:12px;color:#9c8a72;">Loading the photo&hellip;</div>';
+        +'<div id="fb-shot-box" style="font-size:12px;color:#6E5F4A;">Loading the photo&hellip;</div>';
       admFbShotPaint(ib.shot);
     }
     if(!ib.who){
@@ -3136,9 +3136,9 @@ function admFbPanelHTML(){
 
   var h='<div style="background:#fbf7f1;border:1px solid #e3d5c2;border-radius:12px;padding:16px;align-self:start;position:sticky;top:64px;max-height:calc(100vh - 80px);overflow-y:auto;">'
     +'<div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;">'
-      +'<div><div style="font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:#9c8a72;">'+admEsc(admFbTopicName(s.topic))+' &middot; item '+admEsc(admFbItemNo(s.topic,s.qkey))+'</div>'
+      +'<div><div style="font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:#6E5F4A;">'+admEsc(admFbTopicName(s.topic))+' &middot; item '+admEsc(admFbItemNo(s.topic,s.qkey))+'</div>'
       +'<h3 style="font-size:16.5px;color:#400207;margin:5px 0 0;font-weight:600;line-height:1.35;">'+admEsc((it&&it.label)||('Question '+s.qkey))+'</h3></div>'
-      +'<button class="btn btn-sm" style="background:transparent;border-color:transparent;color:#9c8a72;" onclick="admFbClose()" aria-label="Close">&#10005;</button>'
+      +'<button class="btn btn-sm" style="background:transparent;border-color:transparent;color:#6E5F4A;" onclick="admFbClose()" aria-label="Close">&#10005;</button>'
     +'</div>';
 
   if(it){
@@ -3146,15 +3146,15 @@ function admFbPanelHTML(){
       +'<div style="'+lbl+'">What the app does today</div><p style="font-size:12.5px;color:#4a3b2a;line-height:1.6;margin:0;">'+strip(it.today)+'</p>';
   }else{
     h+='<div style="'+lbl+'">This round is no longer in foh-rounds.js</div>'
-      +'<p style="font-size:12.5px;color:#9c8a72;line-height:1.6;margin:0;">Their answer is kept, but we can&rsquo;t say what the question was.</p>';
+      +'<p style="font-size:12.5px;color:#6E5F4A;line-height:1.6;margin:0;">Their answer is kept, but we can&rsquo;t say what the question was.</p>';
   }
 
   h+='<div style="'+lbl+'">What they said</div>';
   h+= says.length ? says.map(function(x){
         return '<div style="background:#f7f2e8;border-radius:8px;padding:9px 11px;margin-bottom:6px;font-size:12.5px;color:#4a3b2a;line-height:1.55;">'
-          + (x.note?'&ldquo;'+admEsc(x.note)+'&rdquo;':'<i style="color:#9c8a72;">No note.</i>')
-          + '<span style="display:block;font-size:11px;color:#9c8a72;margin-top:4px;">&mdash; '+admEsc(x.who)+', answered &ldquo;'+admEsc(x.a)+'&rdquo;</span></div>';
-      }).join('') : '<div style="font-size:12px;color:#9c8a72;">Nobody flagged this one.</div>';
+          + (x.note?'&ldquo;'+admEsc(x.note)+'&rdquo;':'<i style="color:#6E5F4A;">No note.</i>')
+          + '<span style="display:block;font-size:11px;color:#6E5F4A;margin-top:4px;">&mdash; '+admEsc(x.who)+', answered &ldquo;'+admEsc(x.a)+'&rdquo;</span></div>';
+      }).join('') : '<div style="font-size:12px;color:#6E5F4A;">Nobody flagged this one.</div>';
 
   // ── Already fixed by shipped code? Say so, with the evidence ──
   // Valentina's nine were fixed in the Events module (verified in the source),
@@ -3171,9 +3171,9 @@ function admFbPanelHTML(){
       +'<div style="font-size:12.5px;color:#12456E;font-weight:600;">Fixed in the Events module &mdash; live now ('+admEsc(shp.build)+')</div>'
       +(shp.what?'<div style="font-size:12px;color:#4a3b2a;line-height:1.55;margin-top:5px;">'+admEsc(shp.what)+'</div>':'')
       +(shp.check?'<div style="font-size:11.5px;color:#6b5a44;margin-top:6px;"><b style="color:#12456E;">Check it:</b> '+admEsc(shp.check)+'</div>':'')
-      +(shp.in?'<div style="font-size:10.5px;color:#9c8a72;margin-top:6px;">shipped in '+admEsc(shp.in)+'</div>':'')
+      +(shp.in?'<div style="font-size:10.5px;color:#6E5F4A;margin-top:6px;">shipped in '+admEsc(shp.in)+'</div>':'')
       +'</div>'
-      +'<div style="font-size:11px;color:#9c8a72;margin-top:8px;line-height:1.45;">She flagged this and it is done, but she has not been shown it. Send her an events-20 round when you want her to confirm &mdash; her answer will turn this into a confirmed tick. Set a state below only to override.</div>'
+      +'<div style="font-size:11px;color:#6E5F4A;margin-top:8px;line-height:1.45;">She flagged this and it is done, but she has not been shown it. Send her an events-20 round when you want her to confirm &mdash; her answer will turn this into a confirmed tick. Set a state below only to override.</div>'
       +'</div>';
   }
   // ── Already closed by a later round? Say so, with THEIR words ──
@@ -3202,7 +3202,7 @@ function admFbPanelHTML(){
       +'<div style="font-size:11px;color:#6b5a44;margin-top:6px;">Sent in <b>'+admEsc(admFbTopicName(closed.topic))+'</b>, item '+admEsc(admFbItemNo(closed.topic,closed.qkey))
       + (closed.confirmedBy?' &mdash; answered &ldquo;Agree, this is fine&rdquo;.':' &mdash; no answer back on it yet.')
       +'</div></div>'
-      +'<div style="font-size:11px;color:#9c8a72;margin-top:8px;line-height:1.45;">Nothing to record &mdash; this is already accounted for. Set a state below only if you need to override it.</div>'
+      +'<div style="font-size:11px;color:#6E5F4A;margin-top:8px;line-height:1.45;">Nothing to record &mdash; this is already accounted for. Set a state below only if you need to override it.</div>'
       +'</div>';
   }
 
@@ -3330,8 +3330,8 @@ function admInboxRowHTML(r){
       // A camera on the row, so a message that brought evidence is worth opening
       // first. Not the photo itself — forty thumbnails would turn a work list
       // into a gallery, and this screen is read at a glance.
-      + (r.shot?'<span title="Has a photo" style="font-size:12px;color:#9c8a72;">&#128247;</span>':'')
-      +'<span style="color:#9c8a72;white-space:nowrap;">'+admEsc((r.who||'Anonymous').split(' ')[0])+' &middot; '+admEsc(app)+'</span>'
+      + (r.shot?'<span title="Has a photo" style="font-size:12px;color:#6E5F4A;">&#128247;</span>':'')
+      +'<span style="color:#6E5F4A;white-space:nowrap;">'+admEsc((r.who||'Anonymous').split(' ')[0])+' &middot; '+admEsc(app)+'</span>'
       +'<span style="white-space:nowrap;color:'+(st==='ok'?'#2E6B34':(st==='open'?'#8A2A1A':'#9c8a72'))+';">'+admFbStateLabel('inbox',r.id,true)+'</span>'
       +'<span class="fbi-chev" style="color:#e3d5c2;font-size:15px;">&rsaquo;</span>'
     +'</span>'
@@ -3342,7 +3342,7 @@ function admInboxHTML(){
     +'<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:14px;flex-wrap:wrap;">'
       +'<div><h2 style="font-size:19px;color:#400207;margin:0;font-weight:600;">Feedback</h2></div>'
       +'<div style="display:flex;gap:8px;flex-wrap:wrap;">'
-        +'<button class="btn btn-sm" style="'+FB_NOSHOUT+'background:transparent;border-color:transparent;color:#9c8a72;" onclick="admFbLoad()">Refresh</button>'
+        +'<button class="btn btn-sm" style="'+FB_NOSHOUT+'background:transparent;border-color:transparent;color:#6E5F4A;" onclick="admFbLoad()">Refresh</button>'
       +'</div>'
     +'</div>'
     +'<div style="margin-top:10px;">'+admFbLaneHTML()+'</div>';
@@ -3364,7 +3364,7 @@ function admInboxHTML(){
     : (waiting
         ? '<b>'+waiting+'</b> waiting on you &mdash; out of '+total+' the team have sent.'
         : 'Nothing waiting on you. All '+total+' sorted.');
-  h+='<div style="font-size:12.5px;color:#9c8a72;margin-top:9px;">'+truth+'</div>';
+  h+='<div style="font-size:12.5px;color:#6E5F4A;margin-top:9px;">'+truth+'</div>';
 
   if(!total){
     return h+'<div class="ppl-empty" style="margin-top:14px;">Nothing in the inbox yet.</div></div>';
@@ -3393,7 +3393,7 @@ function admInboxHTML(){
     h+='<div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:8px;">'
       + [['all','Both apps',total]].concat(appKeys.map(function(k){ return [k,(FB_APP_NAME[k]||k),apps[k]]; })).map(function(f){
           var on=appF===f[0];
-          return '<button class="btn btn-sm" style="border-radius:20px;'+FB_NOSHOUT+'font-size:11.5px;'+(on?'background:#6b5a45;color:#fff;border-color:#6b5a45;':'background:#fff;border:1px solid #ede2d2;color:#8b7355;')+'" onclick="admInboxSetApp(\''+admEsc(f[0])+'\')">'
+          return '<button class="btn btn-sm" style="border-radius:20px;'+FB_NOSHOUT+'font-size:11.5px;'+(on?'background:#6b5a45;color:#fff;border-color:#6b5a45;':'background:#fff;border:1px solid #ede2d2;color:#6E5F4A;')+'" onclick="admInboxSetApp(\''+admEsc(f[0])+'\')">'
             + admEsc(f[1])+' <b style="font-weight:400;opacity:.7;">'+f[2]+'</b></button>';
         }).join('')
       +'</div>';
@@ -3412,7 +3412,7 @@ function admInboxHTML(){
     : (filter==='open'||filter==='prog')
       ? '<div style="background:#fff;border:1px solid #e8ddcd;border-radius:11px;padding:26px 20px;text-align:center;margin-top:16px;">'
         +'<div style="font-size:15.5px;color:#400207;font-weight:600;">Nothing is waiting on you.</div>'
-        +'<div style="font-size:12.5px;color:#9c8a72;margin-top:6px;">All '+total+' sorted.</div></div>'
+        +'<div style="font-size:12.5px;color:#6E5F4A;margin-top:6px;">All '+total+' sorted.</div></div>'
       : '<div class="ppl-empty" style="padding:24px 8px;">Nothing here &mdash; try another filter.</div>';
 
   var sel=admFbSel();
@@ -3446,7 +3446,7 @@ async function admFbShotPaint(path){
       // at panel width, and that is exactly the kind of thing they photograph.
       box.innerHTML='<a href="'+admEsc(u)+'" target="_blank" rel="noopener" title="Open it full size">'
         +'<img src="'+admEsc(u)+'" alt="What they were looking at" style="max-width:100%;border-radius:9px;border:1px solid #e3d5c2;display:block;">'
-        +'</a><div style="font-size:11px;color:#9c8a72;margin-top:5px;">Tap to open it full size. The link is temporary &mdash; the picture is not public.</div>';
+        +'</a><div style="font-size:11px;color:#6E5F4A;margin-top:5px;">Tap to open it full size. The link is temporary &mdash; the picture is not public.</div>';
     }catch(err){
       box=document.getElementById('fb-shot-box'); if(!box) return;
       box.innerHTML='<span style="color:#8A2A1A;">Couldn&rsquo;t load the photo &mdash; '
@@ -3575,14 +3575,14 @@ function admFbHTML(){
   var h='<div class="adm-wrap">'
     +'<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:14px;flex-wrap:wrap;">'
       +'<div><h2 style="font-size:19px;color:#400207;margin:0;font-weight:600;">Feedback</h2>'
-      +'<div style="font-size:12.5px;color:#9c8a72;margin-top:3px;">'+truth+'</div></div>'
+      +'<div style="font-size:12.5px;color:#6E5F4A;margin-top:3px;">'+truth+'</div></div>'
       // .btn is UPPERCASE with 0.15em tracking app-wide. On a screen made of
       // sentences that reads as shouting, so these opt out — the same `noshout`
       // the panel's own buttons already use.
       +'<div style="display:flex;gap:8px;flex-wrap:wrap;">'
         +'<button class="btn btn-sm" style="'+FB_NOSHOUT+'" onclick="admFbToggleSend()">Send a round</button>'
         + (total?'<button class="btn btn-sm" style="'+FB_NOSHOUT+(state.fbSelMode?'background:#400207;color:#E8D9C7;border-color:#400207;':'')+'" onclick="admFbToggleSelMode()" title="Tick items across different rounds and brief them together">'+(state.fbSelMode?'Done picking':'Pick across rounds')+'</button>':'')
-        +'<button class="btn btn-sm" style="'+FB_NOSHOUT+'background:transparent;border-color:transparent;color:#9c8a72;" onclick="admFbLoad()">Refresh</button>'
+        +'<button class="btn btn-sm" style="'+FB_NOSHOUT+'background:transparent;border-color:transparent;color:#6E5F4A;" onclick="admFbLoad()">Refresh</button>'
       +'</div>'
     +'</div>'
     +'<div style="margin-top:10px;">'+admFbLaneHTML()+'</div>'
@@ -3627,10 +3627,10 @@ function admFbHTML(){
         + (m.again>1 ? (m.latest?' · answered '+(m.again===2?'twice':m.again+' times')+', this is the latest':' · an earlier answer, not counted') : '');
       return '<div style="display:flex;align-items:center;gap:10px 14px;flex-wrap:wrap;padding:10px 4px;border-bottom:1px solid #f1e9da;'+(m.latest?'':'opacity:.5;')+'">'
         +'<div style="min-width:150px;flex:1;"><div style="font-weight:600;color:#2c1810;font-size:13.5px;">'+admEsc(r.who||'Anonymous')+'</div>'
-        +'<div style="font-size:11.5px;color:#9c8a72;">'+sub+'</div>'
+        +'<div style="font-size:11.5px;color:#6E5F4A;">'+sub+'</div>'
         + (m.latest&&r.who?'<button class="btn btn-sm" style="font-size:10.5px;padding:3px 7px;margin-top:4px;text-transform:none;letter-spacing:0;" onclick="admFbStatusLink(\''+admEsc(r.who)+'\')">Copy their status link</button>':'')
         +'</div>'
-        +'<div style="flex:2;min-width:180px;display:flex;gap:5px;flex-wrap:wrap;">'+(pills||'<span style="font-size:12px;color:#9c8a72;">no answers, note only</span>')+'</div>'
+        +'<div style="flex:2;min-width:180px;display:flex;gap:5px;flex-wrap:wrap;">'+(pills||'<span style="font-size:12px;color:#6E5F4A;">no answers, note only</span>')+'</div>'
         + (r.extra?'<div style="flex-basis:100%;font-size:12.5px;color:#4a3b2a;background:#f7f2e8;border-radius:8px;padding:8px 10px;"><b style="color:#400207;">What we missed:</b> '+admEsc(r.extra)+'</div>':'')
         +'</div>';
     }).join('');
@@ -3641,11 +3641,11 @@ function admFbHTML(){
       if(!k||replied[k]||qs[k]) return; qs[k]=1; quiet.push(s);
     });
     var quietHTML=quiet.map(function(s){
-      return '<div style="padding:8px 4px;border-bottom:1px solid #f1e9da;font-size:12.5px;color:#9c8a72;">'+admEsc(s.who)+' &mdash; sent '+admEsc(admUsageAgo(s.sent_at))+', nothing back yet</div>';
+      return '<div style="padding:8px 4px;border-bottom:1px solid #f1e9da;font-size:12.5px;color:#6E5F4A;">'+admEsc(s.who)+' &mdash; sent '+admEsc(admUsageAgo(s.sent_at))+', nothing back yet</div>';
     }).join('');
     if(!rows && !quietHTML) return;
     peopleByTopic[t]='<div style="border-top:1px solid #f1e9da;padding:12px 15px 4px;background:#fdfaf6;">'
-      +'<div style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#b09a7d;margin-bottom:6px;">Who replied</div>'
+      +'<div style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#6E5F4A;margin-bottom:6px;">Who replied</div>'
       + (P.dupes?'<div style="background:#F7DED9;border:1px solid #D89C90;border-radius:8px;padding:8px 11px;font-size:12px;color:#8A2A1A;line-height:1.5;margin:0 0 8px;">'
         +(P.dupes===1?'Someone answered this round twice.':P.dupes+' answers here are repeats.')
         +' Counting each person once, using their latest &mdash; the earlier ones are still below, just not counted.</div>':'')
@@ -3672,11 +3672,11 @@ function admFbHTML(){
         +'</label>':'')
       +'<button style="display:flex;align-items:center;gap:11px;flex:1;min-width:0;text-align:left;background:transparent;border:0;padding:11px 14px 11px '+(selMode?'0':'14px')+';cursor:pointer;font-family:inherit;" onclick="admFbOpen(\''+admEsc(i.topic)+'\',\''+admEsc(i.qkey)+'\')">'
       +'<span style="width:3px;align-self:stretch;border-radius:2px;flex:none;background:'+FB_STATE_COL[i.st]+';"></span>'
-      +'<span style="font-size:11.5px;color:#b9a88f;min-width:18px;">'+admEsc(admFbItemNo(i.topic,i.qkey))+'.</span>'
+      +'<span style="font-size:11.5px;color:#6E5F4A;min-width:18px;">'+admEsc(admFbItemNo(i.topic,i.qkey))+'.</span>'
       +'<span style="flex:1;min-width:0;font-size:13.5px;color:#4a3b2a;line-height:1.4;">'+admEsc(i.label||('Question '+i.qkey))
-      + (note?'<span style="display:block;font-size:11.5px;color:#9c8a72;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">&ldquo;'+admEsc(note)+'&rdquo;</span>':'')
+      + (note?'<span style="display:block;font-size:11.5px;color:#6E5F4A;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">&ldquo;'+admEsc(note)+'&rdquo;</span>':'')
       +'</span>'
-      + (whoTxt?'<span style="font-size:11.5px;color:#9c8a72;white-space:nowrap;flex:none;">'+whoTxt+'</span>':'')
+      + (whoTxt?'<span style="font-size:11.5px;color:#6E5F4A;white-space:nowrap;flex:none;">'+whoTxt+'</span>':'')
       +'<span style="font-size:11.5px;white-space:nowrap;flex:none;color:'+(i.st==='ok'?'#2E6B34':(i.st==='open'?'#8A2A1A':'#9c8a72'))+';">'+admFbStateLabel(i.topic,i.qkey,true)+'</span>'
       +'<span style="color:#e3d5c2;font-size:15px;flex:none;">&rsaquo;</span>'
       +'</button></div>';
@@ -3690,7 +3690,7 @@ function admFbHTML(){
     list = (filter==='open'||filter==='prog')
       ? '<div style="background:#fff;border:1px solid #e8ddcd;border-radius:11px;padding:26px 20px;text-align:center;margin-top:16px;">'
         +'<div style="font-size:15.5px;color:#400207;font-weight:600;">Nothing is waiting on you.</div>'
-        +'<div style="font-size:12.5px;color:#9c8a72;margin-top:6px;">All '+total+' thing'+(total===1?'':'s')+' the team asked for '+(total===1?'is':'are')+' fixed and live.</div>'
+        +'<div style="font-size:12.5px;color:#6E5F4A;margin-top:6px;">All '+total+' thing'+(total===1?'':'s')+' the team asked for '+(total===1?'is':'are')+' fixed and live.</div>'
         +'<button class="btn btn-sm" style="margin-top:14px;'+FB_NOSHOUT+'background:#fff;border:1px solid #e3d5c2;color:#4a3b2a;border-radius:8px;" onclick="admFbSetFilter(\'all\')">Look through everything</button></div>'
       : '<div class="ppl-empty" style="padding:24px 8px;">Nothing here &mdash; try another filter.</div>';
   }else{
@@ -3704,7 +3704,7 @@ function admFbHTML(){
           var all=items.filter(function(x){ return x.topic===t; });
           var c={ok:0,ship:0,prog:0,open:0}; all.forEach(function(x){ c[x.st]++; });
           var pill = c.open ? '<span style="font-size:11px;padding:3px 10px;border-radius:20px;background:#F7DED9;color:#8A2A1A;white-space:nowrap;flex:none;">'+c.open+' not started</span>'
-                   : c.prog ? '<span style="font-size:11px;padding:3px 10px;border-radius:20px;background:#FAF0DC;color:#8A6A1A;white-space:nowrap;flex:none;">'+c.prog+' being worked on</span>'
+                   : c.prog ? '<span style="font-size:11px;padding:3px 10px;border-radius:20px;background:#FAF0DC;color:#7A5E17;white-space:nowrap;flex:none;">'+c.prog+' being worked on</span>'
                    : '<span style="font-size:11px;padding:3px 10px;border-radius:20px;background:#E7F0E5;color:#2E6B34;white-space:nowrap;flex:none;">all live</span>';
           var follows=(round&&round.follows&&FB_ROUNDS[round.follows])?' &middot; follow-up to '+admEsc(FB_ROUNDS[round.follows].name):'';
           var P=perTopic[t]||{}, newest=(P.counted&&P.counted[0]) ? P.counted[0].row : null;
@@ -3718,7 +3718,7 @@ function admFbHTML(){
               +'<span style="color:#c9b79c;font-size:13px;flex:none;display:inline-block;'+(open?'transform:rotate(90deg);':'')+'">&rsaquo;</span>'
               +'<span style="flex:1;min-width:0;">'
                 +'<span style="display:block;font-size:14.5px;color:#400207;font-weight:600;line-height:1.35;">'+admEsc(admFbTopicName(t))+'</span>'
-                +'<span style="display:block;font-size:11.5px;color:#9c8a72;margin-top:3px;">'+meta+'</span>'
+                +'<span style="display:block;font-size:11.5px;color:#6E5F4A;margin-top:3px;">'+meta+'</span>'
               +'</span>'
               + pill
             +'</button>'
@@ -3728,7 +3728,7 @@ function admFbHTML(){
             + (open?( (c.open+c.prog)
                       ? '<div style="border-top:1px solid #f1e9da;padding:10px 15px;background:#fdfaf6;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">'
                         +'<button class="btn btn-sm" style="'+FB_NOSHOUT+'background:#400207;color:#E8D9C7;border-color:#400207;border-radius:8px;" onclick="event.stopPropagation();admFbBriefRound(\''+admEsc(t)+'\')">Copy brief for '+(c.open+c.prog===1?'this one':'all '+(c.open+c.prog))+'</button>'
-                        +'<span style="font-size:11.5px;color:#9c8a72;">One prompt for Claude, covering everything still open here.</span>'
+                        +'<span style="font-size:11.5px;color:#6E5F4A;">One prompt for Claude, covering everything still open here.</span>'
                         +'</div>'
                       : '')
                     + '<div style="border-top:1px solid #f1e9da;">'+its.map(rowHTML).join('')+'</div>'
@@ -3748,7 +3748,7 @@ function admFbHTML(){
   if(state.fbSendOpen){
     h+='<div style="position:fixed;inset:0;background:rgba(44,24,16,.42);z-index:900;display:flex;align-items:flex-start;justify-content:center;padding:24px 14px;overflow:auto;" onclick="if(event.target===this)admFbToggleSend()">'
       +'<div style="width:100%;max-width:720px;background:#f9f4ee;border-radius:14px;box-shadow:0 18px 50px rgba(44,24,16,.28);padding:16px 16px 6px;">'
-        +'<div style="display:flex;justify-content:flex-end;"><button class="btn btn-sm" style="background:transparent;border-color:transparent;color:#9c8a72;font-size:18px;line-height:1;padding:2px 8px;" title="Close" onclick="admFbToggleSend()">&times;</button></div>'
+        +'<div style="display:flex;justify-content:flex-end;"><button class="btn btn-sm" style="background:transparent;border-color:transparent;color:#6E5F4A;font-size:18px;line-height:1;padding:2px 8px;" title="Close" onclick="admFbToggleSend()">&times;</button></div>'
         + admFbSendHTML()
       +'</div></div>';
   }
@@ -4630,7 +4630,7 @@ function fohPickPerson(actionLabel, actionKey, opts){
     var ov=document.createElement('div'); ov.id='fpk-ovl';
     ov.setAttribute('style','position:fixed;inset:0;z-index:100050;background:rgba(40,2,7,.5);display:flex;align-items:flex-start;justify-content:center;padding:22px 14px;overflow:auto;');
     ov.onclick=function(e){ if(e.target===ov) finish(null); };
-    ov.innerHTML='<div id="fpk-box" style="background:#fff;border-radius:14px;max-width:520px;width:100%;padding:18px 18px 16px;box-shadow:0 14px 50px rgba(40,2,7,.3);"><div style="color:#9c8a72;font-size:13px;padding:8px;">Loading…</div></div>';
+    ov.innerHTML='<div id="fpk-box" style="background:#fff;border-radius:14px;max-width:520px;width:100%;padding:18px 18px 16px;box-shadow:0 14px 50px rgba(40,2,7,.3);"><div style="color:#6E5F4A;font-size:13px;padding:8px;">Loading…</div></div>';
     document.body.appendChild(ov);
     document.addEventListener('keydown',onKey);
 
@@ -4642,12 +4642,12 @@ function fohPickPerson(actionLabel, actionKey, opts){
         .map(function(p){ var idx=people.indexOf(p);
           return '<button class="fpk-name" data-i="'+idx+'" style="display:flex;align-items:center;gap:9px;text-align:left;padding:9px 10px;border:1px solid #e4dccd;border-radius:9px;background:#fff;cursor:pointer;">'
             +'<span style="width:32px;height:32px;border-radius:50%;background:#eadfcd;color:#6b4a2e;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;flex:none;">'+admEsc(initials(p.name))+'</span>'
-            +'<span style="min-width:0;"><span style="display:block;font-size:14px;font-weight:600;color:#2c1810;">'+admEsc(p.name||'')+'</span><span style="display:block;font-size:11.5px;color:#8a7a62;">'+admEsc(p.role||'')+'</span></span></button>';
+            +'<span style="min-width:0;"><span style="display:block;font-size:14px;font-weight:600;color:#2c1810;">'+admEsc(p.name||'')+'</span><span style="display:block;font-size:11.5px;color:#6E5F4A;">'+admEsc(p.role||'')+'</span></span></button>';
         }).join('');
       b.innerHTML='<div style="font-family:Georgia,serif;color:#6B1F2A;font-size:19px;">Who’s doing this?</div>'
-        +'<div style="font-size:12.5px;color:#8a7a62;margin:2px 0 12px;">Tap your name to '+admEsc(actionLabel)+'. It’s recorded.</div>'
+        +'<div style="font-size:12.5px;color:#6E5F4A;margin:2px 0 12px;">Tap your name to '+admEsc(actionLabel)+'. It’s recorded.</div>'
         +(useSearch?'<input id="fpk-search" placeholder="Search your name…" style="width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid #d8cbb6;border-radius:9px;font-size:15px;margin-bottom:12px;">':'')
-        +'<div id="fpk-list" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:9px;max-height:44vh;overflow:auto;">'+(html||'<div style="color:#9c8a72;font-size:13px;padding:8px;">No match.</div>')+'</div>'
+        +'<div id="fpk-list" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:9px;max-height:44vh;overflow:auto;">'+(html||'<div style="color:#6E5F4A;font-size:13px;padding:8px;">No match.</div>')+'</div>'
         +'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:14px;border-top:0.5px solid #ece3d3;padding-top:12px;">'
           +'<button id="fpk-other" style="font-size:13px;color:#6B1F2A;border:0.5px solid #6B1F2A;background:transparent;border-radius:9px;padding:9px 13px;cursor:pointer;">I’m someone else — use my ID</button>'
           +'<button id="fpk-cancel" class="btn btn-sm">Cancel</button></div>';
@@ -4660,15 +4660,15 @@ function fohPickPerson(actionLabel, actionKey, opts){
       var b=box(); if(!b) return;
       var cells='';
       for(var i=0;i<6;i++){ var ch=code[i]; var active=(i===code.length);
-        cells+='<span style="width:34px;height:42px;border:'+(active?'1px solid #6B1F2A':'0.5px solid '+(ch?'#cbb89c':'#e4dccd'))+';border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:20px;color:#2c1810;">'+(ch||(active?'<span style=\"color:#bbab92\">_</span>':''))+'</span>'; }
+        cells+='<span style="width:34px;height:42px;border:'+(active?'1px solid #6B1F2A':'0.5px solid '+(ch?'#cbb89c':'#e4dccd'))+';border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:20px;color:#2c1810;">'+(ch||(active?'<span style=\"color:#6E5F4A\">_</span>':''))+'</span>'; }
       function k(d){ return '<button class="fpk-k" data-d="'+d+'" style="padding:13px 0;font-size:18px;color:#2c1810;border:0.5px solid #e4dccd;border-radius:9px;background:#fff;cursor:pointer;">'+d+'</button>'; }
       var pad=''; ['1','2','3','4','5','6','7','8','9'].forEach(function(d){ pad+=k(d); });
-      pad+='<button id="fpk-bk" style="padding:13px 0;font-size:20px;color:#8a7a62;border:0.5px solid #e4dccd;border-radius:9px;background:#fff;cursor:pointer;">⌫</button>';
+      pad+='<button id="fpk-bk" style="padding:13px 0;font-size:20px;color:#6E5F4A;border:0.5px solid #e4dccd;border-radius:9px;background:#fff;cursor:pointer;">⌫</button>';
       pad+=k('0');
       pad+='<button id="fpk-ok" style="padding:13px 0;font-size:18px;color:#fff;background:#6B1F2A;border:0.5px solid #6B1F2A;border-radius:9px;cursor:pointer;">✓</button>';
       var ktitle=opts.title||'Enter your employee ID';
       b.innerHTML='<div style="font-family:Georgia,serif;color:#6B1F2A;font-size:19px;">'+admEsc(ktitle)+'</div>'
-        +'<div style="font-size:12.5px;color:#8a7a62;margin:2px 0 12px;">'+(opts.superOnly?'Manager / super-user code, to ':'Your ID or manager code, to ')+admEsc(actionLabel)+'.</div>'
+        +'<div style="font-size:12.5px;color:#6E5F4A;margin:2px 0 12px;">'+(opts.superOnly?'Manager / super-user code, to ':'Your ID or manager code, to ')+admEsc(actionLabel)+'.</div>'
         +'<div style="display:flex;gap:7px;justify-content:center;margin-bottom:12px;">'+cells+'</div>'
         +'<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;">'+pad+'</div>'
         +'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:14px;border-top:0.5px solid #ece3d3;padding-top:12px;">'
@@ -5184,7 +5184,7 @@ function fohRenderSchedDay(){
   if(content) content.innerHTML =
     evBanner +
     '<div style="margin-bottom:12px;font-size:13px;color:var(--vino-light)">'+total+' staff on duty'+
-    ' · <span style="color:#4a7c59;font-weight:600">'+clockedIn+' clocked in</span>'+
+    ' · <span style="color:#406B4D;font-weight:600">'+clockedIn+' clocked in</span>'+
     (fohSchedLastSync?' · <span style="opacity:.55;font-size:12px">'+fohSchedLastSync+'</span>':'')+
     '</div>' + sections;
 }
@@ -6944,7 +6944,7 @@ function fohSchedPrint(){
   var weekStr=days[0].toLocaleDateString('en-GB',{day:'numeric',month:'short'})+' – '+
     days[6].toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});
   var html='<div style="margin-bottom:6px"><h2 style="font-size:18px;color:#410207;margin:0 0 2px">Roberto\'s DIFC — FOH Roster: '+weekStr+'</h2>'+
-    '<p style="font-size:10px;color:#666;margin:0">Printed: '+new Date().toLocaleString('en-GB')+'</p></div>';
+    '<p style="font-size:10px;color:#6E5F4A;margin:0">Printed: '+new Date().toLocaleString('en-GB')+'</p></div>';
   html+='<table style="width:100%;border-collapse:collapse;font-size:14px;table-layout:fixed"><thead><tr>'+
     '<th style="background:#410207;color:#fff;padding:4px 5px;text-align:left;width:13%">Name</th>'+
     '<th style="background:#410207;color:#fff;padding:4px 5px;text-align:left;width:11%">Role</th>';
@@ -7203,21 +7203,21 @@ function fohHRNoteAsk(wkStr, wasSent){
     ov.onclick=function(e){ if(e.target===ov) finish(null); };
     ov.innerHTML='<div style="background:#fff;border-radius:14px;max-width:540px;width:100%;padding:18px 18px 16px;box-shadow:0 14px 50px rgba(40,2,7,.3);">'
       +'<div style="font-family:Georgia,serif;color:#6B1F2A;font-size:19px;">Send the roster to HR</div>'
-      +'<div style="font-size:12.5px;color:#8a7a62;margin:2px 0 14px;">Week of '+admEsc(wkStr)+'.</div>'
+      +'<div style="font-size:12.5px;color:#6E5F4A;margin:2px 0 14px;">Week of '+admEsc(wkStr)+'.</div>'
       // Ticked for them when we already have a record of sending this week, but
       // still theirs to change: the record is only as good as what got logged.
       +'<label style="display:flex;gap:9px;align-items:flex-start;background:#faf7f2;border:1px solid #e4dccd;border-radius:9px;padding:11px 12px;cursor:pointer;">'
         +'<input type="checkbox" id="fhrn-upd" '+(wasSent?'checked':'')+' style="margin-top:2px;width:18px;height:18px;flex:none;">'
         +'<span style="font-size:13.5px;color:#2c1810;line-height:1.4;">This replaces a roster I already sent for this week'
-          +'<span style="display:block;font-size:11.5px;color:#8a7a62;margin-top:2px;">Adds a line telling HR to discard the earlier one.</span></span></label>'
-      +'<div style="font-size:13.5px;color:#2c1810;font-weight:600;margin:15px 0 3px;">What changed? <span style="font-weight:400;color:#8a7a62;">(optional)</span></div>'
-      +'<div style="font-size:11.5px;color:#8a7a62;margin-bottom:7px;">HR read this at the top of the email, so they don&rsquo;t have to check every person to find it.</div>'
+          +'<span style="display:block;font-size:11.5px;color:#6E5F4A;margin-top:2px;">Adds a line telling HR to discard the earlier one.</span></span></label>'
+      +'<div style="font-size:13.5px;color:#2c1810;font-weight:600;margin:15px 0 3px;">What changed? <span style="font-weight:400;color:#6E5F4A;">(optional)</span></div>'
+      +'<div style="font-size:11.5px;color:#6E5F4A;margin-bottom:7px;">HR read this at the top of the email, so they don&rsquo;t have to check every person to find it.</div>'
       +'<textarea id="fhrn-note" rows="4" placeholder="e.g. Two closing shifts swapped on Friday. Everyone else is unchanged." '
         +'style="width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid #e4dccd;border-radius:9px;font-size:15px;font-family:inherit;line-height:1.45;resize:vertical;"></textarea>'
-      +'<div id="fhrn-count" style="font-size:11px;color:#a89880;text-align:right;margin-top:3px;">&nbsp;</div>'
+      +'<div id="fhrn-count" style="font-size:11px;color:#6E5F4A;text-align:right;margin-top:3px;">&nbsp;</div>'
       +(testTo?'<div style="margin-top:10px;background:#fdeaea;border:1px solid #e0a9a9;border-radius:9px;padding:9px 11px;font-size:12.5px;color:#7f1d1d;">Local preview &mdash; this goes only to '+admEsc(testTo)+'. HR will not receive it.</div>':'')
       +'<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px;border-top:1px solid #e4dccd;padding-top:13px;">'
-        +'<button id="fhrn-cancel" style="font-size:13px;color:#8a7a62;border:1px solid #e4dccd;background:#fff;border-radius:9px;padding:10px 15px;cursor:pointer;">Cancel</button>'
+        +'<button id="fhrn-cancel" style="font-size:13px;color:#6E5F4A;border:1px solid #e4dccd;background:#fff;border-radius:9px;padding:10px 15px;cursor:pointer;">Cancel</button>'
         +'<button id="fhrn-send" style="font-size:13px;font-weight:600;color:#fff;background:#6B1F2A;border:1px solid #6B1F2A;border-radius:9px;padding:10px 17px;cursor:pointer;">'+(testTo?'Send test':'Send to HR')+'</button></div></div>';
     document.body.appendChild(ov);
     document.addEventListener('keydown',onKey);
