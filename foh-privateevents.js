@@ -2072,6 +2072,119 @@ function peClientsCsv(){
   setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 1000);
   peToast(rows.length + ' client' + (rows.length===1?'':'s') + ' extracted');
 }
+// ── "Have they dined with us before?" ────────────────────────────────
+// The events desk never talks to SevenRooms. It asks the Kitchen project's
+// `sevenrooms-sync` function, `?clientcheck=` mode, which authenticates,
+// searches and returns a VERDICT plus visit counts -- never a phone number,
+// an email or an address. That privacy line was drawn deliberately and this
+// screen does not cross it.
+//
+// WHICH FIELD IS SEARCHED MATTERS. Proven live 12 Aug 2026: `phone=`, `email=`
+// and `name=` genuinely filter, but passing the wrong TYPE to a working filter
+// silently returns the unfiltered first page of 50 -- which reads as "matched
+// 50 people" and would look like a working feature. So the value is classified
+// here and the kind is stated explicitly, never guessed by the far end.
+function peSrPick(c){
+  var phone = String(c.phone||'').trim();
+  if(phone.replace(/[^0-9]/g,'').length >= 7) return { value:phone, kind:'phone' };
+  var email = String(c.email||'').trim();
+  if(email.indexOf('@') > 0) return { value:email, kind:'email' };
+  var name = String(c.contact_name || c.display_name || '').trim();
+  // A single short word is not a search, it is a fishing trip.
+  if(name.length >= 4) return { value:name, kind:'name' };
+  return null;
+}
+// How the answer was arrived at, in words rather than a column value.
+var PE_SR_HOW = { phone:'searched on their number', email:'searched on their email', name:'searched on their name', picked:'you confirmed the profile', rejected:'you said none of them matched' };
+function peSrLine(c){
+  if(!c.sr_checked_at){
+    var pick = peSrPick(c);
+    if(!pick) return '<span style="font-size:12.5px;color:#5C3D2E">Nothing to search on — add a number, an email or a fuller name first.</span>';
+    return '<button class="pe-btn sec sm" onclick="peSrCheck(\''+c.id+'\')">Check SevenRooms — by '+pick.kind+'</button>';
+  }
+  var when = 'checked ' + peDLabel(String(c.sr_checked_at).slice(0,10));
+  var body;
+  if(c.sr_status === 'known'){
+    body = '<b style="color:#1C5A25">Yes — they have dined with us.</b>' +
+      (c.sr_visits ? ' <span style="color:#2C1810">'+c.sr_visits+' visit'+(c.sr_visits===1?'':'s')+'</span>' : '') +
+      (c.sr_last_visit ? ' <span style="color:#5C3D2E">· last '+peDLabel(c.sr_last_visit)+'</span>' : '');
+  } else if(c.sr_status === 'new'){
+    body = '<b style="color:#6B4A00">No match in SevenRooms</b> <span style="color:#5C3D2E">— as far as the book knows, a new guest.</span>';
+  } else {
+    body = '<span style="color:#8A2A1A">The last check could not be completed.</span>';
+  }
+  return '<span style="font-size:12.5px">'+body+'</span>'+
+    '<div style="font-size:11px;color:#5C3D2E;margin-top:4px">'+when+
+      (PE_SR_HOW[c.sr_matched_on] ? ' · '+PE_SR_HOW[c.sr_matched_on] : '')+
+      ' · <span style="color:#6B1F2A;text-decoration:underline;cursor:pointer" onclick="peSrCheck(\''+c.id+'\')">check again</span></div>';
+}
+async function peSrCheck(id){
+  var c = (peState.clients||[]).filter(function(x){ return x.id === id; })[0];
+  if(!c) return;
+  var pick = peSrPick(c);
+  var box = document.getElementById('pe-sr-' + id);
+  if(!pick){ if(box) box.innerHTML = '<span style="font-size:12.5px;color:#5C3D2E">Nothing to search on.</span>'; return; }
+  if(box) box.innerHTML = '<span style="font-size:12.5px;color:#5C3D2E">Asking SevenRooms…</span>';
+  try{
+    var url = KITCHEN_URL + '/functions/v1/sevenrooms-sync?clientcheck=' + encodeURIComponent(pick.value) + '&kind=' + pick.kind;
+    var r = await fetch(url, { method:'POST', headers:{ 'Content-Type':'application/json',
+      'Authorization':'Bearer ' + KITCHEN_KEY, 'x-proxy-secret': KITCHEN_PROXY_SECRET } });
+    if(!r.ok) throw new Error('HTTP ' + r.status);
+    var j = await r.json();
+    if(!j || !j.ok || j.status === 'error') throw new Error((j && j.error) || 'the search came back unusable');
+    peState.srHits = peState.srHits || {};
+    peState.srHits[id] = j.matches || [];
+    // Nobody there: record it, so the desk is not asked to look again tomorrow.
+    if(j.status !== 'known' || !(j.matches||[]).length){
+      await peSrSave(id, { sr_status:'new', sr_matched_on:pick.kind, sr_client_id:null, sr_visits:null, sr_last_visit:null });
+      if(box) box.innerHTML = peSrLine(peState.clients.filter(function(x){ return x.id===id; })[0]);
+      return;
+    }
+    // SevenRooms genuinely holds duplicate profiles for the same person, so this
+    // shows what it found and lets the human say which one -- picking silently
+    // would attach a booking to the wrong history.
+    if(box) box.innerHTML = peSrHitsHtml(id, j.matches);
+  }catch(err){
+    if(box) box.innerHTML = '<span style="font-size:12.5px;color:#8A2A1A">Could not reach SevenRooms — '+peEsc(err.message||'unknown error')+'. Nothing was saved.</span>'+
+      '<div style="margin-top:6px"><button class="pe-btn sec sm" onclick="peSrCheck(\''+id+'\')">Try again</button></div>';
+  }
+}
+function peSrHitsHtml(id, matches){
+  return '<div style="font-size:12px;color:#5C3D2E;margin-bottom:6px">SevenRooms found '+matches.length+
+      ' profile'+(matches.length===1?'':'s')+'. Which one is them?</div>'+
+    matches.map(function(m, i){
+      return '<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid rgba(107,31,42,.10)">'+
+        '<div style="flex:1;min-width:0"><div style="font-size:13px;color:#2C1810">'+peEsc(m.name||'Unnamed')+
+          (m.company?' <span style="color:#5C3D2E">· '+peEsc(m.company)+'</span>':'')+'</div>'+
+        '<div style="font-size:11.5px;color:#5C3D2E">'+(m.visits||0)+' visit'+(m.visits===1?'':'s')+
+          (m.covers?' · '+m.covers+' covers':'')+
+          (m.last_visit?' · last '+peDLabel(m.last_visit):'')+'</div></div>'+
+        '<button class="pe-btn sec sm" onclick="peSrPickHit(\''+id+'\','+i+')">That’s them</button></div>';
+    }).join('')+
+    '<div style="margin-top:8px"><button class="pe-btn sec sm" onclick="peSrNone(\''+id+'\')">None of these</button></div>';
+}
+async function peSrPickHit(id, i){
+  var m = ((peState.srHits||{})[id]||[])[i];
+  if(!m) return;
+  await peSrSave(id, { sr_status:'known', sr_client_id:m.sr_client_id||null,
+    sr_visits:(m.visits||null), sr_last_visit:(m.last_visit||null), sr_matched_on:'picked' });
+  var box = document.getElementById('pe-sr-' + id);
+  if(box) box.innerHTML = peSrLine(peState.clients.filter(function(x){ return x.id===id; })[0]);
+}
+async function peSrNone(id){
+  await peSrSave(id, { sr_status:'new', sr_client_id:null, sr_visits:null, sr_last_visit:null, sr_matched_on:'rejected' });
+  var box = document.getElementById('pe-sr-' + id);
+  if(box) box.innerHTML = peSrLine(peState.clients.filter(function(x){ return x.id===id; })[0]);
+}
+// The write is CHECKED. An unchecked update here fails invisibly: the card shows
+// the verdict, nothing is stored, and the same client is re-checked forever.
+async function peSrSave(id, patch){
+  patch.sr_checked_at = new Date().toISOString();
+  var r = await sb.from('event_clients').update(patch).eq('id', id);
+  if(r.error){ peToast('Checked, but the answer could not be saved: ' + r.error.message, true); return false; }
+  (peState.clients||[]).forEach(function(c){ if(c.id === id) Object.keys(patch).forEach(function(k){ c[k] = patch[k]; }); });
+  return true;
+}
 // ── The card behind the name ─────────────────────────────────────────
 function peClientCard(id){
   var r = peClientRows().filter(function(x){ return x.c.id === id; })[0];
@@ -2098,6 +2211,7 @@ function peClientCard(id){
     (c.first_enquiry_at ? line('First enquiry', peDLabel(String(c.first_enquiry_at).slice(0,10))) : '')+
     (r.last ? line('Latest booking', peDLabel(r.last)) : '')+
     (c.notes ? line('Notes', peEsc(c.notes)) : '')+
+    line('Dined with us', '<span id="pe-sr-'+c.id+'">'+peSrLine(c)+'</span>')+
     '<div style="margin-top:14px;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#544418">Their bookings</div>'+
     '<div style="margin-top:6px">'+ (evs.length ? evs.map(function(e){
       var m = peStatusMeta(e.status), v = peEventValue(e);
