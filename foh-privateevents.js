@@ -862,10 +862,38 @@ function peScrollTop(){
   '.pe-top{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:14px}'+
   '.pe-title{font-family:\'Playfair Display\',serif;font-size:22px;color:var(--vino-dark)}'+
   '.pe-tabs{display:flex;gap:6px;flex-wrap:wrap}'+
-  '.pe-tab{font-size:12px;padding:6px 14px;border-radius:14px;border:1px solid rgba(107,31,42,0.3);color:var(--vino);cursor:pointer;background:transparent}'+
-  '.pe-tab.on{background:var(--vino);color:var(--cream)}'+
+  // ENAMEL (13 Aug 2026). Every pill in the module is a glazed cap: a white
+  // highlight across the top, the colour deepening to the foot, and a soft shadow
+  // under it -- the enamel badges on a chef's jacket. Geometry is untouched; only
+  // the surface changed, so nothing moves and no label is renamed.
+  '.pe-tab{font-size:12px;padding:6px 14px;border-radius:14px;border:1px solid rgba(107,31,42,0.28);color:var(--vino);cursor:pointer;'+
+    'background:linear-gradient(180deg,#FFFFFF 0,#F2E9DB 52%,#EFE4D2 100%);'+
+    'box-shadow:0 1px 2px rgba(60,26,20,0.20),0 4px 10px -6px rgba(60,26,20,0.45),'+
+      'inset 0 1px 0 #FFFFFF,inset 0 -3px 6px -3px rgba(92,61,46,0.35);'+
+    'transition:transform .1s ease,box-shadow .13s ease,filter .13s ease}'+
+  // Hover only with a real pointer: on a touch screen it sticks to the last pill
+  // tapped and would leave a filter looking lit that is not the one in force.
+  '@media(hover:hover){.pe-tab:hover{filter:brightness(1.04)}}'+
+  '.pe-tab:active{transform:translateY(1px);box-shadow:inset 0 2px 5px rgba(92,61,46,0.30)}'+
+  '.pe-tab.on{background:linear-gradient(180deg,#8B3040 0,#6B1F2A 55%,#5A1723 100%);border-color:#4A1520;color:var(--cream);'+
+    'box-shadow:0 1px 2px rgba(20,4,4,0.40),0 5px 12px -5px rgba(20,4,4,0.55),'+
+      'inset 0 1px 0 rgba(255,255,255,0.35),inset 0 -3px 7px -3px rgba(0,0,0,0.40)}'+
   '.pe-tab.staff{border-color:#C9A84C;color:#574232}'+
-  '.pe-tab.staff.on{background:#8A6A4F;border-color:#8A6A4F;color:#FBF7F1}'+
+  '.pe-tab.staff.on{background:linear-gradient(180deg,#A07C5C 0,#8A6A4F 55%,#75593F 100%);border-color:#75593F;color:#FBF7F1}'+
+  // The three summary pills are the same glaze, keeping the colour each one
+  // already carries -- the gloss is painted on top, so the meaning is untouched.
+  '.pe-statpill{position:relative;overflow:hidden;'+
+    'box-shadow:0 1px 2px rgba(60,26,20,0.22),0 5px 12px -6px rgba(60,26,20,0.50),'+
+      'inset 0 1px 0 rgba(255,255,255,0.85),inset 0 -4px 8px -4px rgba(92,61,46,0.40)}'+
+  '.pe-statpill::after{content:"";position:absolute;inset:1px 1px 55% 1px;border-radius:10px 10px 40% 40%;'+
+    'background:linear-gradient(180deg,rgba(255,255,255,0.55),rgba(255,255,255,0));pointer-events:none}'+
+  '@media(hover:hover){.pe-statpill:hover{filter:brightness(1.03)}}'+
+  '.pe-statpill:active{transform:translateY(1px)}'+
+  '@media(prefers-reduced-motion:reduce){.pe-tab,.pe-statpill{transition:none}'+
+    '.pe-tab:active,.pe-statpill:active{transform:none}}'+
+  // Paper gets none of it: a glaze prints as a grey smear.
+  '@media print{.pe-tab,.pe-statpill{box-shadow:none}.pe-statpill::after{display:none}'+
+    '.pe-tab{background:none}}'+
   '.pe-btn{font-size:12.5px;padding:8px 14px;border-radius:8px;border:1px solid var(--vino);background:var(--vino);color:var(--cream);cursor:pointer}'+
   '.pe-btn.sec{background:transparent;color:var(--vino)}'+
   '.pe-btn.sm{padding:5px 10px;font-size:11.5px}'+
