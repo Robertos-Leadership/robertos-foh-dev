@@ -2274,8 +2274,9 @@
   .cl-sec-h:first-child{margin-top:0}
   .cl-opt{font-family:var(--font-sans);font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-light);font-weight:400;margin-left:6px}
   .cl-row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+  .cl-row4{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px}
   .cl-row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-  .cl-row3 label,.cl-row2 label{display:flex;flex-direction:column;gap:4px;font-size:11px;color:var(--text-secondary,#8B7355)}
+  .cl-row3 label,.cl-row4 label,.cl-row2 label{display:flex;flex-direction:column;gap:4px;font-size:11px;color:var(--text-secondary,#8B7355)}
   .cl-inp{padding:9px;border:1px solid var(--sabbia-dark);border-radius:6px;font-family:var(--font-sans);font-size:14px;background:var(--surface);color:var(--ink);width:100%;box-sizing:border-box}
   .cl-note{font-size:11px;color:var(--text-light);margin-top:7px;min-height:14px}
   .cl-tips-box{display:flex;flex-direction:column;justify-content:center;gap:4px;font-size:11px;color:var(--text-secondary,#8B7355)}
@@ -2301,7 +2302,7 @@
   .cl-save-only{flex:1;padding:11px;background:transparent;border:1px solid var(--vino);border-radius:6px;cursor:pointer;font-family:var(--font-sans);color:var(--vino);font-weight:700}
   .cl-del{flex:1;padding:11px;background:transparent;border:1px solid #b3402f;border-radius:6px;cursor:pointer;font-family:var(--font-sans);color:#AB3D2D;font-weight:700}
   .cl-open-btn{background:var(--vino)!important;color:var(--cream)!important;border-color:var(--vino)!important;font-weight:700}
-  @media(max-width:560px){ .cl-comp-row{grid-template-columns:1fr 1fr} .cl-comments{grid-template-columns:1fr} .cl-row3{grid-template-columns:1fr} }
+  @media(max-width:560px){ .cl-comp-row{grid-template-columns:1fr 1fr} .cl-comments{grid-template-columns:1fr} .cl-row3{grid-template-columns:1fr} .cl-row4{grid-template-columns:1fr 1fr} }
   .ops-wrap{max-width:980px;margin:0 auto;padding:8px 4px 60px}
   .ops-hero{background:var(--vino);color:var(--cream);border-radius:10px;padding:24px;margin-bottom:8px}
   .ops-hero-k{font-size:10px;letter-spacing:.2em;text-transform:uppercase;opacity:.7;margin-bottom:8px}

@@ -439,7 +439,7 @@ function revEditDay(ds){
     setv('rev-rl-net',null); setv('rev-rl-cov',null); setv('rev-rd-net',row.rest_net); setv('rev-rd-cov',row.rest_covers_actual);
     setv('rev-ll-net',null); setv('rev-ll-cov',null); setv('rev-ld-net',row.lounge_net); setv('rev-ld-cov',row.lounge_covers_actual);
   }
-  setv('rev-food-net',row.food_net); setv('rev-bev-net',row.bev_net); setv('rev-tob-net',row.tobacco_net);
+  setv('rev-food-net',row.food_net); setv('rev-bev-net',row.bev_net); setv('rev-tob-net',row.tobacco_net); setv('rev-misc-net',row.other_net);
   revRecalc();
   document.getElementById('rev-edit-modal').style.display='flex';
 }
@@ -459,11 +459,14 @@ function revRecalc(){
     +'<div><span>Scala Lounge &amp; Bar</span><b>'+revMoney(lounNet)+' · '+lounCov+' cov · '+(tot?Math.round(lounNet/tot*100):0)+'%</b></div>'
     +'<div class="rev-edit-tot-total"><span>Total</span><b>'+revMoney(tot)+' · '+totCov+' cov · avg '+(totCov?revMoney(tot/totCov).replace('AED ',''):'—')+'</b></div>';
   // F&B split reconciliation hint
-  var fb=revNum('rev-food-net')||0, bv=revNum('rev-bev-net')||0, tb=revNum('rev-tob-net')||0, fbSum=fb+bv+tb;
+  // Miscellaneous (flowers, cake, corkage) is charged to the guest, so it belongs inside
+  // net with the other categories — leaving it out made the reconciliation read "off by"
+  // the exact misc amount on every night that had one.
+  var fb=revNum('rev-food-net')||0, bv=revNum('rev-bev-net')||0, tb=revNum('rev-tob-net')||0, ms=revNum('rev-misc-net')||0, fbSum=fb+bv+tb+ms;
   var chk=document.getElementById('rev-fnb-check');
   if(chk){
     if(fbSum===0){ chk.style.color='var(--text-light)'; chk.textContent='Not entered — AI will estimate Food 48% / Bev 51% / Tobacco 1% of net.'; }
-    else { var diff=fbSum-tot; chk.style.color=''; chk.innerHTML='F&B total '+revMoney(fbSum)+' vs net '+revMoney(tot)+' · '+(Math.abs(diff)<1?'<b style="color:#296E48">matches</b>':'<b style="color:#AB3D2D">off by '+revMoney(Math.abs(diff)).replace('AED ','')+'</b>'); }
+    else { var diff=fbSum-tot; chk.style.color=''; chk.innerHTML='Split total '+revMoney(fbSum)+' vs net '+revMoney(tot)+' · '+(Math.abs(diff)<1?'<b style="color:#296E48">matches</b>':'<b style="color:#AB3D2D">off by '+revMoney(Math.abs(diff)).replace('AED ','')+'</b>'); }
   }
 }
 async function revSaveDay(){
@@ -475,12 +478,12 @@ async function revSaveDay(){
   var net=(restNet==null&&lounNet==null)?null:((restNet||0)+(lounNet||0));
   var bIn=revNum('rev-edit-budget'), defB=revAutoBudget(ds);
   var budgetOverride=(bIn==null||Math.abs(bIn-defB)<1)?null:bIn;   // store only if changed from the auto (distributed) default
-  var food=revNum('rev-food-net'), bev=revNum('rev-bev-net'), tob=revNum('rev-tob-net');
+  var food=revNum('rev-food-net'), bev=revNum('rev-bev-net'), tob=revNum('rev-tob-net'), misc=revNum('rev-misc-net');
   var payload={ service_date:ds, budget_override:budgetOverride,
     rest_lunch_net:rl, rest_lunch_covers:rlc, rest_dinner_net:rd, rest_dinner_covers:rdc,
     lounge_lunch_net:ll, lounge_lunch_covers:llc, lounge_dinner_net:ld, lounge_dinner_covers:ldc,
     rest_net:restNet, rest_covers_actual:restCov, lounge_net:lounNet, lounge_covers_actual:lounCov,
-    food_net:food, bev_net:bev, tobacco_net:tob,
+    food_net:food, bev_net:bev, tobacco_net:tob, other_net:misc,
     net_actual:net, updated_at:new Date().toISOString() };
   var R=revInit(); var i=R.daily.findIndex(function(x){ return String(x.service_date).slice(0,10)===ds; });
   var prevRow=(i>=0)?R.daily[i]:null;   // snapshot for revert on failure

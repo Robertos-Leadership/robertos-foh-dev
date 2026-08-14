@@ -95,7 +95,7 @@ function clFill(row){
   set('cl-rd-net',row.rest_dinner_net); set('cl-rd-cov',row.rest_dinner_covers);
   set('cl-ll-net',row.lounge_lunch_net); set('cl-ll-cov',row.lounge_lunch_covers);
   set('cl-ld-net',row.lounge_dinner_net); set('cl-ld-cov',row.lounge_dinner_covers);
-  set('cl-food',row.food_net); set('cl-bev',row.bev_net); set('cl-tob',row.tobacco_net);
+  set('cl-food',row.food_net); set('cl-bev',row.bev_net); set('cl-tob',row.tobacco_net); set('cl-misc',row.other_net);
   set('cl-cc',row.cc_tips); set('cl-cash',row.cash_tips);
   set('cl-mgr-am',row.manager_am); set('cl-mgr-pm',row.manager_pm);
   var sh=row.shifts||{};
@@ -118,8 +118,21 @@ function clRecalc(){
   if(g('cl-tot')) g('cl-tot').innerHTML='<div><span>Restaurant</span><b>'+revMoney(restNet)+' · '+restCov+' cov</b></div>'
     +'<div><span>Scala Lounge &amp; Bar</span><b>'+revMoney(lounNet)+' · '+lounCov+' cov</b></div>'
     +'<div class="rev-edit-tot-total"><span>Total net</span><b>'+revMoney(tot)+' · '+totCov+' cov · avg '+(totCov?revMoney(tot/totCov).replace('AED ',''):'—')+'</b></div>';
-  var fb=(clNum('cl-food')||0)+(clNum('cl-bev')||0)+(clNum('cl-tob')||0);
-  if(g('cl-fnb-chk')) g('cl-fnb-chk').textContent= fb===0?'Optional — leave blank and the model estimates Food 48% / Bev 51% / Tobacco 1%.':('F&B '+revMoney(fb)+' vs net '+revMoney(tot)+(Math.abs(fb-tot)<1?'  ✓':''));
+  // Miscellaneous counts INTO the split: it is money the guest was charged (flowers,
+  // cake, corkage), so it sits inside net alongside Food/Bev/Tobacco. Before it existed
+  // any such charge left the reconciliation permanently short and the ✓ never appeared.
+  var fb=(clNum('cl-food')||0)+(clNum('cl-bev')||0)+(clNum('cl-tob')||0)+(clNum('cl-misc')||0);
+  if(g('cl-fnb-chk')){
+    if(fb===0) g('cl-fnb-chk').textContent='Optional — leave blank and the model estimates Food 48% / Bev 51% / Tobacco 1%.';
+    else {
+      // Say the gap out loud rather than just withholding the tick — a missing ✓ never
+      // told the manager how far out they were, or which box to look at.
+      var fbGap=fb-tot;
+      g('cl-fnb-chk').innerHTML='Split '+revMoney(fb)+' vs net '+revMoney(tot)+' · '
+        +(Math.abs(fbGap)<1?'<b style="color:#296E48">matches ✓</b>'
+          :'<b style="color:#AB3D2D">off by '+revMoney(Math.abs(fbGap))+'</b>');
+    }
+  }
   var tips=(clNum('cl-cc')||0)+(clNum('cl-cash')||0);
   if(g('cl-tips-tot')) g('cl-tips-tot').textContent=revMoney(tips);
   var ct=clInit().comps.reduce(function(s,c){return s+(Number(c.amount)||0);},0);
@@ -193,7 +206,7 @@ function clEmailHTML(c, ds){
     +row('Scala Lounge &amp; Bar', lln?m(lln):'—', ldn?m(ldn):'—', lounCov, avg(lounNet,lounCov))
     +'<tr style="background:#F3EADA;font-weight:bold;color:#400207;"><td style="padding:9px;">Total</td><td style="padding:9px;text-align:right;">'+((rln+lln)?m(rln+lln):'—')+'</td><td style="padding:9px;text-align:right;">'+m(rdn+ldn)+'</td><td style="padding:9px;text-align:right;">'+totCov+'</td><td style="padding:9px;text-align:right;">'+avg(net,totCov)+'</td></tr></table>'
     +(srLine?'<div style="font-family:Arial,sans-serif;font-size:11px;color:#4F4535;margin-top:8px;">'+srLine+'</div>':'')+'</div>'
-    +'<div style="padding:12px 30px;"><table style="width:100%;font-family:Arial,sans-serif;font-size:13px;"><tr><td style="vertical-align:top;width:50%;padding-right:12px;"><div style="font-family:Georgia,serif;font-size:14px;color:#400207;margin-bottom:6px;">Sales split</div><div style="color:#5b4a36;line-height:1.7;">Food <strong>'+m(c.food_net)+'</strong><br>Beverage <strong>'+m(c.bev_net)+'</strong><br>Tobacco <strong>'+m(c.tobacco_net)+'</strong></div></td><td style="vertical-align:top;width:50%;padding-left:12px;border-left:1px solid #E3D8C6;"><div style="font-family:Georgia,serif;font-size:14px;color:#400207;margin-bottom:6px;">Tips</div><div style="color:#5b4a36;line-height:1.7;">CC <strong>'+m(c.cc_tips)+'</strong><br>Cash <strong>'+m(c.cash_tips)+'</strong><br>Total <strong>'+m(tips)+'</strong></div></td></tr></table></div>'
+    +'<div style="padding:12px 30px;"><table style="width:100%;font-family:Arial,sans-serif;font-size:13px;"><tr><td style="vertical-align:top;width:50%;padding-right:12px;"><div style="font-family:Georgia,serif;font-size:14px;color:#400207;margin-bottom:6px;">Sales split</div><div style="color:#5b4a36;line-height:1.7;">Food <strong>'+m(c.food_net)+'</strong><br>Beverage <strong>'+m(c.bev_net)+'</strong><br>Tobacco <strong>'+m(c.tobacco_net)+'</strong>'+(n(c.other_net)?'<br>Miscellaneous <strong>'+m(c.other_net)+'</strong>':'')+'</div></td><td style="vertical-align:top;width:50%;padding-left:12px;border-left:1px solid #E3D8C6;"><div style="font-family:Georgia,serif;font-size:14px;color:#400207;margin-bottom:6px;">Tips</div><div style="color:#5b4a36;line-height:1.7;">CC <strong>'+m(c.cc_tips)+'</strong><br>Cash <strong>'+m(c.cash_tips)+'</strong><br>Total <strong>'+m(tips)+'</strong></div></td></tr></table></div>'
     +'<div style="padding:10px 30px;"><div style="font-family:Georgia,serif;font-size:14px;color:#400207;border-bottom:2px solid #C9A84C;padding-bottom:5px;margin-bottom:10px;">Comps &middot; '+m(compsTot)+(net?(' ('+(compsTot/net*100).toFixed(1)+'% of net)'):'')+'</div><table style="width:100%;border-collapse:collapse;font-family:Arial,sans-serif;font-size:12px;color:#5b4a36;"><tr style="color:#4F4535;text-transform:uppercase;font-size:10px;"><td style="padding:3px 6px;">Table</td><td style="padding:3px 6px;">Guest</td><td style="padding:3px 6px;text-align:right;">Amount</td><td style="padding:3px 6px;">Reason</td><td style="padding:3px 6px;">Mgr</td></tr>'+compRows+'</table></div>'
     +(c.private_events?'<div style="padding:8px 30px;font-family:Arial,sans-serif;font-size:13px;color:#5b4a36;"><span style="font-family:Georgia,serif;color:#400207;">Private events:</span> '+e(c.private_events)+'</div>':'')
     +'<div style="padding:12px 30px;"><div style="font-family:Georgia,serif;font-size:14px;color:#400207;border-bottom:2px solid #C9A84C;padding-bottom:5px;margin-bottom:10px;">Shift logs</div><div style="font-family:Arial,sans-serif;font-size:12px;color:#5b4a36;line-height:1.7;">'+shiftLine('Day (12&ndash;7)',sh.day)+shiftLine('Night (7&ndash;11)',sh.night)+shiftLine('Late (11&ndash;close)',sh.late)+'</div></div>'
@@ -246,7 +259,7 @@ async function clSave(andEmail){
   function sum(a,b){ return (a==null&&b==null)?null:((a||0)+(b||0)); }
   var rl=clNum('cl-rl-net'),rlc=clNum('cl-rl-cov'),rd=clNum('cl-rd-net'),rdc=clNum('cl-rd-cov');
   var ll=clNum('cl-ll-net'),llc=clNum('cl-ll-cov'),ld=clNum('cl-ld-net'),ldc=clNum('cl-ld-cov');
-  var food=clNum('cl-food'),bev=clNum('cl-bev'),tob=clNum('cl-tob');
+  var food=clNum('cl-food'),bev=clNum('cl-bev'),tob=clNum('cl-tob'),misc=clNum('cl-misc');
   var restNet=sum(rl,rd), restCov=sum(rlc,rdc), lounNet=sum(ll,ld), lounCov=sum(llc,ldc);
   var net=(restNet==null&&lounNet==null)?null:((restNet||0)+(lounNet||0));
   var shifts={ day:{feedback:clVal('cl-day-fb'),challenges:clVal('cl-day-ch')}, night:{feedback:clVal('cl-night-fb'),challenges:clVal('cl-night-ch')}, late:{feedback:clVal('cl-late-fb'),challenges:clVal('cl-late-ch')} };
@@ -255,7 +268,7 @@ async function clSave(andEmail){
   var crow={ service_date:ds,
     rest_lunch_net:rl, rest_lunch_covers:rlc, rest_dinner_net:rd, rest_dinner_covers:rdc,
     lounge_lunch_net:ll, lounge_lunch_covers:llc, lounge_dinner_net:ld, lounge_dinner_covers:ldc,
-    food_net:food, bev_net:bev, tobacco_net:tob, cc_tips:clNum('cl-cc'), cash_tips:clNum('cl-cash'),
+    food_net:food, bev_net:bev, tobacco_net:tob, other_net:misc, cc_tips:clNum('cl-cc'), cash_tips:clNum('cl-cash'),
     manager_am:clVal('cl-mgr-am')||null, manager_pm:clVal('cl-mgr-pm')||null,
     comps:comps, shifts:shifts, private_events:clVal('cl-events')||null,
     comments_good:good, comments_bad:bad, support:clVal('cl-support')||null,
@@ -303,7 +316,7 @@ async function clSave(andEmail){
     rest_lunch_net:rl, rest_lunch_covers:rlc, rest_dinner_net:rd, rest_dinner_covers:rdc,
     lounge_lunch_net:ll, lounge_lunch_covers:llc, lounge_dinner_net:ld, lounge_dinner_covers:ldc,
     rest_net:restNet, rest_covers_actual:restCov, lounge_net:lounNet, lounge_covers_actual:lounCov,
-    food_net:food, bev_net:bev, tobacco_net:tob, net_actual:net, updated_at:new Date().toISOString() };
+    food_net:food, bev_net:bev, tobacco_net:tob, other_net:misc, net_actual:net, updated_at:new Date().toISOString() };
   var res2=await sb.from('rev_daily').upsert(revRow,{onConflict:'service_date'});
   var R=revInit();
   // Only mirror into the local cache when the DB write actually succeeded —

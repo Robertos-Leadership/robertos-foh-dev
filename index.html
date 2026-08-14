@@ -134,7 +134,7 @@ if ('serviceWorker' in navigator) {
 }
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<link rel="stylesheet" href="foh-styles.css?v=20260813d">
+<link rel="stylesheet" href="foh-styles.css?v=20260814a">
 </head>
 <body>
 
@@ -168,7 +168,7 @@ if ('serviceWorker' in navigator) {
     <div class="foh-hero-content">
       <img class="foh-hero-logo" src="robertos-logo-white.svg" alt="Roberto's">
     </div>
-    <div id="foh-build" style="position:absolute;bottom:6px;right:10px;font-size:9px;letter-spacing:.08em;color:rgba(255,255,255,.4);z-index:3;font-variant-numeric:tabular-nums;">build 2026-08-11.01</div>
+    <div id="foh-build" style="position:absolute;bottom:6px;right:10px;font-size:9px;letter-spacing:.08em;color:rgba(255,255,255,.4);z-index:3;font-variant-numeric:tabular-nums;">build 2026-08-14.01</div>
   </div>
 
   <!-- main scroll area -->
@@ -424,8 +424,8 @@ if ('serviceWorker' in navigator) {
 <script src="foh-core.js?v=20260813d"></script>
 <script src="foh-events.js?v=20260731a"></script>
 <script src="foh-privateevents.js?v=20260813q"></script>
-<script src="foh-revenue.js?v=20260813d"></script>
-<script src="foh-closing.js?v=20260813d"></script>
+<script src="foh-revenue.js?v=20260814a"></script>
+<script src="foh-closing.js?v=20260814a"></script>
 <script src="foh-ops.js?v=20260710b"></script>
 <script src="stock-take.js?v=20260813d"></script>
 <script src="foh-reviews.js?v=20260812d"></script>
@@ -668,11 +668,12 @@ window.FB_INBOX = {
     </table></div>
     <div id="rev-edit-totals" class="rev-edit-totals"></div>
     <div class="rev-fnb">
-      <div class="rev-fnb-h">Sales split — Food / Beverage / Tobacco (AED, from DSR · optional)</div>
+      <div class="rev-fnb-h">Sales split — Food / Beverage / Tobacco / Miscellaneous (AED, from DSR · optional)</div>
       <div class="rev-fnb-row">
         <label>Food<input id="rev-food-net" class="rev-eg-inp" type="number" inputmode="decimal" oninput="revRecalc()"></label>
         <label>Beverage<input id="rev-bev-net" class="rev-eg-inp" type="number" inputmode="decimal" oninput="revRecalc()"></label>
         <label>Tobacco<input id="rev-tob-net" class="rev-eg-inp" type="number" inputmode="decimal" oninput="revRecalc()"></label>
+        <label>Miscellaneous<input id="rev-misc-net" class="rev-eg-inp" type="number" inputmode="decimal" placeholder="flowers, cake…" oninput="revRecalc()"></label>
       </div>
       <div id="rev-fnb-check" class="rev-fnb-check"></div>
     </div>
@@ -730,11 +731,12 @@ window.FB_INBOX = {
       <div id="cl-tot" class="rev-edit-totals"></div>
       <div id="cl-sr-covers" class="cl-note"></div>
 
-      <div class="cl-sec-h">Sales split — Food / Beverage / Tobacco <span class="cl-opt">optional</span></div>
-      <div class="cl-row3">
+      <div class="cl-sec-h">Sales split — Food / Beverage / Tobacco / Miscellaneous <span class="cl-opt">optional</span></div>
+      <div class="cl-row4">
         <label>Food<input id="cl-food" class="cl-inp" type="number" inputmode="decimal" oninput="clRecalc()"></label>
         <label>Beverage<input id="cl-bev" class="cl-inp" type="number" inputmode="decimal" oninput="clRecalc()"></label>
         <label>Tobacco<input id="cl-tob" class="cl-inp" type="number" inputmode="decimal" oninput="clRecalc()"></label>
+        <label>Miscellaneous<input id="cl-misc" class="cl-inp" type="number" inputmode="decimal" placeholder="flowers, cake…" oninput="clRecalc()"></label>
       </div>
       <div id="cl-fnb-chk" class="cl-note"></div>
 
