@@ -35,7 +35,12 @@ function fail(m){ var el=document.getElementById('pb-msg'); if(el) el.textConten
 function showBrief(html, saved){
   var btn = '<div class="pb-bar" style="position:fixed;top:12px;right:12px;z-index:99">'+
     '<button onclick="window.print()" style="background:#400207;color:#E8D9C7;border:none;border-radius:9px;padding:11px 20px;font-family:Georgia,serif;font-size:14px;letter-spacing:.5px;cursor:pointer;box-shadow:0 4px 14px rgba(44,24,16,.25)">🖨 Print for the wall</button></div>'+
-    '<style>@media print{.pb-bar{display:none !important}}</style>';
+    '<style>@media print{.pb-bar{display:none !important}}'+
+    // On a phone the fixed button sat on top of the Roberto’s logo. It is
+    // the device the kitchen actually reads this on, so there it becomes an
+    // ordinary full-width button above the brief instead of an overlay.
+    '@media screen and (max-width:600px){.pb-bar{position:static !important;top:auto;right:auto;'+
+    'padding:10px 14px 0}.pb-bar button{width:100%}}</style>';
   var band = saved
     ? '<div style="max-width:720px;margin:0 auto 14px;padding:10px 14px;border:2px solid #B00020;'+
       'background:#FBECEE;color:#B00020;font-family:Arial,sans-serif;font-size:13px;line-height:1.5;'+
