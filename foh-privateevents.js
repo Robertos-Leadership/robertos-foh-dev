@@ -4501,6 +4501,9 @@ function peDocShell(title, inner, extraCss){
   '.ft{text-align:center;font-size:10.5px;color:#574232;margin-top:34px;line-height:1.7}'+
   'table{width:100%;border-collapse:collapse;font-size:12px}td{padding:6px 8px;border:1px solid #E3D5C2;vertical-align:top}'+
   'td.l{width:32%;color:#574232;font-size:10.5px;text-transform:uppercase;letter-spacing:1px}'+
+  // The kitchen sheet prints WHAT THE DISH IS under its name — a chef reading
+  // "Tonno Battuto" alone cannot cook it, and cannot print it as a menu.
+  '.pdesc{display:block;font-size:11px;color:#574232;line-height:1.45;margin-top:3px;text-transform:none;letter-spacing:0;font-weight:400}'+
   '.fs-h{background:#450207;color:#E8D9C7;text-align:center;padding:8px;font-size:13px;letter-spacing:2px}'+
   // Phone only — never print. The kitchen table is three columns wide, so on a
   // phone it has to be allowed to scroll on its own rather than push the page.
@@ -4672,15 +4675,32 @@ function peSetMenuPrepHTML(e){
   var g = Number(e.guests)||0;
   var h = '<div class="fs-h" style="margin-top:16px">KITCHEN — '+peEsc(m.name).toUpperCase()+' · '+(g||'?')+' GUESTS</div><table>';
   m.courses.forEach(function(c){
+    // A set menu stores plain dish NAMES, so this block used to print "Tonno
+    // Battuto" and nothing else. The kitchen prints this sheet as its menu, so
+    // it carries the same description and allergen codes the guest's copy does:
+    // the menu's own text first, the a la carte only filling a gap.
+    var kind = peCmCourseKind(c), stored = c.desc||{};
+    function pCell(name){
+      var info = stored[name] ? null : peCmDishInfo(name, kind);
+      var alg  = peAlgOf(c, name);
+      if(!alg.known && info && info.allergens && info.allergens.length) alg = { known:true, list:info.allergens };
+      var txt  = stored[name] ? peDescOf(c, name) : ((info && info.desc) ? info.desc : '');
+      // Spelled out, not codes: the same words the chef already reads on the
+      // canape half of this sheet. Nothing is printed when nobody has recorded
+      // them — "Allergens: none" would be a claim we cannot make.
+      var codes = alg.known ? peAllergenText(alg.list) : '';
+      return '<td>'+peEsc(name)+(codes?' <span style="font-size:10px;color:#574232">'+peEsc(codes)+'</span>':'')+
+        (txt?'<div class="pdesc">'+peEsc(txt)+'</div>':'')+'</td>';
+    }
     h += '<tr><td colspan="2" style="background:#F3E9DA;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#574232">'+peEsc(c.name)+(c.choose?' — guests’ choice':'')+'</td></tr>';
     if(c.choose){
       var counts = (sm.choices&&sm.choices[c.name])||{}, sum = 0;
       c.options.forEach(function(o){ var n=Number(counts[o])||0; sum+=n;
-        h += '<tr><td>'+o+'</td><td><b>'+(n?n+' portions':'—')+'</b></td></tr>';
+        h += '<tr>'+pCell(o)+'<td><b>'+(n?n+' portions':'—')+'</b></td></tr>';
       });
       if(g && sum!==g) h += '<tr><td colspan="2" style="color:#B00020;font-size:11px">▲ choices total '+sum+' of '+g+' guests — confirm the split with the events desk</td></tr>';
     } else {
-      (c.items||[]).forEach(function(it){ h += '<tr><td>'+it+'</td><td><b>'+(g?g+' portions':'per guest')+'</b></td></tr>'; });
+      (c.items||[]).forEach(function(it){ h += '<tr>'+pCell(it)+'<td><b>'+(g?g+' portions':'per guest')+'</b></td></tr>'; });
     }
   });
   h += '</table>';
@@ -4811,7 +4831,8 @@ function peKitchenPrepHTML(e, t){
       lastServe = r.d.serve;
       h += '<tr><td colspan="3" style="background:#F3E9DA;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#574232">'+(r.d.serve==='Dessert'?'Dolci':peEsc(r.d.serve))+'</td></tr>';
     }
-    h += '<tr><td>'+peEsc(r.d.name)+' <span style="font-size:10px;color:#574232">'+peEsc(peAllergenText(r.d.allergens))+'</span></td>'+
+    h += '<tr><td>'+peEsc(r.d.name)+' <span style="font-size:10px;color:#574232">'+peEsc(peAllergenText(r.d.allergens))+'</span>'+
+      (r.d.description?'<div class="pdesc">'+peEsc(r.d.description)+'</div>':'')+'</td>'+
       '<td>'+(Math.round(r.pcs*10)/10)+' pc'+(r.unconfirmed?' <span style="color:#544418;font-size:9px">default</span>':'')+'</td>'+
       '<td><b>'+(r.total!=null ? r.total+' pcs' : '— set guests')+'</b>'+(r.minFlag?' <span style="color:#B00020;font-size:10px">min order '+r.minFlag+'</span>':'')+'</td></tr>';
   });
