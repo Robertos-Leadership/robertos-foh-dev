@@ -9,27 +9,128 @@
 <body style="margin:0;font-family:Georgia,'Times New Roman',serif;color:#6B4A33">
 <div id="pb-msg" style="text-align:center;padding-top:70px;font-size:15px">Opening the brief…</div>
 <script>
-// Served from our own site (renders reliably), it pulls the saved branded brief
-// from the token-gated function and writes it as a full page with a Print button.
+// Served from our own site (renders reliably), token-gated by brief_token.
+//
+// ⚠ THIS PAGE USED TO PRINT THE BOOKING AS IT WAS THE DAY THE BRIEF WAS EMAILED.
+// `events_desk.brief_html` is written once, at send time. A guest count that
+// moved, a dish swapped, a beverage package dropped — none of it reached this
+// page, and nothing on the paper said so. Farhan Booso's saved brief still
+// carried an AED 5,925 beverage package that had already come off the booking,
+// and a chef reading it off the wall had no way to know.
+//
+// So the page now renders the brief LIVE, using the app's own module — one
+// renderer, no second copy in an edge function to drift out of step. The saved
+// HTML is still fetched alongside the data and is used if anything at all goes
+// wrong, so this link can never come back blank or broken.
 var FN = 'https://paoaivwtkzujmrgrfjuq.supabase.co/functions/v1/event-brief';
 var token = new URLSearchParams(location.search).get('t') || '';
 function fail(m){ var el=document.getElementById('pb-msg'); if(el) el.textContent = m; }
-function showBrief(html){
+// `saved` = we could not render the brief live and are showing the copy stored
+// when it was emailed. That has to be ON THE PAPER. The whole point of this page
+// is that a chef can tell which state the booking is in, and a saved copy that
+// looks identical to a live one is the exact problem being fixed - Farhan
+// Booso's stored brief still shows a beverage package worth AED 5,925 that came
+// off the booking, with nothing to say so. The band PRINTS: it is on the wall
+// that it matters.
+function showBrief(html, saved){
   var btn = '<div class="pb-bar" style="position:fixed;top:12px;right:12px;z-index:99">'+
     '<button onclick="window.print()" style="background:#400207;color:#E8D9C7;border:none;border-radius:9px;padding:11px 20px;font-family:Georgia,serif;font-size:14px;letter-spacing:.5px;cursor:pointer;box-shadow:0 4px 14px rgba(44,24,16,.25)">🖨 Print for the wall</button></div>'+
     '<style>@media print{.pb-bar{display:none !important}}</style>';
-  html = html.indexOf('<body>')>=0 ? html.replace('<body>', '<body>'+btn) : btn+html;
+  var band = saved
+    ? '<div style="max-width:720px;margin:0 auto 14px;padding:10px 14px;border:2px solid #B00020;'+
+      'background:#FBECEE;color:#B00020;font-family:Arial,sans-serif;font-size:13px;line-height:1.5;'+
+      '-webkit-print-color-adjust:exact;print-color-adjust:exact">'+
+      '<b>This is the saved copy of this brief, not the live one.</b> The current version could not be '+
+      'loaded, so what follows is the booking as it was when the brief was emailed — the guests, the '+
+      'menu or the beverage may have changed since. Reload this page, or check with the events desk '+
+      'before you prep.</div>'
+    : '';
+  var head = btn + band;
+  html = html.indexOf('<body>')>=0 ? html.replace('<body>', '<body>'+head) : head+html;
   document.open(); document.write(html); document.close();
 }
-function loadBrief(){
+
+// The app shell the module expects. It is never signed in here — this page only
+// ever renders one document from data the function already checked the token for.
+var state = { userEmail:'', user:{}, venue:'robertos-difc' };
+var sb = {
+  from:function(){ return { select:function(){ return Promise.resolve({data:[],error:null}); } }; },
+  functions:{ invoke:function(){ return Promise.resolve({data:null,error:null}); } }
+};
+function renderMain(){}
+function localISO(d){ return new Date(d).toISOString().slice(0,10); }
+function peToast(){}
+function kToast(){}
+
+// The module is big, so it is only fetched once the data has arrived — a broken
+// token should not cost the reader a 640KB download.
+function loadModule(){
+  return new Promise(function(res, rej){
+    if(window.peBriefBodyHTML) return res();
+    var s = document.createElement('script');
+    // Deliberately NOT the app's ?v= stamp. Pinning this to '20260821a' would
+    // quietly freeze the renderer on the day this page was written: every later
+    // deploy bumps the app's stamp, this page would not, and the wall print
+    // would drift behind the app with nothing saying so - the same staleness
+    // this page exists to remove, one level down. A date key refreshes daily
+    // and can never pin itself to a build.
+    s.src = 'foh-privateevents.js?d=' + new Date().toISOString().slice(0, 10);
+    s.onload = function(){ window.peBriefBodyHTML ? res() : rej(new Error('module loaded but empty')); };
+    s.onerror = function(){ rej(new Error('module did not load')); };
+    document.head.appendChild(s);
+  });
+}
+
+function renderLive(d){
+  peState.events   = [d.event];
+  peState.items    = {}; peState.items[d.event.id] = d.items || [];
+  peState.dishes   = d.dishes   || [];
+  peState.bevs     = d.bevs     || [];
+  peState.setMenus = d.setMenus || [];
+  peState.setMenusOk = true;
+  peState.alacarte = d.alacarte || [];
+  peState.packs    = [];
+  peState.loaded   = true;
+  var html = peDocShell('Roberto\u2019s \u2014 event brief', peBriefBodyHTML(d.event));
+  // Never hand back something that is not the brief. If the render came back
+  // short or wrong, the saved copy is a better answer than a blank page.
+  if(!html || html.indexOf('EVENT BRIEF') < 0) throw new Error('render did not produce a brief');
+  return html;
+}
+
+async function loadBrief(){
   if(!token){ fail('This link is not valid.'); return; }
-  fetch(FN + '?t=' + encodeURIComponent(token))
-    .then(function(r){ return r.text(); })
-    .then(function(html){
-      if(!html || html.indexOf('EVENT BRIEF')<0){ fail('This brief is no longer available.'); return; }
-      showBrief(html);
-    })
-    .catch(function(){ fail('Could not open the brief — please check your connection and reopen the link.'); });
+  var d = null;
+  try{
+    var r = await fetch(FN + '?t=' + encodeURIComponent(token) + '&format=json');
+    d = await r.json();
+  }catch(e){ d = null; }
+
+  if(d && d.ok === false){ fail('This brief is no longer available.'); return; }
+
+  if(d && d.ok && d.event){
+    try{
+      await loadModule();
+      showBrief(renderLive(d));
+      return;
+    }catch(e){
+      // fall through to the saved copy — the reader still gets their brief
+      if(d.brief_html && d.brief_html.indexOf('EVENT BRIEF') >= 0){
+        showBrief(d.brief_html, true);
+        return;
+      }
+    }
+  }
+
+  // Last resort: the original route, exactly as it always worked.
+  try{
+    var r2 = await fetch(FN + '?t=' + encodeURIComponent(token));
+    var html = await r2.text();
+    if(!html || html.indexOf('EVENT BRIEF') < 0){ fail('This brief is no longer available.'); return; }
+    showBrief(html, true);
+  }catch(e){
+    fail('Could not open the brief — please check your connection and reopen the link.');
+  }
 }
 if(!window.__pbTest) loadBrief();
 </script>

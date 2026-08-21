@@ -15,7 +15,7 @@
    controllerchange reload), a fresh deploy reaches every screen with no manual
    tap. To force a clean cache rebuild, bump the CACHE version string below. */
 
-const CACHE = 'robertos-foh-v20260821a';
+const CACHE = 'robertos-foh-v20260821b';
 
 // Best-effort warm cache. The bare paths are precached on install; the real
 // runtime requests (some carry a ?v= cache-buster) are cached on the fly by the
@@ -112,7 +112,7 @@ self.addEventListener('fetch', e => {
   // It would have been swallowed by the app exactly like the round was, and just
   // as silently. Any NEW foh-feedback-* page is covered automatically now; any
   // other link-only page must still be added here by hand.
-  if (/\/(client-[a-z0-9-]+|foh-feedback(-[a-z0-9-]+)?)(\.html)?$/i.test(url.pathname)) return;
+  if (/\/(client-[a-z0-9-]+|foh-feedback(-[a-z0-9-]+)?|print-brief)(\.html)?$/i.test(url.pathname)) return;
 
   e.respondWith(
     fetch(e.request, { cache: 'no-store' })
