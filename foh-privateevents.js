@@ -747,6 +747,24 @@ function peGo(view, id){
   if((view==='event' || view==='guidedevent') && id) peLoadLog(id);
   renderMain();
   var mc = document.getElementById('foh-tab-content') || document.getElementById('main-content'); if(mc) mc.scrollTop = 0;
+  if((view==='event' || view==='guidedevent') && id) peMaybeAutoOfferRevenue(id);
+}
+// (A) Opening a DONE event that's still at AED 0: offer the SevenRooms check
+// without waiting to be asked. Once per event per session -- it must not re-pop
+// on every redraw while the event stays open, and never when a figure is already
+// in. Still one tap to accept: the number is never written silently.
+function peMaybeAutoOfferRevenue(id){
+  if(!peCanEdit()) return;
+  var e = peEvById(id); if(!e || e.status!=='done') return;
+  var v = peEventValue(e); if(v!=null && v!==0) return;
+  peState.srAutoOffered = peState.srAutoOffered || {};
+  if(peState.srAutoOffered[id]) return;
+  peState.srAutoOffered[id] = true;
+  setTimeout(function(){
+    if(document.querySelector('.pe-modal-bg')) return;   // don't stack on another modal
+    if(peState.currentId !== id) return;                 // they navigated away already
+    peSrRevenueOffer(id);
+  }, 450);
 }
 // Where a persistent "back" on an event screen should return to.
 function peBackTarget(){
@@ -1531,7 +1549,11 @@ function peListRow(e){
     '<span class="pe-spine"></span><span class="pe-sdot"></span>'+
     '<div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:600;color:#2C1810">'+nameHtml+'</div>'+
     '<div style="font-size:11.5px;color:#5C3D2E">'+(parts.join(' · ')||'—')+'</div></div>'+
-    (val?'<div class="pe-hide-m" style="font-size:13px;color:#5C3D2E;white-space:nowrap">AED '+peMoney(val)+'</div>':'')+
+    (val
+      ? '<div class="pe-hide-m" style="font-size:13px;color:#5C3D2E;white-space:nowrap">AED '+peMoney(val)+'</div>'
+      : (e.status==='done' && peCanEdit()
+        ? '<span onclick="event.stopPropagation();peSrRevenueOffer(\''+e.id+'\')" title="Pull the POS check from SevenRooms" style="border:1px solid #C9A84C;color:#7A5500;background:#FBF5E6;border-radius:9px;padding:7px 12px;font-size:12px;font-weight:600;white-space:nowrap;cursor:pointer">Add revenue</span>'
+        : ''))+
     (ns.label?'<span onclick="event.stopPropagation();peGo(\''+(peCanEdit()?'guidedevent':'event')+'\',\''+e.id+'\')" style="'+PE_KEY[ns.kind]+';border-radius:9px;padding:7px 13px;font-size:12px;font-weight:600;white-space:nowrap;cursor:pointer" class="pe-key">'+ns.label+'</span>':'')+
   '</div>';
 }
