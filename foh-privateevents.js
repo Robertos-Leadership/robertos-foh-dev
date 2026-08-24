@@ -672,8 +672,8 @@ async function peLoadAll(force){
     // rather than warn about nothing.
     var probe = peState.events[0];
     peState.colsOk = probe
-      ? { spaces:('spaces' in probe), options:('options' in probe), alt_dates:('alt_dates' in probe), actual_revenue:('actual_revenue' in probe) }
-      : { spaces:true, options:true, alt_dates:true, actual_revenue:true };
+      ? { spaces:('spaces' in probe), options:('options' in probe), alt_dates:('alt_dates' in probe), actual_revenue:('actual_revenue' in probe), actual_revenue_source:('actual_revenue_source' in probe) }
+      : { spaces:true, options:true, alt_dates:true, actual_revenue:true, actual_revenue_source:true };
     peState.loaded = true;
     peState.lastLoad = Date.now();
     peLoadReplies(true);   // fire-and-forget; its own error handling
@@ -2233,6 +2233,151 @@ async function peSrSave(id, patch){
   (peState.clients||[]).forEach(function(c){ if(c.id === id) Object.keys(patch).forEach(function(k){ c[k] = patch[k]; }); });
   return true;
 }
+// ── Revenue from SevenRooms — fill the "real total" from the POS check ──────
+// When an event is marked done and no revenue was recorded, the till figure is
+// already sitting in SevenRooms: each reservation carries its OWN POS check
+// (pos_tickets.subtotal = the tax-inclusive gross the guest paid). The desk asks
+// the Kitchen project's `sevenrooms-sync` function in `?daysheet=` mode for that
+// night, finds the booking and OFFERS its check as the real total. It is NEVER
+// written silently -- SevenRooms names bookings its own way (an "Esther /
+// Santander" event was booked "Standard Chartered Bank", area "High Tables" not
+// "Scala"), so the human picks and the number is only a suggestion until tapped
+// in. SevenRooms is the TILL, not the truth: the final figure is Simphony, and
+// every screen the number touches says so.
+function peSrDayCache(){ return (peState.srDay = peState.srDay || {}); }
+async function peSrDaysheet(date){
+  var cache = peSrDayCache();
+  if(cache[date]) return cache[date];
+  var url = KITCHEN_URL + '/functions/v1/sevenrooms-sync?daysheet=' + encodeURIComponent(date) + '&include=all';
+  var r = await fetch(url, { method:'POST', headers:{ 'Content-Type':'application/json',
+    'Authorization':'Bearer ' + KITCHEN_KEY, 'x-proxy-secret': KITCHEN_PROXY_SECRET } });
+  if(!r.ok) throw new Error('HTTP ' + r.status);
+  var j = await r.json();
+  if(!j || !j.ok) throw new Error((j && j.error) || 'the day came back unusable');
+  cache[date] = j.reservations || [];
+  return cache[date];
+}
+// Words worth matching on -- short words ("the", "de", "ltd") are noise.
+function peSrTokens(s){
+  return String(s==null?'':s).toLowerCase().replace(/[^a-z0-9 ]/g,' ').split(/\s+/)
+    .filter(function(w){ return w.length>=4; });
+}
+function peSrHHMM(t){
+  t = String(t==null?'':t).trim();
+  var m = t.match(/^(\d{1,2}):(\d{2})/); if(!m) return null;
+  var h = +m[1]; if(/pm/i.test(t) && h<12) h+=12; if(/am/i.test(t) && h===12) h=0;
+  return h*60 + (+m[2]);
+}
+// Score a booking against the event. The NAME is the strong signal -- a shared
+// word is almost certainly them. Guest count and start time come next: a private
+// event's size and slot rarely coincide by chance, and they rank ABOVE the area,
+// which the two systems record inconsistently (the Santander event was "Scala and
+// Bar" in the book and "High Tables" in SevenRooms -- an area match there would
+// have buried the right booking at #13). None of these fire the "Best match"
+// badge on their own; only a real name hit (>=10) does. No check = not an answer.
+function peSrScore(e, r){
+  if(!(Number(r.gross)>0)) return -1;
+  var want = {};
+  peSrTokens(e.client_name).concat(peSrTokens(e.contact_name)).forEach(function(w){ want[w]=1; });
+  var score = peSrTokens(r.name).filter(function(w){ return want[w]; }).length * 10;
+  if(e.guests && r.pax && Math.abs(Number(e.guests)-Number(r.pax)) <= 3) score += 3;
+  var et = peSrHHMM(e.time_from), rt = peSrHHMM(r.time);
+  if(et!=null && rt!=null && Math.abs(et-rt) <= 30) score += 2;
+  var ea = String(e.area||'').toUpperCase(), ra = String(r.area||'').toUpperCase();
+  if(ea && ra){ var e1 = ea.split(' ')[0], r1 = ra.split(' ')[0];
+    if(e1 && r1 && (ea.indexOf(r1)>=0 || ra.indexOf(e1)>=0)) score += 1; }
+  return score;
+}
+function peSrCandidates(e, rows){
+  return rows.map(function(r){ return { r:r, s:peSrScore(e, r) }; })
+    .filter(function(x){ return x.s >= 0; })
+    .sort(function(a,b){ return b.s - a.s || (Number(b.r.gross)||0) - (Number(a.r.gross)||0); });
+}
+// The offer modal. Opens straight away with a "looking…" line so the tap feels
+// answered, then fills itself once SevenRooms replies.
+function peSrRevenueOffer(id){
+  var e = peEvById(id); if(!e) return;
+  if(!peCanEdit()){ peToast('View only — ask Katarina, Andrea or Francesco to make changes', true); return; }
+  var date = e.event_date ? String(e.event_date).slice(0,10) : null;
+  if(!date){ peToast('Add the event date first, then I can look it up in SevenRooms.', true); return; }
+  var bg = document.createElement('div'); bg.className='pe-modal-bg';
+  bg.addEventListener('click', function(ev){ if(ev.target===bg) bg.remove(); });
+  bg.innerHTML = '<div class="pe-modal" style="max-width:480px">'+
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">'+
+      '<b style="color:#400207">Revenue from SevenRooms</b>'+
+      '<span class="pe-x" onclick="this.closest(\'.pe-modal-bg\').remove()">✕</span></div>'+
+    '<div style="font-size:11.5px;color:#4F4535;margin:2px 0 10px;line-height:1.5">SevenRooms holds the <b>POS check</b> for each booking — the till figure for the night. It’s a shortcut, not the final word: <b>always confirm against Simphony</b>.</div>'+
+    '<div id="pe-srrev-body" style="font-size:13px;color:#2C1810">'+
+      '<span style="color:#5C3D2E">Looking up the check for '+peEsc(peDLabel(date))+'…</span></div>';
+  document.body.appendChild(bg);
+  var fill = function(html){ var b = bg.querySelector('#pe-srrev-body'); if(b) b.innerHTML = html; };
+  peSrDaysheet(date).then(function(rows){
+    var cands = peSrCandidates(e, rows).slice(0, 6);
+    if(!cands.length){
+      fill('<div style="color:#6B4A00">No booking with a POS check matched this event on '+peEsc(peDLabel(date))+'.</div>'+
+        '<div style="font-size:11.5px;color:#5C3D2E;margin-top:6px">The event may not be a SevenRooms cover, or its check isn’t linked yet. Enter the total from Simphony in the box below.</div>'+
+        '<div style="margin-top:12px"><button class="pe-btn sec sm" onclick="this.closest(\'.pe-modal-bg\').remove()">Close</button></div>');
+      return;
+    }
+    var html = cands.map(function(x, i){
+      var r = x.r, amt = Math.round(Number(r.gross));
+      var meta = [r.area, r.time, (r.pax!=null?r.pax+' guest'+(r.pax===1?'':'s'):null)].filter(Boolean).join(' · ');
+      return '<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid rgba(107,31,42,.10)">'+
+        '<div style="flex:1;min-width:0">'+
+          (i===0 && x.s>=10 ? '<div style="font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:#1C5A25;font-weight:700">Best match</div>' : '')+
+          '<div style="font-size:13.5px;color:#2C1810;font-weight:600">'+peEsc(r.name||'Booking')+'</div>'+
+          '<div style="font-size:11.5px;color:#5C3D2E">'+peEsc(meta)+'</div></div>'+
+        '<div style="text-align:right;flex-shrink:0">'+
+          '<div style="font-size:14px;color:#400207;font-weight:700">AED '+peMoney(amt)+'</div>'+
+          '<button class="pe-btn sm" style="margin-top:3px" onclick="peSrUseRevenue(\''+id+'\','+amt+',this)" data-srname="'+peEsc(String(r.name||'')).replace(/"/g,'&quot;')+'">Use this</button></div></div>';
+    }).join('');
+    fill(html +
+      '<div style="font-size:11px;color:#8A2A1A;background:#FBF0D6;border:1px solid #E4CE8E;border-radius:8px;padding:7px 9px;margin-top:11px">This is the till figure — it becomes the event’s revenue marked <b>“from SevenRooms”</b> until someone checks Simphony and confirms it.</div>'+
+      '<div style="margin-top:10px"><button class="pe-btn sec sm" onclick="this.closest(\'.pe-modal-bg\').remove()">None of these — I’ll enter it from Simphony</button></div>');
+  }).catch(function(err){
+    fill('<div style="color:#8A2A1A">Could not reach SevenRooms — '+peEsc(err.message||'unknown error')+'.</div>'+
+      '<div style="font-size:11.5px;color:#5C3D2E;margin-top:6px">Enter the total from Simphony in the box below.</div>'+
+      '<div style="margin-top:12px"><button class="pe-btn sec sm" onclick="this.closest(\'.pe-modal-bg\').remove()">Close</button></div>');
+  });
+}
+// Accepting a suggestion writes it into the SAME `actual_revenue` field the box
+// uses -- so it flows to the report exactly like a hand-typed figure -- and, when
+// the column exists, stamps `actual_revenue_source` so the screen can keep saying
+// it came from SevenRooms and still wants a Simphony check. A human tapped it; it
+// is not silent, and it can be overwritten the moment the real number is known.
+async function peSrUseRevenue(id, amount, btn){
+  var e = peEvById(id); if(!e) return;
+  if(!peCanEdit()){ peToast('View only — ask Katarina, Andrea or Francesco to make changes', true); return; }
+  var amt = Math.max(0, Math.round(Number(amount))||0);
+  var srName = btn && btn.getAttribute ? (btn.getAttribute('data-srname')||'') : '';
+  var patch = { actual_revenue: amt, updated_at:new Date().toISOString(), updated_by:peActor() };
+  var canStamp = !(peState.colsOk && peState.colsOk.actual_revenue_source===false);
+  if(canStamp) patch.actual_revenue_source = 'sevenrooms';
+  var r = await sb.from('events_desk').update(patch).eq('id', id);
+  if(r.error && canStamp && peColMissing(r.error, 'actual_revenue_source')){
+    // The stamp column isn't in the DB yet — save the number without it.
+    if(peState.colsOk) peState.colsOk.actual_revenue_source = false;
+    delete patch.actual_revenue_source;
+    r = await sb.from('events_desk').update(patch).eq('id', id);
+  }
+  if(r.error){
+    if(peColMissing(r.error, 'actual_revenue')){
+      e.actual_revenue = amt;
+      peToast('Kept for now — “Real total charged” needs the Batch 7 database update to save permanently.', true);
+      var bg0 = document.querySelector('.pe-modal-bg'); if(bg0) bg0.remove(); renderMain(); return;
+    }
+    peToast('NOT saved — '+(r.error.message||'check connection'), true); return;
+  }
+  Object.keys(patch).forEach(function(k){ e[k] = patch[k]; });
+  if(e.status!=='draft'){
+    sb.from('event_log').insert({event_id:id, action:'edited',
+      detail:('Real total charged → AED '+peMoney(amt)+' (from SevenRooms'+(srName?' — “'+srName+'”':'')+'; verify vs Simphony)').slice(0,400),
+      actor:peActor()}).then(function(){ peLoadLog(id); });
+  }
+  var bg = document.querySelector('.pe-modal-bg'); if(bg) bg.remove();
+  peToast('Set AED '+peMoney(amt)+' from SevenRooms — check Simphony and adjust if it differs.');
+  renderMain();
+}
 // ── "Have THIS person booked with us?" — for anyone, in the book or not ──
 // The search box above filters OUR 34 clients. That is the wrong question when
 // an enquiry arrives from somebody new: the useful question is whether the
@@ -3086,13 +3231,21 @@ function peRenderEvent(){
     var actSet = (e.actual_revenue!=null && e.actual_revenue!=='');
     var actVal = actSet ? Math.max(0, Number(e.actual_revenue)) : null;
     var colMissing = !!(peState.colsOk && peState.colsOk.actual_revenue===false);
+    var srSourced = actSet && e.actual_revenue_source==='sevenrooms';
     h += '<div class="pe-card" style="margin-top:12px;border-color:rgba(201,168,76,0.55);background:#FDFBF6">'+
       '<b style="font-size:14px;color:#400207">After the event — real revenue</b>'+
       '<div style="font-size:11.5px;color:#4F4535;margin:4px 0 9px">More guests showed up, or extra bar / off-menu spend? Put the <b>real final total</b> here — it becomes this event’s revenue in the monthly report. You can also just raise the guest count above. Leave this blank to keep the quoted '+(t.total!=null?'AED '+peMoney(t.total):'amount')+'.</div>'+
       '<div class="pe-lbl">Real total charged (AED)</div>'+
       '<input class="pe-in" type="number" min="0" step="50" value="'+(actSet?peEsc(actVal):'')+'" placeholder="'+(t.total!=null?peMoney(t.total):'quoted total')+'" onchange="peFact(this,\'actual_revenue\',\''+e.id+'\')"'+(ce?'':' disabled')+'>'+
+      (ce
+        ? '<div style="margin-top:8px"><button class="pe-btn sec sm" onclick="peSrRevenueOffer(\''+e.id+'\')">Pull the check from SevenRooms</button>'+
+          '<span style="font-size:11px;color:#5C3D2E;margin-left:8px">the till figure for the night — confirm against Simphony</span></div>'
+        : '')+
       (actSet
         ? '<div style="margin-top:8px;font-size:12.5px;color:#2E6B34">✓ The report counts <b>AED '+peMoney(actVal)+'</b> for this event'+((t.total!=null && Math.round(actVal)!==Math.round(t.total))?' <span style="color:#4F4535">(quoted was AED '+peMoney(t.total)+')</span>':'')+'.</div>'
+        : '')+
+      (srSourced
+        ? '<div style="margin-top:6px;font-size:11.5px;color:#8A2A1A;background:#FBF0D6;border:1px solid #E4CE8E;border-radius:8px;padding:7px 9px">From <b>SevenRooms</b> (POS check) — not yet checked against Simphony. Type the Simphony figure over it to confirm.</div>'
         : '')+
       (colMissing
         ? '<div style="margin-top:8px;font-size:11.5px;color:#7A5500;background:#FBF0D6;border:1px solid #DFC680;border-radius:8px;padding:8px 10px">Run <b>foh-events-actualrev.sql</b> once in Supabase before this saves permanently — until then it holds for this session only.</div>'
@@ -3382,6 +3535,9 @@ async function peFact(el, field, id){
   // P1.10 — typing a minimum spend makes it the pricing basis in one step.
   var autoMin = false;
   if(field==='min_spend' && v!=null && e.pricing_type!=='min_spend'){ patch.pricing_type = 'min_spend'; autoMin = true; }
+  // Typing the real total by hand CONFIRMS it — clear any "from SevenRooms" stamp
+  // so the unverified note drops away. Only when the stamp column exists.
+  if(field==='actual_revenue' && e.actual_revenue_source && !(peState.colsOk && peState.colsOk.actual_revenue_source===false)){ patch.actual_revenue_source = null; }
   if(breaks){
     // Void the signature only — the booking KEEPS its status and deposit.
     // Valentina, 17 Jul 2026: a signed + paid booking that gained +2 guests used to
@@ -3846,6 +4002,17 @@ async function peSetStatus(id, status){
   renderMain();
   if(status==='confirmed'){
     peToast('Confirmed ✓ — now send the event brief so the kitchen and hostess have it.');
+  } else if(status==='done'){
+    // The reason this feature exists: an event marked done with no revenue typed
+    // used to just sit at AED 0 until someone remembered. The till figure is
+    // already in SevenRooms, so offer it now rather than hoping it's chased later.
+    var v = peEventValue(e);
+    if(v==null || v===0){
+      peToast('Marked done — this event has no revenue yet. Pulling the SevenRooms check…');
+      peSrRevenueOffer(id);
+    } else {
+      peToast('Saved ✓');
+    }
   } else {
     peToast('Saved ✓');
   }
