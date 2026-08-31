@@ -5415,8 +5415,10 @@ function peRenderChefCorner(){
   var lede, stand;
   if(tab==='set'){
     var nSet = peSetMenusLoaded() ? peSetMenusDesigned().length : 0;
-    lede  = nSet ? (nSet + ' set menu' + (nSet===1?'':'s')) : 'Set menus';
-    stand = 'Plated set menus — saved here they appear in the events desk booking dropdown, the guest proposal and the kitchen brief.';
+    var nCust = peSetMenusLoaded() ? (peSetMenusAll().length - nSet) : 0;
+    lede  = nSet ? (nSet + ' set menu' + (nSet===1?'':'s') + (nCust?' + '+nCust+' customised':'')) : 'Set menus';
+    stand = 'Plated set menus — saved here they appear in the events desk booking dropdown, the guest proposal and the kitchen brief.'+
+            (nCust?' The customised menus below were tailored for one booking each; they can still reach a guest, so they are yours to cost and pause too.':'');
   } else {
     var nDish = peState.dishes.filter(function(d){ return d.active; }).length;
     lede  = nDish ? (nDish + ' dish' + (nDish===1?'':'es') + ' in the library') : 'The dish library';
@@ -7788,6 +7790,18 @@ function peSmFillNow(){
   else if(r.missing.length) peToast('Filled '+r.filled+' dish'+(r.filled>1?'es':'')+' ✓ — still no allergens for: '+r.missing.join(', ')+'. Save to keep the rest.', true);
   else peToast('Every dish now has its description and allergens ✓ — press Save menu to keep it');
 }
+// A customised menu is built FOR one booking. Name it, so the chef reading the
+// library knows whose menu he is editing — and so a customised menu that no
+// longer belongs to anything is visible as exactly that. (31 Aug 2026)
+function peSmBookingFor(key){
+  var evs = (peState.events || []);
+  for(var i=0;i<evs.length;i++){
+    var sm = evs[i].set_menu;
+    var k = sm && (typeof sm === 'string' ? sm : sm.key);
+    if(k && k === key) return evs[i];
+  }
+  return null;
+}
 function peRenderSetMenuLib(){
   var raw = (peState.editSetMenuId && peState.editSetMenuId!=='new') ? peSmRawById(peState.editSetMenuId) : null;
   var editing = peState.editSetMenuId==='new' || !!raw;
@@ -7848,9 +7862,14 @@ function peRenderSetMenuLib(){
   } else {
     h += '<div style="margin-bottom:10px"><button class="pe-btn" onclick="peSmNew()">+ Add set menu</button></div>';
   }
-  // The chef's library shows the DESIGNED menus only — a menu Valentina
-  // customised for one booking is hers, and lives on that booking.
+  // The chef owns every menu that can reach a guest (Francesco, 31 Aug 2026).
+  // Customised menus used to be hidden here — but they are sendable from Menu
+  // packages and resolve on any booking, so a menu the chef could not see, cost,
+  // correct or pause was still being sold. They now get their own section below,
+  // kept separate so the designed library does not fill up with one bespoke row
+  // per booking.
   var list = peSetMenusRaw().filter(function(m){ return !m.is_custom; });
+  var customList = peSetMenusRaw().filter(function(m){ return !!m.is_custom; });
   // ── Is the margin check actually running? ──
   // Every menu already says "no cost yet" on its own row, but nobody was told
   // that it is ALL of them — so the 27% guard reads as "nothing is over target"
@@ -7865,7 +7884,8 @@ function peRenderSetMenuLib(){
       'a menu priced too close to what it costs to make would pass without a word.'+
       '</div>';
   }
-  h += '<div class="pe-card">'+(list.length?list.map(function(m){
+  var smLibRow = function(m, opts){
+    opts = opts || {};
     var mm=peNormSM(m); var pending=mm.price==null;
     var costPct = (mm.cost!=null && mm.price) ? Math.round((mm.cost/(mm.price/PE_GROSS))*100) : null;
     return '<div class="pe-dishrow" style="opacity:'+(mm.active===false?.45:1)+'">'+
@@ -7875,6 +7895,11 @@ function peRenderSetMenuLib(){
         ? ' <span style="font-size:11px;color:'+(costPct==null?'#8B7355':(costPct<=27?'#2E6B34':'#B00020'))+'">· cost '+peMoney(mm.cost)+(costPct!=null?' ('+costPct+'% of net'+(costPct<=27?'':' — above 27% target')+')':'')+'</span>'
         : ' <span style="font-size:11px;color:#B00020">· no cost yet — chef to add</span>')+
       (mm.active===false?' <span style="font-size:11px;color:#4F4535">· retired</span>':'')+
+      (opts.forBooking!==undefined
+        ? '<br><span style="font-size:11px;color:#6B4A33">'+(opts.forBooking
+            ? 'Built for ' + peEsc(opts.forBooking)
+            : 'Not on any booking — safe to retire')+'</span>'
+        : '')+
       '<br><span style="font-size:11px;color:#4F4535">'+peEsc(mm.line||peSmSummary(mm.courses))+'</span></span>'+
       // Seeing it is now one tap from the list, not something you have to open
       // the editor and save first to find out.
@@ -7882,11 +7907,30 @@ function peRenderSetMenuLib(){
         (mm.key?'<button class="pe-btn sec sm" onclick="peCmPrintMenu(\''+peEsc(mm.key)+'\')">PDF</button>'+
                 '<button class="pe-btn sec sm" onclick="peCmOpen(\''+peEsc(mm.key)+'\')">View</button>':'')+
         (m.id?'<button class="pe-btn sec sm" onclick="peSmEdit(\''+m.id+'\')">Edit</button>'+
+              // Pause without opening the menu first. Retiring keeps existing
+              // bookings on it and only takes it out of new quotes.
+              '<button class="pe-btn sec sm" onclick="peToggleSetMenu(\''+m.id+'\','+(mm.active===false?'true':'false')+')">'+(mm.active===false?'Reactivate':'Pause')+'</button>'+
               '<button class="pe-btn sec sm" style="color:#B00020;border-color:#B00020" onclick="peSmDelete(\''+m.id+'\')">Delete</button>'
              :'<span style="font-size:11px;color:#574232;align-self:center">built-in</span>')+
       '</span>'+
     '</div>';
-  }).join(''):'<div style="font-size:12px;color:#4F4535">No set menus yet — tap “+ Add set menu”.</div>')+'</div>';
+  };
+  h += '<div class="pe-card">'+(list.length?list.map(function(m){ return smLibRow(m); }).join('')
+      :'<div style="font-size:12px;color:#4F4535">No set menus yet — tap “+ Add set menu”.</div>')+'</div>';
+  // ── Customised menus ──────────────────────────────────────────────────────
+  // Same controls as the designed library: cost it, correct it, pause it. Kept
+  // in their own section because one is created every time a menu is tailored
+  // for a client, and they would otherwise bury the designed menus.
+  if(customList.length){
+    h += '<div style="margin:18px 0 8px"><b style="color:#400207;font-size:14px">Customised for a booking</b>'+
+      '<div style="font-size:12px;color:#4F4535;margin-top:3px">'+customList.length+' menu'+(customList.length===1?'':'s')+
+      ' tailored for one client. They can be sent to a guest, so they are yours to cost, correct and pause — '+
+      'they stay out of the booking dropdown and the designed library above.</div></div>';
+    h += '<div class="pe-card">'+customList.map(function(m){
+      var ev = peSmBookingFor(peNormSM(m).key);
+      return smLibRow(m, {forBooking: ev ? (ev.client_name || 'an unnamed booking') : ''});
+    }).join('')+'</div>';
+  }
   return h;
 }
 async function peSaveSetMenu(id){
