@@ -1036,7 +1036,7 @@ function peScrollTop(){
   // under the text rather than squeezing it.
   '.pe-acts{display:flex;gap:6px;justify-content:flex-end;align-items:center;flex-wrap:nowrap;white-space:nowrap}'+
   '.pe-acts .pe-btn{flex:0 0 auto}'+
-  '.pe-acts.w3{min-width:196px}.pe-acts.w5{min-width:310px}'+
+  '.pe-acts.w3{min-width:196px}.pe-acts.w5{min-width:310px}.pe-acts.w6{min-width:376px}'+
   '.pe-note{font-size:10.5px;color:#6B5E4E;margin-top:3px;line-height:1.35}'+
   '@media(max-width:640px){.pe-dishrow{grid-template-columns:minmax(0,1fr)}.pe-acts{justify-content:flex-start;flex-wrap:wrap}.pe-acts.w3,.pe-acts.w5{min-width:0}}'+
   '.pe-x{color:#B00020;cursor:pointer;font-size:14px;padding:0 4px}'+
@@ -8056,6 +8056,7 @@ function peRenderChefPackLib(){
   var live = packs.filter(function(p){ return p.active!==false; });
   var h = '';
   if(!packs.length) return '<div class="pe-card"><div style="font-size:12px;color:#4F4535">No canapé set menus yet — they are built in Menu packages.</div></div>';
+  if(ce) h += '<div style="margin-bottom:10px"><button class="pe-btn" onclick="peState.packsTab=\'canape\';peState.editPackId=\'new\';peGo(\'packlib\')">+ New canap\u00e9 set menu</button></div>';
   h += '<div style="font-size:12px;color:#4F4535;margin-bottom:10px">'+
     live.length+' of '+packs.length+' can be sold right now. Pausing one keeps every booking already on it and only takes it out of new quotes.</div>';
   h += '<div class="pe-card">'+packs.map(function(p){
@@ -8065,14 +8066,15 @@ function peRenderChefPackLib(){
       '<span><b style="color:#400207">'+peEsc(p.name)+'</b> · AED '+peMoney(p.price_pp)+'/guest'+
       (off?' <span style="font-size:11px;color:#4F4535">· paused</span>':'')+
       '<br><span style="font-size:11px;color:#4F4535">'+peEsc(names.join(' · '))+'</span></span>'+
-      '<span class="pe-acts w5">'+
+      '<span class="pe-acts w6">'+
       // A canape set menu is a menu a guest reads, so it gets the same PDF and
       // the same guest view as the plated ones. Both are readable by everyone;
       // only Edit and Pause are gated.
       '<button class="pe-btn sec sm" onclick="pePackPrint(\''+p.id+'\')">PDF</button>'+
       '<button class="pe-btn sec sm" onclick="pePackOpen(\''+p.id+'\')">View</button>'+
       (ce?'<button class="pe-btn sec sm" onclick="peState.packsTab=\'canape\';peState.editPackId=\''+p.id+'\';peGo(\'packlib\')">Edit</button>'+
-          '<button class="pe-btn sec sm" onclick="peTogglePack(\''+p.id+'\','+(off?'true':'false')+')">'+(off?'Reactivate':'Pause')+'</button>':'')+
+          '<button class="pe-btn sec sm" onclick="peTogglePack(\''+p.id+'\','+(off?'true':'false')+')">'+(off?'Reactivate':'Pause')+'</button>'+
+          '<button class="pe-btn sec sm" style="color:#B00020;border-color:#B00020" onclick="peDeletePack(\''+p.id+'\')">Delete</button>':'')+
       '</span></div>';
   }).join('')+'</div>';
   return h;
@@ -8136,6 +8138,36 @@ function pePackPrint(id){
     (p.price_pp!=null?'All prices are in AED inclusive of 5% VAT, 7% DIFC Authority Fee and 10% Service Charge.':'')+
     peAlgLegend(body)+'</div>';
   pePrintHTML(peDocShell(p.name, body));
+}
+// How many bookings were sold under this canape set menu's name. Bookings hold
+// package_label as TEXT (peApplyPackage copies the dishes into event_items and
+// writes the name), so this is a "you should know" number, not a lock.
+function pePackUsage(name){
+  var n = String(name||'').trim().toLowerCase();
+  if(!n) return 0;
+  return (peState.events||[]).filter(function(e){
+    return String(e.package_label||'').trim().toLowerCase() === n;
+  }).length;
+}
+async function peDeletePack(id){
+  if(!peCanEdit()){ peToast('View only \u2014 ask Katarina, Andrea or Francesco to make changes', true); return; }
+  var p = pePackById(id); if(!p) return;
+  var used = pePackUsage(p.name);
+  if(!(await peConfirm({
+    title:'Delete \u201c'+p.name+'\u201d?',
+    html:'It goes off the canap\u00e9 set menus for good, for everyone.'+
+      (used ? '<br><br><b>'+used+' booking'+(used>1?'s were':' was')+' sold as \u201c'+peEsc(p.name)+'\u201d.</b> '+
+              'Those keep their dishes and keep the name on their paperwork \u2014 deleting this does not change them. '+
+              'It only stops the menu being offered on anything new.'
+            : '<br><br>No booking has been sold under this name.')+
+      '<br><br>If you may want it back, <b>pause</b> it instead \u2014 paused menus stay here and never reach the events desk.',
+    ok:'Delete for good', cancel:'Keep it', danger:true
+  }))) return;
+  var r = await sb.from('event_packages').delete().eq('id', id);
+  if(r.error){ peToast('NOT deleted \u2014 '+String(r.error.message||'').slice(0,90), true); return; }
+  peState.packs = (peState.packs||[]).filter(function(x){ return x.id !== id; });
+  peToast('\u201c'+p.name+'\u201d deleted');
+  renderMain();
 }
 // The same branded guest page the menu-send uses, for one canape set menu.
 function pePackOpen(id){
