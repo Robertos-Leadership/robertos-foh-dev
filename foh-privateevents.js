@@ -1030,7 +1030,15 @@ function peScrollTop(){
   '.pe-grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}'+
   '.pe-grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}'+
   '.pe-2col{display:grid;grid-template-columns:1.2fr .8fr;gap:14px;align-items:start}'+
-  '.pe-dishrow{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid rgba(107,31,42,0.08);font-size:12.5px}'+
+  '.pe-dishrow{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;gap:10px 14px;padding:9px 0;border-bottom:1px solid rgba(107,31,42,0.08);font-size:12.5px}'+
+  // One action column, one width, never wrapping: the buttons line up down the
+  // page instead of shuffling left and right per row. Narrow screens drop it
+  // under the text rather than squeezing it.
+  '.pe-acts{display:flex;gap:6px;justify-content:flex-end;align-items:center;flex-wrap:nowrap;white-space:nowrap}'+
+  '.pe-acts .pe-btn{flex:0 0 auto}'+
+  '.pe-acts.w3{min-width:196px}.pe-acts.w5{min-width:310px}'+
+  '.pe-note{font-size:10.5px;color:#6B5E4E;margin-top:3px;line-height:1.35}'+
+  '@media(max-width:640px){.pe-dishrow{grid-template-columns:minmax(0,1fr)}.pe-acts{justify-content:flex-start;flex-wrap:wrap}.pe-acts.w3,.pe-acts.w5{min-width:0}}'+
   '.pe-x{color:#B00020;cursor:pointer;font-size:14px;padding:0 4px}'+
   '.pe-tot{background:#F7EEE2;border-radius:10px;padding:13px 14px}'+
   '.pe-tot-row{display:flex;justify-content:space-between;font-size:13px;padding:3px 0;color:#6B4A33}'+
@@ -7260,11 +7268,12 @@ function peRenderDishLib(){
       '<span><b>'+peEsc(d.name)+'</b>'+
       (d.active?'':' <span style="font-size:10px;background:#E4DBCC;color:#4E4433;border-radius:8px;padding:2px 7px;font-weight:600">paused</span>')+
       ' <span style="color:#574232;font-size:10.5px">'+peEsc(peAllergenText(d.allergens))+'</span><br>'+
-      '<span style="font-size:11px;color:#4F4535">'+peEsc(d.category)+' · '+peEsc(d.serve)+' · '+peEsc(d.tier||'')+' · AED '+peMoney(d.sell_price)+'/pc · cost '+(d.cost!=null?d.cost:'—')+(d.description?' · “'+peEsc(d.description)+'”':' · <span style="color:#B00020">no menu line</span>')+'</span></span>'+
-      '<span style="display:flex;align-items:center;gap:6px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end">'+
+      '<span style="font-size:11px;color:#4F4535">'+peEsc(d.category)+' · '+peEsc(d.serve)+' · '+peEsc(d.tier||'')+' · AED '+peMoney(d.sell_price)+'/pc · cost '+(d.cost!=null?d.cost:'—')+(d.description?' · “'+peEsc(d.description)+'”':' · <span style="color:#B00020">no menu line</span>')+'</span>'+
+      (why ? '<div class="pe-note">'+peEsc(why)+'</div>' : '')+'</span>'+
+      '<span class="pe-acts w3">'+
       '<button class="pe-btn sec sm" onclick="peState.editDishId=\''+d.id+'\';peState.aiDesc=null;renderMain()">Edit</button>'+
       '<button class="pe-btn sec sm" onclick="peToggleDish(\''+d.id+'\','+(d.active?'false':'true')+')">'+(d.active?'Pause':'Resume')+'</button>'+
-      (why ? '<span style="font-size:10px;color:#4F4535;max-width:190px;text-align:right;line-height:1.35">'+peEsc(why)+'</span>'
+      (why ? '<button class="pe-btn sec sm" disabled title="'+peEsc(why)+'" style="opacity:.45">Delete</button>'
            : '<button class="pe-btn sec sm" style="color:#B00020;border-color:#B00020" onclick="peDeleteDish(\''+d.id+'\')">Delete</button>')+
       '</span></div>';
   }).join('')+'</div>';
@@ -7919,7 +7928,7 @@ function peRenderSetMenuLib(){
       '<br><span style="font-size:11px;color:#4F4535">'+peEsc(mm.line||peSmSummary(mm.courses))+'</span></span>'+
       // Seeing it is now one tap from the list, not something you have to open
       // the editor and save first to find out.
-      '<span style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">'+
+      '<span class="pe-acts w5">'+
         (mm.key?'<button class="pe-btn sec sm" onclick="peCmPrintMenu(\''+peEsc(mm.key)+'\')">PDF</button>'+
                 '<button class="pe-btn sec sm" onclick="peCmOpen(\''+peEsc(mm.key)+'\')">View</button>':'')+
         (m.id?'<button class="pe-btn sec sm" onclick="peSmEdit(\''+m.id+'\')">Edit</button>'+
@@ -7928,7 +7937,7 @@ function peRenderSetMenuLib(){
               '<button class="pe-btn sec sm" onclick="peToggleSetMenu(\''+m.id+'\','+(mm.active===false?'true':'false')+')">'+(mm.active===false?'Reactivate':'Pause')+'</button>'+
 
               '<button class="pe-btn sec sm" style="color:#B00020;border-color:#B00020" onclick="peSmDelete(\''+m.id+'\')">Delete</button>'
-             :'<span style="font-size:11px;color:#574232;align-self:center">built-in</span>')+
+             :'<button class="pe-btn sec sm" disabled title="A built-in menu - it cannot be deleted, only paused" style="opacity:.45">Delete</button>')+
       '</span>'+
     '</div>';
   };
