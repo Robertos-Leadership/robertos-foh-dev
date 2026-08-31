@@ -3060,7 +3060,7 @@ function peRenderEvent(){
     '<b style="font-size:14px;color:#400207">Food</b>'+
     (sm || !ce ? '' : '<span><select class="pe-in" style="width:auto;display:inline-block" onchange="peApplyPackage(\''+e.id+'\',this.value)">'+
       '<option value="">Start from a canapé package…</option>'+
-      peState.packs.map(function(p){ return '<option value="'+p.id+'">'+peEsc(p.name)+' — AED '+peMoney(p.price_pp)+'/guest</option>'; }).join('')+
+      peState.packs.filter(function(p){ return p.active!==false; }).map(function(p){ return '<option value="'+p.id+'">'+peEsc(p.name)+' — AED '+peMoney(p.price_pp)+'/guest</option>'; }).join('')+
     '</select></span>')+'</div>';
   if(!sm && ce) h += '<div style="font-size:11px;color:#4F4535;margin:-2px 0 8px">Start from a canapé package above, or build the menu dish by dish below.</div>';
   h += peFoodSetMenuHTML(e);
@@ -5419,17 +5419,25 @@ function peRenderChefCorner(){
     lede  = nSet ? (nSet + ' set menu' + (nSet===1?'':'s') + (nCust?' + '+nCust+' customised':'')) : 'Set menus';
     stand = 'Plated set menus — saved here they appear in the events desk booking dropdown, the guest proposal and the kitchen brief.'+
             (nCust?' The customised menus below were tailored for one booking each; they can still reach a guest, so they are yours to cost and pause too.':'');
+  } else if(tab==='packs'){
+    var nPk = (peState.packs||[]).filter(function(p){ return p.active!==false; }).length;
+    lede  = nPk ? (nPk + ' canapé set menu' + (nPk===1?'':'s')) : 'Canapé set menus';
+    stand = 'The priced canapé menus the events desk sells from — “Start from a canapé package…” on a booking. Built out of the dishes in the Canapé library.';
   } else {
     var nDish = peState.dishes.filter(function(d){ return d.active; }).length;
     lede  = nDish ? (nDish + ' dish' + (nDish===1?'':'es') + ' in the library') : 'The dish library';
-    stand = 'The kitchen’s home: add and update canapés — everything saved here is instantly available to the events desk and the guest menu.';
+    stand = 'The kitchen’s home: the individual canapés every canapé set menu is built from — everything saved here is instantly available to the events desk and the guest menu.';
   }
   h += peRoom('chef', 'Chef corner', lede, stand);
-  var tabs = [['canape','Canap\u00e9s'],['set','Set menus']];
+  // Canapé packages belong in the chef's corner too: they are a priced thing a
+  // guest can be sold, and until 31 Aug 2026 they lived only under Menu
+  // packages, so the chef could not reach them at all. (Francesco: if it is not
+  // in the Chef Corner it should not be sellable.)
+  var tabs = [['canape','Canap\u00e9 library'],['packs','Canap\u00e9 set menus'],['set','Set menus']];
   h += '<div class="pe-tabs" style="margin-bottom:12px">'+tabs.map(function(t){
     return '<span class="pe-tab'+(tab===t[0]?' on':'')+'" onclick="peState.chefTab=\''+t[0]+'\';renderMain()">'+t[1]+'</span>';
   }).join('')+'</div>';
-  h += (tab==='set') ? peRenderSetMenuLib() : peRenderDishLib();
+  h += (tab==='set') ? peRenderSetMenuLib() : (tab==='packs' ? peRenderChefPackLib() : peRenderDishLib());
   return h+PE_FOOT;
 }
 function peRenderBevCorner(){
@@ -8019,6 +8027,43 @@ async function peSmDelete(id){
   peToast('“'+raw.name+'” deleted');
   renderMain();
 }
+// The chef's view of the canapé packages: what is in each one, what it costs a
+// guest, and a switch. Editing stays in Menu packages (that editor picks dishes
+// off the same library) — this is the shelf, and the switch on it.
+function peRenderChefPackLib(){
+  var ce = peCanEdit();
+  var packs = peState.packs || [];
+  var live = packs.filter(function(p){ return p.active!==false; });
+  var h = '';
+  if(!packs.length) return '<div class="pe-card"><div style="font-size:12px;color:#4F4535">No canapé set menus yet — they are built in Menu packages.</div></div>';
+  h += '<div style="font-size:12px;color:#4F4535;margin-bottom:10px">'+
+    live.length+' of '+packs.length+' can be sold right now. Pausing one keeps every booking already on it and only takes it out of new quotes.</div>';
+  h += '<div class="pe-card">'+packs.map(function(p){
+    var names = (p.dish_ids||[]).map(function(id){ var d=peDishById(id); return d?d.name:null; }).filter(Boolean);
+    var off = p.active===false;
+    return '<div class="pe-dishrow" style="opacity:'+(off?.45:1)+'">'+
+      '<span><b style="color:#400207">'+peEsc(p.name)+'</b> · AED '+peMoney(p.price_pp)+'/guest'+
+      (off?' <span style="font-size:11px;color:#4F4535">· paused</span>':'')+
+      '<br><span style="font-size:11px;color:#4F4535">'+peEsc(names.join(' · '))+'</span></span>'+
+      '<span style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">'+
+      (ce?'<button class="pe-btn sec sm" onclick="peState.packsTab=\'canape\';peState.editPackId=\''+p.id+'\';peGo(\'packlib\')">Edit</button>'+
+          '<button class="pe-btn sec sm" onclick="peTogglePack(\''+p.id+'\','+(off?'true':'false')+')">'+(off?'Reactivate':'Pause')+'</button>':'')+
+      '</span></div>';
+  }).join('')+'</div>';
+  return h;
+}
+// event_packages has always had an `active` column and nothing ever wrote it, so
+// a package could not be retired at all. It is written here — and the two places
+// that offer a package for sale now honour it, or this button would be a lie.
+async function peTogglePack(id, active){
+  if(!peCanEdit()){ peToast('View only — ask Katarina, Andrea or Francesco to make changes', true); return; }
+  var on = (active==='true'||active===true);
+  var r = await sb.from('event_packages').update({active:on}).eq('id', id);
+  if(r.error){ peToast('NOT changed — '+String(r.error.message||'').slice(0,80), true); return; }
+  peState.packs.forEach(function(p){ if(p.id===id) p.active=on; });
+  peToast(on?'Canapé set menu reactivated ✓':'Canapé set menu paused — existing bookings keep it, new quotes won’t show it');
+  renderMain();
+}
 async function peToggleSetMenu(id, active){
   var on = (active==='true'||active===true);
   var r = await sb.from('event_set_menus').update({active:on, updated_at:new Date().toISOString()}).eq('id', id);
@@ -8628,7 +8673,7 @@ function peRenderGuided(){
       card('setmenu','A plated set menu','Terra, Mare or Fuoco');
     if(g.foodMode==='package'){
       h += '<div style="margin-top:4px"><div class="pe-lbl">Which package?</div><select class="pe-in" onchange="peGuideSet(\'packId\',this.value)"><option value="">Choose a package…</option>'+
-        peState.packs.map(function(p){ return '<option value="'+p.id+'"'+(g.packId===p.id?' selected':'')+'>'+peEsc(p.name)+' — AED '+peMoney(p.price_pp)+'/guest</option>'; }).join('')+'</select></div>';
+        peState.packs.filter(function(p){ return p.active!==false || g.packId===p.id; }).map(function(p){ return '<option value="'+p.id+'"'+(g.packId===p.id?' selected':'')+'>'+peEsc(p.name)+' — AED '+peMoney(p.price_pp)+'/guest</option>'; }).join('')+'</select></div>';
     } else if(g.foodMode==='setmenu'){
       h += '<div style="margin-top:4px"><div class="pe-lbl">Which set menu?</div><select class="pe-in" onchange="peGuideSet(\'setKey\',this.value)"><option value="">Choose a set menu…</option>'+
         peSetMenusPick().map(function(m){ return '<option value="'+m.key+'"'+(g.setKey===m.key?' selected':'')+'>'+peEsc(m.name)+' — AED '+m.price+'/guest</option>'; }).join('')+'</select></div>'+
