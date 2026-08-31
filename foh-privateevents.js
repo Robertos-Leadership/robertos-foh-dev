@@ -1728,7 +1728,17 @@ function peEventValue(e){
   }
   var v = peAgBase(e);                       // respects pricing_type — min spend means the minimum
   if(v != null && v !== 0) return v;
-  return e.min_spend ? Number(e.min_spend) : null;
+  if(e.min_spend) return Number(e.min_spend);
+  // Minimum-spend pricing picked, amount not typed yet. peAgBase returns null
+  // there ON PURPOSE — nothing can be signed against an empty minimum and that
+  // gate stays. But for REPORTING, valuing it at nothing hid a real menu with
+  // real guests from the list, calendar, pipeline and the target. Fall back to
+  // what the menu and the guest count already come to. (31 Aug 2026)
+  if(e.pricing_type==='min_spend'){
+    var mt = peCalcTotals(e);
+    if(mt.total) return mt.total;
+  }
+  return null;
 }
 
 // ── Andrea's reporting lens ──────────────────────────────────────────────────
@@ -3964,7 +3974,13 @@ async function peApplyOption(id, key){
   if(o.min_spend !== '' && o.min_spend != null && Number(o.min_spend)){
     patch.min_spend = Number(o.min_spend); patch.pricing_type = 'min_spend';
   } else if(o.price_pp !== '' && o.price_pp != null){
+    // A per-person option must also take the booking OFF minimum-spend pricing.
+    // Without this, peAgBase kept quoting the old minimum on the agreement, the
+    // deposit and the contract while the confirm dialog promised this option's
+    // price. (31 Aug 2026)
     patch.food_price_pp = Number(o.price_pp);
+    patch.pricing_type = 'set_price';
+    patch.min_spend = null;
   }
   var r = await sb.from('events_desk').update(patch).eq('id', id);
   if(r.error && !peColMissing(r.error, 'option_chosen')){ peToast('NOT saved — check connection', true); return; }
@@ -4410,7 +4426,7 @@ function peFoodSetMenuHTML(e){
   var evPP = (e.food_price_pp!=null && e.food_price_pp!=='') ? Number(e.food_price_pp) : null;
   var custPP = (m && evPP!=null && Math.round(evPP)!==Math.round(Number(m.price)));
   h += '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">'+
-    '<b style="color:#400207">'+(m?peEsc(m.name):'Set menu')+(m?' · AED '+peMoney(evPP!=null?evPP:m.price)+'/guest'+(custPP?' <span style="font-weight:normal;font-size:11px;color:#7A5500">(agreed — list AED '+m.price+')</span>':''):'')+'</b>'+
+    '<b style="color:#400207">'+(m?peEsc(m.name):'Set menu')+(m?' · AED '+peMoney(evPP!=null?evPP:m.price)+'/guest'+(custPP&&m.price!=null?' <span style="font-weight:normal;font-size:11px;color:#7A5500">(agreed — list AED '+m.price+')</span>':''):'')+'</b>'+
     // The guest is happy with this menu but wants dishes from the à la carte:
     // this is the door to the builder, pre-loaded with THIS menu and THIS
     // booking, so she never re-picks either.
@@ -4424,7 +4440,7 @@ function peFoodSetMenuHTML(e){
     var pill = function(v, on, lbl){
       return '<button class="pe-btn sm'+(on?'':' sec')+'" style="flex:1;min-width:150px"'+
         (on||!ce ? ' disabled' : ' onclick="peSetMenuServe(\''+e.id+'\',\''+peSmEsc(v.key)+'\')"')+'>'+
-        lbl+' — AED '+v.price+'/guest'+(on?' ✓':'')+'</button>';
+        lbl+(v.price!=null?' — AED '+v.price+'/guest':'')+(on?' ✓':'')+'</button>';
     };
     h += '<div style="margin-top:8px"><div class="pe-lbl">How is it served?</div>'+
       '<div style="display:flex;gap:6px;flex-wrap:wrap">'+
@@ -4437,8 +4453,8 @@ function peFoodSetMenuHTML(e){
     // (food_price_pp), surfaced here so a negotiated menu price is one edit.
     h += '<div style="margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">'+
       '<span class="pe-lbl" style="margin:0">Agreed price per guest</span>'+
-      '<input class="pe-in" style="width:90px;padding:4px 6px" type="number" min="0" value="'+(evPP!=null?peEsc(e.food_price_pp):'')+'" placeholder="'+m.price+'" onchange="peFact(this,\'food_price_pp\',\''+e.id+'\')"'+(ce?'':' disabled')+'>'+
-      '<span style="font-size:11px;color:#4F4535">list price AED '+m.price+' — change only what was agreed with the guest</span></div>';
+      '<input class="pe-in" style="width:90px;padding:4px 6px" type="number" min="0" value="'+(evPP!=null?peEsc(e.food_price_pp):'')+'" placeholder="'+(m.price!=null?m.price:'')+'" onchange="peFact(this,\'food_price_pp\',\''+e.id+'\')"'+(ce?'':' disabled')+'>'+
+      '<span style="font-size:11px;color:#4F4535">'+(m.price!=null?'list price AED '+m.price+' — change only what was agreed with the guest':'This menu has no list price — the price on the proposal is whatever you type here.')+'</span></div>';
     var g = Number(e.guests)||0;
     m.courses.forEach(function(c){
       if(!c.choose) return;
@@ -4800,8 +4816,15 @@ function peProposalHTML(e, noPrice){
       (t.discount>0?'<br><span class="d" style="color:#5B6737">including a courtesy of AED '+peMoney(t.discount)+'</span>':'')+
       '<br><span class="d">'+(t.items.length?'Canapé selection':'Menu')+(bev?' and '+(bev.duration_hours?bev.duration_hours+'-hour ':'')+'beverage package':'')+' — everything included</span></div>';
   } else if(e.min_spend){
+    // The minimum the guest is actually charged. A courtesy discount comes off it
+    // here exactly as peAgBase, peDepositAmt and the signed agreement already take
+    // it off — printing the raw min_spend made the proposal and the contract
+    // disagree by the discount, and the deposit ask came up short. (31 Aug 2026)
+    var msDisc = Math.max(0, Number(e.discount)||0);
+    var msBase = Math.max(0, Number(e.min_spend) - msDisc);
     body += '<div class="rule" style="margin-top:26px"></div><div class="sec">Your event</div>'+
-      '<div class="dish" style="font-size:15px">Minimum spend AED '+peMoney(e.min_spend)+'</div>';
+      '<div class="dish" style="font-size:15px">Minimum spend AED '+peMoney(msBase)+
+      (msDisc>0?'<br><span class="d" style="color:#5B6737">including a courtesy of AED '+peMoney(msDisc)+'</span>':'')+'</div>';
   }
   // Nothing stands in for the money on a no-price proposal — no placeholder, no
   // "pricing to follow". The VAT sentence goes with it: it is a statement about
