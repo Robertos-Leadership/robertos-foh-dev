@@ -7918,11 +7918,17 @@ function peRenderSetMenuLib(){
               // Pause without opening the menu first. Retiring keeps existing
               // bookings on it and only takes it out of new quotes.
               '<button class="pe-btn sec sm" onclick="peToggleSetMenu(\''+m.id+'\','+(mm.active===false?'true':'false')+')">'+(mm.active===false?'Reactivate':'Pause')+'</button>'+
+              // Move it to the other shelf. Standard = offered on every booking;
+              // customised = only where it is already attached.
+              '<button class="pe-btn sec sm" onclick="peSmSetCustom(\''+m.id+'\','+(mm.custom?'false':'true')+')">'+(mm.custom?'Make standard':'Make customised')+'</button>'+
               '<button class="pe-btn sec sm" style="color:#B00020;border-color:#B00020" onclick="peSmDelete(\''+m.id+'\')">Delete</button>'
              :'<span style="font-size:11px;color:#574232;align-self:center">built-in</span>')+
       '</span>'+
     '</div>';
   };
+  h += '<div style="margin:4px 0 8px"><b style="color:#400207;font-size:14px">Standard menus</b>'+
+    '<div style="font-size:12px;color:#4F4535;margin-top:3px">'+list.length+' menu'+(list.length===1?'':'s')+
+    ' offered on every booking and in the guest menu-send list.</div></div>';
   h += '<div class="pe-card">'+(list.length?list.map(function(m){ return smLibRow(m); }).join('')
       :'<div style="font-size:12px;color:#4F4535">No set menus yet — tap “+ Add set menu”.</div>')+'</div>';
   // ── Customised menus ──────────────────────────────────────────────────────
@@ -7930,10 +7936,10 @@ function peRenderSetMenuLib(){
   // in their own section because one is created every time a menu is tailored
   // for a client, and they would otherwise bury the designed menus.
   if(customList.length){
-    h += '<div style="margin:18px 0 8px"><b style="color:#400207;font-size:14px">Customised for a booking</b>'+
+    h += '<div style="margin:18px 0 8px"><b style="color:#400207;font-size:14px">Customised menus</b>'+
       '<div style="font-size:12px;color:#4F4535;margin-top:3px">'+customList.length+' menu'+(customList.length===1?'':'s')+
-      ' tailored for one client. They can be sent to a guest, so they are yours to cost, correct and pause — '+
-      'they stay out of the booking dropdown and the designed library above.</div></div>';
+      ' tailored for one client. They can still be sent to a guest, so they are yours to cost, correct and pause — '+
+      'but they stay out of the booking dropdown and the guest menu-send list. Use <b>Make standard</b> to put one on general sale.</div></div>';
     h += '<div class="pe-card">'+customList.map(function(m){
       var ev = peSmBookingFor(peNormSM(m).key);
       return smLibRow(m, {forBooking: ev ? (ev.client_name || 'an unnamed booking') : ''});
@@ -8062,6 +8068,29 @@ async function peTogglePack(id, active){
   if(r.error){ peToast('NOT changed — '+String(r.error.message||'').slice(0,80), true); return; }
   peState.packs.forEach(function(p){ if(p.id===id) p.active=on; });
   peToast(on?'Canapé set menu reactivated ✓':'Canapé set menu paused — existing bookings keep it, new quotes won’t show it');
+  renderMain();
+}
+// Move a menu between the two shelves. is_custom is NOT a label - it decides
+// whether the menu is offered in the booking dropdown and the guest menu-send
+// picker, so the confirm spells out what actually changes. (Francesco, 31 Aug 2026)
+async function peSmSetCustom(id, toCustom){
+  if(!peCanEdit()){ peToast('View only - ask Katarina, Andrea or Francesco to make changes', true); return; }
+  var on = (toCustom==='true'||toCustom===true);
+  var m = null; (peState.setMenus||[]).forEach(function(x){ if(x.id===id) m=x; });
+  if(!m) return;
+  var ev = peSmBookingFor(peNormSM(m).key);
+  if(!(await peConfirm({
+    title: on ? 'Move to customised menus?' : 'Move to standard menus?',
+    body: on
+      ? '\u201c'+peEsc(m.name)+'\u201d becomes a customised menu. It will no longer be offered in the booking dropdown or the guest menu-send list \u2014 it stays sellable only where it is already attached.'+
+        (ev ? ' It is currently on '+peEsc(ev.client_name||'a booking')+', and that booking keeps it.' : '')
+      : '\u201c'+peEsc(m.name)+'\u201d becomes a standard menu. It will be offered on every new booking and in the guest menu-send list, so make sure the price and the allergens are right for general sale.',
+    ok: on ? 'Move to customised' : 'Move to standard', cancel:'Leave it where it is'
+  }))) return;
+  var r = await sb.from('event_set_menus').update({is_custom:on, updated_at:new Date().toISOString()}).eq('id', id);
+  if(r.error){ peToast('NOT moved - '+String(r.error.message||'').slice(0,80), true); return; }
+  peState.setMenus.forEach(function(x){ if(x.id===id) x.is_custom=on; });
+  peToast(on?'Moved to customised menus \u2713':'Moved to standard menus \u2713');
   renderMain();
 }
 async function peToggleSetMenu(id, active){
