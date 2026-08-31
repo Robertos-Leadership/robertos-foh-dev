@@ -8087,22 +8087,52 @@ function peSmDragInit(){
   if(peSmDrag) return;
   peSmDrag = { d:null };
   document.addEventListener('pointerdown', peSmDragDown, true);
-  document.addEventListener('pointermove', peSmDragMove, true);
+  document.addEventListener('pointermove', peSmDragMove, {capture:true, passive:false});
   document.addEventListener('pointerup', peSmDragUp, true);
   document.addEventListener('pointercancel', peSmDragUp, true);
+  // The row keeps touch-action:pan-y so a finger can still scroll the library.
+  // Once the press has ARMED a drag, this cancels the scroll the browser would
+  // otherwise start - a passive listener cannot, hence passive:false.
+  document.addEventListener('touchmove', function(e){
+    if(peSmDrag && peSmDrag.d && peSmDrag.d.armed && e.cancelable) e.preventDefault();
+  }, {passive:false});
 }
 function peSmZones(){
   return { std: document.getElementById('pe-smzone-std'),
            cust: document.getElementById('pe-smzone-cust') };
 }
 function peSmZoneAt(x, y){
-  var z = peSmZones(), hit = null;
+  var z = peSmZones();
+  if(!z.std || !z.cust) return null;
+  var rs = z.std.getBoundingClientRect(), rc = z.cust.getBoundingClientRect();
+  if(y>=rs.top && y<=rs.bottom) return 'std';
+  if(y>=rc.top && y<=rc.bottom) return 'cust';
+  // Outside both. The other shelf is usually off the bottom of the screen, so
+  // fall back to which side of the gap between them the pointer is on: dragging
+  // a row DOWN past the end of its list means "the list below", and up means
+  // "the list above". Only the vertical axis matters - the shelves are stacked
+  // and full width.
+  return (y > (rs.bottom + rc.top)/2) ? 'cust' : 'std';
+}
+// Drag near the top or bottom edge and the page keeps scrolling, so the other
+// shelf can be reached at all on a long library. This MUST be on a timer: a
+// pointer held still at the edge fires no further pointermove events, so a
+// move-driven scroll stops dead and the other shelf stays out of reach.
+function peSmAutoScrollTick(){
+  var d = peSmDrag && peSmDrag.d;
+  if(!d || !d.armed) return;
+  var m = 90, y = d.lastY, before = window.pageYOffset;
+  if(y < m) window.scrollBy(0, -Math.max(8, Math.ceil((m-y)/3)));
+  else if(y > window.innerHeight - m) window.scrollBy(0, Math.max(8, Math.ceil((y-(window.innerHeight-m))/3)));
+  // Scrolling moves the shelves under a stationary pointer, so re-read which one
+  // it is now over, or the highlight lies about where the drop will land.
+  if(window.pageYOffset !== before) peSmDragHighlight(d.lastX, d.lastY);
+}
+function peSmDragHighlight(x, y){
+  var z = peSmZones(), over = peSmZoneAt(x, y);
   [['std',z.std],['cust',z.cust]].forEach(function(p){
-    if(!p[1]) return;
-    var r = p[1].getBoundingClientRect();
-    if(x>=r.left && x<=r.right && y>=r.top && y<=r.bottom) hit = p[0];
+    if(p[1]) p[1].style.background = (over===p[0]) ? '#F6EEDC' : '';
   });
-  return hit;
 }
 function peSmDragPaint(on){
   var z = peSmZones();
@@ -8118,7 +8148,8 @@ function peSmDragDown(ev){
   var row = ev.target.closest('[data-smid]');
   if(!row) return;
   var d = { row:row, id:row.getAttribute('data-smid'), from:row.getAttribute('data-cust')==='1',
-            x:ev.clientX, y:ev.clientY, armed:false, ghost:null, timer:null, touch:(ev.pointerType==='touch') };
+            x:ev.clientX, y:ev.clientY, armed:false, ghost:null, timer:null, pid:ev.pointerId,
+            touch:(ev.pointerType==='touch') };
   peSmDrag.d = d;
   if(d.touch) d.timer = setTimeout(function(){ peSmDragArm(); }, 220);
 }
@@ -8126,6 +8157,9 @@ function peSmDragArm(){
   var d = peSmDrag && peSmDrag.d; if(!d || d.armed) return;
   d.armed = true;
   d.row.style.opacity = '.4';
+  document.body.style.userSelect = 'none';
+  try{ if(d.pid!=null && d.row.setPointerCapture) d.row.setPointerCapture(d.pid); }catch(e){}
+  try{ var sel = window.getSelection && window.getSelection(); if(sel) sel.removeAllRanges(); }catch(e){}
   var g = document.createElement('div');
   g.textContent = (d.row.getAttribute('data-smname')||'Menu');
   g.style.cssText = 'position:fixed;z-index:9999;pointer-events:none;background:#400207;color:#F6EFE3;'+
@@ -8133,6 +8167,8 @@ function peSmDragArm(){
     'left:'+d.x+'px;top:'+d.y+'px;transform:translate(-50%,-150%)';
   document.body.appendChild(g);
   d.ghost = g;
+  d.lastX = d.x; d.lastY = d.y;
+  d.scroller = setInterval(peSmAutoScrollTick, 30);
   peSmDragPaint(true);
 }
 function peSmDragMove(ev){
@@ -8148,17 +8184,18 @@ function peSmDragMove(ev){
   }
   if(ev.cancelable) ev.preventDefault();
   if(d.ghost){ d.ghost.style.left = ev.clientX+'px'; d.ghost.style.top = ev.clientY+'px'; }
-  var z = peSmZones(), over = peSmZoneAt(ev.clientX, ev.clientY);
-  [['std',z.std],['cust',z.cust]].forEach(function(p){
-    if(p[1]) p[1].style.background = (over===p[0]) ? '#F6EEDC' : '';
-  });
+  d.lastX = ev.clientX; d.lastY = ev.clientY;
+  peSmDragHighlight(ev.clientX, ev.clientY);
 }
 function peSmDragUp(ev){
   var d = peSmDrag && peSmDrag.d; if(!d) return;
   clearTimeout(d.timer);
+  if(d.scroller) clearInterval(d.scroller);
   var armed = d.armed, id = d.id, from = d.from;
   if(d.ghost && d.ghost.parentNode) d.ghost.parentNode.removeChild(d.ghost);
   d.row.style.opacity = '';
+  document.body.style.userSelect = '';
+  try{ if(d.pid!=null && d.row.releasePointerCapture) d.row.releasePointerCapture(d.pid); }catch(e){}
   var z = peSmZones(); [z.std,z.cust].forEach(function(el){ if(el) el.style.background = ''; });
   peSmDragPaint(false);
   peSmDrag.d = null;
