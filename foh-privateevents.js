@@ -203,6 +203,14 @@ function peSetMenusPick(){
 // menu-send screen: a minimum-spend client is sent the menu WITHOUT a price, so
 // a menu with "price pending" (e.g. a bespoke confidential-price menu) must still
 // be tickable there. The per-guest price never appears — the send hides it.
+// Everything the desk can put on a booking: standard AND customised, minus
+// whatever the chef has paused. The two shelves are how the CHEF organises the
+// library; the pause is the only thing that decides what can be sold.
+function peSetMenusBookable(){
+  return peSetMenusAll().filter(function(m){
+    return m.active!==false && !(/-sharing$/.test(m.key) && peSmFamily(m.key));
+  });
+}
 function peSetMenusPickInc(){
   return peSetMenusDesigned().filter(function(m){
     return m.active!==false && !(/-sharing$/.test(m.key) && peSmFamily(m.key));
@@ -4416,7 +4424,7 @@ function peFoodSetMenuHTML(e){
     if(!ce) return '';
     h += '<div class="pe-lbl">Or use a plated set menu…</div>'+
       '<span style="display:flex;gap:6px;align-items:center"><select class="pe-in" style="flex:1" id="pe-sm-sel"><option value="">Choose a plated set menu…</option>'+
-      peSetMenusPickInc().map(function(m){ return '<option value="'+m.key+'">'+peEsc(m.name)+(m.price!=null?' — AED '+m.price+'/guest':' — price on the proposal')+'</option>'; }).join('')+
+      peSetMenusBookable().map(function(m){ return '<option value="'+m.key+'">'+peEsc(m.name)+(m.price!=null?' — AED '+m.price+'/guest':' — price on the proposal')+'</option>'; }).join('')+
       '</select><button class="pe-btn sec sm" onclick="peApplySetMenu(\''+e.id+'\')">Use</button></span>';
     return h+'</div>';
   }
@@ -7896,8 +7904,8 @@ function peRenderSetMenuLib(){
     opts = opts || {};
     var mm=peNormSM(m); var pending=mm.price==null;
     var costPct = (mm.cost!=null && mm.price) ? Math.round((mm.cost/(mm.price/PE_GROSS))*100) : null;
-    return '<div class="pe-dishrow" style="opacity:'+(mm.active===false?.45:1)+'">'+
-      '<span><b style="color:#400207">'+peEsc(mm.name)+'</b> '+
+    return '<div class="pe-dishrow" data-smid="'+(m.id||'')+'" data-cust="'+(mm.custom?'1':'0')+'" data-smname="'+peEsc(mm.name)+'" style="opacity:'+(mm.active===false?.45:1)+';cursor:grab;touch-action:pan-y">'+
+      '<span><span style="color:#C0B49F;margin-right:7px;letter-spacing:-1px" title="Drag to the other list">⁙</span><b style="color:#400207">'+peEsc(mm.name)+'</b> '+
       (pending?'<span style="background:#FAEEDA;color:#854F0B;font-size:11px;padding:2px 9px;border-radius:20px;margin-left:2px">Price pending</span>':'· AED '+peMoney(mm.price)+'/guest')+
       (mm.cost!=null
         ? ' <span style="font-size:11px;color:'+(costPct==null?'#8B7355':(costPct<=27?'#2E6B34':'#B00020'))+'">· cost '+peMoney(mm.cost)+(costPct!=null?' ('+costPct+'% of net'+(costPct<=27?'':' — above 27% target')+')':'')+'</span>'
@@ -7918,33 +7926,30 @@ function peRenderSetMenuLib(){
               // Pause without opening the menu first. Retiring keeps existing
               // bookings on it and only takes it out of new quotes.
               '<button class="pe-btn sec sm" onclick="peToggleSetMenu(\''+m.id+'\','+(mm.active===false?'true':'false')+')">'+(mm.active===false?'Reactivate':'Pause')+'</button>'+
-              // Move it to the other shelf. Standard = offered on every booking;
-              // customised = only where it is already attached.
-              '<button class="pe-btn sec sm" onclick="peSmSetCustom(\''+m.id+'\','+(mm.custom?'false':'true')+')">'+(mm.custom?'Make standard':'Make customised')+'</button>'+
+
               '<button class="pe-btn sec sm" style="color:#B00020;border-color:#B00020" onclick="peSmDelete(\''+m.id+'\')">Delete</button>'
              :'<span style="font-size:11px;color:#574232;align-self:center">built-in</span>')+
       '</span>'+
     '</div>';
   };
+  peSmDragInit();
   h += '<div style="margin:4px 0 8px"><b style="color:#400207;font-size:14px">Standard menus</b>'+
     '<div style="font-size:12px;color:#4F4535;margin-top:3px">'+list.length+' menu'+(list.length===1?'':'s')+
-    ' offered on every booking and in the guest menu-send list.</div></div>';
-  h += '<div class="pe-card">'+(list.length?list.map(function(m){ return smLibRow(m); }).join('')
-      :'<div style="font-size:12px;color:#4F4535">No set menus yet — tap “+ Add set menu”.</div>')+'</div>';
+    ' — the everyday library. <b>Drag a menu onto the other list to move it.</b> Anything not paused can be put on a booking, whichever list it sits in.</div></div>';
+  h += '<div class="pe-card" id="pe-smzone-std">'+(list.length?list.map(function(m){ return smLibRow(m); }).join('')
+      :'<div style="font-size:12px;color:#4F4535">No standard menus — drag one up from below, or tap “+ Add set menu”.</div>')+'</div>';
   // ── Customised menus ──────────────────────────────────────────────────────
   // Same controls as the designed library: cost it, correct it, pause it. Kept
   // in their own section because one is created every time a menu is tailored
   // for a client, and they would otherwise bury the designed menus.
-  if(customList.length){
-    h += '<div style="margin:18px 0 8px"><b style="color:#400207;font-size:14px">Customised menus</b>'+
-      '<div style="font-size:12px;color:#4F4535;margin-top:3px">'+customList.length+' menu'+(customList.length===1?'':'s')+
-      ' tailored for one client. They can still be sent to a guest, so they are yours to cost, correct and pause — '+
-      'but they stay out of the booking dropdown and the guest menu-send list. Use <b>Make standard</b> to put one on general sale.</div></div>';
-    h += '<div class="pe-card">'+customList.map(function(m){
+  h += '<div style="margin:18px 0 8px"><b style="color:#400207;font-size:14px">Customised menus</b>'+
+    '<div style="font-size:12px;color:#4F4535;margin-top:3px">'+customList.length+' menu'+(customList.length===1?'':'s')+
+    ' tailored for one client. Same powers as above — cost it, correct it, pause it — and unless you pause it, it can be put on a booking like any other.</div></div>';
+  h += '<div class="pe-card" id="pe-smzone-cust">'+(customList.length?customList.map(function(m){
       var ev = peSmBookingFor(peNormSM(m).key);
       return smLibRow(m, {forBooking: ev ? (ev.client_name || 'an unnamed booking') : ''});
-    }).join('')+'</div>';
-  }
+    }).join('')
+    :'<div style="font-size:12px;color:#4F4535">Nothing here yet — drag a menu down from Standard menus to keep it out of the everyday list.</div>')+'</div>';
   return h;
 }
 async function peSaveSetMenu(id){
@@ -8073,24 +8078,109 @@ async function peTogglePack(id, active){
 // Move a menu between the two shelves. is_custom is NOT a label - it decides
 // whether the menu is offered in the booking dropdown and the guest menu-send
 // picker, so the confirm spells out what actually changes. (Francesco, 31 Aug 2026)
+// ── Drag a menu between the two shelves ──────────────────────────────────────
+// Francesco, 31 Aug 2026: "just give me a drag option not a button, much easier."
+// The WHOLE row is the handle. Mouse arms on 6px of movement; touch arms on a
+// 220ms press so a finger can still scroll the list without dragging anything.
+var peSmDrag = null;
+function peSmDragInit(){
+  if(peSmDrag) return;
+  peSmDrag = { d:null };
+  document.addEventListener('pointerdown', peSmDragDown, true);
+  document.addEventListener('pointermove', peSmDragMove, true);
+  document.addEventListener('pointerup', peSmDragUp, true);
+  document.addEventListener('pointercancel', peSmDragUp, true);
+}
+function peSmZones(){
+  return { std: document.getElementById('pe-smzone-std'),
+           cust: document.getElementById('pe-smzone-cust') };
+}
+function peSmZoneAt(x, y){
+  var z = peSmZones(), hit = null;
+  [['std',z.std],['cust',z.cust]].forEach(function(p){
+    if(!p[1]) return;
+    var r = p[1].getBoundingClientRect();
+    if(x>=r.left && x<=r.right && y>=r.top && y<=r.bottom) hit = p[0];
+  });
+  return hit;
+}
+function peSmDragPaint(on){
+  var z = peSmZones();
+  [z.std, z.cust].forEach(function(el){
+    if(!el) return;
+    el.style.outline = on ? '2px dashed #C9A84C' : '';
+    el.style.outlineOffset = on ? '3px' : '';
+  });
+}
+function peSmDragDown(ev){
+  if(!peCanEdit() || !ev.target || !ev.target.closest) return;
+  if(ev.target.closest('button,input,select,textarea,a,label')) return;
+  var row = ev.target.closest('[data-smid]');
+  if(!row) return;
+  var d = { row:row, id:row.getAttribute('data-smid'), from:row.getAttribute('data-cust')==='1',
+            x:ev.clientX, y:ev.clientY, armed:false, ghost:null, timer:null, touch:(ev.pointerType==='touch') };
+  peSmDrag.d = d;
+  if(d.touch) d.timer = setTimeout(function(){ peSmDragArm(); }, 220);
+}
+function peSmDragArm(){
+  var d = peSmDrag && peSmDrag.d; if(!d || d.armed) return;
+  d.armed = true;
+  d.row.style.opacity = '.4';
+  var g = document.createElement('div');
+  g.textContent = (d.row.getAttribute('data-smname')||'Menu');
+  g.style.cssText = 'position:fixed;z-index:9999;pointer-events:none;background:#400207;color:#F6EFE3;'+
+    'font:600 12px/1.2 sans-serif;padding:7px 12px;border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,.28);'+
+    'left:'+d.x+'px;top:'+d.y+'px;transform:translate(-50%,-150%)';
+  document.body.appendChild(g);
+  d.ghost = g;
+  peSmDragPaint(true);
+}
+function peSmDragMove(ev){
+  var d = peSmDrag && peSmDrag.d; if(!d) return;
+  var dx = ev.clientX-d.x, dy = ev.clientY-d.y;
+  if(!d.armed){
+    if(d.touch){
+      // Moved before the press armed it: that is a scroll, not a drag.
+      if(Math.abs(dx)>10 || Math.abs(dy)>10){ clearTimeout(d.timer); peSmDrag.d = null; }
+      return;
+    }
+    if(Math.abs(dx)>6 || Math.abs(dy)>6) peSmDragArm(); else return;
+  }
+  if(ev.cancelable) ev.preventDefault();
+  if(d.ghost){ d.ghost.style.left = ev.clientX+'px'; d.ghost.style.top = ev.clientY+'px'; }
+  var z = peSmZones(), over = peSmZoneAt(ev.clientX, ev.clientY);
+  [['std',z.std],['cust',z.cust]].forEach(function(p){
+    if(p[1]) p[1].style.background = (over===p[0]) ? '#F6EEDC' : '';
+  });
+}
+function peSmDragUp(ev){
+  var d = peSmDrag && peSmDrag.d; if(!d) return;
+  clearTimeout(d.timer);
+  var armed = d.armed, id = d.id, from = d.from;
+  if(d.ghost && d.ghost.parentNode) d.ghost.parentNode.removeChild(d.ghost);
+  d.row.style.opacity = '';
+  var z = peSmZones(); [z.std,z.cust].forEach(function(el){ if(el) el.style.background = ''; });
+  peSmDragPaint(false);
+  peSmDrag.d = null;
+  if(!armed) return;
+  var zone = peSmZoneAt(ev.clientX, ev.clientY);
+  if(!zone) return;
+  var toCustom = (zone==='cust');
+  if(toCustom === from) return;                 // dropped back where it started
+  peSmSetCustom(id, toCustom);
+}
 async function peSmSetCustom(id, toCustom){
   if(!peCanEdit()){ peToast('View only - ask Katarina, Andrea or Francesco to make changes', true); return; }
   var on = (toCustom==='true'||toCustom===true);
   var m = null; (peState.setMenus||[]).forEach(function(x){ if(x.id===id) m=x; });
   if(!m) return;
-  var ev = peSmBookingFor(peNormSM(m).key);
-  if(!(await peConfirm({
-    title: on ? 'Move to customised menus?' : 'Move to standard menus?',
-    body: on
-      ? '\u201c'+peEsc(m.name)+'\u201d becomes a customised menu. It will no longer be offered in the booking dropdown or the guest menu-send list \u2014 it stays sellable only where it is already attached.'+
-        (ev ? ' It is currently on '+peEsc(ev.client_name||'a booking')+', and that booking keeps it.' : '')
-      : '\u201c'+peEsc(m.name)+'\u201d becomes a standard menu. It will be offered on every new booking and in the guest menu-send list, so make sure the price and the allergens are right for general sale.',
-    ok: on ? 'Move to customised' : 'Move to standard', cancel:'Leave it where it is'
-  }))) return;
+  // No confirm: a drag is already a deliberate act, and dragging it back undoes
+  // it. Nothing about what can be SOLD changes here either - only the pause does
+  // that - so there is nothing to warn about. (Francesco, 31 Aug 2026)
   var r = await sb.from('event_set_menus').update({is_custom:on, updated_at:new Date().toISOString()}).eq('id', id);
   if(r.error){ peToast('NOT moved - '+String(r.error.message||'').slice(0,80), true); return; }
   peState.setMenus.forEach(function(x){ if(x.id===id) x.is_custom=on; });
-  peToast(on?'Moved to customised menus \u2713':'Moved to standard menus \u2713');
+  peToast('“'+m.name+'” is now a '+(on?'customised':'standard')+' menu — drag it back to undo');
   renderMain();
 }
 async function peToggleSetMenu(id, active){
@@ -8705,7 +8795,7 @@ function peRenderGuided(){
         peState.packs.filter(function(p){ return p.active!==false || g.packId===p.id; }).map(function(p){ return '<option value="'+p.id+'"'+(g.packId===p.id?' selected':'')+'>'+peEsc(p.name)+' — AED '+peMoney(p.price_pp)+'/guest</option>'; }).join('')+'</select></div>';
     } else if(g.foodMode==='setmenu'){
       h += '<div style="margin-top:4px"><div class="pe-lbl">Which set menu?</div><select class="pe-in" onchange="peGuideSet(\'setKey\',this.value)"><option value="">Choose a set menu…</option>'+
-        peSetMenusPick().map(function(m){ return '<option value="'+m.key+'"'+(g.setKey===m.key?' selected':'')+'>'+peEsc(m.name)+' — AED '+m.price+'/guest</option>'; }).join('')+'</select></div>'+
+        peSetMenusBookable().filter(function(m){ return m.price!=null; }).map(function(m){ return '<option value="'+m.key+'"'+(g.setKey===m.key?' selected':'')+'>'+peEsc(m.name)+' — AED '+m.price+'/guest</option>'; }).join('')+'</select></div>'+
         '<div style="font-size:11px;color:#4F4535;margin-top:2px">Menus with a sharing version: pick individual or shared on the event’s Food card after this.</div>';
     }
     var bevs = peState.bevs.filter(function(b){ return b.active!==false; })
