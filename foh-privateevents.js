@@ -8065,7 +8065,12 @@ function peRenderChefPackLib(){
       '<span><b style="color:#400207">'+peEsc(p.name)+'</b> · AED '+peMoney(p.price_pp)+'/guest'+
       (off?' <span style="font-size:11px;color:#4F4535">· paused</span>':'')+
       '<br><span style="font-size:11px;color:#4F4535">'+peEsc(names.join(' · '))+'</span></span>'+
-      '<span style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">'+
+      '<span class="pe-acts w5">'+
+      // A canape set menu is a menu a guest reads, so it gets the same PDF and
+      // the same guest view as the plated ones. Both are readable by everyone;
+      // only Edit and Pause are gated.
+      '<button class="pe-btn sec sm" onclick="pePackPrint(\''+p.id+'\')">PDF</button>'+
+      '<button class="pe-btn sec sm" onclick="pePackOpen(\''+p.id+'\')">View</button>'+
       (ce?'<button class="pe-btn sec sm" onclick="peState.packsTab=\'canape\';peState.editPackId=\''+p.id+'\';peGo(\'packlib\')">Edit</button>'+
           '<button class="pe-btn sec sm" onclick="peTogglePack(\''+p.id+'\','+(off?'true':'false')+')">'+(off?'Reactivate':'Pause')+'</button>':'')+
       '</span></div>';
@@ -8075,6 +8080,67 @@ function peRenderChefPackLib(){
 // event_packages has always had an `active` column and nothing ever wrote it, so
 // a package could not be retired at all. It is written here — and the two places
 // that offer a package for sale now honour it, or this button would be a lie.
+// A canape set menu is a menu a guest reads, so it gets the same house document
+// as everything else - the Austin shell, Cold / Hot / Dolci, allergen codes after
+// the name and the description underneath. Built from the package's own dishes.
+function pePackById(id){
+  var out = null; (peState.packs||[]).forEach(function(p){ if(p.id===id) out = p; });
+  return out;
+}
+function pePackDishes(p){
+  return ((p && p.dish_ids) || []).map(function(id){ return peDishById(id); }).filter(Boolean);
+}
+// The same food-safety rule the plated menus follow: a dish whose allergens
+// NOBODY has recorded blocks the print. An empty list means "checked, none" and
+// is fine; a missing list means "not recorded" and is not. Never collapse those.
+function pePackAllergenGaps(dishes){
+  return dishes.filter(function(d){ return !Array.isArray(d.allergens); })
+               .map(function(d){ return d.name; });
+}
+function pePackPrint(id){
+  var p = pePackById(id); if(!p) return;
+  var dishes = pePackDishes(p);
+  if(!dishes.length){ peToast('Nothing to print \u2014 this canap\u00e9 set menu has no dishes on it yet.', true); return; }
+  var gaps = pePackAllergenGaps(dishes);
+  if(gaps.length){
+    peToast('Not printed: '+gaps.length+' dish'+(gaps.length>1?'es have':' has')+' no allergens \u2014 '+gaps.join(', ')+
+            '. Open them in the Canap\u00e9 library, add them, and it will go straight out.', true);
+    return;
+  }
+  var body = '<div class="brand">'+peLogoImg()+'</div><div class="rule"></div>'+
+    '<h2>'+peEsc(p.name)+'</h2>'+
+    (p.price_pp!=null ? '<div class="sub">'+pePerPerson(p.price_pp)+'</div>' : '');
+  var placed = ['Cold','Hot','Dessert'];
+  [{k:'Cold',n:'Cold'},{k:'Hot',n:'Hot'},{k:'Dessert',n:'Dolci'}].forEach(function(g){
+    var list = dishes.filter(function(d){ return d.serve===g.k; });
+    if(!list.length) return;
+    body += '<div class="sec">'+g.n+'</div>';
+    list.forEach(function(d){
+      body += '<div class="dish">'+peEsc(d.name)+
+        ((d.allergens||[]).length?' <span class="codes">('+(d.allergens||[]).join(')(')+')</span>':'')+
+        (d.description?'<br><span class="d">'+peEsc(d.description)+'</span>':'')+'</div>';
+    });
+  });
+  // Anything filed outside those three still reaches the paper - a dish must
+  // never be silently dropped from a menu a guest reads.
+  var rest = dishes.filter(function(d){ return placed.indexOf(d.serve) === -1; });
+  if(rest.length){
+    body += '<div class="sec">Also</div>';
+    rest.forEach(function(d){
+      body += '<div class="dish">'+peEsc(d.name)+
+        ((d.allergens||[]).length?' <span class="codes">('+(d.allergens||[]).join(')(')+')</span>':'')+
+        (d.description?'<br><span class="d">'+peEsc(d.description)+'</span>':'')+'</div>';
+    });
+  }
+  body += '<div class="ft">Our Chefs will do their best to accommodate your dietary requirements, please inform your waiter.<br>'+
+    (p.price_pp!=null?'All prices are in AED inclusive of 5% VAT, 7% DIFC Authority Fee and 10% Service Charge.':'')+
+    peAlgLegend(body)+'</div>';
+  pePrintHTML(peDocShell(p.name, body));
+}
+// The same branded guest page the menu-send uses, for one canape set menu.
+function pePackOpen(id){
+  window.open(peBaseUrl()+'client-menus.html?pack='+encodeURIComponent(id), '_blank');
+}
 async function peTogglePack(id, active){
   if(!peCanEdit()){ peToast('View only — ask Katarina, Andrea or Francesco to make changes', true); return; }
   var on = (active==='true'||active===true);
