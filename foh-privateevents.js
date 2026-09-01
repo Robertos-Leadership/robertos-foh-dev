@@ -266,6 +266,20 @@ function peViewBanner(){
   return '<div style="background:#F3ECE0;border:1px solid #D8CDBB;border-radius:10px;padding:9px 13px;margin-bottom:12px;font-size:12.5px;color:#6B5E4E">'+
     'View only — changes are made by Katarina, Andrea or Francesco.</div>';
 }
+// ── Who may work in the Chef Corner set-menu shelves ─────────────────────
+// NOT peCanEdit(). That is the EVENTS DESK right - create a booking, send an
+// agreement - and the chef does not have it. Danilo has the Events module but
+// not events_editor, so peCanEdit() was false for him while Save and Pause on a
+// set menu were never gated at all: he could rewrite a menu, but dragging it
+// between the two shelves died silently. On Francesco's laptop (a founding
+// editor) the same drag worked, so it read as a broken laptop.
+// Chef Corner is the kitchen's room: reaching the module is the right.
+// (Francesco, 1 Sep 2026 - "we always need to create things are working on
+// every device".)
+function peCanEditChef(){
+  if(!state.access) return false;          // deny until we actually know, as peCanEdit does
+  return (typeof fohBlocked === 'function') ? !fohBlocked('privateevents') : peCanEdit();
+}
 // A disabled action explains itself out loud: toast the reason and jump to the
 // empty field (touch users never see hover tooltips).
 function peScrollToField(fid, msg){
@@ -7911,12 +7925,15 @@ function peRenderSetMenuLib(){
       'a menu priced too close to what it costs to make would pass without a word.'+
       '</div>';
   }
+  // Every drag affordance below reads this ONE value, the same one
+  // peSmDragDown tests. A hand that cannot drag is the bug being fixed here.
+  var canChef = peCanEditChef();
   var smLibRow = function(m, opts){
     opts = opts || {};
     var mm=peNormSM(m); var pending=mm.price==null;
     var costPct = (mm.cost!=null && mm.price) ? Math.round((mm.cost/(mm.price/PE_GROSS))*100) : null;
-    return '<div class="pe-dishrow" data-smid="'+(m.id||'')+'" data-cust="'+(mm.custom?'1':'0')+'" data-smname="'+peEsc(mm.name)+'" style="opacity:'+(mm.active===false?.45:1)+';cursor:grab;touch-action:pan-y">'+
-      '<span><span style="color:#C0B49F;margin-right:7px;letter-spacing:-1px" title="Drag to the other list">⁙</span><b style="color:#400207">'+peEsc(mm.name)+'</b> '+
+    return '<div class="pe-dishrow" data-smid="'+(m.id||'')+'" data-cust="'+(mm.custom?'1':'0')+'" data-smname="'+peEsc(mm.name)+'" style="opacity:'+(mm.active===false?.45:1)+';cursor:'+(canChef?'grab':'default')+';touch-action:pan-y">'+
+      '<span>'+(canChef?'<span style="color:#C0B49F;margin-right:7px;letter-spacing:-1px" title="Drag to the other list">⁙</span>':'')+'<b style="color:#400207">'+peEsc(mm.name)+'</b> '+
       (pending?'<span style="background:#FAEEDA;color:#854F0B;font-size:11px;padding:2px 9px;border-radius:20px;margin-left:2px">Price pending</span>':'· AED '+peMoney(mm.price)+'/guest')+
       (mm.cost!=null
         ? ' <span style="font-size:11px;color:'+(costPct==null?'#8B7355':(costPct<=27?'#2E6B34':'#B00020'))+'">· cost '+peMoney(mm.cost)+(costPct!=null?' ('+costPct+'% of net'+(costPct<=27?'':' — above 27% target')+')':'')+'</span>'
@@ -7946,9 +7963,9 @@ function peRenderSetMenuLib(){
   peSmDragInit();
   h += '<div style="margin:4px 0 8px"><b style="color:#400207;font-size:14px">Standard menus</b>'+
     '<div style="font-size:12px;color:#4F4535;margin-top:3px">'+list.length+' menu'+(list.length===1?'':'s')+
-    ' — the everyday library. <b>Drag a menu onto the other list to move it.</b> Anything not paused can be put on a booking, whichever list it sits in.</div></div>';
+    ' — the everyday library. '+(canChef?'<b>Drag a menu onto the other list to move it.</b> ':'')+'Anything not paused can be put on a booking, whichever list it sits in.</div></div>';
   h += '<div class="pe-card" id="pe-smzone-std">'+(list.length?list.map(function(m){ return smLibRow(m); }).join('')
-      :'<div style="font-size:12px;color:#4F4535">No standard menus — drag one up from below, or tap “+ Add set menu”.</div>')+'</div>';
+      :'<div style="font-size:12px;color:#4F4535">No standard menus'+(canChef?' — drag one up from below, or tap “+ Add set menu”':'')+'.</div>')+'</div>';
   // ── Customised menus ──────────────────────────────────────────────────────
   // Same controls as the designed library: cost it, correct it, pause it. Kept
   // in their own section because one is created every time a menu is tailored
@@ -7960,10 +7977,11 @@ function peRenderSetMenuLib(){
       var ev = peSmBookingFor(peNormSM(m).key);
       return smLibRow(m, {forBooking: ev ? (ev.client_name || 'an unnamed booking') : ''});
     }).join('')
-    :'<div style="font-size:12px;color:#4F4535">Nothing here yet — drag a menu down from Standard menus to keep it out of the everyday list.</div>')+'</div>';
+    :'<div style="font-size:12px;color:#4F4535">Nothing here yet'+(canChef?' — drag a menu down from Standard menus to keep it out of the everyday list':'')+'.</div>')+'</div>';
   return h;
 }
 async function peSaveSetMenu(id){
+  if(!peCanEditChef()){ peToast('View only — the kitchen team change the set menus', true); return; }
   peSmSync();
   var name=(peState.smName||'').trim();
   if(!name){ peToast('Menu name is required', true); return; }
@@ -8035,7 +8053,7 @@ async function peSaveSetMenu(id){
 // would quietly rewrite a booking that has already been sent out. Those get
 // told to retire instead, and told WHICH events are holding it.
 async function peSmDelete(id){
-  if(!peCanEdit()){ peToast('View only — ask Katarina, Andrea or Francesco to make changes', true); return; }
+  if(!peCanEditChef()){ peToast('View only — the kitchen team change the set menus', true); return; }
   var raw = peSmRawById(id); if(!raw || !raw.key) return;
   // TWO nets, because a query returning nothing does not mean nothing is there:
   // row-level security can hide a booking from the reader, and an empty answer
@@ -8237,10 +8255,15 @@ function peSmDragPaint(on){
   });
 }
 function peSmDragDown(ev){
-  if(!peCanEdit() || !ev.target || !ev.target.closest) return;
+  if(!ev.target || !ev.target.closest) return;
   if(ev.target.closest('button,input,select,textarea,a,label')) return;
   var row = ev.target.closest('[data-smid]');
   if(!row) return;
+  // A blocked press SAYS so. Returning silently here - under a row that still
+  // drew the grab hand, the handle and "drag it to the other list" - is exactly
+  // what made this look like one laptop being broken. The affordances below are
+  // keyed to this same test now, so the screen cannot advertise it again.
+  if(!peCanEditChef()){ peToast('View only — the kitchen team move menus between the two lists', true); return; }
   var d = { row:row, id:row.getAttribute('data-smid'), from:row.getAttribute('data-cust')==='1',
             x:ev.clientX, y:ev.clientY, armed:false, ghost:null, timer:null, pid:ev.pointerId,
             touch:(ev.pointerType==='touch') };
@@ -8301,7 +8324,7 @@ function peSmDragUp(ev){
   peSmSetCustom(id, toCustom);
 }
 async function peSmSetCustom(id, toCustom){
-  if(!peCanEdit()){ peToast('View only - ask Katarina, Andrea or Francesco to make changes', true); return; }
+  if(!peCanEditChef()){ peToast('View only — the kitchen team move menus between the two lists', true); return; }
   var on = (toCustom==='true'||toCustom===true);
   var m = null; (peState.setMenus||[]).forEach(function(x){ if(x.id===id) m=x; });
   if(!m) return;
@@ -8315,6 +8338,7 @@ async function peSmSetCustom(id, toCustom){
   renderMain();
 }
 async function peToggleSetMenu(id, active){
+  if(!peCanEditChef()){ peToast('View only — the kitchen team change the set menus', true); return; }
   var on = (active==='true'||active===true);
   var r = await sb.from('event_set_menus').update({active:on, updated_at:new Date().toISOString()}).eq('id', id);
   if(r.error){ peToast('NOT changed — check connection', true); return; }
