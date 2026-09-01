@@ -1786,6 +1786,22 @@ function admEmailsHTML(){
     h.push('<button class="px-mini" onclick="admMailAddOpen(\''+admEsc(nt.k)+'\')">+ Add someone</button>');
     h.push('</div>');
 
+    // The ticks above are what is in the database. That is NOT the same claim as
+    // "this is who the email reaches", and for two weeks in Aug 2026 the two
+    // disagreed: the roster email could not read this screen at all and quietly
+    // used a list written in code, while this screen looked perfectly healthy.
+    // Nothing here could have shown that, because everything here reads the same
+    // database the screen is drawn from — it can only ever agree with itself.
+    // So this asks the SEND FUNCTION instead, over the same key and the same
+    // lookup a real send uses, and prints what it says. Nothing is emailed.
+    if(nt.k==='roster_foh' || nt.k==='roster_kitchen'){
+      h.push('<div class="adm-set-row" style="padding-top:0;">'
+        +'<div class="adm-set-txt"><div class="adm-set-d">Ask the roster email who it would actually copy. Sends nothing.</div></div>'
+        +'<button class="px-mini" id="mlchk-btn-'+admEsc(nt.k)+'" onclick="admMailCheck(\''+admEsc(nt.k)+'\')">Check who really gets it</button>'
+        +'</div>');
+      h.push('<div id="mlchk-'+admEsc(nt.k)+'"></div>');
+    }
+
     if(!people.length){
       h.push('<div class="adm-set-note adm-set-warn">Nobody is on this list. The email has <b>not</b> stopped — '
         +'with an empty list the send falls back to its original built-in recipients. '
@@ -1816,6 +1832,71 @@ function admEmailsHTML(){
 
   h.push('</div>');
   return h.join('');
+}
+/* ── "Check who really gets it" ──────────────────────────────────────────────
+   Proves the chain end to end instead of asking the database to confirm itself.
+
+   The roster email is sent by an edge function in the KITCHEN project, which
+   reads this app's app_users over the network with its own key. Every link in
+   that chain can break without a single error appearing anywhere: the read that
+   failed in Aug 2026 returned HTTP 200 with an empty list, which the function
+   read as "nobody is ticked" and answered with a list written in code. Two
+   weeks of rosters went to the wrong people while this screen showed the right
+   ones, and every send reported a green tick.
+
+   So this asks the function what it would do, and shows the answer next to the
+   ticks. If the two ever disagree again, it says so in one press. Nothing is
+   emailed — the function's check mode returns before it ever reaches Resend.
+=================================================================== */
+async function admMailCheck(key){
+  var box=document.getElementById('mlchk-'+key);
+  var btn=document.getElementById('mlchk-btn-'+key);
+  if(!box) return;
+  if(btn){ btn.disabled=true; btn.textContent='Checking…'; }
+  box.innerHTML='<div class="adm-set-note">Asking the roster email who it would copy…</div>';
+  try{
+    var r=await fetch('https://zrpglswalgjbtghudmhu.supabase.co/functions/v1/send-roster',{
+      method:'POST',
+      headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+KITCHEN_KEY },
+      body:JSON.stringify({ check:true, source: key==='roster_foh' ? 'FOH' : 'KITCHEN' })
+    });
+    var d=await r.json();
+    if(!r.ok) throw new Error(d.error||d.message||('The check failed ('+r.status+').'));
+
+    var got=(d.recipients||[]);
+    // What this screen believes, so the two can be compared rather than trusted.
+    var want=admNotifyList(key).map(function(u){ return String(u.email||'').toLowerCase(); }).sort();
+    var have=got.map(function(e){ return String(e).toLowerCase(); }).sort();
+    var agree = want.length===have.length && want.every(function(e,i){ return e===have[i]; });
+
+    var rows='<div class="adm-mail-list">'
+      +'<div class="adm-mail-row"><div class="adm-mail-who"><b>hr@robertos.ae</b>'
+      +'<span class="adm-mail-em">always the addressee — cannot be removed here</span></div></div>'
+      +got.map(function(e){
+          var u=(state.adminUsers||[]).filter(function(x){ return String(x.email||'').toLowerCase()===String(e).toLowerCase(); })[0];
+          return '<div class="adm-mail-row"><div class="adm-mail-who"><b>'+admEsc((u&&u.name)||e)+'</b>'
+            +'<span class="adm-mail-em">'+admEsc(e)+' — copied</span></div></div>';
+        }).join('')
+      +'</div>';
+
+    if(d.usedFallback){
+      box.innerHTML='<div class="adm-set-note adm-set-warn"><b>These ticks are being ignored.</b> '
+        +'The roster email could not read this screen'+(d.fallbackReason?' — '+admEsc(d.fallbackReason):'')
+        +', so it is using a list written in code. Anyone added or removed here is having no effect. '
+        +'The email itself is still going out, to these people:</div>'+rows;
+    } else if(!agree){
+      box.innerHTML='<div class="adm-set-note adm-set-warn"><b>This screen and the email disagree.</b> '
+        +'The email read this list live, but it does not match what is ticked above. '
+        +'Someone may have changed it in another window — reload and check again.</div>'+rows;
+    } else {
+      box.innerHTML='<div class="adm-set-note">✓ Checked just now. The roster email read this list live and would copy '
+        +'exactly the '+got.length+' '+(got.length===1?'person':'people')+' ticked above. Nothing was sent.</div>'+rows;
+    }
+  }catch(e){
+    box.innerHTML='<div class="adm-set-note adm-set-warn">The check could not run: '+admEsc(e.message||String(e))
+      +'. That does not mean the email is broken — it means this check could not reach it.</div>';
+  }
+  if(btn){ btn.disabled=false; btn.textContent='Check again'; }
 }
 // Adding someone is two different jobs behind one button: if the email is
 // already known to the app we only tick the box (never touch their access);
@@ -3127,11 +3208,26 @@ function admFbPanelHTML(){
     // is a door, and a delete you can hit while scanning is a delete you will hit
     // by accident. The confirm names who sent it, because the moment it is not
     // one of his own tests, this is somebody's message.
+    // ── Their status link ──
+    // The check line we write is worth nothing if the person who asked cannot
+    // reach it — and until now they could not. The only "Copy their status link"
+    // button lived in the ROUNDS lane, beside someone who had answered a round.
+    // Anyone who pressed "Tell us" never appears there, so every inbox sender
+    // — the people most likely to ask again — had a status page with no door.
+    // Found on 20 Aug when Jins asked for Reda on the closing report: the fix was
+    // recorded with a check line he had no way of ever seeing.
+    // Same function, same token, same link that stays current; only the door was
+    // missing. Hidden when they sent it without a name, because then there is
+    // nobody to give it to — which the line just above already says.
+    var link = ib.who ? ('<div style="border-top:1px solid #f1e9da;margin-top:13px;padding-top:11px;">'
+      +'<button class="btn btn-sm" style="'+FB_NOSHOUT+'" onclick="admFbStatusLink(\''+admEsc(ib.who)+'\')">Copy '+admEsc(String(ib.who).trim().split(/\s+/)[0])+'&rsquo;s status link</button>'
+      +'<div style="'+hint+'">Their own page, no login needed. It shows what changed and how to check it, and it keeps itself current — send it once.</div>'
+      +'</div>') : '';
     var del='<div style="border-top:1px solid #f1e9da;margin-top:13px;padding-top:11px;">'
       +'<button class="btn btn-sm" style="'+FB_NOSHOUT+'background:transparent;border:1px solid #E0C4BE;color:#8A2A1A;border-radius:8px;" onclick="admInboxDelete(\''+admEsc(ib.id)+'\')">Delete this message</button>'
       +'<div style="'+hint+'">For your own test messages. It cannot be undone, and if someone sent it, it goes from their status page too.</div>'
       +'</div>';
-    return hi + admFbStateFormHTML(s, f, lbl, inp, hint, del);
+    return hi + admFbStateFormHTML(s, f, lbl, inp, hint, link + del);
   }
 
   var h='<div style="background:#fbf7f1;border:1px solid #e3d5c2;border-radius:12px;padding:16px;align-self:start;position:sticky;top:64px;max-height:calc(100vh - 80px);overflow-y:auto;">'
@@ -4539,7 +4635,7 @@ async function renderFohHome(){
   // Fetch covers
   try{
     const t=RC.dubaiBusinessDate(new Date()), td=new Date(t+'T12:00:00'); td.setDate(td.getDate()+1); const tm=localISO(td);
-    const {data,error}=await sbKitchen.from('covers').select('service_date,night_covers').in('service_date',[t,tm]);
+    const {data,error}=await sbKitchen.from('covers').select('service_date,night_covers,updated_at').in('service_date',[t,tm]);
     if(error) throw error;
     const tr=(data||[]).find(r=>String(r.service_date).slice(0,10)===t);
     const tmr=(data||[]).find(r=>String(r.service_date).slice(0,10)===tm);
@@ -4548,7 +4644,29 @@ async function renderFohHome(){
     const syncEl=document.getElementById('foh-tn-sync');
     if(tnEl) tnEl.textContent=tr?(tr.night_covers??'—'):'—';
     if(tmEl) tmEl.textContent=tmr?(tmr.night_covers??'—'):'—';
-    if(syncEl) syncEl.textContent='Live · SevenRooms';
+    // The `covers` table is a CACHE, written by the last laptop sync — it is not live, and
+    // captioning it "Live · SevenRooms" is what let this screen read 52 on 20 Aug while the
+    // Management landing and the Reservations book both read 58. Ask SevenRooms directly for
+    // tonight (counts only, the same ?upcoming= read the landing strip already makes), and if
+    // that cannot be reached, show the cached number with the DAY it was taken — never "Live".
+    if(syncEl) syncEl.textContent = 'Checking SevenRooms…';
+    let liveBooked = null;
+    try{
+      const r = await fetch(KITCHEN_URL+'/functions/v1/sevenrooms-sync?upcoming='+t, { method:'POST',
+        headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+KITCHEN_KEY, 'x-proxy-secret':KITCHEN_PROXY_SECRET } });
+      if(r.ok){ const j = await r.json(); if(j && j.ok && j.booked!=null) liveBooked = j.booked; }
+    }catch(_){ /* offline or the function is down — the cached figure below still stands */ }
+    if(liveBooked !== null){
+      if(tnEl) tnEl.textContent = liveBooked;
+      if(syncEl) syncEl.textContent = 'Live · SevenRooms';
+    } else if(tr && tr.updated_at){
+      const d = new Date(tr.updated_at);
+      const hm = d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+      const sameDay = localISO(d) === localISO(new Date());
+      if(syncEl) syncEl.textContent = 'Last synced '+(sameDay ? hm : d.toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'})+' '+hm)+' · not live';
+    } else {
+      if(syncEl) syncEl.textContent = 'Not synced';
+    }
   }catch(e){
     const s=document.getElementById('foh-tn-sync');if(s)s.textContent='Could not load';
   }
@@ -7410,10 +7528,41 @@ async function fohSchedSendToHR(_downloadOnly){
 
     fohLogSend(rosterWho, 'roster_send', weekStr);
 
+    // The roster reached HR either way, so this is not a failure — but if the Cc
+    // list did not come from Admin → Emails, then whoever was ticked or unticked
+    // on that screen was ignored, and a green tick says the exact opposite of
+    // what happened.
+    //
+    // This is not hypothetical. Between 1 and 14 Aug 2026 the key that reads that
+    // screen was the wrong one, every roster went to a hardcoded list that
+    // pre-dated Ouafaa, and the button said "✓ Sent to HR" every single time. The
+    // function had been reporting usedFallback all along; nothing displayed it.
+    // A flag nobody shows is the same as no flag at all.
+    var fellBack = emailData.usedFallback === true;
+    var copied   = (emailData.recipients || []);
+
+    if(fellBack){
+      alert('The roster WAS sent to HR — but the copy list did not come from Admin → Emails.\n\n'
+        + (emailData.fallbackReason ? 'Reason: ' + emailData.fallbackReason + '.\n\n' : '')
+        + 'The app used its built-in list instead, so these ' + copied.length + ' were copied:\n\n'
+        + copied.join('\n')
+        + '\n\nAnyone you have added or removed on Admin → Emails was ignored on this send. '
+        + 'HR has the roster, so nothing needs re-sending — but please report this so the list can be fixed.');
+    }
+
     if(btn){
-      btn.textContent = _note ? '✓ Sent with your note' : '✓ Sent to HR';
-      btn.style.background='rgba(45,122,79,.3)'; btn.style.borderColor='rgba(45,122,79,.6)'; btn.style.color='#7fc08e';
-      setTimeout(function(){ btn.textContent='📧 Send to HR'; btn.style.background=''; btn.style.borderColor=''; btn.style.color=''; btn.disabled=false; }, 3000);
+      // Says who, not just that it went — the whole point of the screen is which
+      // people got it, and that is the thing that was silently wrong.
+      var okLabel = (_note ? '✓ Sent with your note' : '✓ Sent to HR')
+                  + (copied.length ? ' · ' + copied.length + ' copied' : '');
+      btn.textContent = fellBack ? '⚠ Sent — wrong copy list' : okLabel;
+      if(fellBack){
+        btn.style.background='rgba(180,83,9,.3)'; btn.style.borderColor='rgba(180,83,9,.7)'; btn.style.color='#f0b17a';
+      } else {
+        btn.style.background='rgba(45,122,79,.3)'; btn.style.borderColor='rgba(45,122,79,.6)'; btn.style.color='#7fc08e';
+      }
+      // A warning has to outlast a glance; a tick does not.
+      setTimeout(function(){ btn.textContent='📧 Send to HR'; btn.style.background=''; btn.style.borderColor=''; btn.style.color=''; btn.disabled=false; }, fellBack ? 12000 : 3000);
     }
   } catch(err){
     console.error('FOH Send to HR error:',err);

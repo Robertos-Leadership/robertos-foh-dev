@@ -521,8 +521,15 @@ function revBriefing(){
   L.push('Venues: Restaurant and Scala Lounge & Bar. Lunch is normally closed (dinner only).');
   L.push('F&B split: "actual" = entered from the DSR; "est" = estimated at Food '+(REV_FNB_MIX.food*100)+'% / Bev '+(REV_FNB_MIX.bev*100)+'% / Tobacco '+(REV_FNB_MIX.tob*100)+'% of net. Always label estimates as estimates.');
   L.push('Sales categories sum to net: Food + Beverage + Tobacco + Other income. "Other" = non-F&B revenue (events/packages), shown only when present.');
-  L.push('\nWEEKDAY RATES (daily budget pattern = cover_target × avg_spend):');
-  ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'].forEach(function(wd){ var r=R.rates[wd]; if(r) L.push('  '+wd+': avg_spend '+Number(r.avg_spend)+', cover_target '+Number(r.cover_target)+', daily budget '+(Number(r.cover_target)*Number(r.avg_spend))); });
+  // The weekday rates are a SHAPE, not a budget. revAutoBudget() scales that shape so the month
+  // sums to the monthly budget, and the Revenue table shows the SCALED figure. Handing the model
+  // the raw pattern made it quote a different budget than the screen beside it: on 20 Aug 2026 it
+  // answered "Wed 19 Aug budget 61,875, vs budget -11,059" while the table read 54,173 and -3,357
+  // — the same day, the same app, a 14% gap, out of a panel that exports a board summary.
+  // Every day's real budget now travels on its own DAILY ACTUALS line below.
+  L.push('\nWEEKDAY PATTERN (a SHAPE only = cover_target × avg_spend. NEVER quote a pattern weight as a day\'s budget):');
+  ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'].forEach(function(wd){ var r=R.rates[wd]; if(r) L.push('  '+wd+': avg_spend '+Number(r.avg_spend)+', cover_target '+Number(r.cover_target)+', pattern weight '+(Number(r.cover_target)*Number(r.avg_spend))); });
+  L.push('A day\'s REAL budget = this pattern scaled so the month sums to the monthly budget below (or the manual override, when one is set). The scaled figure is on each DAILY ACTUALS line as "budget" — quote THAT, never the pattern weight, and never scale it yourself.');
   L.push('\nMONTHLY TARGETS / BUDGETS:');
   Object.keys(R.targets||{}).sort().forEach(function(per){ L.push('  '+per+': target '+Math.round(R.targets[per]||0)+((R.budgets&&R.budgets[per]!=null)?', monthly budget '+Math.round(R.budgets[per]):'')); });
   L.push('\nDAILY ACTUALS (every entered day; ? = not split out):');
@@ -530,7 +537,11 @@ function revBriefing(){
     if(row.net_actual==null) return;
     var ds=String(row.service_date).slice(0,10), wd=revWeekday(ds), f=revFnbSplit(row);
     var rc=(row.rest_covers_actual!=null?row.rest_covers_actual:'?'), lc=(row.lounge_covers_actual!=null?row.lounge_covers_actual:'?');
+    // The exact figures the Revenue table prints for this day — budget after scaling, override
+    // respected — so the model quotes the screen instead of re-deriving a second answer.
+    var bud=Math.round(revBudget(ds)), vsB=Math.round((Number(row.net_actual)||0)-bud);
     L.push('  '+ds+' ('+wd.slice(0,3)+'): net '+Math.round(row.net_actual)
+      +' | budget '+bud+', vs budget '+(vsB>=0?'+':'')+vsB
       +' | Restaurant '+Math.round(row.rest_net||0)+'/'+rc+'cov | Scala '+Math.round(row.lounge_net||0)+'/'+lc+'cov'
       +' | F&B('+(f.est?'est':'actual')+') food '+f.food+' bev '+f.bev+' tob '+f.tob+(f.other?' other '+f.other:''));
   });

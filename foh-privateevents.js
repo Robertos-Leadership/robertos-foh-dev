@@ -7832,14 +7832,20 @@ function peRenderSetMenuLib(){
   var editing = peState.editSetMenuId==='new' || !!raw;
   var curPrice = raw ? (raw.price_pp!=null?raw.price_pp:(raw.price!=null?raw.price:null)) : null;
   var curCost = raw ? (raw.cost_pp!=null?raw.cost_pp:null) : null;
-  var ce = peCanEdit();
   var h='';
   if(editing){
     var priceVal2 = peState.smPrice!=null ? peState.smPrice : (curPrice!=null?curPrice:'');
     var costVal = peState.smCost!=null ? peState.smCost : (curCost!=null?curCost:'');
-    var priceRow = ce
-      ? '<input class="pe-in" id="pe-sm-price" type="number" min="0" style="max-width:190px" value="'+peEsc(priceVal2)+'" placeholder="e.g. 395">'
-      : '<input class="pe-in" style="max-width:190px;background:#EFE7DA;color:#4F4535" value="'+(curPrice!=null?('AED '+peMoney(curPrice)):'Price pending')+'" disabled><div style="font-size:11px;color:#785F0E;margin-top:5px">Price is set by Katarina, Andrea or Francesco.</div>';
+    // The price of a menu belongs with the menu, next to what it costs to make.
+    // It used to be read-only here and set from the events desk, which left the
+    // chef looking at a cost and a margin he could not act on (Danilo, 1 Sep
+    // 2026). It is his now, like the cost and the courses beside it. Nothing
+    // about the desk changed: this is the LIST price a new quote starts from —
+    // a booking's own agreed price stays audited and editor-locked (peFact /
+    // food_price_pp) — and changing it here asks first and says out loud that
+    // bookings already quoted keep theirs.
+    var priceRow = '<input class="pe-in" id="pe-sm-price" type="number" min="0" style="max-width:190px" value="'+peEsc(priceVal2)+'" placeholder="e.g. 395">'+
+      '<div style="font-size:11px;color:#4F4535;margin-top:5px">The price a new quote starts from. Bookings already quoted keep the price they were given. Left empty, the menu reads “Price pending” and stays out of the events-desk dropdown.</div>';
     h += '<div class="pe-card"><b style="color:#400207">'+(raw?'Edit set menu':'New set menu')+'</b>'+
       '<div style="font-size:11px;color:#4F4535;margin:2px 0 10px">Saved here it appears in the events desk dropdown, the guest proposal and the kitchen brief.</div>'+
       '<div class="pe-lbl">Menu name</div><input class="pe-in" id="pe-sm-name" value="'+peEsc(peState.smName||'')+'" placeholder="e.g. Vegetarian set menu">'+
@@ -7975,9 +7981,26 @@ async function peSaveSetMenu(id){
   if(!courses.length){ peToast('Add at least one course with a dish in it', true); return; }
   var raw = id ? peSmRawById(id) : null;
   var priceVal = raw ? (raw.price_pp!=null?raw.price_pp:(raw.price!=null?raw.price:null)) : null;
-  if(peCanEdit()){
-    var pe=document.getElementById('pe-sm-price');
-    if(pe){ var pv=pe.value.trim(); priceVal = pv===''?null:Number(pv); }
+  // The price is the chef's too now. It is the one field here that reaches
+  // money, so a change to an existing menu is confirmed out loud: old price,
+  // new price, and what happens to the bookings already on it.
+  var pe=document.getElementById('pe-sm-price');
+  if(pe){
+    var pv=pe.value.trim();
+    var newPrice = pv==='' ? null : Number(pv);
+    if(pv!=='' && !(isFinite(newPrice) && newPrice>=0)){ peToast('Price / guest has to be a number', true); return; }
+    if(raw && Number(priceVal==null?-1:priceVal) !== Number(newPrice==null?-1:newPrice)){
+      var onBooking = (peState.events||[]).filter(function(x){ return x && x.set_menu && x.set_menu.key===raw.key; }).length;
+      var was = priceVal!=null ? 'AED '+peMoney(priceVal)+'/guest' : 'no price (Price pending)';
+      var now = newPrice!=null ? 'AED '+peMoney(newPrice)+'/guest' : 'no price — it leaves the events-desk dropdown until it is priced again';
+      if(!(await peConfirm({ title:'Change the price of “'+raw.name+'”?',
+        html:'<b>'+peEsc(was)+'</b> becomes <b>'+peEsc(now)+'</b>.<br><br>'+
+             'New quotes start from the new price. '+
+             (onBooking ? peEsc(onBooking+' booking'+(onBooking>1?'s':'')+' already on this menu keep'+(onBooking>1?'':'s')+' the price '+(onBooking>1?'they were':'it was')+' quoted.')
+                        : 'No booking is on this menu, so nothing already quoted changes.'),
+        ok:'Change the price', cancel:'Leave it as it is' }))) return;
+    }
+    priceVal = newPrice;
   }
   var row = { key:(raw&&raw.key)||peSmSlug(name), name:name, courses:courses,
               line:peSmSummary(courses), price_pp:priceVal, updated_at:new Date().toISOString() };
@@ -8004,7 +8027,7 @@ async function peSaveSetMenu(id){
   if(id){ peState.setMenus = peState.setMenus.map(function(m){ return m.id===id ? r.data : m; }); }
   else { if(!Array.isArray(peState.setMenus)) peState.setMenus=[]; peState.setMenus.push(r.data); }
   peState.editSetMenuId=null; peState.smDraft=null; peState.smName=''; peState.smText=''; peState.smPdf=null; peState.smBrandDoc=false;
-  peToast(priceVal!=null ? 'Set menu saved ✓ — ready for the events desk' : 'Set menu saved ✓ — the events desk sets the price before it can be quoted');
+  peToast(priceVal!=null ? 'Set menu saved ✓ — ready for the events desk' : 'Set menu saved ✓ — it stays out of the events-desk dropdown until it has a price');
   renderMain();
 }
 // Retire is for a menu that is off for a while — the Netflix menu between two
