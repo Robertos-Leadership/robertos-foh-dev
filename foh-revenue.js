@@ -68,7 +68,13 @@ async function loadRevenue(){
     // Deliberately kept out of tablesMissing so the whole Revenue tab does not fall
     // back to the setup screen on an app that shipped before rev-monthly-schema.sql ran.
     R.monthly={}; if(!res[3].error) (res[3].data||[]).forEach(function(m){ R.monthly[String(m.period).slice(0,7)]=m; });
-    if(!R.period) R.period=revLatestPeriod();
+    // Open on the month the venue is trading NOW (Dubai operational clock), not the last
+    // month that has filed nights. On the 1st, before tonight's closing report exists, the
+    // old rule reopened the month that had just ENDED and read as if the app were stuck.
+    // The empty current month is not a blank screen: the full-month forecast projects from
+    // the recent weekday run-rate and says so, and no night is flagged unfiled until it ends.
+    // Fails safe: revNowPeriod() falls back to the latest month with data when RC is absent.
+    if(!R.period) R.period=revNowPeriod();
     R.loaded=true;
     clearTimeout(R.retryT);
     R.loading=false;
