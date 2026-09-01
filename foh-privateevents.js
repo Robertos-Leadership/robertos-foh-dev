@@ -159,6 +159,22 @@ function peSetMenusTableMissing(r){
 // built-in menus back. Empty now means empty. peState.setMenus is seeded from
 // PE_SET_MENUS at load time only when the table genuinely isn't there yet.
 function peSetMenusRaw(){ return peState.setMenus || []; }
+// One shelf, in the order it is drawn. peState.setMenus is kept sorted by
+// peSmResort, so "the array order" and "what the chef sees" are the same thing -
+// which is what lets a drop index computed off the screen be written straight back.
+function peSmShelf(custom){
+  return (peState.setMenus||[]).filter(function(m){ return !!m.is_custom === !!custom; });
+}
+// Mirror of the server's ORDER BY. After a reorder we re-sort in place rather
+// than refetching, so the list cannot flicker back to the old order first.
+function peSmResort(){
+  (peState.setMenus||[]).sort(function(a,b){
+    var ac=a.is_custom?1:0, bc=b.is_custom?1:0; if(ac!==bc) return ac-bc;
+    var as=(a.sort_order==null?999:a.sort_order), bs=(b.sort_order==null?999:b.sort_order);
+    if(as!==bs) return as-bs;
+    return String(a.name||'').localeCompare(String(b.name||''));
+  });
+}
 // Did the menu list actually load? false = the read failed, so the pickers must
 // say so instead of showing an empty dropdown that looks like "no menus exist".
 function peSetMenusLoaded(){ return peState.setMenusOk !== false; }
@@ -593,7 +609,10 @@ async function peLoadAll(force){
       peFetchAllPaged(function(){ return sb.from('event_dishes').select('*').order('category').order('serve').order('name').order('id'); }),
       peFetchAllPaged(function(){ return sb.from('event_bev_packages').select('*').order('name').order('id'); }),
       peFetchAllPaged(function(){ return sb.from('event_packages').select('*').order('name').order('id'); }),
-      peFetchAllPaged(function(){ return sb.from('event_set_menus').select('*').order('name').order('id'); }),
+      // sort_order first: the chef's own order on the shelf. name/id stay as the
+      // tie-break so a row that has never been dragged still lands somewhere
+      // predictable instead of wherever Postgres felt like.
+      peFetchAllPaged(function(){ return sb.from('event_set_menus').select('*').order('sort_order').order('name').order('id'); }),
       // Set-menu replies only. Without the menu_key filter an unapplied à la carte
       // pick sharing the same token lit up the set-menu banner, which then had no
       // matching numbers to review.
@@ -7933,7 +7952,7 @@ function peRenderSetMenuLib(){
     var mm=peNormSM(m); var pending=mm.price==null;
     var costPct = (mm.cost!=null && mm.price) ? Math.round((mm.cost/(mm.price/PE_GROSS))*100) : null;
     return '<div class="pe-dishrow" data-smid="'+(m.id||'')+'" data-cust="'+(mm.custom?'1':'0')+'" data-smname="'+peEsc(mm.name)+'" style="opacity:'+(mm.active===false?.45:1)+';cursor:'+(canChef?'grab':'default')+';touch-action:pan-y">'+
-      '<span>'+(canChef?'<span style="color:#C0B49F;margin-right:7px;letter-spacing:-1px" title="Drag to the other list">⁙</span>':'')+'<b style="color:#400207">'+peEsc(mm.name)+'</b> '+
+      '<span>'+(canChef?'<span style="color:#C0B49F;margin-right:7px;letter-spacing:-1px" title="Drag to reorder, or onto the other list">⁙</span>':'')+'<b style="color:#400207">'+peEsc(mm.name)+'</b> '+
       (pending?'<span style="background:#FAEEDA;color:#854F0B;font-size:11px;padding:2px 9px;border-radius:20px;margin-left:2px">Price pending</span>':'· AED '+peMoney(mm.price)+'/guest')+
       (mm.cost!=null
         ? ' <span style="font-size:11px;color:'+(costPct==null?'#8B7355':(costPct<=27?'#2E6B34':'#B00020'))+'">· cost '+peMoney(mm.cost)+(costPct!=null?' ('+costPct+'% of net'+(costPct<=27?'':' — above 27% target')+')':'')+'</span>'
@@ -7963,7 +7982,7 @@ function peRenderSetMenuLib(){
   peSmDragInit();
   h += '<div style="margin:4px 0 8px"><b style="color:#400207;font-size:14px">Standard menus</b>'+
     '<div style="font-size:12px;color:#4F4535;margin-top:3px">'+list.length+' menu'+(list.length===1?'':'s')+
-    ' — the everyday library. '+(canChef?'<b>Drag a menu onto the other list to move it.</b> ':'')+'Anything not paused can be put on a booking, whichever list it sits in.</div></div>';
+    ' — the everyday library. '+(canChef?'<b>Drag a menu up or down to set the order, or onto the other list to move it.</b> ':'')+'Anything not paused can be put on a booking, whichever list it sits in.</div></div>';
   h += '<div class="pe-card" id="pe-smzone-std">'+(list.length?list.map(function(m){ return smLibRow(m); }).join('')
       :'<div style="font-size:12px;color:#4F4535">No standard menus'+(canChef?' — drag one up from below, or tap “+ Add set menu”':'')+'.</div>')+'</div>';
   // ── Customised menus ──────────────────────────────────────────────────────
@@ -8027,6 +8046,14 @@ async function peSaveSetMenu(id){
   // re-reads the courses so an edit here reaches the guest.
   else if(peState.smBrandDoc) row.pdf = 'client-setmenu.html?m='+encodeURIComponent(row.key);
   if(!id) row.created_by=peActor();
+  // A brand new menu lands at the BOTTOM of its shelf. Without this it takes the
+  // column default and jumps in among menus the chef has already put in order.
+  if(!id){
+    var tail = peSmShelf(!!row.is_custom).reduce(function(mx, m){
+      return Math.max(mx, (m.sort_order==null?0:m.sort_order));
+    }, 0);
+    row.sort_order = tail + 10;
+  }
   var r = id ? await sb.from('event_set_menus').update(row).eq('id', id).select().single()
              : await sb.from('event_set_menus').insert(row).select().single();
   // Cost column not added yet (SQL pending) — save everything else rather than
@@ -8240,11 +8267,48 @@ function peSmAutoScrollTick(){
   // it is now over, or the highlight lies about where the drop will land.
   if(window.pageYOffset !== before) peSmDragHighlight(d.lastX, d.lastY);
 }
+// The shelf alone is no longer the answer - the chef reorders WITHIN a shelf too,
+// so a drop needs an index. Rows are measured live off the screen; the dragged
+// row is skipped, because it is not a target for itself and counting it would
+// shift every index below it by one. (Francesco, 1 Sep 2026: "i want certain menu
+// to show in different order not only between standard and costumized".)
+function peSmDropAt(x, y){
+  var zone = peSmZoneAt(x, y); if(!zone) return null;
+  var z = peSmZones(), el = (zone==='std') ? z.std : z.cust;
+  if(!el) return null;
+  var d = peSmDrag && peSmDrag.d;
+  var rows = [].slice.call(el.querySelectorAll('[data-smid]'));
+  var idx = 0, before = null;
+  for(var i=0;i<rows.length;i++){
+    if(d && rows[i] === d.row) continue;
+    var r = rows[i].getBoundingClientRect();
+    if(y < r.top + r.height/2){ before = rows[i]; break; }
+    idx++;
+  }
+  return { zone:zone, index:idx, before:before, listEl:el };
+}
+// A gold line exactly where the row will land. Highlighting the whole shelf was
+// enough when the only question was WHICH shelf; for a position it is not - the
+// chef has to see the slot, or the drop is a guess.
+function peSmDropLine(t){
+  var d = peSmDrag && peSmDrag.d; var g = d && d.line; if(!g) return;
+  if(!t || !t.listEl){ g.style.display='none'; return; }
+  var lr = t.listEl.getBoundingClientRect(), top;
+  if(t.before){ top = t.before.getBoundingClientRect().top; }
+  else {
+    var rest = [].slice.call(t.listEl.querySelectorAll('[data-smid]'))
+                 .filter(function(r){ return !(d && r === d.row); });
+    top = rest.length ? rest[rest.length-1].getBoundingClientRect().bottom : (lr.top + 8);
+  }
+  g.style.display = 'block';
+  g.style.left = lr.left+'px'; g.style.width = lr.width+'px'; g.style.top = (top-1.5)+'px';
+}
 function peSmDragHighlight(x, y){
   var z = peSmZones(), over = peSmZoneAt(x, y);
   [['std',z.std],['cust',z.cust]].forEach(function(p){
     if(p[1]) p[1].style.background = (over===p[0]) ? '#F6EEDC' : '';
   });
+  peSmDropLine(peSmDropAt(x, y));
 }
 function peSmDragPaint(on){
   var z = peSmZones();
@@ -8284,6 +8348,11 @@ function peSmDragArm(){
     'left:'+d.x+'px;top:'+d.y+'px;transform:translate(-50%,-150%)';
   document.body.appendChild(g);
   d.ghost = g;
+  var ln = document.createElement('div');
+  ln.style.cssText = 'position:fixed;z-index:9998;pointer-events:none;height:3px;'+
+    'background:#C9A84C;border-radius:2px;box-shadow:0 0 0 1px rgba(64,2,7,.15);display:none';
+  document.body.appendChild(ln);
+  d.line = ln;
   d.lastX = d.x; d.lastY = d.y;
   d.scroller = setInterval(peSmAutoScrollTick, 30);
   peSmDragPaint(true);
@@ -8310,18 +8379,67 @@ function peSmDragUp(ev){
   if(d.scroller) clearInterval(d.scroller);
   var armed = d.armed, id = d.id, from = d.from;
   if(d.ghost && d.ghost.parentNode) d.ghost.parentNode.removeChild(d.ghost);
+  if(d.line && d.line.parentNode) d.line.parentNode.removeChild(d.line);
   d.row.style.opacity = '';
   document.body.style.userSelect = '';
   try{ if(d.pid!=null && d.row.releasePointerCapture) d.row.releasePointerCapture(d.pid); }catch(e){}
   var z = peSmZones(); [z.std,z.cust].forEach(function(el){ if(el) el.style.background = ''; });
   peSmDragPaint(false);
+  // Read the drop target BEFORE clearing the drag. peSmDropAt skips the row being
+  // dragged, and it finds that row through peSmDrag.d - so clearing first made it
+  // count the row against itself and every slot below it came out one too low. It
+  // only misplaced rows dragged from the MIDDLE, which is why first/last looked fine.
+  var t = armed ? peSmDropAt(ev.clientX, ev.clientY) : null;
   peSmDrag.d = null;
-  if(!armed) return;
-  var zone = peSmZoneAt(ev.clientX, ev.clientY);
-  if(!zone) return;
-  var toCustom = (zone==='cust');
-  if(toCustom === from) return;                 // dropped back where it started
-  peSmSetCustom(id, toCustom);
+  if(!armed || !t) return;
+  peSmApplyDrop(id, t.zone==='cust', t.index);
+}
+// A drop is now "this shelf, this slot". Crossing shelves and reordering inside
+// one are the same gesture and the same write - keeping them apart is what made
+// the old version able to move a menu but never to place it.
+async function peSmApplyDrop(id, toCustom, index){
+  if(!peCanEditChef()){ peToast('View only \u2014 the kitchen team order the set menus', true); return; }
+  var moved = null; (peState.setMenus||[]).forEach(function(x){ if(x.id===id) moved = x; });
+  if(!moved) return;
+  var wasCustom = !!moved.is_custom, nowCustom = !!toCustom;
+  var before = peSmShelf(nowCustom);
+  var shelf = before.filter(function(m){ return m.id !== id; });
+  index = Math.max(0, Math.min(index, shelf.length));
+  shelf.splice(index, 0, moved);
+  // Nothing moved: same shelf, same neighbours. Write nothing and say nothing -
+  // a no-op that still fires a toast reads as "it did something".
+  var same = (wasCustom === nowCustom) && before.length === shelf.length &&
+             before.every(function(m, i){ return m.id === shelf[i].id; });
+  if(same) return;
+  // Only the rows whose number actually changes are written. On a short drag that
+  // is two or three rows, not the whole shelf.
+  var writes = [];
+  shelf.forEach(function(m, i){
+    var n = (i+1)*10, patch = {};
+    if(m.sort_order !== n) patch.sort_order = n;
+    if(m.id === id && wasCustom !== nowCustom) patch.is_custom = nowCustom;
+    if(Object.keys(patch).length){ patch.updated_at = new Date().toISOString(); writes.push({m:m, patch:patch}); }
+  });
+  if(!writes.length) return;
+  var res = await Promise.all(writes.map(function(w){
+    return sb.from('event_set_menus').update(w.patch).eq('id', w.m.id);
+  }));
+  var bad = null; res.forEach(function(r){ if(r && r.error && !bad) bad = r.error; });
+  if(bad){
+    // Local state is NOT touched, so the screen keeps showing the server's truth
+    // rather than an order that only exists in this browser.
+    peToast('NOT reordered \u2014 '+String(bad.message||'').slice(0,80), true);
+    renderMain(); return;
+  }
+  writes.forEach(function(w){
+    if(w.patch.sort_order!=null) w.m.sort_order = w.patch.sort_order;
+    if(w.patch.is_custom!=null)  w.m.is_custom  = w.patch.is_custom;
+  });
+  peSmResort();
+  peToast(wasCustom !== nowCustom
+    ? '\u201c'+moved.name+'\u201d is now a '+(nowCustom?'customised':'standard')+' menu \u2014 drag it back to undo'
+    : '\u201c'+moved.name+'\u201d moved \u2014 drag it again to change the order');
+  renderMain();
 }
 async function peSmSetCustom(id, toCustom){
   if(!peCanEditChef()){ peToast('View only — the kitchen team move menus between the two lists', true); return; }
