@@ -1038,7 +1038,7 @@ function peScrollTop(){
   '.pe-acts .pe-btn{flex:0 0 auto}'+
   '.pe-acts.w3{min-width:196px}.pe-acts.w5{min-width:310px}.pe-acts.w6{min-width:376px}'+
   '.pe-note{font-size:10.5px;color:#6B5E4E;margin-top:3px;line-height:1.35}'+
-  '@media(max-width:640px){.pe-dishrow{grid-template-columns:minmax(0,1fr)}.pe-acts{justify-content:flex-start;flex-wrap:wrap}.pe-acts.w3,.pe-acts.w5{min-width:0}}'+
+  '@media(max-width:640px){.pe-dishrow{grid-template-columns:minmax(0,1fr)}.pe-acts{justify-content:flex-start;flex-wrap:wrap}.pe-acts.w3,.pe-acts.w5,.pe-acts.w6{min-width:0}}'+
   '.pe-x{color:#B00020;cursor:pointer;font-size:14px;padding:0 4px}'+
   '.pe-tot{background:#F7EEE2;border-radius:10px;padding:13px 14px}'+
   '.pe-tot-row{display:flex;justify-content:space-between;font-size:13px;padding:3px 0;color:#6B4A33}'+
@@ -5422,7 +5422,7 @@ async function peSendPaymentLink(id){
 
 // ── library (chef dishes / Manuel beverage / packages) ───────────────────────
 function peRenderChefCorner(){
-  var tab = peState.chefTab || 'canape';
+  var tab = (peState.chefTab === 'set') ? 'set' : 'canape';
   var h = peHeader('chef');
   // The count has to be the SAME count the library below prints, or the band is
   // a second version of the truth. Dishes: peRenderDishLib's own total.
@@ -5435,25 +5435,21 @@ function peRenderChefCorner(){
     lede  = nSet ? (nSet + ' set menu' + (nSet===1?'':'s') + (nCust?' + '+nCust+' customised':'')) : 'Set menus';
     stand = 'Plated set menus — saved here they appear in the events desk booking dropdown, the guest proposal and the kitchen brief.'+
             (nCust?' The customised menus below were tailored for one booking each; they can still reach a guest, so they are yours to cost and pause too.':'');
-  } else if(tab==='packs'){
-    var nPk = (peState.packs||[]).filter(function(p){ return p.active!==false; }).length;
-    lede  = nPk ? (nPk + ' canapé set menu' + (nPk===1?'':'s')) : 'Canapé set menus';
-    stand = 'The priced canapé menus the events desk sells from — “Start from a canapé package…” on a booking. Built out of the dishes in the Canapé library.';
   } else {
     var nDish = peState.dishes.filter(function(d){ return d.active; }).length;
     lede  = nDish ? (nDish + ' dish' + (nDish===1?'':'es') + ' in the library') : 'The dish library';
     stand = 'The kitchen’s home: the individual canapés every canapé set menu is built from — everything saved here is instantly available to the events desk and the guest menu.';
   }
   h += peRoom('chef', 'Chef corner', lede, stand);
-  // Canapé packages belong in the chef's corner too: they are a priced thing a
-  // guest can be sold, and until 31 Aug 2026 they lived only under Menu
-  // packages, so the chef could not reach them at all. (Francesco: if it is not
-  // in the Chef Corner it should not be sellable.)
-  var tabs = [['canape','Canap\u00e9 library'],['packs','Canap\u00e9 set menus'],['set','Set menus']];
+  // Francesco, 1 Sep 2026: the canapé set menus had a third tab here AND a home
+  // under Menu packages → Canapé packages. One thing, said twice. The tab is
+  // gone; every action it carried (PDF, View, Pause, Delete) moved onto the rows
+  // in Menu packages, so nothing was lost with it.
+  var tabs = [['canape','Canap\u00e9 library'],['set','Set menus']];
   h += '<div class="pe-tabs" style="margin-bottom:12px">'+tabs.map(function(t){
     return '<span class="pe-tab'+(tab===t[0]?' on':'')+'" onclick="peState.chefTab=\''+t[0]+'\';renderMain()">'+t[1]+'</span>';
   }).join('')+'</div>';
-  h += (tab==='set') ? peRenderSetMenuLib() : (tab==='packs' ? peRenderChefPackLib() : peRenderDishLib());
+  h += (tab==='set') ? peRenderSetMenuLib() : peRenderDishLib();
   return h+PE_FOOT;
 }
 function peRenderBevCorner(){
@@ -8070,38 +8066,6 @@ async function peSmDelete(id){
   peToast('“'+raw.name+'” deleted');
   renderMain();
 }
-// The chef's view of the canapé packages: what is in each one, what it costs a
-// guest, and a switch. Editing stays in Menu packages (that editor picks dishes
-// off the same library) — this is the shelf, and the switch on it.
-function peRenderChefPackLib(){
-  var ce = peCanEdit();
-  var packs = peState.packs || [];
-  var live = packs.filter(function(p){ return p.active!==false; });
-  var h = '';
-  if(!packs.length) return '<div class="pe-card"><div style="font-size:12px;color:#4F4535">No canapé set menus yet — they are built in Menu packages.</div></div>';
-  if(ce) h += '<div style="margin-bottom:10px"><button class="pe-btn" onclick="peState.packsTab=\'canape\';peState.editPackId=\'new\';peGo(\'packlib\')">+ New canap\u00e9 set menu</button></div>';
-  h += '<div style="font-size:12px;color:#4F4535;margin-bottom:10px">'+
-    live.length+' of '+packs.length+' can be sold right now. Pausing one keeps every booking already on it and only takes it out of new quotes.</div>';
-  h += '<div class="pe-card">'+packs.map(function(p){
-    var names = (p.dish_ids||[]).map(function(id){ var d=peDishById(id); return d?d.name:null; }).filter(Boolean);
-    var off = p.active===false;
-    return '<div class="pe-dishrow" style="opacity:'+(off?.45:1)+'">'+
-      '<span><b style="color:#400207">'+peEsc(p.name)+'</b> · AED '+peMoney(p.price_pp)+'/guest'+
-      (off?' <span style="font-size:11px;color:#4F4535">· paused</span>':'')+
-      '<br><span style="font-size:11px;color:#4F4535">'+peEsc(names.join(' · '))+'</span></span>'+
-      '<span class="pe-acts w6">'+
-      // A canape set menu is a menu a guest reads, so it gets the same PDF and
-      // the same guest view as the plated ones. Both are readable by everyone;
-      // only Edit and Pause are gated.
-      '<button class="pe-btn sec sm" onclick="pePackPrint(\''+p.id+'\')">PDF</button>'+
-      '<button class="pe-btn sec sm" onclick="pePackOpen(\''+p.id+'\')">View</button>'+
-      (ce?'<button class="pe-btn sec sm" onclick="peState.packsTab=\'canape\';peState.editPackId=\''+p.id+'\';peGo(\'packlib\')">Edit</button>'+
-          '<button class="pe-btn sec sm" onclick="peTogglePack(\''+p.id+'\','+(off?'true':'false')+')">'+(off?'Reactivate':'Pause')+'</button>'+
-          '<button class="pe-btn sec sm" style="color:#B00020;border-color:#B00020" onclick="peDeletePack(\''+p.id+'\')">Delete</button>':'')+
-      '</span></div>';
-  }).join('')+'</div>';
-  return h;
-}
 // event_packages has always had an `active` column and nothing ever wrote it, so
 // a package could not be retired at all. It is written here — and the two places
 // that offer a package for sale now honour it, or this button would be a lie.
@@ -8504,10 +8468,26 @@ function peRenderPackLib(){
   } else {
     if(peCanEdit()) h += '<div style="margin-bottom:10px"><button class="pe-btn" onclick="peState.editPackId=\'new\';renderMain()">+ New menu package</button></div>';
   }
+  // This is now the ONLY shelf for the canapé set menus, so it carries every
+  // action the Chef Corner tab used to: the guest document (PDF / View) for
+  // anyone, Edit / Pause / Delete for whoever may change things. Pausing keeps
+  // every booking already on a package and only takes it out of new quotes.
+  var pkLive = peState.packs.filter(function(p){ return p.active!==false; }).length;
+  if(peState.packs.length) h += '<div style="font-size:12px;color:#4F4535;margin-bottom:10px">'+
+    pkLive+' of '+peState.packs.length+' can be sold right now. Pausing one keeps every booking already on it and only takes it out of new quotes.</div>';
   h += '<div class="pe-card">'+(peState.packs.length?peState.packs.map(function(p){
     var names = (p.dish_ids||[]).map(function(id){ var d=peDishById(id); return d?d.name:null; }).filter(Boolean);
-    return '<div class="pe-dishrow"><span><b>'+peEsc(p.name)+'</b> · AED '+peMoney(p.price_pp)+'/guest<br><span style="font-size:11px;color:#4F4535">'+peEsc(names.join(' · '))+'</span></span>'+
-      (peCanEdit()?'<button class="pe-btn sec sm" onclick="peState.editPackId=\''+p.id+'\';renderMain()">Edit</button>':'')+'</div>';
+    var off = p.active===false;
+    return '<div class="pe-dishrow" style="opacity:'+(off?.45:1)+'"><span><b>'+peEsc(p.name)+'</b> · AED '+peMoney(p.price_pp)+'/guest'+
+      (off?' <span style="font-size:11px;color:#4F4535">· paused</span>':'')+
+      '<br><span style="font-size:11px;color:#4F4535">'+peEsc(names.join(' · '))+'</span></span>'+
+      '<span class="pe-acts w6">'+
+      '<button class="pe-btn sec sm" onclick="pePackPrint(\''+p.id+'\')">PDF</button>'+
+      '<button class="pe-btn sec sm" onclick="pePackOpen(\''+p.id+'\')">View</button>'+
+      (peCanEdit()?'<button class="pe-btn sec sm" onclick="peState.editPackId=\''+p.id+'\';renderMain()">Edit</button>'+
+          '<button class="pe-btn sec sm" onclick="peTogglePack(\''+p.id+'\','+(off?'true':'false')+')">'+(off?'Reactivate':'Pause')+'</button>'+
+          '<button class="pe-btn sec sm" style="color:#B00020;border-color:#B00020" onclick="peDeletePack(\''+p.id+'\')">Delete</button>':'')+
+      '</span></div>';
   }).join(''):'<div style="font-size:12px;color:#4F4535">No packages yet.</div>')+'</div>';
   return h;
 }
