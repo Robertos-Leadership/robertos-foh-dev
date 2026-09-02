@@ -6193,14 +6193,37 @@ function peAlcParsePdfSpans(pages){
       var sameHalf = function(s){ return (s.cx < half) === (n.cx < half); };
       // The section is the nearest heading ABOVE — larger y — on the same half.
       var above = heads.filter(function(h){ return h.y >= n.y - 2 && sameHalf(h); });
-      var section = null, best = Infinity;
-      above.forEach(function(h){ if(h.y - n.y < best){ best = h.y - n.y; section = h.text; } });
+      var section = null, secSpan = null, best = Infinity;
+      above.forEach(function(h){ if(h.y - n.y < best){ best = h.y - n.y; section = h.text; secSpan = h; } });
       // Anything belonging to this dish sits BELOW it and is centred on it.
       var near = function(s, dy, dx){ return s.y < n.y + 2 && s.y > n.y - dy && Math.abs(s.cx - n.cx) < dx; };
       var a = [];
       algs.forEach(function(s){
         if(near(s, 16, 200)) (s.text.match(/\(([A-Z]{1,2})\)/g)||[]).forEach(function(m){ a.push(m.slice(1,-1)); });
       });
+      // ⚠ Some sections print their allergens ONCE, on the heading — "DALLA
+      // NOSTRA GRIGLIA JOSPER (D)(E)" — and then no cut carries its own codes.
+      // Read per-dish only, every steak on that section arrives with NO allergens
+      // at all, and the guest link shows none where the printed menu declares two.
+      // An allergen is a safety declaration; inheriting it is not optional.
+      // ...but NEVER across a sub-heading. CONTORNI CALDI sits between the grill
+      // heading and the side dishes, so inheriting there would stamp (D)(E) onto
+      // broccolini in garlic and oil. Over-declaring an allergen is still
+      // declaring something the menu does not say.
+      var blocked = false;
+      if(secSpan){
+        spans.forEach(function(s2){
+          if(s2.size >= 12.5 && s2.size < 15 && sameHalf(s2) && s2.y < secSpan.y && s2.y > n.y) blocked = true;
+        });
+      }
+      if(!a.length && secSpan && !blocked){
+        algs.forEach(function(s){
+          var dy = s.y - secSpan.y;
+          if(dy < 2 && dy > -18 && Math.abs(s.cx - secSpan.cx) < 220){
+            (s.text.match(/\(([A-Z]{1,2})\)/g)||[]).forEach(function(m){ a.push(m.slice(1,-1)); });
+          }
+        });
+      }
       var dsc = descs.filter(function(s){ return near(s, 52, 170); })
                      .sort(function(p,q){ return q.y - p.y; })
                      .map(function(s){ return s.text; }).join(' ');
