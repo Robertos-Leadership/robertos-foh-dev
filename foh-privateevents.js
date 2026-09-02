@@ -5760,10 +5760,15 @@ function peAlcSections(){
     return (i<0?99:i)-(j<0?99:j);
   });
 }
+// ⚠ This is the CHEF'S list, and it deliberately includes dishes that are off
+// the menu. It used to run through peAlcAll(), which drops anything inactive --
+// so the moment a dish was taken off it vanished from the only screen that could
+// put it back, and there was no way to reach it again. Paused is meant to be
+// reversible; invisible is not.
 function peAlcFiltered(){
   var q = String(peState.alcQ||'').trim().toLowerCase();
   var sec = peState.alcSec||'';
-  return peAlcAll().filter(function(a){
+  return (peState.alacarte||[]).filter(function(a){
     if(sec && a.section!==sec) return false;
     if(!q) return true;
     return (a.name+' '+(a.description||'')+' '+a.section).toLowerCase().indexOf(q)>=0;
@@ -5790,7 +5795,13 @@ function peAlcPicksHTML(){
       var ev = (peState.events||[]).filter(function(e){ return e.client_token===p.token; })[0];
       return '<div class="pe-dishrow"><span><b style="color:#400207">'+peEsc((c.guest||(ev&&ev.client_name)||'A guest'))+'</b>'+
         ' <span style="font-size:11px;color:#4F4535">'+peEsc(peWhenLabel(p.created_at))+'</span>'+
-        '<br><span style="font-size:12px;color:#6B4A33">'+peEsc((c.dishes||[]).join(' · '))+'</span>'+
+        // Replies now carry `items` with a count per dish. `dishes` is kept for
+        // every reply sent before that existed, so an old card still reads right.
+        '<br><span style="font-size:12px;color:#6B4A33">'+peEsc(
+          (c.items && c.items.length)
+            ? c.items.map(function(i){ return (Number(i.qty)||1)+' × '+i.name; }).join(' · ')
+            : (c.dishes||[]).join(' · '))+'</span>'+
+        (c.portions ? '<br><span style="font-size:11px;color:#4F4535">'+c.portions+' portions in total</span>' : '')+
         (p.note?'<br><span style="font-size:11.5px;color:#B00020">“'+peEsc(p.note)+'”</span>':'')+
         '</span>'+
         '<span style="display:flex;gap:6px;flex-shrink:0">'+
@@ -5863,16 +5874,41 @@ function peRenderAlaCarte(){
       'Nothing else is affected: set menus, canapés and beverage all work as normal.</div></div>';
   }
   var rows = peAlcFiltered();
-  var secs = peAlcSections();
+  // Built from the rows actually being drawn -- NOT peAlcSections(), which only
+  // knows about live dishes and is shared with seven other screens.
+  var secs = (function(){
+    var seen = {}, out = [];
+    (peState.alacarte||[]).forEach(function(a){ if(!seen[a.section]){ seen[a.section]=1; out.push(a.section); } });
+    return out.sort(function(x,y){
+      var i = PE_ALC_ORDER.indexOf(x), j = PE_ALC_ORDER.indexOf(y);
+      return (i<0?99:i)-(j<0?99:j);
+    });
+  })();
   var h = peAlcPicksHTML();
-  h += '<div style="font-size:12px;color:#4F4535;margin-bottom:10px">Roberto’s à la carte, June 2026 — every price checked against the POS. '+
-    'This is the list “Customise a menu” swaps from, so a dish added to a menu carries its real price.</div>';
+  // This used to read "Roberto's à la carte, June 2026" as hardcoded text, so it
+  // would have said June 2026 for ever, however old the menu got and however
+  // often it changed. It reads the rows now.
+  var alcStamp = (peState.alacarte||[]).reduce(function(mx, a){
+    var t = a.updated_at || a.created_at; return (t && t > mx) ? t : mx;
+  }, '');
+  h += '<div style="font-size:12px;color:#4F4535;margin-bottom:10px">Roberto’s à la carte'+
+    (alcStamp ? ' — last changed '+peEsc(peWhenLabel(alcStamp)) : '')+'. '+
+    'This is the list guests receive on an à la carte link, and the list “Customise a menu” swaps from, '+
+    'so a dish added to a menu carries its real price.</div>';
+  if(peCanEditChef()){
+    h += '<div style="margin-bottom:10px"><button class="pe-btn" onclick="peAlcNew()">+ Add a dish</button></div>';
+  }
+  h += peAlcEditorHTML();
   h += '<div class="pe-card"><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">'+
     '<input class="pe-in" id="pe-alc-q" style="flex:1;min-width:180px" placeholder="Search a dish — e.g. burrata, branzino, truffle" value="'+peEsc(peState.alcQ||'')+'" oninput="peAlcQ(this.value, this.selectionStart)">'+
     '<select class="pe-in" style="width:auto" onchange="peAlcSec(this.value)"><option value="">Every section</option>'+
       secs.map(function(s){ return '<option value="'+peEsc(s)+'"'+(peState.alcSec===s?' selected':'')+'>'+peEsc(peAlcSecLabel(s))+'</option>'; }).join('')+
     '</select>'+
-    '<span style="font-size:11.5px;color:#4F4535">'+rows.length+' of '+peAlcAll().length+' dishes</span>'+
+    (function(){
+      var live = peAlcAll().length, all = (peState.alacarte||[]).length, off = all - live;
+      return '<span style="font-size:11.5px;color:#4F4535">'+rows.length+' of '+all+' dishes'+
+        (off ? ' · <span style="color:#8A6A4F">'+off+' off the menu</span>' : '')+'</span>';
+    })()+
   '</div></div>';
   if(!rows.length){
     h += '<div class="pe-card"><div style="font-size:12px;color:#4F4535">No dish matches that. Clear the search to see the whole menu.</div></div>';
@@ -5885,17 +5921,162 @@ function peRenderAlaCarte(){
     if(!inSec.length) return;
     h += '<div style="font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:#544418;margin:12px 0 4px">'+peEsc(peAlcSecLabel(s))+'</div>';
     inSec.forEach(function(a){
-      h += '<div class="pe-dishrow"><span><b style="font-weight:600;color:#400207">'+peEsc(a.name)+'</b>'+
+      h += '<div class="pe-dishrow" style="opacity:'+(a.active===false?.5:1)+'"><span><b style="font-weight:600;color:#400207">'+peEsc(a.name)+'</b>'+
+        (a.active===false?' <span style="font-size:10px;background:#E4DBCC;color:#4E4433;border-radius:8px;padding:2px 7px;font-weight:600">off the menu</span>':'')+
         (a.sub?' <span style="font-size:10px;color:#574232">'+peEsc(a.sub)+'</span>':'')+
         ((a.allergens&&a.allergens.length)?' <span style="color:#574232;font-size:10px">('+a.allergens.join(')(')+')</span>':'')+
         '<br><span style="font-size:11px;color:#4F4535">'+peEsc(a.description||'')+'</span>'+
         (a.price_note?'<br><span style="font-size:11px;color:#B00020">'+peEsc(a.price_note)+'</span>':'')+
         '</span>'+
-        '<span style="flex-shrink:0;text-align:right"><b style="font-size:12.5px;color:'+(peAlcPrice(a)==null?'#8A6A4F':'#400207')+'">'+peEsc(peAlcPriceText(a))+'</b></span></div>';
+        '<span style="flex-shrink:0;text-align:right"><b style="font-size:12.5px;color:'+(peAlcPrice(a)==null?'#8A6A4F':'#400207')+'">'+peEsc(peAlcPriceText(a))+'</b>'+
+        (function(){
+          var lc = peSmLastChange('alc:'+a.id);
+          var hist = lc ? '<div style="font-size:10.5px;color:#6B4A33;font-weight:400;margin-top:2px">'+peEsc(lc.actor)+' · '+peEsc(peWhenLabel(lc.when))+'</div>' : '';
+          if(!peCanEditChef()) return hist;
+          return hist+'<div style="display:flex;gap:5px;margin-top:5px;justify-content:flex-end">'+
+            '<button class="pe-btn sec sm" onclick="peAlcEdit(\''+a.id+'\')">Edit</button>'+
+            '<button class="pe-btn sec sm" onclick="peAlcToggle(\''+a.id+'\','+(a.active===false?'true':'false')+')">'+(a.active===false?'Put back':'Take off')+'</button>'+
+            '<button class="pe-btn sec sm" style="color:#B00020;border-color:#B00020" onclick="peAlcDelete(\''+a.id+'\')">Delete</button>'+
+          '</div>';
+        })()+'</span></div>';
     });
   });
   h += '</div>';
   return h;
+}
+// ── the a la carte is the CHEF'S, like every other menu the app can sell ─────
+// Chef Corner is the only source of truth for anything sellable (Francesco,
+// 2 Sep 2026). Until this, event_alacarte was READ-ONLY inside the app: one
+// SELECT and no write path anywhere, so the printed menu could only be changed
+// by running SQL against the database. It was seeded from the June 2026 PDF,
+// last loaded 30 July, and nobody on the team could touch it -- which is exactly
+// why a guest was still being sent a month-old menu.
+function peAlcRawById(id){
+  var out = null; (peState.alacarte||[]).forEach(function(a){ if(a.id===id) out = a; });
+  return out;
+}
+function peAlcNew(){
+  peState.editAlcId = 'new'; peState.alcDraft = null; renderMain();
+}
+function peAlcEdit(id){
+  peState.editAlcId = id; peState.alcDraft = null; renderMain();
+}
+function peAlcCancel(){
+  peState.editAlcId = null; peState.alcDraft = null; renderMain();
+}
+// Same shape as the set-menu history, so one screen can show both.
+function peAlcLog(id, name, what){ peSmLog('alc:'+id, name, what); }
+function peAlcDiff(raw, row){
+  var out = [];
+  var money = function(v){ return v==null||v==='' ? 'no price' : 'AED '+peMoney(v); };
+  if(String(raw.name||'') !== String(row.name||'')) out.push('renamed "'+raw.name+'" → "'+row.name+'"');
+  if(String(raw.section||'') !== String(row.section||'')) out.push('moved to '+peAlcSecLabel(row.section));
+  var op = raw.price==null?null:Number(raw.price), np = row.price==null?null:Number(row.price);
+  if(op !== np) out.push('price '+money(op)+' → '+money(np));
+  if(!!raw.market_price !== !!row.market_price) out.push(row.market_price ? 'now market price' : 'no longer market price');
+  if(String(raw.description||'') !== String(row.description||'')) out.push('description edited');
+  if((raw.allergens||[]).join(',') !== (row.allergens||[]).join(',')) out.push('allergens → '+((row.allergens||[]).join('')||'none'));
+  return out.join('; ');
+}
+async function peAlcSave(id){
+  if(!peCanEditChef()){ peToast('View only — the kitchen team change the menu', true); return; }
+  var val = function(k){ var el = document.getElementById('pe-alc-'+k); return el ? el.value : ''; };
+  var name = String(val('name')||'').trim();
+  if(!name){ peToast('The dish needs a name', true); return; }
+  var section = String(val('section')||'').trim();
+  if(section === '__new') section = String(val('newsection')||'').trim().toUpperCase();
+  if(!section){ peToast('Choose a section, or type a new one', true); return; }
+  var priceRaw = String(val('price')||'').trim();
+  var market = !!(document.getElementById('pe-alc-market') || {}).checked;
+  var price = null;
+  if(!market){
+    if(priceRaw === ''){ peToast('Add a price, or tick “market price”', true); return; }
+    price = Number(priceRaw);
+    if(!isFinite(price) || price < 0){ peToast('The price has to be a number', true); return; }
+  }
+  // Allergen CODES, the same short letters the printed menu and the guest page
+  // already use -- "(D)(E)" not "dairy, egg" -- because the guest page prints
+  // whatever is stored here verbatim.
+  var allerg = String(val('allergens')||'').toUpperCase().replace(/[^A-Z,\s]/g,'')
+                 .split(/[,\s]+/).map(function(x){ return x.trim(); }).filter(Boolean);
+  var raw = (id && id!=='new') ? peAlcRawById(id) : null;
+  var row = { name:name, section:section,
+              description:String(val('description')||'').trim() || null,
+              price: price, market_price: market,
+              allergens: allerg.length ? allerg : null,
+              updated_at: new Date().toISOString() };
+  // A price change on a menu guests are quoted from is said out loud, exactly as
+  // it is for a set menu.
+  if(raw){
+    var op = raw.price==null?null:Number(raw.price);
+    if(op !== price || !!raw.market_price !== market){
+      var was = raw.market_price ? 'market price' : (op!=null ? 'AED '+peMoney(op) : 'no price');
+      var now = market ? 'market price' : (price!=null ? 'AED '+peMoney(price) : 'no price');
+      if(!(await peConfirm({ title:'Change the price of “'+raw.name+'”?',
+        html:'<b>'+peEsc(was)+'</b> becomes <b>'+peEsc(now)+'</b>. This is the price “Customise a menu” '+
+             'costs a swap from, and the price a guest sees on the à la carte link. '+
+             'Quotes already sent keep the price they were given.',
+        ok:'Change the price', cancel:'Leave it as it is' }))) return;
+    }
+  }
+  // A new dish lands at the end of its own section, not at the top of the menu.
+  if(!raw){
+    var tail = (peState.alacarte||[]).filter(function(a){ return a.section===section; })
+      .reduce(function(mx, a){ return Math.max(mx, (a.sort_order==null?0:a.sort_order)); }, 0);
+    if(!tail){
+      // A brand new section goes after everything, so it cannot land in the
+      // middle of the printed menu by accident.
+      tail = (peState.alacarte||[]).reduce(function(mx, a){ return Math.max(mx, (a.sort_order==null?0:a.sort_order)); }, 0);
+    }
+    row.sort_order = tail + 10;
+  }
+  var r = raw ? await sb.from('event_alacarte').update(row).eq('id', id).select().single()
+              : await sb.from('event_alacarte').insert(row).select().single();
+  if(r.error || !r.data){ peToast('NOT saved — '+String(r.error&&r.error.message||'').slice(0,110), true); return; }
+  if(raw){ peState.alacarte = (peState.alacarte||[]).map(function(a){ return a.id===id ? r.data : a; }); }
+  else { peState.alacarte = (peState.alacarte||[]).concat([r.data]); }
+  peAlcLog(r.data.id, r.data.name, raw ? peAlcDiff(raw, r.data) : 'added to '+peAlcSecLabel(section));
+  peState.editAlcId = null; peState.alcDraft = null;
+  peToast('Saved ✓ — the guest à la carte link shows it straight away');
+  renderMain();
+}
+async function peAlcToggle(id, on){
+  if(!peCanEditChef()){ peToast('View only — the kitchen team change the menu', true); return; }
+  var want = (on==='true'||on===true);
+  var raw = peAlcRawById(id); if(!raw) return;
+  var r = await sb.from('event_alacarte').update({active:want, updated_at:new Date().toISOString()}).eq('id', id);
+  if(r.error){ peToast('NOT changed — '+String(r.error.message||'').slice(0,80), true); return; }
+  raw.active = want;
+  peAlcLog(id, raw.name, want ? 'back on the menu' : 'taken off the menu');
+  peToast(want ? '“'+raw.name+'” is back on the menu ✓' : '“'+raw.name+'” taken off — it leaves the guest menu and “Customise a menu”');
+  renderMain();
+}
+async function peAlcDelete(id){
+  if(!peCanEditChef()){ peToast('View only — the kitchen team change the menu', true); return; }
+  var raw = peAlcRawById(id); if(!raw) return;
+  // A dish already swapped into a customised menu is quoted on a real booking.
+  // Deleting it would leave that menu naming a dish that no longer exists, so
+  // those get told to take it off the menu instead.
+  var used = [];
+  (peState.setMenus||[]).forEach(function(m){
+    var hit = JSON.stringify(m.courses||[]).toLowerCase().indexOf(String(raw.name||'').toLowerCase()) >= 0;
+    if(hit) used.push(m.name);
+  });
+  if(used.length){
+    peToast('“'+raw.name+'” is on '+used.length+' menu'+(used.length>1?'s':'')+': '+used.slice(0,3).join(', ')+
+      '. Take it off the menu instead — it leaves the guest list but those menus keep the dish.', true);
+    return;
+  }
+  if(!(await peConfirm({ title:'Delete “'+raw.name+'”?',
+    body:'This removes the dish from the à la carte for good. No menu is using it. If it is only off for a season, take it off the menu instead — that is reversible.',
+    ok:'Delete for good', cancel:'Keep it', danger:true }))) return;
+  var r = await sb.from('event_alacarte').delete().eq('id', id);
+  if(r.error){ peToast('Not deleted — '+String(r.error.message||'').slice(0,90), true); return; }
+  peAlcLog(id, raw.name, 'deleted');
+  peState.alacarte = (peState.alacarte||[]).filter(function(a){ return a.id!==id; });
+  if(peState.editAlcId===id) peAlcCancel();
+  peToast('“'+raw.name+'” deleted');
+  renderMain();
 }
 // "DALLA NOSTRA GRIGLIA JOSPER" shouted in a dropdown is not how anyone reads a
 // menu — Title Case it for the screen, leave the stored value alone. Italian
@@ -5903,6 +6084,49 @@ function peRenderAlaCarte(){
 // after an apostrophe is never capitalised (Roberto’s, not Roberto’S).
 var PE_ALC_MINOR = {e:1, di:1, del:1, della:1, la:1, le:1, il:1, al:1, alla:1, allo:1,
                     con:1, da:1, dal:1, nostra:1, nostro:1, in:1, a:1};
+// The editor. Deliberately the SAME shape as the set-menu editor -- name, then
+// the thing that reaches money, then Save/Cancel/Delete -- so the chef is not
+// learning a second form for the same job.
+function peAlcEditorHTML(){
+  var id = peState.editAlcId;
+  if(!id) return '';
+  var raw = (id!=='new') ? peAlcRawById(id) : null;
+  if(id!=='new' && !raw) return '';
+  var v = raw || {};
+  var secs = peAlcSections();
+  if(!secs.length) secs = PE_ALC_ORDER.slice();
+  var mp = !!v.market_price;
+  return '<div class="pe-card" style="border-color:#C9A84C">'+
+    '<b style="color:#400207">'+(raw?'Edit dish':'New dish')+'</b>'+
+    '<div style="font-size:11px;color:#4F4535;margin:2px 0 10px">Saved here it appears on the guest à la carte link, in “Customise a menu”, and on every quote built from it.</div>'+
+    '<div class="pe-lbl">Dish name</div><input class="pe-in" id="pe-alc-name" value="'+peEsc(v.name||'')+'" placeholder="e.g. Branzino">'+
+    '<div class="pe-grid2" style="margin-top:10px">'+
+      '<div><div class="pe-lbl">Section</div><select class="pe-in" id="pe-alc-section" onchange="peAlcSecPick(this.value)">'+
+        secs.map(function(s){ return '<option value="'+peEsc(s)+'"'+(v.section===s?' selected':'')+'>'+peEsc(peAlcSecLabel(s))+'</option>'; }).join('')+
+        '<option value="__new">+ a new section…</option></select>'+
+        '<input class="pe-in" id="pe-alc-newsection" style="margin-top:6px;display:none" placeholder="Name the new section">'+
+      '</div>'+
+      '<div><div class="pe-lbl">Price (AED)</div>'+
+        '<input class="pe-in" id="pe-alc-price" type="number" min="0" value="'+peEsc(v.price!=null?v.price:'')+'" placeholder="e.g. 115"'+(mp?' disabled':'')+'>'+
+        '<label style="display:flex;align-items:center;gap:6px;font-size:11.5px;color:#4F4535;margin-top:6px;cursor:pointer">'+
+          '<input type="checkbox" id="pe-alc-market" '+(mp?'checked':'')+' onchange="var p=document.getElementById(\'pe-alc-price\'); p.disabled=this.checked; if(this.checked) p.value=\'\';" style="accent-color:#400207">'+
+          'Market price — no figure shown</label>'+
+      '</div>'+
+    '</div>'+
+    '<div style="margin-top:10px"><div class="pe-lbl">Description — this is what the guest reads</div>'+
+    '<input class="pe-in" id="pe-alc-description" value="'+peEsc(v.description||'')+'" placeholder="e.g. Sea bass carpaccio, Amalfi lemon, artichokes salad"></div>'+
+    '<div style="margin-top:10px"><div class="pe-lbl">Allergen codes — the letters as they print, e.g. D E N</div>'+
+    '<input class="pe-in" id="pe-alc-allergens" value="'+peEsc((v.allergens||[]).join(' '))+'" placeholder="D E N R S V"></div>'+
+    '<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">'+
+      '<button class="pe-btn" onclick="peAlcSave(\''+(raw?raw.id:'new')+'\')">Save dish</button>'+
+      '<button class="pe-btn sec" onclick="peAlcCancel()">Cancel</button>'+
+      (raw?'<button class="pe-btn sec" style="margin-left:auto;color:#B00020;border-color:#B00020" onclick="peAlcDelete(\''+raw.id+'\')">Delete</button>':'')+
+    '</div></div>';
+}
+function peAlcSecPick(v){
+  var box = document.getElementById('pe-alc-newsection');
+  if(box){ box.style.display = (v==='__new') ? 'block' : 'none'; if(v==='__new') box.focus(); }
+}
 function peAlcSecLabel(s){
   return String(s||'').toLowerCase().split(/\s+/).map(function(w, i){
     if(i && PE_ALC_MINOR[w]) return w;

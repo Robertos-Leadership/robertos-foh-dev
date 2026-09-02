@@ -85,19 +85,52 @@ function secLabel(x){
     return w.replace(/^([a-zà-ÿ])/, function(m,c){ return c.toUpperCase(); });
   }).join(' ');
 }
+(function(){
+  var st = document.createElement('style');
+  st.textContent =
+    '.qty button{width:30px;height:30px;border-radius:8px;border:1px solid var(--line);background:#fff;'+
+      'color:var(--vino);font-size:17px;line-height:1;cursor:pointer;font-family:var(--font-body);'+
+      '-webkit-tap-highlight-color:transparent;padding:0}'+
+    '.qty button:disabled{opacity:.35;cursor:default}'+
+    '.qty input{width:34px;height:30px;box-sizing:border-box;text-align:center;border:1px solid var(--line);'+
+      // 16px or iOS zooms the whole page on focus and the guest loses their place.
+      'border-radius:8px;background:#fff;color:var(--ink);font-family:var(--font-body);font-size:16px;padding:0}'+
+    '.item-on{background:rgba(107,31,42,.045);border-radius:8px}';
+  document.head.appendChild(st);
+})();
 function priceText(a){
   if(a.tiers && a.tiers.length) return a.tiers.map(function(t){ return t.size+' AED '+money(t.price); }).join(' · ');
   if(a.market_price) return 'Market price';
   if(a.price==null) return '';
   return 'AED '+money(a.price)+(a.unit==='per piece' ? ' per piece' : '');
 }
-function tick(cb){
-  var id = cb.getAttribute('data-alc');
-  if(cb.checked) picked[id]=true; else delete picked[id];
-  var n = Object.keys(picked).length;
+// picked[id] is now a COUNT, not a boolean. A party of seventeen orders three
+// branzino and two ribeye; a tick could only ever say "yes, that one", so the
+// desk had to go back and ask how many every single time (Francesco, 2 Sep 2026).
+// Zero means not wanted -- the key is deleted, so nothing downstream sees a 0.
+function alcQty(id, delta, absolute){
+  var cur = Number(picked[id]) || 0;
+  var next = absolute != null ? Number(absolute) : cur + delta;
+  if(!isFinite(next) || next < 0) next = 0;
+  if(next > 99) next = 99;                      // a typo, not an order
+  if(next) picked[id] = next; else delete picked[id];
+  var box = document.querySelector('[data-alcqty="'+id+'"]');
+  if(box) box.value = next ? String(next) : '';
+  var row = document.querySelector('[data-alcrow="'+id+'"]');
+  if(row) row.className = 'item' + (next ? ' item-on' : '');
+  var minus = document.querySelector('[data-alcminus="'+id+'"]');
+  if(minus) minus.disabled = !next;
+  alcRecount();
+}
+function alcRecount(){
+  var ids = Object.keys(picked);
+  var dishes = ids.length;
+  var plates = ids.reduce(function(n, k){ return n + (Number(picked[k])||0); }, 0);
   var btn = el('alc-send'), msg = el('alc-msg');
-  if(btn) btn.disabled = !n;
-  if(msg) msg.textContent = n ? (n+' dish'+(n>1?'es':'')+' chosen — send them whenever you are ready.') : 'Tick a dish to send your choices.';
+  if(btn) btn.disabled = !dishes;
+  if(msg) msg.textContent = dishes
+    ? (plates+' portion'+(plates>1?'s':'')+' across '+dishes+' dish'+(dishes>1?'es':'')+' — send them whenever you are ready.')
+    : 'Choose how many of each dish you would like.';
 }
 // The picks go straight into event_menu_choices, which accepts an anonymous
 // insert — no server of our own in the way. Valentina sees them in the app.
@@ -106,7 +139,13 @@ async function sendPicks(){
   if(!ids.length) return;
   var btn = el('alc-send'), msg = el('alc-msg');
   if(btn){ btn.disabled = true; btn.textContent = 'Sending…'; }
-  var names = (window.__alc||[]).filter(function(a){ return picked[a.id]; }).map(function(a){ return a.name; });
+  // Three shapes, on purpose. `items` carries the quantities and is what the desk
+  // reads now; `dishes` stays a list of human strings ("3 x Branzino") so an older
+  // reply and a newer one both read correctly in the app, on the card and in the
+  // email, with no migration and nothing to backfill.
+  var chosen = (window.__alc||[]).filter(function(a){ return picked[a.id]; });
+  var items  = chosen.map(function(a){ return { id:a.id, name:a.name, qty:Number(picked[a.id])||1 }; });
+  var names  = items.map(function(i){ return (i.qty>1 ? i.qty+' × ' : '')+i.name; });
   try{
     var r = await fetch(SUPA+'/rest/v1/event_menu_choices', {
       method:'POST',
@@ -114,7 +153,8 @@ async function sendPicks(){
       body: JSON.stringify({
         token: pickTok || 'alc-no-token',
         menu_key: 'alacarte',
-        choices: { alacarte_ids: ids, dishes: names,
+        choices: { alacarte_ids: ids, dishes: names, items: items,
+                   portions: items.reduce(function(n,i){ return n+i.qty; }, 0),
                    guest: ((el('alc-who')&&el('alc-who').value.slice(0,60).trim()) || who || null) },
         note: (el('alc-note')&&el('alc-note').value.slice(0,900)) || null
       })
@@ -238,13 +278,21 @@ function render(menus, bevs, alc, packs){
     var secs = [];
     alc.forEach(function(a){ if(secs.indexOf(a.section)<0) secs.push(a.section); });
     h += '<div class="sect">'+(both||menus.length ? '<div class="sect-t">À la carte</div>' : '')+
-      '<div class="hint" style="text-align:center;font-size:12px;color:var(--ink-soft);margin-bottom:8px">Tick anything you would like and send it back to us.</div>'+
+      '<div class="hint" style="text-align:center;font-size:12px;color:var(--ink-soft);margin-bottom:8px">Choose how many of each dish you would like, then send it back to us.</div>'+
       secs.map(function(sname){
         return '<div class="sect-t" style="margin-top:14px">'+esc(secLabel(sname))+'</div>'+
           alc.filter(function(a){ return a.section===sname; }).map(function(a){
             var pr = noPrice ? '' : priceText(a);
-            return '<label class="item" style="display:flex;gap:10px;align-items:flex-start;cursor:pointer">'+
-              '<input type="checkbox" data-alc="'+esc(a.id)+'" onchange="tick(this)" style="accent-color:var(--vino);margin-top:4px">'+
+            var qid = esc(a.id);
+            return '<div class="item" data-alcrow="'+qid+'" style="display:flex;gap:10px;align-items:flex-start">'+
+              // A stepper, not a number field alone: on a phone the +/- is the
+              // whole control, and the box is there for "12" without twelve taps.
+              '<span class="qty" style="display:flex;align-items:center;gap:4px;flex-shrink:0;margin-top:2px">'+
+                '<button type="button" data-alcminus="'+qid+'" onclick="alcQty(\''+qid+'\',-1)" aria-label="One fewer" disabled>&minus;</button>'+
+                '<input type="text" inputmode="numeric" data-alcqty="'+qid+'" value="" placeholder="0" aria-label="How many"'+
+                  ' oninput="alcQty(\''+qid+'\',0,this.value.replace(/[^0-9]/g,\'\'))">'+
+                '<button type="button" onclick="alcQty(\''+qid+'\',1)" aria-label="One more">+</button>'+
+              '</span>'+
               '<span style="flex:1"><span class="nm">'+esc(a.name)+
                 // An empty array means "checked, none". A missing one is OUR gap
                 // and the guest never reads it — a menu with a gap can no longer
@@ -253,7 +301,7 @@ function render(menus, bevs, alc, packs){
                    ? ' <span class="codes" style="font-size:10px;color:var(--ink-faint)">('+a.allergens.join(')(')+')</span>'
                    : '')+'</span>'+
               (pr?'<div class="pr">'+esc(pr)+'</div>':'')+
-              (a.description?'<span class="ds">'+esc(a.description)+'</span>':'')+'</span></label>';
+              (a.description?'<span class="ds">'+esc(a.description)+'</span>':'')+'</span></div>';
           }).join('');
       }).join('')+
       // Without this the choices arrive as "A guest" and nobody can tell whose
@@ -262,7 +310,7 @@ function render(menus, bevs, alc, packs){
       '<div style="margin-top:14px"><input id="alc-who" value="'+esc(who||'')+'" placeholder="Your name, so we know whose choices these are" style="width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:8px;background:#fff;padding:10px;font-family:var(--font-body);font-size:13px"></div>'+
       '<div style="margin-top:10px"><textarea id="alc-note" placeholder="Anything we should know? Allergies, the occasion, a dish you cannot see here…" style="width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:8px;background:#fff;padding:9px 10px;font-family:var(--font-body);font-size:13px;min-height:60px"></textarea></div>'+
       '<div style="margin-top:10px"><button id="alc-send" onclick="sendPicks()" style="width:100%;background:var(--vino);color:var(--sabbia);border:none;border-radius:9px;padding:13px;font-size:14px;font-family:var(--font-display);letter-spacing:1px;cursor:pointer" disabled>Send my choices to Roberto’s</button>'+
-      '<div id="alc-msg" style="font-size:11.5px;color:var(--ink-soft);text-align:center;margin-top:7px">Tick a dish to send your choices.</div></div>'+
+      '<div id="alc-msg" style="font-size:11.5px;color:var(--ink-soft);text-align:center;margin-top:7px">Choose how many of each dish you would like.</div></div>'+
       '</div>';
   }
 
