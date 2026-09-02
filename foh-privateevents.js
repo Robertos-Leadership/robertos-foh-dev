@@ -5568,7 +5568,7 @@ async function peSendPaymentLink(id){
 
 // ── library (chef dishes / Manuel beverage / packages) ───────────────────────
 function peRenderChefCorner(){
-  var tab = (peState.chefTab === 'set') ? 'set' : 'canape';
+  var tab = (peState.chefTab === 'set' || peState.chefTab === 'alacarte') ? peState.chefTab : 'canape';
   var h = peHeader('chef');
   // The count has to be the SAME count the library below prints, or the band is
   // a second version of the truth. Dishes: peRenderDishLib's own total.
@@ -5581,6 +5581,10 @@ function peRenderChefCorner(){
     lede  = nSet ? (nSet + ' set menu' + (nSet===1?'':'s') + (nCust?' + '+nCust+' customised':'')) : 'Set menus';
     stand = 'Plated set menus — saved here they appear in the events desk booking dropdown, the guest proposal and the kitchen brief.'+
             (nCust?' The customised menus below were tailored for one booking each; they can still reach a guest, so they are yours to cost and pause too.':'');
+  } else if(tab==='alacarte'){
+    var nAlc = peAlcAll().length;
+    lede  = nAlc ? (nAlc + ' dish' + (nAlc===1?'':'es') + ' on the printed menu') : 'The à la carte';
+    stand = 'The restaurant’s own menu. It is what a guest receives on an à la carte link, what “Customise a menu” swaps dishes from, and where every quoted dish takes its price — so it is the chef’s, like everything else in here.';
   } else {
     var nDish = peState.dishes.filter(function(d){ return d.active; }).length;
     lede  = nDish ? (nDish + ' dish' + (nDish===1?'':'es') + ' in the library') : 'The dish library';
@@ -5591,11 +5595,13 @@ function peRenderChefCorner(){
   // under Menu packages → Canapé packages. One thing, said twice. The tab is
   // gone; every action it carried (PDF, View, Pause, Delete) moved onto the rows
   // in Menu packages, so nothing was lost with it.
-  var tabs = [['canape','Canap\u00e9 library'],['set','Set menus']];
+  var tabs = [['canape','Canap\u00e9 library'],['set','Set menus'],['alacarte','\u00c0 la carte']];
   h += '<div class="pe-tabs" style="margin-bottom:12px">'+tabs.map(function(t){
     return '<span class="pe-tab'+(tab===t[0]?' on':'')+'" onclick="peState.chefTab=\''+t[0]+'\';renderMain()">'+t[1]+'</span>';
   }).join('')+'</div>';
-  h += (tab==='set') ? peRenderSetMenuLib() : peRenderDishLib();
+  h += (tab==='set') ? peRenderSetMenuLib()
+     : (tab==='alacarte') ? peRenderAlaCarte(true)     // true = this is the chef's copy, editable
+     : peRenderDishLib();
   return h+PE_FOOT;
 }
 function peRenderBevCorner(){
@@ -5623,7 +5629,15 @@ function peRenderPacksView(){
     h += peRenderPackLib();
     return h+PE_FOOT;
   }
-  if(tab==='alacarte'){ h += peRenderAlaCarte(); return h+PE_FOOT; }
+  // Read-only here on purpose. The desk quotes FROM the à la carte; the kitchen
+  // decides WHAT it is. Two editable copies of one menu is the duplication that
+  // caused the canapé mess, so the edit controls live in Chef Corner only.
+  if(tab==='alacarte'){
+    h += '<div style="font-size:11.5px;color:#4F4535;margin-bottom:10px">Reference copy — to add, reprice or take off a dish, go to '+
+      '<span style="color:#400207;text-decoration:underline;cursor:pointer" onclick="peState.chefTab=\'alacarte\';peGo(\'chef\')">Chef corner → À la carte</span>.</div>';
+    h += peRenderAlaCarte(false);
+    return h+PE_FOOT;
+  }
   if(tab==='custom'){ h += peRenderCustomise(); return h+PE_FOOT; }
   h += '<div style="font-size:12px;color:#4F4535;margin-bottom:10px">Tick anything below — a set menu, dishes from the à la carte, beverage packages, or a mix — and the guest receives it all in ONE branded email, or one WhatsApp with one link.</div>';
   // The canapé link stays where she has always found it — on Guest link. No
@@ -5865,7 +5879,10 @@ async function peAlcPickDone(id){
   peToast('Cleared ✓');
   renderMain();
 }
-function peRenderAlaCarte(){
+function peRenderAlaCarte(editable){
+  // editable is passed ONLY by Chef Corner. Everywhere else this is a reference
+  // list, and peCanEditChef() still has to agree before anything can be changed.
+  var alcEdit = !!editable && peCanEditChef();
   peAlcLoadPicks();
   if(!peState.alacarteOk){
     return '<div class="pe-card"><b style="color:#400207">À la carte</b>'+
@@ -5895,10 +5912,16 @@ function peRenderAlaCarte(){
     (alcStamp ? ' — last changed '+peEsc(peWhenLabel(alcStamp)) : '')+'. '+
     'This is the list guests receive on an à la carte link, and the list “Customise a menu” swaps from, '+
     'so a dish added to a menu carries its real price.</div>';
-  if(peCanEditChef()){
-    h += '<div style="margin-bottom:10px"><button class="pe-btn" onclick="peAlcNew()">+ Add a dish</button></div>';
+  if(alcEdit){
+    h += '<div style="margin-bottom:10px;display:flex;gap:8px;flex-wrap:wrap">'+
+      '<button class="pe-btn" onclick="peAlcNew()">+ Add a dish</button>'+
+      '<button class="pe-btn sec" onclick="peAlcImpOpen()">Upload a new menu</button>'+
+      '<button class="pe-btn sec" onclick="peAlcLinkCheckOpen()">Check everything links</button>'+
+    '</div>';
+    h += peAlcImportHTML();
+    h += peAlcLinkCheckHTML();
   }
-  h += peAlcEditorHTML();
+  h += alcEdit ? peAlcEditorHTML() : '';
   h += '<div class="pe-card"><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">'+
     '<input class="pe-in" id="pe-alc-q" style="flex:1;min-width:180px" placeholder="Search a dish — e.g. burrata, branzino, truffle" value="'+peEsc(peState.alcQ||'')+'" oninput="peAlcQ(this.value, this.selectionStart)">'+
     '<select class="pe-in" style="width:auto" onchange="peAlcSec(this.value)"><option value="">Every section</option>'+
@@ -5932,7 +5955,7 @@ function peRenderAlaCarte(){
         (function(){
           var lc = peSmLastChange('alc:'+a.id);
           var hist = lc ? '<div style="font-size:10.5px;color:#6B4A33;font-weight:400;margin-top:2px">'+peEsc(lc.actor)+' · '+peEsc(peWhenLabel(lc.when))+'</div>' : '';
-          if(!peCanEditChef()) return hist;
+          if(!alcEdit) return hist;
           return hist+'<div style="display:flex;gap:5px;margin-top:5px;justify-content:flex-end">'+
             '<button class="pe-btn sec sm" onclick="peAlcEdit(\''+a.id+'\')">Edit</button>'+
             '<button class="pe-btn sec sm" onclick="peAlcToggle(\''+a.id+'\','+(a.active===false?'true':'false')+')">'+(a.active===false?'Put back':'Take off')+'</button>'+
@@ -6084,6 +6107,270 @@ async function peAlcDelete(id){
 // after an apostrophe is never capitalised (Roberto’s, not Roberto’S).
 var PE_ALC_MINOR = {e:1, di:1, del:1, della:1, la:1, le:1, il:1, al:1, alla:1, allo:1,
                     con:1, da:1, dal:1, nostra:1, nostro:1, in:1, a:1};
+// ═══ Upload a whole new printed à la carte ═════════════════════════════════
+// The menu changes as a menu, not a dish at a time: a new print run lands and
+// fifty-odd dishes move together. Typing that in one row at a time is how a menu
+// ends up a month out of date, which is exactly what happened to the June 2026
+// list. This reads the whole thing, shows it for checking, and only then writes.
+function peAlcImpOpen(){
+  peState.alcImp = peState.alcImp || { text:'', rows:null, busy:false, open:false };
+  peState.alcImp.open = !peState.alcImp.open;
+  peState.alcLink = null;
+  renderMain();
+}
+function peAlcImpSet(v){ (peState.alcImp = peState.alcImp || {}).text = v; }
+function peAlcImpCancel(){ peState.alcImp = null; renderMain(); }
+// Toggle one row out of the import without losing the rest of the read.
+function peAlcImpToggle(i){
+  var r = ((peState.alcImp||{}).rows||[])[i]; if(!r) return;
+  r.skip = !r.skip; renderMain();
+}
+// The AI lays the menu out; a plain-text parser is the fallback so a failed or
+// unavailable model never means "you cannot load your menu".
+async function peAlcImpRead(){
+  var imp = peState.alcImp = peState.alcImp || {};
+  var txt = String(imp.text||'').trim();
+  if(!txt){ peToast('Paste the menu, or upload the PDF or Word file', true); return; }
+  imp.busy = true; renderMain();
+  var rows = null;
+  try{
+    var r = await sb.functions.invoke('revenue-assistant', { body:{
+      max_tokens:3000,
+      system:'You convert a pasted restaurant à la carte menu into strict JSON and nothing else. Output ONLY {"dishes":[{"section":string,"name":string,"description":string,"price":number|null,"market_price":boolean,"allergens":[string]}]}. section is the printed heading the dish sits under, in the SAME capitalisation the menu uses (e.g. "CRUDO BAR", "PASTE E RISO"). name is the dish name only, without the price. description is the one-line English description if the menu gives one, else "". price is the number only, no currency, no commas; use null and set market_price true when the menu says market price / price on request / MP. allergens: menus mark these as single letters in brackets after the dish, like "Ricciola (R)(S)" — return them as ["R","S"], uppercase, and NEVER invent one that is not printed and NEVER drop one that is. They are a safety declaration. Keep every dish, in menu order. No commentary, no markdown fences.',
+      messages:[{ role:'user', content: txt.slice(0, 60000) }]
+    }});
+    if(!r.error && r.data && r.data.text){
+      var clean = String(r.data.text).replace(/^[\s\S]*?\{/, '{').replace(/\}[^}]*$/, '}');
+      var obj = JSON.parse(clean);
+      if(obj && obj.dishes && obj.dishes.length) rows = obj.dishes;
+    }
+  }catch(e){}
+  if(!rows) rows = peAlcImpParseText(txt);
+  if(!rows || !rows.length){
+    imp.busy = false;
+    peToast('Could not read that menu — check it is the text of the menu, or add the dishes by hand', true);
+    renderMain(); return;
+  }
+  // Normalise, and mark what each row will DO, so the review reads as a plan and
+  // not just a list: a dish already on the menu is an update, not a duplicate.
+  var byName = {};
+  (peState.alacarte||[]).forEach(function(a){ byName[peAlcKey(a.name)] = a; });
+  imp.rows = rows.map(function(d){
+    var name = String(d.name||'').trim();
+    var cur = byName[peAlcKey(name)];
+    var price = (d.price==null || d.price==='') ? null : Number(d.price);
+    if(!isFinite(price)) price = null;
+    return { name:name,
+             section:String(d.section||'').trim().toUpperCase() || 'MENU',
+             description:String(d.description||'').trim(),
+             price:price, market_price: !!d.market_price || price==null,
+             allergens:(d.allergens||[]).map(function(x){ return String(x).toUpperCase().trim(); }).filter(Boolean),
+             existingId: cur ? cur.id : null,
+             was: cur ? (cur.price==null ? 'no price' : 'AED '+peMoney(cur.price)) : null,
+             skip:false };
+  }).filter(function(d){ return d.name; });
+  imp.busy = false;
+  peToast('Read '+imp.rows.length+' dish'+(imp.rows.length===1?'':'es')+' — check them, then apply');
+  renderMain();
+}
+// Match on a squashed name so "Branzino " and "branzino" are the same dish.
+function peAlcKey(n){ return String(n||'').toLowerCase().replace(/[^a-z0-9]+/g,''); }
+// Fallback reader. A printed à la carte is: a heading in caps, then dish lines
+// ending in a price, each optionally followed by its description.
+function peAlcImpParseText(txt){
+  var out = [], section = 'MENU';
+  String(txt).split(/\r?\n/).forEach(function(raw){
+    var line = raw.trim(); if(!line) return;
+    var priced = line.match(/^(.*?)[\s.…]*(?:AED\s*)?(\d{1,3}(?:,\d{3})*|\d+)(?:\.\d+)?\s*$/i);
+    var isHeading = !priced && line === line.toUpperCase() && /[A-Z]/.test(line) && line.length < 46;
+    if(isHeading){ section = line.replace(/[^A-Z0-9'’\s&À-ÿ]/gi,'').trim() || section; return; }
+    if(priced && priced[1].trim()){
+      var name = priced[1].trim();
+      var alg = [];
+      name = name.replace(/\(([A-Za-z]{1,2})\)/g, function(m, c){ alg.push(c.toUpperCase()); return ''; }).trim();
+      out.push({ section:section, name:name, description:'',
+                 price:Number(String(priced[2]).replace(/,/g,'')), market_price:false, allergens:alg });
+      return;
+    }
+    // An unpriced line right after a dish is that dish's description.
+    if(out.length && !isHeading && line.length > 12 && !/^[A-Z\s]+$/.test(line)){
+      var last = out[out.length-1];
+      if(!last.description) last.description = line;
+    }
+  });
+  return out;
+}
+// Apply. Two modes, and the difference is stated in the confirm rather than
+// buried in a label: "add to" leaves everything alone, "replace" takes the
+// dishes that are NOT in the new menu OFF it (never deletes — a dish quoted on a
+// past booking must still resolve).
+async function peAlcImpApply(mode){
+  if(!peCanEditChef()){ peToast('View only — the kitchen team change the menu', true); return; }
+  var imp = peState.alcImp || {};
+  var rows = (imp.rows||[]).filter(function(r){ return !r.skip; });
+  if(!rows.length){ peToast('Nothing ticked to apply', true); return; }
+  var keep = {}; rows.forEach(function(r){ keep[peAlcKey(r.name)] = 1; });
+  var retiring = (mode==='replace')
+    ? (peState.alacarte||[]).filter(function(a){ return a.active!==false && !keep[peAlcKey(a.name)]; })
+    : [];
+  var nNew = rows.filter(function(r){ return !r.existingId; }).length;
+  var nUpd = rows.length - nNew;
+  // Anything the kitchen already built a menu out of gets named BEFORE the write,
+  // not discovered afterwards on a guest document.
+  var atRisk = [];
+  retiring.forEach(function(a){
+    (peState.setMenus||[]).forEach(function(m){
+      if(JSON.stringify(m.courses||[]).toLowerCase().indexOf(String(a.name||'').toLowerCase()) >= 0){
+        atRisk.push(a.name+' (on '+m.name+')');
+      }
+    });
+  });
+  if(!(await peConfirm({ title:'Apply this menu?',
+    html:'<b>'+nNew+'</b> new dish'+(nNew===1?'':'es')+', <b>'+nUpd+'</b> updated'+
+      (retiring.length ? ', and <b>'+retiring.length+'</b> taken off the menu (kept, not deleted, so past bookings still resolve)' : '')+'.'+
+      (atRisk.length ? '<br><br><span style="color:#B00020">⚠ '+peEsc(atRisk.slice(0,6).join('; '))+
+        (atRisk.length>6?' and '+(atRisk.length-6)+' more':'')+' — '+(atRisk.length===1?'that dish is':'those dishes are')+
+        ' used by a saved menu. Taking '+(atRisk.length===1?'it':'them')+' off leaves the menu naming a dish the à la carte no longer offers.</span>' : '')+
+      '<br><br>This is what a guest sees on an à la carte link and what every quote prices from.',
+    ok:'Apply the menu', cancel:'Not yet' }))) return;
+  imp.busy = true; renderMain();
+  var okCount = 0, failed = [];
+  for(var i=0;i<rows.length;i++){
+    var r = rows[i];
+    var row = { name:r.name, section:r.section, description:r.description||null,
+                price:r.market_price?null:r.price, market_price:!!r.market_price,
+                allergens:r.allergens.length?r.allergens:null, active:true,
+                updated_at:new Date().toISOString() };
+    if(!r.existingId) row.sort_order = (i+1)*10;
+    var res = r.existingId
+      ? await sb.from('event_alacarte').update(row).eq('id', r.existingId)
+      : await sb.from('event_alacarte').insert(row);
+    if(res.error) failed.push(r.name); else okCount++;
+  }
+  for(var j=0;j<retiring.length;j++){
+    var rr = await sb.from('event_alacarte').update({active:false, updated_at:new Date().toISOString()}).eq('id', retiring[j].id);
+    if(rr.error) failed.push(retiring[j].name);
+  }
+  // Re-read rather than patching state by hand: after a write this size, the
+  // table is the only thing that knows what actually landed.
+  var fresh = await peFetchAllPaged(function(){ return sb.from('event_alacarte').select('*').order('sort_order').order('name'); });
+  if(fresh && !fresh.error) peState.alacarte = fresh.data || [];
+  peSmLog('alc:import', 'À la carte', 'menu uploaded — '+okCount+' dish'+(okCount===1?'':'es')+' written'+
+    (retiring.length?', '+retiring.length+' taken off':'')+(failed.length?', '+failed.length+' FAILED':''));
+  imp.busy = false; peState.alcImp = null;
+  if(failed.length) peToast(okCount+' saved, but '+failed.length+' failed: '+failed.slice(0,3).join(', '), true);
+  else peToast('Menu applied ✓ — '+okCount+' dishes live on the guest link straight away');
+  peAlcLinkCheckOpen(true);   // answer "does it all link?" without being asked
+}
+function peAlcImportHTML(){
+  var imp = peState.alcImp;
+  if(!imp || !imp.open) return '';
+  var h = '<div class="pe-card" style="border-color:#C9A84C;background:#FBF6EA">'+
+    '<div style="display:flex;justify-content:space-between;align-items:baseline"><b style="color:#400207">Upload a new à la carte</b>'+
+    '<span class="pe-x" onclick="peAlcImpCancel()">✕</span></div>'+
+    '<div style="font-size:11.5px;color:#4F4535;margin:2px 0 10px">Paste the menu, or upload the PDF or the Word file. Nothing is written until you have checked the list.</div>';
+  if(!imp.rows){
+    h += '<textarea class="pe-in" id="pe-alcimp-text" rows="5" placeholder="CRUDO BAR&#10;Ricciola (R)(S)  98&#10;Yellow tail carpaccio, purple cabbage dressing, dill oil&#10;…" oninput="peAlcImpSet(this.value)">'+peEsc(imp.text||'')+'</textarea>'+
+      '<div style="margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">'+
+      '<button class="pe-btn" onclick="peAlcImpRead()"'+(imp.busy?' disabled':'')+'>'+(imp.busy?'Reading…':'Read the menu')+'</button>'+
+      '<label class="pe-btn sec sm" style="cursor:pointer">'+(imp.busy?'Reading…':'…or upload the PDF')+
+        '<input type="file" accept="application/pdf,.pdf" style="display:none" onchange="peAlcImpFile(this,\'pdf\')"'+(imp.busy?' disabled':'')+'></label>'+
+      '<label class="pe-btn sec sm" style="cursor:pointer">'+(imp.busy?'Reading…':'…or a Word file')+
+        '<input type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" style="display:none" onchange="peAlcImpFile(this,\'doc\')"'+(imp.busy?' disabled':'')+'></label>'+
+      '</div></div>';
+    return h;
+  }
+  var live = imp.rows.filter(function(r){ return !r.skip; });
+  var nNew = live.filter(function(r){ return !r.existingId; }).length;
+  h += '<div style="font-size:12px;color:#400207;margin-bottom:8px"><b>'+live.length+' dish'+(live.length===1?'':'es')+'</b> ready — '+
+    nNew+' new, '+(live.length-nNew)+' already on the menu. Untick anything that should not go on.</div>'+
+    '<div style="max-height:340px;overflow:auto;border:1px solid #E3D8C4;border-radius:9px;background:#fff">';
+  var sec = null;
+  imp.rows.forEach(function(r, i){
+    if(r.section !== sec){ sec = r.section;
+      h += '<div style="font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:#544418;padding:8px 10px 2px">'+peEsc(peAlcSecLabel(sec))+'</div>'; }
+    h += '<label style="display:flex;gap:8px;align-items:flex-start;padding:5px 10px;border-top:1px solid #F2EBDD;cursor:pointer;opacity:'+(r.skip?.45:1)+'">'+
+      '<input type="checkbox"'+(r.skip?'':' checked')+' onchange="peAlcImpToggle('+i+')" style="accent-color:#400207;margin-top:3px">'+
+      '<span style="flex:1;font-size:12px;color:#2C1810"><b>'+peEsc(r.name)+'</b>'+
+        (r.allergens.length?' <span style="font-size:10px;color:#574232">('+r.allergens.join(')(')+')</span>':'')+
+        (r.description?'<br><span style="font-size:11px;color:#4F4535">'+peEsc(r.description)+'</span>':'')+
+      '</span>'+
+      '<span style="font-size:12px;color:#400207;white-space:nowrap">'+(r.market_price?'Market price':'AED '+peMoney(r.price))+
+        (r.existingId && r.was ? '<br><span style="font-size:10px;color:#8A6A4F">was '+peEsc(r.was)+'</span>' : '<br><span style="font-size:10px;color:#2E6B34">new</span>')+
+      '</span></label>';
+  });
+  h += '</div><div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">'+
+    '<button class="pe-btn" onclick="peAlcImpApply(\'replace\')"'+(imp.busy?' disabled':'')+'>'+(imp.busy?'Applying…':'This is the whole new menu')+'</button>'+
+    '<button class="pe-btn sec" onclick="peAlcImpApply(\'add\')"'+(imp.busy?' disabled':'')+'>Just add these dishes</button>'+
+    '<button class="pe-btn sec" onclick="peAlcImpCancel()">Cancel</button></div>'+
+    '<div style="font-size:11px;color:#4F4535;margin-top:6px">“The whole new menu” also takes anything not listed above OFF the menu — kept, never deleted, so a past booking still resolves.</div>'+
+    '</div>';
+  return h;
+}
+// Reuses the readers the set-menu editor already has, so a PDF or Word menu is
+// read exactly the same way in both places.
+async function peAlcImpFile(input, kind){
+  var f = input.files && input.files[0]; if(!f) return;
+  input.value = '';
+  var imp = peState.alcImp = peState.alcImp || { open:true };
+  imp.busy = true; renderMain();
+  var text = '';
+  // peSmDocxText / peSmPdfText are the SAME readers the set-menu editor uses --
+  // one implementation, so a PDF menu reads identically in both places.
+  try{ text = (kind==='pdf') ? await peSmPdfText(f) : await peSmDocxText(f); }
+  catch(err){ imp.busy=false; renderMain(); peToast('Could not read that file — paste the menu text instead. '+String(err&&err.message||'').slice(0,60), true); return; }
+  if(!text){ imp.busy=false; renderMain(); peToast('No readable text in that file (a scan has none) — paste the menu text instead', true); return; }
+  imp.text = text; imp.busy = false; renderMain();
+  await peAlcImpRead();
+}
+// ═══ Does it all still link? ═══════════════════════════════════════════════
+// A set menu stores its courses as plain dish NAMES, not ids, so renaming or
+// removing an à la carte dish silently breaks the link — the menu keeps naming a
+// dish the à la carte no longer offers, and nothing says so until a guest reads
+// it. This is the answer to "check they all link everywhere".
+function peAlcLinkCheckOpen(quiet){
+  // BOTH libraries, not just the à la carte. A canapé menu names dishes from the
+  // canapé library (event_dishes) and is entirely correct to do so — an earlier
+  // version of this check looked only at event_alacarte and so reported all three
+  // canapé menus as 100% broken. A warning that cries wolf teaches people to
+  // ignore it, which is worse than not having one.
+  var alc = {};
+  peAlcAll().forEach(function(a){ alc[peAlcKey(a.name)] = 1; });
+  (peState.dishes||[]).forEach(function(d){ if(d.active!==false) alc[peAlcKey(d.name)] = 1; });
+  var out = [];
+  (peState.setMenus||[]).forEach(function(m){
+    var mm = peNormSM(m);
+    var names = [];
+    (mm.courses||[]).forEach(function(c){
+      (c.items||[]).forEach(function(x){ names.push(x); });
+      (c.options||[]).forEach(function(x){ names.push(x); });
+    });
+    var missing = names.filter(function(n){ return n && !alc[peAlcKey(n)]; });
+    if(missing.length) out.push({ menu:mm.name, custom:mm.custom, missing:missing, of:names.length });
+  });
+  peState.alcLink = { rows:out, checked:(peState.setMenus||[]).length, alcCount:peAlcAll().length,
+                      dishCount:(peState.dishes||[]).filter(function(d){ return d.active!==false; }).length };
+  if(!quiet) renderMain(); else renderMain();
+}
+function peAlcLinkCheckHTML(){
+  var lk = peState.alcLink;
+  if(!lk) return '';
+  var clean = !lk.rows.length;
+  return '<div class="pe-card" style="border-color:'+(clean?'#9BBF9E':'#E4C98A')+';background:'+(clean?'#F1F7F1':'#FAEEDA')+'">'+
+    '<div style="display:flex;justify-content:space-between;align-items:baseline"><b style="color:#400207">'+
+      (clean ? 'Everything links ✓' : lk.rows.length+' menu'+(lk.rows.length===1?'':'s')+' name a dish the à la carte no longer has')+'</b>'+
+      '<span class="pe-x" onclick="peState.alcLink=null;renderMain()">✕</span></div>'+
+    '<div style="font-size:11.5px;color:#4F4535;margin-top:4px">Checked '+lk.checked+' menu'+(lk.checked===1?'':'s')+' against '+lk.alcCount+' à la carte dishes and '+lk.dishCount+' canapés. '+
+      (clean ? 'Every dish named on every set and customised menu is on the à la carte, so prices and swaps resolve everywhere.'
+             : 'A set menu stores dish NAMES, so a renamed or removed dish leaves the menu naming something the à la carte no longer offers — the guest still reads it, but “Customise a menu” cannot price it.')+'</div>'+
+    (clean ? '' : lk.rows.map(function(r){
+      return '<div style="margin-top:8px;font-size:12px;color:#2C1810"><b>'+peEsc(r.menu)+'</b>'+
+        (r.custom?' <span style="font-size:10px;color:#574232">customised</span>':'')+
+        '<br><span style="font-size:11.5px;color:#B00020">'+peEsc(r.missing.join(' · '))+'</span>'+
+        '<span style="font-size:11px;color:#4F4535"> — '+r.missing.length+' of '+r.of+' dishes</span></div>';
+    }).join(''))+
+  '</div>';
+}
 // The editor. Deliberately the SAME shape as the set-menu editor -- name, then
 // the thing that reaches money, then Save/Cancel/Delete -- so the chef is not
 // learning a second form for the same job.
