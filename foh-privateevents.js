@@ -5916,10 +5916,8 @@ function peRenderAlaCarte(editable){
     h += '<div style="margin-bottom:10px;display:flex;gap:8px;flex-wrap:wrap">'+
       '<button class="pe-btn" onclick="peAlcNew()">+ Add a dish</button>'+
       '<button class="pe-btn sec" onclick="peAlcImpOpen()">Upload a new menu</button>'+
-      '<button class="pe-btn sec" onclick="peAlcLinkCheckOpen()">Check everything links</button>'+
     '</div>';
     h += peAlcImportHTML();
-    h += peAlcLinkCheckHTML();
   }
   h += alcEdit ? peAlcEditorHTML() : '';
   h += '<div class="pe-card"><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">'+
@@ -6158,20 +6156,37 @@ function peAlcParsePdfSpans(pages){
     // and the menu comes in longer than it is. Join them back up first.
     var names = spans.filter(function(s){ return s.size >= 10.5 && s.size <= 12.5; })
                      .sort(function(p,q){ return q.y - p.y; });
-    for(var i=0; i<names.length-1; i++){
-      var a = names[i], b2 = names[i+1];
-      var gap = a.y - b2.y;
-      // One line down (never two), centred within half a name's width, and the
-      // continuation must not itself start a new thought with a capitalised
-      // stand-alone word list — the size band already guarantees both are names.
-      if(gap > 4 && gap < 17 && Math.abs(a.cx - b2.cx) < 70){
-        a.text = (a.text + ' ' + b2.text).replace(/\s+/g,' ').trim();
-        a.x0 = Math.min(a.x0, b2.x0); a.x1 = Math.max(a.x1, b2.x1);
-        // Keep the FIRST line's y: the description and price sit below the block.
-        names.splice(i+1, 1); i--;
+    // ⚠ Pair each name with its continuation by POSITION, never by adjacency in
+    // this list. A menu page has two sub-columns side by side, so the name after
+    // "Purea di Patate alla Nocciola e" in y-order is the dish in the NEXT column
+    // at the same height, not its own second line — sorting alone silently fails
+    // to merge and imports the fragment as a dish. Search for the nearest name
+    // exactly one line below and centred on this one.
+    names.forEach(function(a){
+      if(a._used) return;
+      var best = null, bestDx = Infinity;
+      names.forEach(function(b2){
+        if(b2 === a || b2._used) return;
+        var gap = a.y - b2.y;
+        if(gap <= 4 || gap >= 17) return;            // one line down, never two
+        var dx = Math.abs(a.cx - b2.cx);
+        if(dx < 70 && dx < bestDx){ bestDx = dx; best = b2; }
+      });
+      if(best){
+        a.text = (a.text + ' ' + best.text).replace(/\s+/g,' ').trim();
+        a.x0 = Math.min(a.x0, best.x0); a.x1 = Math.max(a.x1, best.x1);
+        best._used = true;   // keep a's y: the description and price sit below the block
       }
-    }
+    });
+    names = names.filter(function(n){ return !n._used; });
     var algs   = spans.filter(function(s){ return s.size <= 7.5 && /\([A-Z]{1,2}\)/.test(s.text); });
+    // A cut weight — "(300g)", "(1.2kg)" — is printed in the SAME 7pt face as the
+    // allergen codes but is part of the dish's identity, not its allergens: a
+    // 300g Costata di Angus and a 1.2kg Costata con Osso are different dishes at
+    // very different prices. Dropped, the name stops matching the row already on
+    // the menu, and the import retires the real dish and adds a weightless
+    // duplicate beside it. (Francesco, 2 Sep 2026)
+    var sizes  = spans.filter(function(s){ return s.size <= 7.5 && /^\(\s*[\d.]+\s*(g|kg|gr)\s*\)$/i.test(s.text); });
     var descs  = spans.filter(function(s){ return s.size >= 9.2 && s.size <= 9.8; });
     var prices = spans.filter(function(s){ return s.size > 9.8 && s.size <= 10.4 && /^[\d,]+(\s*(per piece|g))?$/.test(s.text); });
     names.forEach(function(n){
@@ -6198,7 +6213,10 @@ function peAlcParsePdfSpans(pages){
         else { var m = raw.match(/^([\d,]+)/); if(m) price = Number(m[1].replace(/,/g,'')); }
       } else market = true;                                  // no figure printed = market price
       var uniq = {}; a = a.filter(function(x){ if(uniq[x]) return false; uniq[x]=1; return true; }).sort();
-      out.push({ section:(section||'MENU').trim(), name:n.text, description:dsc,
+      var wt = sizes.filter(function(s){ return near(s, 16, 200); })
+                    .sort(function(p,q){ return Math.abs(p.cx-n.cx) - Math.abs(q.cx-n.cx); });
+      var fullName = wt.length ? (n.text + ' ' + wt[0].text.replace(/\s+/g,'')) : n.text;
+      out.push({ section:(section||'MENU').trim(), name:fullName, description:dsc,
                  price:price, market_price:(price==null), allergens:a });
     });
   });
@@ -6227,7 +6245,6 @@ async function peAlcPdfDishes(file){
 function peAlcImpOpen(){
   peState.alcImp = peState.alcImp || { text:'', rows:null, busy:false, open:false };
   peState.alcImp.open = !peState.alcImp.open;
-  peState.alcLink = null;
   renderMain();
 }
 function peAlcImpSet(v){ (peState.alcImp = peState.alcImp || {}).text = v; }
@@ -6406,7 +6423,6 @@ async function peAlcImpApply(mode){
   imp.busy = false; peState.alcImp = null;
   if(failed.length) peToast(okCount+' saved, but '+failed.length+' failed: '+failed.slice(0,3).join(', '), true);
   else peToast('Menu applied ✓ — '+okCount+' dishes live on the guest link straight away');
-  peAlcLinkCheckOpen(true);   // answer "does it all link?" without being asked
 }
 function peAlcImportHTML(){
   var imp = peState.alcImp;
@@ -6502,54 +6518,10 @@ async function peAlcImpFile(input, kind){
   imp.text = text; imp.busy = false; renderMain();
   await peAlcImpRead();
 }
-// ═══ Does it all still link? ═══════════════════════════════════════════════
-// A set menu stores its courses as plain dish NAMES, not ids, so renaming or
-// removing an à la carte dish silently breaks the link — the menu keeps naming a
-// dish the à la carte no longer offers, and nothing says so until a guest reads
-// it. This is the answer to "check they all link everywhere".
-function peAlcLinkCheckOpen(quiet){
-  // BOTH libraries, not just the à la carte. A canapé menu names dishes from the
-  // canapé library (event_dishes) and is entirely correct to do so — an earlier
-  // version of this check looked only at event_alacarte and so reported all three
-  // canapé menus as 100% broken. A warning that cries wolf teaches people to
-  // ignore it, which is worse than not having one.
-  var alc = {};
-  peAlcAll().forEach(function(a){ alc[peAlcKey(a.name)] = 1; });
-  (peState.dishes||[]).forEach(function(d){ if(d.active!==false) alc[peAlcKey(d.name)] = 1; });
-  var out = [];
-  (peState.setMenus||[]).forEach(function(m){
-    var mm = peNormSM(m);
-    var names = [];
-    (mm.courses||[]).forEach(function(c){
-      (c.items||[]).forEach(function(x){ names.push(x); });
-      (c.options||[]).forEach(function(x){ names.push(x); });
-    });
-    var missing = names.filter(function(n){ return n && !alc[peAlcKey(n)]; });
-    if(missing.length) out.push({ menu:mm.name, custom:mm.custom, missing:missing, of:names.length });
-  });
-  peState.alcLink = { rows:out, checked:(peState.setMenus||[]).length, alcCount:peAlcAll().length,
-                      dishCount:(peState.dishes||[]).filter(function(d){ return d.active!==false; }).length };
-  if(!quiet) renderMain(); else renderMain();
-}
-function peAlcLinkCheckHTML(){
-  var lk = peState.alcLink;
-  if(!lk) return '';
-  var clean = !lk.rows.length;
-  return '<div class="pe-card" style="border-color:'+(clean?'#9BBF9E':'#E4C98A')+';background:'+(clean?'#F1F7F1':'#FAEEDA')+'">'+
-    '<div style="display:flex;justify-content:space-between;align-items:baseline"><b style="color:#400207">'+
-      (clean ? 'Everything links ✓' : lk.rows.length+' menu'+(lk.rows.length===1?'':'s')+' name a dish the à la carte no longer has')+'</b>'+
-      '<span class="pe-x" onclick="peState.alcLink=null;renderMain()">✕</span></div>'+
-    '<div style="font-size:11.5px;color:#4F4535;margin-top:4px">Checked '+lk.checked+' menu'+(lk.checked===1?'':'s')+' against '+lk.alcCount+' à la carte dishes and '+lk.dishCount+' canapés. '+
-      (clean ? 'Every dish named on every set and customised menu is on the à la carte, so prices and swaps resolve everywhere.'
-             : 'A set menu stores dish NAMES, so a renamed or removed dish leaves the menu naming something the à la carte no longer offers — the guest still reads it, but “Customise a menu” cannot price it.')+'</div>'+
-    (clean ? '' : lk.rows.map(function(r){
-      return '<div style="margin-top:8px;font-size:12px;color:#2C1810"><b>'+peEsc(r.menu)+'</b>'+
-        (r.custom?' <span style="font-size:10px;color:#574232">customised</span>':'')+
-        '<br><span style="font-size:11.5px;color:#B00020">'+peEsc(r.missing.join(' · '))+'</span>'+
-        '<span style="font-size:11px;color:#4F4535"> — '+r.missing.length+' of '+r.of+' dishes</span></div>';
-    }).join(''))+
-  '</div>';
-}
+// A set menu is its own document. It carries its own dish names, descriptions
+// and allergens, and it does NOT have to match the à la carte — they are
+// different menus with different purposes (Francesco, 2 Sep 2026). A report
+// comparing the two was noise dressed as a warning, and it lived here.
 // The editor. Deliberately the SAME shape as the set-menu editor -- name, then
 // the thing that reaches money, then Save/Cancel/Delete -- so the chef is not
 // learning a second form for the same job.
