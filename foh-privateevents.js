@@ -6210,19 +6210,31 @@ function peAlcParsePdfSpans(pages){
       // heading and the side dishes, so inheriting there would stamp (D)(E) onto
       // broccolini in garlic and oil. Over-declaring an allergen is still
       // declaring something the menu does not say.
-      var blocked = false;
-      if(secSpan){
+      // Inherit from the NEAREST heading above this dish, whatever its size, and
+      // only if THAT heading carries codes. Never look past it.
+      //   OSTRICHE (R)(S) and CAVIAR (D)(E)(R) are 13pt sub-headings and their
+      //   dishes carry nothing of their own — so the nearest heading is the only
+      //   place their allergens exist.
+      //   CONTORNI CALDI is also 13pt and carries NO codes, so its side dishes
+      //   inherit nothing. Looking further up would reach the grill's (D)(E) and
+      //   stamp dairy and egg onto broccolini in garlic and oil — over-declaring
+      //   is still declaring something the menu does not say, and it sends a
+      //   guest away from a dish they can eat.
+      if(!a.length){
+        var owner = null, ob = Infinity;
         spans.forEach(function(s2){
-          if(s2.size >= 12.5 && s2.size < 15 && sameHalf(s2) && s2.y < secSpan.y && s2.y > n.y) blocked = true;
+          if(s2.size < 12.5 || !sameHalf(s2)) return;
+          var dy = s2.y - n.y;
+          if(dy >= -2 && dy < ob){ ob = dy; owner = s2; }
         });
-      }
-      if(!a.length && secSpan && !blocked){
-        algs.forEach(function(s){
-          var dy = s.y - secSpan.y;
-          if(dy < 2 && dy > -18 && Math.abs(s.cx - secSpan.cx) < 220){
-            (s.text.match(/\(([A-Z]{1,2})\)/g)||[]).forEach(function(m){ a.push(m.slice(1,-1)); });
-          }
-        });
+        if(owner){
+          algs.forEach(function(s){
+            var dy = s.y - owner.y;
+            if(dy < 2 && dy > -18 && Math.abs(s.cx - owner.cx) < 220){
+              (s.text.match(/\(([A-Z]{1,2})\)/g)||[]).forEach(function(m){ a.push(m.slice(1,-1)); });
+            }
+          });
+        }
       }
       var dsc = descs.filter(function(s){ return near(s, 52, 170); })
                      .sort(function(p,q){ return q.y - p.y; })
