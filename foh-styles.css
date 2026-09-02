@@ -1547,7 +1547,14 @@
   /* toast */
   .toast {
     position: fixed;
-    bottom: 24px;
+    /* The "Tell us" pill is fixed at right:14px / bottom:14px with z-index
+       99998 -- far above the toast's 999 -- and lives in this same corner, so
+       it painted straight over the end of every message: "Type the guest's
+       m..." was all that could be read (Francesco, 2 Sep 2026). Moving the
+       toast clear ABOVE the button fixes it for every toast in the app rather
+       than for one screen, and it is a position fix, not a z-index fight --
+       raising the toast over the button would only have hidden the button. */
+    bottom: calc(74px + env(safe-area-inset-bottom, 0px));
     right: 24px;
     background: var(--vino);
     border-left: 3px solid var(--gold);

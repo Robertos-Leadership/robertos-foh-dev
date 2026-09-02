@@ -227,6 +227,79 @@ function peSetMenusBookable(){
     return m.active!==false && !(/-sharing$/.test(m.key) && peSmFamily(m.key));
   });
 }
+// ── One dropdown shape, in the chef's order ──────────────────────────────────
+// Every set-menu picker draws from here, so the events desk can never disagree
+// with Chef Corner about the order or about which shelf a menu is on. The two
+// groups are LABELLED: a menu built for one client sitting unmarked among the
+// standard menus is how a bespoke price reaches the wrong guest.
+function peSetMenuOptGroups(selKey, needPrice){
+  var rows = peSetMenusBookable().filter(function(m){ return needPrice ? m.price!=null : true; });
+  return [['Set menus', false], ['Customised for a booking', true]].map(function(g){
+    var list = rows.filter(function(m){ return peSmIsCustom(m) === g[1]; });
+    if(!list.length) return '';
+    return '<optgroup label="'+g[0]+'">'+list.map(function(m){
+      return '<option value="'+peEsc(m.key)+'"'+(selKey && selKey===m.key ? ' selected' : '')+'>'+
+        peEsc(m.name)+(m.price!=null ? ' — AED '+peMoney(m.price)+'/guest' : ' — price on the proposal')+'</option>';
+    }).join('')+'</optgroup>';
+  }).join('');
+}
+// ── Who changed a menu, and what ─────────────────────────────────────────────
+// Chef Corner kept no history at all: a price could move and nothing on the
+// screen said who moved it or what it had been (Francesco, 2 Sep 2026). Every
+// change now writes ONE line into event_log with a NULL event_id -- the column
+// is nullable and every existing reader filters by event_id or by a different
+// action, so these rows are invisible to all of them. detail is
+// '[key] name — what changed' so the menu can be read back out of the string.
+function peSmLog(key, name, what){
+  if(!key || !what) return;
+  try{
+    sb.from('event_log').insert({ event_id:null, action:'menu', actor:peActor(),
+      detail:('['+key+'] '+name+' — '+what).slice(0,500) })
+      .then(function(){ peSmLogLoad(true); });
+  }catch(e){}
+}
+// Loaded non-fatally and OUTSIDE the module's main read: a missing history must
+// never be the reason Chef Corner will not open.
+async function peSmLogLoad(redraw){
+  try{
+    var r = await sb.from('event_log').select('actor,detail,created_at').eq('action','menu')
+              .order('created_at',{ascending:false}).limit(300);
+    peState.menuLog   = (r && !r.error) ? (r.data||[]) : [];
+    peState.menuLogOk = !!(r && !r.error);
+  }catch(e){ peState.menuLog = []; peState.menuLogOk = false; }
+  if(redraw && peState.view==='packs') renderMain();
+}
+// The most recent change to one menu.
+function peSmLastChange(key){
+  var tag = '['+key+']';
+  var rows = peState.menuLog||[];
+  for(var i=0;i<rows.length;i++){
+    var d = String(rows[i].detail||'');
+    if(d.indexOf(tag)===0){
+      var rest = d.slice(tag.length).replace(/^\s*/,'');
+      var dash = rest.indexOf(' — ');
+      return { actor:rows[i].actor||'someone', when:rows[i].created_at,
+               what: dash>=0 ? rest.slice(dash+3) : rest };
+    }
+  }
+  return null;
+}
+// What actually changed between the saved row and what is about to be written.
+// Named in words, old value then new, so the line reads without opening anything.
+function peSmDiff(raw, row){
+  var out = [];
+  var money = function(v){ return v==null||v==='' ? 'no price' : 'AED '+peMoney(v); };
+  if(String(raw.name||'') !== String(row.name||'')) out.push('renamed "'+raw.name+'" → "'+row.name+'"');
+  var op = raw.price_pp==null?null:Number(raw.price_pp), np = row.price_pp==null?null:Number(row.price_pp);
+  if(op !== np) out.push('price '+money(op)+' → '+money(np));
+  if('cost_pp' in row){
+    var oc = raw.cost_pp==null?null:Number(raw.cost_pp), nc = row.cost_pp==null?null:Number(row.cost_pp);
+    if(oc !== nc) out.push('cost '+money(oc)+' → '+money(nc));
+  }
+  if(JSON.stringify(raw.courses||[]) !== JSON.stringify(row.courses||[])) out.push('courses edited');
+  if(('pdf' in row) && String(raw.pdf||'') !== String(row.pdf||'')) out.push('guest menu replaced');
+  return out.join('; ');
+}
 function peSetMenusPickInc(){
   return peSetMenusDesigned().filter(function(m){
     return m.active!==false && !(/-sharing$/.test(m.key) && peSmFamily(m.key));
@@ -612,7 +685,13 @@ async function peLoadAll(force){
       // sort_order first: the chef's own order on the shelf. name/id stay as the
       // tie-break so a row that has never been dragged still lands somewhere
       // predictable instead of wherever Postgres felt like.
-      peFetchAllPaged(function(){ return sb.from('event_set_menus').select('*').order('sort_order').order('name').order('id'); }),
+      // is_custom FIRST. Without it the two shelves interleave: they reuse the
+      // same sort_order numbers (10, 30, 50...), so ordering on sort_order alone
+      // put "Customized Menu" above "FUOCO SET MENU" and every picker in the
+      // module read as one muddled list (Francesco, 2 Sep 2026). sort_order then
+      // name/id stay as the tie-break so a row never dragged still lands
+      // somewhere predictable instead of wherever Postgres felt like.
+      peFetchAllPaged(function(){ return sb.from('event_set_menus').select('*').order('is_custom').order('sort_order').order('name').order('id'); }),
       // Set-menu replies only. Without the menu_key filter an unapplied à la carte
       // pick sharing the same token lit up the set-menu banner, which then had no
       // matching numbers to review.
@@ -667,6 +746,12 @@ async function peLoadAll(force){
     } else {
       peState.setMenus = [];                            // read failed — quote nothing
     }
+    // Belt and braces: peSmResort is the client-side mirror of that ORDER BY, and
+    // running it here means the array order equals the chef's order from the very
+    // first paint. Before, it ran only after somebody dragged a row -- so a fresh
+    // load was in the wrong order until the first drag of the day.
+    peSmResort();
+    peSmLogLoad(false);
     // res[10] (non-fatal): the à la carte. alacarteOk is what the screen reads
     // to tell "the table isn't there yet" apart from "the menu is empty" —
     // two different things to put in front of Valentina mid-quote.
@@ -3107,11 +3192,13 @@ function peRenderEvent(){
   var sm = e.set_menu;
   h += '<div class="pe-card" id="pe-card-food"><div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:6px">'+
     '<b style="font-size:14px;color:#400207">Food</b>'+
-    (sm || !ce ? '' : '<span><select class="pe-in" style="width:auto;display:inline-block" onchange="peApplyPackage(\''+e.id+'\',this.value)">'+
-      '<option value="">Start from a canapé package…</option>'+
-      peState.packs.filter(function(p){ return p.active!==false; }).map(function(p){ return '<option value="'+p.id+'">'+peEsc(p.name)+' — AED '+peMoney(p.price_pp)+'/guest</option>'; }).join('')+
-    '</select></span>')+'</div>';
-  if(!sm && ce) h += '<div style="font-size:11px;color:#4F4535;margin:-2px 0 8px">Start from a canapé package above, or build the menu dish by dish below.</div>';
+    ''+'</div>';
+  // The "start from a canapé package" picker was removed here for the same
+  // reason it left the wizard: the canapés live in Chef Corner as set menus now,
+  // and this was the second door onto the retired event_packages copy. Bookings
+  // already built from a package are untouched -- their dishes, prices and
+  // documents all still render below exactly as before.
+  if(!sm && ce) h += '<div style="font-size:11px;color:#4F4535;margin:-2px 0 8px">Pick a set menu below — canapés included — or build the menu dish by dish.</div>';
   h += peFoodSetMenuHTML(e);
   if(!sm){
     h += '<div class="pe-lbl">Package label on documents (free text)</div>'+
@@ -4463,9 +4550,10 @@ function peFoodSetMenuHTML(e){
   var h = '<div style="margin-top:8px;padding-top:8px;border-top:1px dashed rgba(107,31,42,0.15)">';
   if(!sm){
     if(!ce) return '';
-    h += '<div class="pe-lbl">Or use a plated set menu…</div>'+
-      '<span style="display:flex;gap:6px;align-items:center"><select class="pe-in" style="flex:1" id="pe-sm-sel"><option value="">Choose a plated set menu…</option>'+
-      peSetMenusBookable().map(function(m){ return '<option value="'+m.key+'">'+peEsc(m.name)+(m.price!=null?' — AED '+m.price+'/guest':' — price on the proposal')+'</option>'; }).join('')+
+    // "Plated" is no longer true of this list -- the canapé menus are in it.
+    h += '<div class="pe-lbl">Use a set menu…</div>'+
+      '<span style="display:flex;gap:6px;align-items:center"><select class="pe-in" style="flex:1" id="pe-sm-sel"><option value="">Choose a set menu…</option>'+
+      peSetMenuOptGroups(null, false)+
       '</select><button class="pe-btn sec sm" onclick="peApplySetMenu(\''+e.id+'\')">Use</button></span>';
     return h+'</div>';
   }
@@ -7944,6 +8032,24 @@ function peRenderSetMenuLib(){
       'a menu priced too close to what it costs to make would pass without a word.'+
       '</div>';
   }
+  // ── Which menus the events desk cannot actually see ──
+  // A menu with no price is filtered out of every booking dropdown. The chef had
+  // no way to know that: he could see the menu, open it, print it and send it,
+  // while Sophie's list simply did not have it (Francesco, 2 Sep 2026). The
+  // filter is unchanged -- an unpriced menu must not reach a quote -- but it is
+  // no longer silent.
+  var smNoPrice = peSetMenusRaw().filter(function(m){
+    var mm = peNormSM(m); return mm.active!==false && mm.price==null;
+  });
+  if(smNoPrice.length){
+    h += '<div style="margin-bottom:10px;padding:11px 14px;border-radius:10px;background:#FAEEDA;'+
+      'border:1px solid #E4C98A;color:#6b4a10;font:500 13px/1.45 var(--font-body,inherit)">'+
+      '<strong>'+smNoPrice.length+' menu'+(smNoPrice.length===1?'':'s')+' cannot be put on a booking yet</strong> — '+
+      peEsc(smNoPrice.map(function(m){ return peNormSM(m).name; }).slice(0,6).join(', '))+
+      (smNoPrice.length>6 ? ' and '+(smNoPrice.length-6)+' more' : '')+
+      '. Until a price is filled in '+(smNoPrice.length===1?'it stays':'they stay')+' out of the events-desk list entirely, '+
+      'so the desk cannot see '+(smNoPrice.length===1?'it':'them')+' at all.</div>';
+  }
   // Every drag affordance below reads this ONE value, the same one
   // peSmDragDown tests. A hand that cannot drag is the bug being fixed here.
   var canChef = peCanEditChef();
@@ -7953,7 +8059,7 @@ function peRenderSetMenuLib(){
     var costPct = (mm.cost!=null && mm.price) ? Math.round((mm.cost/(mm.price/PE_GROSS))*100) : null;
     return '<div class="pe-dishrow" data-smid="'+(m.id||'')+'" data-cust="'+(mm.custom?'1':'0')+'" data-smname="'+peEsc(mm.name)+'" style="opacity:'+(mm.active===false?.45:1)+';cursor:'+(canChef?'grab':'default')+';touch-action:pan-y">'+
       '<span>'+(canChef?'<span style="color:#C0B49F;margin-right:7px;letter-spacing:-1px" title="Drag to reorder, or onto the other list">⁙</span>':'')+'<b style="color:#400207">'+peEsc(mm.name)+'</b> '+
-      (pending?'<span style="background:#FAEEDA;color:#854F0B;font-size:11px;padding:2px 9px;border-radius:20px;margin-left:2px">Price pending</span>':'· AED '+peMoney(mm.price)+'/guest')+
+      (pending?'<span title="With no price this menu is filtered out of every booking dropdown" style="background:#FAEEDA;color:#854F0B;font-size:11px;padding:2px 9px;border-radius:20px;margin-left:2px">Price pending — the desk cannot pick it</span>':'· AED '+peMoney(mm.price)+'/guest')+
       (mm.cost!=null
         ? ' <span style="font-size:11px;color:'+(costPct==null?'#8B7355':(costPct<=27?'#2E6B34':'#B00020'))+'">· cost '+peMoney(mm.cost)+(costPct!=null?' ('+costPct+'% of net'+(costPct<=27?'':' — above 27% target')+')':'')+'</span>'
         : ' <span style="font-size:11px;color:#B00020">· no cost yet — chef to add</span>')+
@@ -7963,7 +8069,16 @@ function peRenderSetMenuLib(){
             ? 'Built for ' + peEsc(opts.forBooking)
             : 'Not on any booking — safe to retire')+'</span>'
         : '')+
-      '<br><span style="font-size:11px;color:#4F4535">'+peEsc(mm.line||peSmSummary(mm.courses))+'</span></span>'+
+      '<br><span style="font-size:11px;color:#4F4535">'+peEsc(mm.line||peSmSummary(mm.courses))+'</span>'+
+      // Who changed this menu last, and what they changed. Falls back to the
+      // creator so a menu nobody has edited still says where it came from.
+      (function(){
+        var lc = mm.key ? peSmLastChange(mm.key) : null;
+        if(lc) return '<br><span style="font-size:11px;color:#6B4A33">'+peEsc(lc.actor)+' · '+peEsc(peWhenLabel(lc.when))+' — '+peEsc(lc.what)+'</span>';
+        if(peState.menuLogOk === false) return '';
+        if(m.created_by) return '<br><span style="font-size:11px;color:#8B7355">added by '+peEsc(m.created_by)+' · '+peEsc(peWhenLabel(m.created_at))+' — no change since</span>';
+        return '';
+      })()+'</span>'+
       // Seeing it is now one tap from the list, not something you have to open
       // the editor and save first to find out.
       '<span class="pe-acts w5">'+
@@ -8065,6 +8180,10 @@ async function peSaveSetMenu(id){
     if(!r.error) peToast('Saved without the cost — the cost field needs foh-events-setmenu-cost.sql run first.', true);
   }
   if(r.error || !r.data){ peToast('Set menu NOT saved — '+String(r.error&&r.error.message||'').slice(0,110), true); return; }
+  // The history line. Written AFTER the save succeeded, so the log can never
+  // claim a change the table did not take.
+  peSmLog(r.data.key, r.data.name, raw ? peSmDiff(raw, row)
+    : ('created'+(priceVal!=null ? ' at AED '+peMoney(priceVal)+'/guest' : ' with no price yet')));
   if(id){ peState.setMenus = peState.setMenus.map(function(m){ return m.id===id ? r.data : m; }); }
   else { if(!Array.isArray(peState.setMenus)) peState.setMenus=[]; peState.setMenus.push(r.data); }
   peState.editSetMenuId=null; peState.smDraft=null; peState.smName=''; peState.smText=''; peState.smPdf=null; peState.smBrandDoc=false;
@@ -8106,6 +8225,7 @@ async function peSmDelete(id){
     ok:'Delete for good', cancel:'Keep it', danger:true }))) return;
   var r = await sb.from('event_set_menus').delete().eq('id', id);
   if(r.error){ peToast('Not deleted — '+String(r.error&&r.error.message||'').slice(0,90), true); return; }
+  peSmLog(raw.key, raw.name, 'deleted');
   peState.setMenus = (peState.setMenus||[]).filter(function(m){ return m.id!==id; });
   if(peState.editSetMenuId===id){ peSmCancel(); return; }
   peToast('“'+raw.name+'” deleted');
@@ -8436,6 +8556,9 @@ async function peSmApplyDrop(id, toCustom, index){
     if(w.patch.is_custom!=null)  w.m.is_custom  = w.patch.is_custom;
   });
   peSmResort();
+  peSmLog(moved.key, moved.name, wasCustom !== nowCustom
+    ? 'moved to the '+(nowCustom?'customised':'standard')+' shelf'
+    : 'moved in the order');
   peToast(wasCustom !== nowCustom
     ? '\u201c'+moved.name+'\u201d is now a '+(nowCustom?'customised':'standard')+' menu \u2014 drag it back to undo'
     : '\u201c'+moved.name+'\u201d moved \u2014 drag it again to change the order');
@@ -8452,6 +8575,7 @@ async function peSmSetCustom(id, toCustom){
   var r = await sb.from('event_set_menus').update({is_custom:on, updated_at:new Date().toISOString()}).eq('id', id);
   if(r.error){ peToast('NOT moved - '+String(r.error.message||'').slice(0,80), true); return; }
   peState.setMenus.forEach(function(x){ if(x.id===id) x.is_custom=on; });
+  peSmLog(m.key, m.name, 'moved to the '+(on?'customised':'standard')+' shelf');
   peToast('“'+m.name+'” is now a '+(on?'customised':'standard')+' menu — drag it back to undo');
   renderMain();
 }
@@ -8460,7 +8584,8 @@ async function peToggleSetMenu(id, active){
   var on = (active==='true'||active===true);
   var r = await sb.from('event_set_menus').update({active:on, updated_at:new Date().toISOString()}).eq('id', id);
   if(r.error){ peToast('NOT changed — check connection', true); return; }
-  peState.setMenus.forEach(function(m){ if(m.id===id) m.active=on; });
+  var tg = null; (peState.setMenus||[]).forEach(function(m){ if(m.id===id){ m.active=on; tg=m; } });
+  if(tg) peSmLog(tg.key, tg.name, on ? 'reactivated — back in the events-desk list' : 'retired — out of new quotes');
   peState.editSetMenuId=null; peState.smDraft=null;
   peToast(on?'Menu reactivated ✓':'Menu retired — existing bookings keep it, new quotes won’t show it');
   renderMain();
@@ -9075,16 +9200,20 @@ function peRenderGuided(){
         (sub?'<div style="font-size:11px;color:#4F4535">'+sub+'</div>':'')+'</div>';
     };
     h += '<div class="pe-title" style="font-size:19px">What are they eating?</div>'+
-      '<div style="font-size:12px;color:#4F4535;margin:2px 0 12px">Not sure? Start with a canapé package — you can change every dish later.</div>'+
-      card('package','Canapé package','Pick a ready-made spread')+
-      card('build','Build the menu myself','Add dishes one by one later')+
-      card('setmenu','A plated set menu','Terra, Mare or Fuoco');
+      '<div style="font-size:12px;color:#4F4535;margin:2px 0 12px">Every menu the kitchen has built — canapés included. You can change any dish later.</div>'+
+      // The canapé-package card is gone. Canapés are set menus now, built and
+      // priced in Chef Corner, so offering the old event_packages copy here put
+      // the same canapé in front of her twice at two prices that agreed only
+      // until one of them was edited (Francesco, 2 Sep 2026). Nothing about
+      // bookings already on a package changed -- they still resolve and render.
+      card('setmenu','Choose a set menu','Canapés, plated menus — everything in Chef Corner')+
+      card('build','Build the menu myself','Add dishes one by one later');
     if(g.foodMode==='package'){
       h += '<div style="margin-top:4px"><div class="pe-lbl">Which package?</div><select class="pe-in" onchange="peGuideSet(\'packId\',this.value)"><option value="">Choose a package…</option>'+
         peState.packs.filter(function(p){ return p.active!==false || g.packId===p.id; }).map(function(p){ return '<option value="'+p.id+'"'+(g.packId===p.id?' selected':'')+'>'+peEsc(p.name)+' — AED '+peMoney(p.price_pp)+'/guest</option>'; }).join('')+'</select></div>';
     } else if(g.foodMode==='setmenu'){
       h += '<div style="margin-top:4px"><div class="pe-lbl">Which set menu?</div><select class="pe-in" onchange="peGuideSet(\'setKey\',this.value)"><option value="">Choose a set menu…</option>'+
-        peSetMenusBookable().filter(function(m){ return m.price!=null; }).map(function(m){ return '<option value="'+m.key+'"'+(g.setKey===m.key?' selected':'')+'>'+peEsc(m.name)+' — AED '+m.price+'/guest</option>'; }).join('')+'</select></div>'+
+        peSetMenuOptGroups(g.setKey, true)+'</select></div>'+
         '<div style="font-size:11px;color:#4F4535;margin-top:2px">Menus with a sharing version: pick individual or shared on the event’s Food card after this.</div>';
     }
     var bevs = peState.bevs.filter(function(b){ return b.active!==false; })
