@@ -4379,9 +4379,34 @@ function peOpenDishPicker(eventId){
   var e = peEvById(eventId);
   var g = Number(e&&e.guests)||0;
   var existing = (peState.items[eventId]||[]).map(function(i){ return i.dish_id; });
+  // The picker used to key its groups on category + serve and then rely on the
+  // object's insertion order, which is the load order (category, then serve,
+  // then name). That produced BEEF · COLD, BEEF · HOT, DESSERT · DESSERT,
+  // FISH · COLD... -- the cold dishes scattered through the list in three
+  // places, and no relationship to price at all. It reads as random because it
+  // effectively is (Francesco, 2 Sep 2026).
+  //
+  // A menu is built in the order it is eaten and chosen against a budget, so:
+  // Cold, then Hot, then Dessert, and inside each one CHEAPEST FIRST. The
+  // category is not lost -- it moves onto the dish's own line, where it says
+  // more than it did as half a heading.
+  var pool = peState.dishes.filter(function(d){ return d.active && existing.indexOf(d.id)<0; });
+  var PE_SERVE_ORDER = ['Cold','Hot','Dessert'];
+  var byPriceThenName = function(a, b){
+    var pa = a.sell_price==null ? Infinity : Number(a.sell_price);
+    var pb = b.sell_price==null ? Infinity : Number(b.sell_price);
+    if(pa !== pb) return pa - pb;
+    return String(a.name||'').localeCompare(String(b.name||''));
+  };
   var cats = {};
-  peState.dishes.filter(function(d){ return d.active && existing.indexOf(d.id)<0; })
-    .forEach(function(d){ (cats[d.category+' · '+d.serve]=cats[d.category+' · '+d.serve]||[]).push(d); });
+  PE_SERVE_ORDER.forEach(function(s){
+    var list = pool.filter(function(d){ return d.serve === s; }).sort(byPriceThenName);
+    if(list.length) cats[s] = list;
+  });
+  // A dish whose serve is blank, misspelt or something new must never vanish
+  // from the picker just because it is not one of the three we expect.
+  var rest = pool.filter(function(d){ return PE_SERVE_ORDER.indexOf(d.serve) < 0; }).sort(byPriceThenName);
+  if(rest.length) cats['Not yet classified'] = rest;
   var h = '<div class="pe-modal-bg" onclick="if(event.target===this)this.remove()"><div class="pe-modal">'+
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><b style="color:#400207">Add dishes from the library</b><span class="pe-x" onclick="this.closest(\'.pe-modal-bg\').remove()">✕</span></div>';
   if(!Object.keys(cats).length){
@@ -4402,7 +4427,7 @@ function peOpenDishPicker(eventId){
         '<span><b style="font-weight:600">'+peEsc(d.name)+'</b>'+
         ' <span style="color:#574232;font-size:10px">'+peEsc(peAllergenText(d.allergens))+'</span>'+
         (d.description?'<br><span style="color:#574232;font-size:10.5px">'+peEsc(d.description)+'</span>':'')+
-        '<br><span style="font-size:11px;color:#4F4535">'+peEsc(d.tier||'')+(d.tier?' · ':'')+'AED '+peMoney(d.sell_price)+' each · min '+(d.min_order||10)+' pieces</span></span>'+
+        '<br><span style="font-size:11px;color:#4F4535">'+peEsc(d.category||'')+(d.category?' · ':'')+peEsc(d.tier||'')+(d.tier?' · ':'')+'AED '+peMoney(d.sell_price)+' each · min '+(d.min_order||10)+' pieces</span></span>'+
         '<span style="display:flex;align-items:center;gap:5px;flex-shrink:0">'+
           '<span style="display:flex;flex-direction:column;align-items:center;line-height:1.1">'+
             '<input class="pe-in pe-dp-qty" style="width:56px;padding:4px 6px;text-align:center" type="number" step="0.5" min="0" value="1" data-price="'+(Number(d.sell_price)||0)+'" oninput="peDishPickerQty(this,'+g+')">'+
