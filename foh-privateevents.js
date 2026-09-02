@@ -6110,6 +6110,115 @@ async function peAlcDelete(id){
 // after an apostrophe is never capitalised (Roberto’s, not Roberto’S).
 var PE_ALC_MINOR = {e:1, di:1, del:1, della:1, la:1, le:1, il:1, al:1, alla:1, allo:1,
                     con:1, da:1, dal:1, nostra:1, nostro:1, in:1, a:1};
+// ═══ Reading a DESIGNED menu PDF ═══════════════════════════════════════════
+// peSmPdfText joins every text item with a space and throws the geometry away.
+// That is fine for a one-column set menu and useless for the à la carte, which
+// is a GRID: a section heading spans half the page and dishes sit under it in
+// one or two sub-columns. Flattened, it comes out as "il 98 98 SE 220 220 45 45"
+// and reads as two dishes in a fifty-six dish menu. (Francesco, 2 Sep 2026)
+//
+// Roberto's printed menus are set in two faces at fixed sizes, so the ROLE of
+// every scrap of text is in its font size, and which dish it belongs to is in
+// its position:
+//     >= 15      section heading   (Bodoni Medium 18)
+//     10.5-12.5  dish name         (Bodoni Semibold 11)
+//     9.8-10.4   price             (Forum 10, drawn twice — deduped)
+//     9.2-9.8    description       (Forum 9.5)
+//     <= 7.5     allergen codes    (Bodoni Semibold 7)
+// Verified against Roberto's_Alacarte_Menu_Sep2026.pdf: 56 dishes, every one
+// with its own description, prices and allergen codes correct.
+//
+// ⚠ pdf.js y counts UP from the bottom of the page, so "under a dish name" is a
+// SMALLER y, not a larger one. Getting that backwards silently pairs each dish
+// with the description of the one above it.
+function peAlcSpansFromPdf(items, pageWidth){
+  var spans = [];
+  items.forEach(function(it){
+    var t = String(it.str||'').replace(/\s+/g,' ').trim();
+    if(!t) return;
+    var tr = it.transform || [1,0,0,1,0,0];
+    // The vertical scale of the text matrix IS the rendered font size.
+    var size = Math.round(Math.hypot(tr[2], tr[3]) * 10) / 10;
+    var x0 = tr[4], x1 = tr[4] + (it.width||0);
+    spans.push({ text:t, size:size, x0:x0, x1:x1, cx:(x0+x1)/2, y:tr[5] });
+  });
+  return spans;
+}
+var PE_ALC_PDF_DROP = /Dairy \||Our Chefs|All prices|robertosrestaurants|la Carte Menu/i;
+function peAlcParsePdfSpans(pages){
+  var out = [];
+  pages.forEach(function(pg){
+    var spans = (pg.spans||[]).filter(function(s){ return !PE_ALC_PDF_DROP.test(s.text); });
+    if(!spans.length) return;
+    var half = (pg.width || 1190) / 2;
+    var heads  = spans.filter(function(s){ return s.size >= 15; });
+    // A long dish name wraps onto a second line and arrives as two spans one line
+    // apart, centred on each other: "Purea di Patate alla Nocciola e" then
+    // "Funghi di Stagione". Left alone that is two dishes, one of them nonsense,
+    // and the menu comes in longer than it is. Join them back up first.
+    var names = spans.filter(function(s){ return s.size >= 10.5 && s.size <= 12.5; })
+                     .sort(function(p,q){ return q.y - p.y; });
+    for(var i=0; i<names.length-1; i++){
+      var a = names[i], b2 = names[i+1];
+      var gap = a.y - b2.y;
+      // One line down (never two), centred within half a name's width, and the
+      // continuation must not itself start a new thought with a capitalised
+      // stand-alone word list — the size band already guarantees both are names.
+      if(gap > 4 && gap < 17 && Math.abs(a.cx - b2.cx) < 70){
+        a.text = (a.text + ' ' + b2.text).replace(/\s+/g,' ').trim();
+        a.x0 = Math.min(a.x0, b2.x0); a.x1 = Math.max(a.x1, b2.x1);
+        // Keep the FIRST line's y: the description and price sit below the block.
+        names.splice(i+1, 1); i--;
+      }
+    }
+    var algs   = spans.filter(function(s){ return s.size <= 7.5 && /\([A-Z]{1,2}\)/.test(s.text); });
+    var descs  = spans.filter(function(s){ return s.size >= 9.2 && s.size <= 9.8; });
+    var prices = spans.filter(function(s){ return s.size > 9.8 && s.size <= 10.4 && /^[\d,]+(\s*(per piece|g))?$/.test(s.text); });
+    names.forEach(function(n){
+      var sameHalf = function(s){ return (s.cx < half) === (n.cx < half); };
+      // The section is the nearest heading ABOVE — larger y — on the same half.
+      var above = heads.filter(function(h){ return h.y >= n.y - 2 && sameHalf(h); });
+      var section = null, best = Infinity;
+      above.forEach(function(h){ if(h.y - n.y < best){ best = h.y - n.y; section = h.text; } });
+      // Anything belonging to this dish sits BELOW it and is centred on it.
+      var near = function(s, dy, dx){ return s.y < n.y + 2 && s.y > n.y - dy && Math.abs(s.cx - n.cx) < dx; };
+      var a = [];
+      algs.forEach(function(s){
+        if(near(s, 16, 200)) (s.text.match(/\(([A-Z]{1,2})\)/g)||[]).forEach(function(m){ a.push(m.slice(1,-1)); });
+      });
+      var dsc = descs.filter(function(s){ return near(s, 52, 170); })
+                     .sort(function(p,q){ return q.y - p.y; })
+                     .map(function(s){ return s.text; }).join(' ');
+      var prc = prices.filter(function(s){ return near(s, 78, 170); })
+                      .sort(function(p,q){ return (q.y - p.y) || (Math.abs(p.cx-n.cx) - Math.abs(q.cx-n.cx)); });
+      var price = null, market = false;
+      if(prc.length){
+        var raw = prc[0].text;
+        if(/g$/.test(raw.trim())) market = true;            // "30g" is a caviar tier, not a price
+        else { var m = raw.match(/^([\d,]+)/); if(m) price = Number(m[1].replace(/,/g,'')); }
+      } else market = true;                                  // no figure printed = market price
+      var uniq = {}; a = a.filter(function(x){ if(uniq[x]) return false; uniq[x]=1; return true; }).sort();
+      out.push({ section:(section||'MENU').trim(), name:n.text, description:dsc,
+                 price:price, market_price:(price==null), allergens:a });
+    });
+  });
+  // A name with neither a price nor a description is a fragment of a wrapped
+  // heading, not a dish.
+  return out.filter(function(d){ return d.price != null || d.description; });
+}
+// Read the file, keeping position and size for every piece of text.
+async function peAlcPdfDishes(file){
+  var lib = await peLoadPdfJs();
+  var doc = await lib.getDocument({ data: await file.arrayBuffer() }).promise;
+  var pages = [];
+  for(var i=1; i<=doc.numPages; i++){
+    var page = await doc.getPage(i);
+    var tc = await page.getTextContent();
+    var vp = page.getViewport({ scale: 1 });
+    pages.push({ width: vp.width, spans: peAlcSpansFromPdf(tc.items, vp.width) });
+  }
+  return peAlcParsePdfSpans(pages);
+}
 // ═══ Upload a whole new printed à la carte ═════════════════════════════════
 // The menu changes as a menu, not a dish at a time: a new print run lands and
 // fifty-odd dishes move together. Typing that in one row at a time is how a menu
@@ -6154,8 +6263,16 @@ async function peAlcImpRead(){
     peToast('Could not read that menu — check it is the text of the menu, or add the dishes by hand', true);
     renderMain(); return;
   }
-  // Normalise, and mark what each row will DO, so the review reads as a plan and
-  // not just a list: a dish already on the menu is an update, not a duplicate.
+  peAlcImpAdopt(rows);
+  imp.busy = false;
+  peToast('Read '+imp.rows.length+' dish'+(imp.rows.length===1?'':'es')+' — check them, then apply');
+  renderMain();
+}
+// Normalise, and mark what each row will DO, so the review reads as a plan and
+// not just a list: a dish already on the menu is an update, not a duplicate.
+// Shared by the layout reader and the text reader, so both produce one shape.
+function peAlcImpAdopt(rows){
+  var imp = peState.alcImp = peState.alcImp || { open:true };
   var byName = {};
   (peState.alacarte||[]).forEach(function(a){ byName[peAlcKey(a.name)] = a; });
   imp.rows = rows.map(function(d){
@@ -6172,9 +6289,6 @@ async function peAlcImpRead(){
              was: cur ? (cur.price==null ? 'no price' : 'AED '+peMoney(cur.price)) : null,
              skip:false };
   }).filter(function(d){ return d.name; });
-  imp.busy = false;
-  peToast('Read '+imp.rows.length+' dish'+(imp.rows.length===1?'':'es')+' — check them, then apply');
-  renderMain();
 }
 // Match on a squashed name so "Branzino " and "branzino" are the same dish.
 function peAlcKey(n){ return String(n||'').toLowerCase().replace(/[^a-z0-9]+/g,''); }
@@ -6213,11 +6327,28 @@ async function peAlcImpApply(mode){
   var rows = (imp.rows||[]).filter(function(r){ return !r.skip; });
   if(!rows.length){ peToast('Nothing ticked to apply', true); return; }
   var keep = {}; rows.forEach(function(r){ keep[peAlcKey(r.name)] = 1; });
+  // ⚠ Replace only the SECTIONS this file actually contains. The dessert menu is
+  // always a separate document from the à la carte (Francesco, 2 Sep 2026), so
+  // uploading the à la carte must not quietly take DOLCI off the menu — and the
+  // same is true of any section a given print run does not cover. A file that
+  // says nothing about a section is not evidence that the section is gone.
+  var inFile = {}; rows.forEach(function(r){ inFile[String(r.section||'').toUpperCase().replace(/\s+/g,' ').trim()] = 1; });
   var retiring = (mode==='replace')
-    ? (peState.alacarte||[]).filter(function(a){ return a.active!==false && !keep[peAlcKey(a.name)]; })
+    ? (peState.alacarte||[]).filter(function(a){
+        if(a.active===false || keep[peAlcKey(a.name)]) return false;
+        return !!inFile[String(a.section||'').toUpperCase().replace(/\s+/g,' ').trim()];
+      })
+    : [];
+  var untouched = (mode==='replace')
+    ? (peState.alacarte||[]).filter(function(a){
+        return a.active!==false && !keep[peAlcKey(a.name)] &&
+               !inFile[String(a.section||'').toUpperCase().replace(/\s+/g,' ').trim()];
+      })
     : [];
   var nNew = rows.filter(function(r){ return !r.existingId; }).length;
   var nUpd = rows.length - nNew;
+  var seenSec = {}, untouchedSecs = [];
+  untouched.forEach(function(a){ var k=a.section||'—'; if(!seenSec[k]){ seenSec[k]=1; untouchedSecs.push(k); } });
   // Anything the kitchen already built a menu out of gets named BEFORE the write,
   // not discovered afterwards on a guest document.
   var atRisk = [];
@@ -6237,6 +6368,9 @@ async function peAlcImpApply(mode){
   if(!(await peConfirm({ title: retiring.length ? 'Replace the à la carte?' : 'Add to the à la carte?',
     html: head +
       (retiring.length ? '<br><span style="font-size:11.5px">Taken off, not deleted — a dish quoted on a past booking still resolves.</span>' : '')+
+      (untouched.length ? '<br><span style="font-size:11.5px;color:#2E6B34">'+untouched.length+' dish'+(untouched.length===1?'':'es')+
+         ' in sections this file does not cover ('+peEsc(untouchedSecs.slice(0,3).join(', '))+
+         (untouchedSecs.length>3?'…':'')+') are left exactly as they are.</span>' : '')+
       (atRisk.length ? '<br><br><span style="color:#B00020">⚠ '+atRisk.length+' of them '+(atRisk.length===1?'is':'are')+
         ' named by a saved set menu, so that menu would list a dish the à la carte no longer has: '+
         peEsc(atRisk.slice(0,4).join('; '))+(atRisk.length>4?' …':'')+'</span>' : '')+
@@ -6343,6 +6477,22 @@ async function peAlcImpFile(input, kind){
   input.value = '';
   var imp = peState.alcImp = peState.alcImp || { open:true };
   imp.busy = true; renderMain();
+  // A designed PDF is read by LAYOUT first — it is exact, and needs no model.
+  // Only if that comes back thin do we fall back to the flattened text, which is
+  // then handed to the reader that guesses.
+  if(kind === 'pdf'){
+    try{
+      var laid = await peAlcPdfDishes(f);
+      if(laid && laid.length >= 8){
+        imp.text = '';
+        imp.busy = false;
+        peAlcImpAdopt(laid);
+        peToast('Read '+laid.length+' dishes straight off the menu layout ✓ — check them, then apply');
+        renderMain();
+        return;
+      }
+    }catch(e){ /* fall through to the flattened read */ }
+  }
   var text = '';
   // peSmDocxText / peSmPdfText are the SAME readers the set-menu editor uses --
   // one implementation, so a PDF menu reads identically in both places.
