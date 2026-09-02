@@ -6039,7 +6039,10 @@ async function peAlcSave(id){
         html:'<b>'+peEsc(was)+'</b> becomes <b>'+peEsc(now)+'</b>. This is the price “Customise a menu” '+
              'costs a swap from, and the price a guest sees on the à la carte link. '+
              'Quotes already sent keep the price they were given.',
-        ok:'Change the price', cancel:'Leave it as it is' }))) return;
+        ok:'Change the price', cancel:'Leave it as it is' }))) {
+        peToast('Nothing was saved — the price change was cancelled. Your edits are still on screen.', true);
+        return;
+      }
     }
   }
   // A new dish lands at the end of its own section, not at the top of the menu.
@@ -6225,14 +6228,23 @@ async function peAlcImpApply(mode){
       }
     });
   });
-  if(!(await peConfirm({ title:'Apply this menu?',
-    html:'<b>'+nNew+'</b> new dish'+(nNew===1?'':'es')+', <b>'+nUpd+'</b> updated'+
-      (retiring.length ? ', and <b>'+retiring.length+'</b> taken off the menu (kept, not deleted, so past bookings still resolve)' : '')+'.'+
-      (atRisk.length ? '<br><br><span style="color:#B00020">⚠ '+peEsc(atRisk.slice(0,6).join('; '))+
-        (atRisk.length>6?' and '+(atRisk.length-6)+' more':'')+' — '+(atRisk.length===1?'that dish is':'those dishes are')+
-        ' used by a saved menu. Taking '+(atRisk.length===1?'it':'them')+' off leaves the menu naming a dish the à la carte no longer offers.</span>' : '')+
+  // The removal leads. It is the only irreversible-feeling half of this, and it
+  // used to be a clause at the end of a sentence under a wall of dish names.
+  var head = retiring.length
+    ? '<span style="color:#8A2A1A"><b>'+retiring.length+' dish'+(retiring.length===1?'':'es')+' will be taken off the menu</b></span>, '+
+      'and <b>'+nNew+'</b> added'+(nUpd?', <b>'+nUpd+'</b> updated':'')+'.'
+    : '<b>'+nNew+'</b> new dish'+(nNew===1?'':'es')+(nUpd?', <b>'+nUpd+'</b> updated':'')+'.';
+  if(!(await peConfirm({ title: retiring.length ? 'Replace the à la carte?' : 'Add to the à la carte?',
+    html: head +
+      (retiring.length ? '<br><span style="font-size:11.5px">Taken off, not deleted — a dish quoted on a past booking still resolves.</span>' : '')+
+      (atRisk.length ? '<br><br><span style="color:#B00020">⚠ '+atRisk.length+' of them '+(atRisk.length===1?'is':'are')+
+        ' named by a saved set menu, so that menu would list a dish the à la carte no longer has: '+
+        peEsc(atRisk.slice(0,4).join('; '))+(atRisk.length>4?' …':'')+'</span>' : '')+
       '<br><br>This is what a guest sees on an à la carte link and what every quote prices from.',
-    ok:'Apply the menu', cancel:'Not yet' }))) return;
+    ok: retiring.length ? 'Replace the menu' : 'Add them', cancel:'Not yet' }))) {
+    peToast('Nothing was written — the menu is still as it was. Your list is below, ready when you are.', true);
+    return;
+  }
   imp.busy = true; renderMain();
   var okCount = 0, failed = [];
   for(var i=0;i<rows.length;i++){
@@ -6282,6 +6294,22 @@ function peAlcImportHTML(){
   }
   var live = imp.rows.filter(function(r){ return !r.skip; });
   var nNew = live.filter(function(r){ return !r.existingId; }).length;
+  // A printed à la carte does not shrink by 80% in one revision. When the read
+  // comes back far smaller than the menu we already have, the file did not parse
+  // — a multi-column PDF flattens into "il 98 98 SE 220 220 45 45" and yields a
+  // handful of rows. Say that plainly and take the destructive button away, so a
+  // bad read cannot be one click from wiping the menu. (Francesco, 2 Sep 2026)
+  var liveNow = peAlcAll().length;
+  var looksWrong = liveNow > 8 && live.length < liveNow * 0.6;
+  if(looksWrong){
+    h += '<div style="margin-bottom:10px;padding:11px 14px;border-radius:10px;background:#FBE9E7;'+
+      'border:1px solid #E0A9A0;color:#8A2A1A;font:500 13px/1.45 var(--font-body,inherit)">'+
+      '<strong>Only '+live.length+' dish'+(live.length===1?'':'es')+' could be read, and the menu has '+liveNow+'.</strong> '+
+      'That is almost certainly the file not reading rather than a menu this short — a menu laid out in columns '+
+      'often comes out of a PDF as jumbled text. <b>Copy the menu text and paste it instead</b>, or send it to '+
+      'Francesco to load directly. Replacing the whole menu is switched off until the read looks complete; '+
+      'you can still add these '+live.length+' if they are right.</div>';
+  }
   h += '<div style="font-size:12px;color:#400207;margin-bottom:8px"><b>'+live.length+' dish'+(live.length===1?'':'es')+'</b> ready — '+
     nNew+' new, '+(live.length-nNew)+' already on the menu. Untick anything that should not go on.</div>'+
     '<div style="max-height:340px;overflow:auto;border:1px solid #E3D8C4;border-radius:9px;background:#fff">';
@@ -6300,8 +6328,9 @@ function peAlcImportHTML(){
       '</span></label>';
   });
   h += '</div><div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">'+
-    '<button class="pe-btn" onclick="peAlcImpApply(\'replace\')"'+(imp.busy?' disabled':'')+'>'+(imp.busy?'Applying…':'This is the whole new menu')+'</button>'+
-    '<button class="pe-btn sec" onclick="peAlcImpApply(\'add\')"'+(imp.busy?' disabled':'')+'>Just add these dishes</button>'+
+    (looksWrong ? '' :
+      '<button class="pe-btn" onclick="peAlcImpApply(\'replace\')"'+(imp.busy?' disabled':'')+'>'+(imp.busy?'Applying…':'This is the whole new menu')+'</button>')+
+    '<button class="pe-btn'+(looksWrong?'':' sec')+'" onclick="peAlcImpApply(\'add\')"'+(imp.busy?' disabled':'')+'>Just add these '+live.length+' dish'+(live.length===1?'':'es')+'</button>'+
     '<button class="pe-btn sec" onclick="peAlcImpCancel()">Cancel</button></div>'+
     '<div style="font-size:11px;color:#4F4535;margin-top:6px">“The whole new menu” also takes anything not listed above OFF the menu — kept, never deleted, so a past booking still resolves.</div>'+
     '</div>';
@@ -8682,7 +8711,13 @@ async function peSaveSetMenu(id){
              'New quotes start from the new price. '+
              (onBooking ? peEsc(onBooking+' booking'+(onBooking>1?'s':'')+' already on this menu keep'+(onBooking>1?'':'s')+' the price '+(onBooking>1?'they were':'it was')+' quoted.')
                         : 'No booking is on this menu, so nothing already quoted changes.'),
-        ok:'Change the price', cancel:'Leave it as it is' }))) return;
+        ok:'Change the price', cancel:'Leave it as it is' }))) {
+        // Returning here throws away the WHOLE save — name, courses and cost, not
+        // just the price — so it has to say so. This is what silently lost the
+        // Canapé Salotto rename on 1 Sep 2026.
+        peToast('Nothing was saved — the price change was cancelled. Your edits are still on screen.', true);
+        return;
+      }
     }
     priceVal = newPrice;
   }
