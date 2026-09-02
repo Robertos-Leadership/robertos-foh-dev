@@ -47,24 +47,38 @@ async function clOpen(ds){
   })();
   // Manager(s) on duty — from the schedule (foh_staff Management + foh_roster working)
   C.onDuty=[];
+  // (clOnAt is defined at the foot of this file — "is this shift running at hh:mm?")
   try{
     var stf=await sb.from('foh_staff').select('id,name').eq('section','Management').eq('active',true);
     var byId={}; (stf.data||[]).forEach(function(s){byId[s.id]=s.name;}); var ids=Object.keys(byId);
     if(ids.length){
-      var ros=await sb.from('foh_roster').select('staff_id,status,shift_start').eq('work_date',ds).in('staff_id',ids);
-      C.onDuty=(ros.data||[]).filter(function(r){return r.status==='working';}).map(function(r){return {name:byId[r.staff_id], start:r.shift_start};}).filter(function(x){return x.name;});
+      var ros=await sb.from('foh_roster').select('staff_id,status,shift_start,shift_end').eq('work_date',ds).in('staff_id',ids);
+      C.onDuty=(ros.data||[]).filter(function(r){return r.status==='working';}).map(function(r){return {name:byId[r.staff_id], start:r.shift_start, end:r.shift_end};}).filter(function(x){return x.name;});
     }
   }catch(e){}
   document.getElementById('cl-modal').style.display='flex';
   var delBtn=document.getElementById('cl-delete'); if(delBtn) delBtn.style.display = row ? '' : 'none';   // only deletable once saved
   clFill(row); clRenderComps(); clRenderComments();
-  // Auto-fill manager on duty for a NEW report (never overwrite a saved one)
+  // Auto-fill manager on duty for a NEW report (never overwrite a saved one).
+  //
+  // A manager belongs to the service they were actually STANDING IN, not the one
+  // their clock-in hour suggests. This used to split on shift START at 15:00 --
+  // and Roberto's dinner managers come in at 14:00 and work to midnight, so they
+  // were classed AM, PM came out empty, and a fallback then pasted the ENTIRE
+  // on-duty list into the PM box. Six of the twelve reports to 29 Aug 2026 named
+  // the same three managers for both services. (Francesco, 2 Sep 2026)
+  //
+  // Note the old asymmetry, which is what made it silent: AM was filled only
+  // `if(am.length)`, but PM had no such guard and fell through to everybody.
   if(!row && C.onDuty.length){
-    var am=C.onDuty.filter(function(x){return x.start && x.start<'15:00';}).map(function(x){return x.name;});
-    var pm=C.onDuty.filter(function(x){return !x.start || x.start>='15:00';}).map(function(x){return x.name;});
+    var am=C.onDuty.filter(function(x){return clOnAt(x,'13:00');}).map(function(x){return x.name;});
+    var pm=C.onDuty.filter(function(x){return clOnAt(x,'20:00');}).map(function(x){return x.name;});
     var amEl=document.getElementById('cl-mgr-am'), pmEl=document.getElementById('cl-mgr-pm');
+    // NO cross-fallback, in either direction. An empty side stays empty: "we do
+    // not know who ran that service" must never be written down as "all of them",
+    // which is the exact shape the old bug took. Somebody types it, or it is blank.
     if(amEl && !amEl.value && am.length) amEl.value=am.join(', ');
-    if(pmEl && !pmEl.value) pmEl.value=(pm.length?pm:C.onDuty.map(function(x){return x.name;})).join(', ');
+    if(pmEl && !pmEl.value && pm.length) pmEl.value=pm.join(', ');
   }
   var od=document.getElementById('cl-onduty'); if(od) od.innerHTML=C.onDuty.length?('&#128197; From schedule — Management on duty: <b>'+C.onDuty.map(function(x){return clEsc(x.name);}).join(', ')+'</b>'):'No Management rostered for this date.';
   clRecalc();
@@ -343,4 +357,19 @@ async function clSave(andEmail){
   revInit().opsRecentLoaded=false;
   if(state.currentTab==='revenue'||state.currentTab==='operations') renderMain();
   alert('Closing report saved · revenue updated.'+emailMsg);
+}
+
+// Is a shift running at hh:mm? Sounds trivial and is not: 1209 of the last sixty
+// days' shifts END BEFORE THEY START (14:00–00:00, 16:00–02:00), so a plain
+// `start <= t < end` range test gets every single one of them wrong. An open-ended
+// shift is treated as running from its start; a shift with no start claims nothing,
+// because a guess here is written into an accountability record.
+function clOnAt(x, hhmm){
+  var s = x && x.start, e = x && x.end;
+  if(!s) return false;
+  s = String(s).slice(0,5);
+  e = e ? String(e).slice(0,5) : null;
+  if(!e) return hhmm >= s;
+  return (e > s) ? (hhmm >= s && hhmm < e)      // ordinary same-day shift
+                 : (hhmm >= s || hhmm < e);     // runs past midnight
 }

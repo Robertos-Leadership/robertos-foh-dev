@@ -4912,7 +4912,9 @@ async function fohLoadSchedData(){
   var weekEnd  = formatDate(addDays(fohSchedWeekStart, 13));
   var weekFrom = formatDate(addDays(fohSchedWeekStart, -7));
   var res = await Promise.all([
-    sb.from('foh_staff').select('*').eq('active', true).order('sort_order'),
+    // NOT filtered on active here -- see the filter below, which keeps anyone who
+    // actually holds a roster row in the window being drawn.
+    sb.from('foh_staff').select('*').order('sort_order'),
     sb.from('foh_roster').select('*').gte('work_date', weekFrom).lte('work_date', weekEnd).limit(5000),
     sb.from('foh_events').select('*').gte('event_date', weekFrom).lte('event_date', weekEnd).limit(2000)
   ]);
@@ -4924,7 +4926,21 @@ async function fohLoadSchedData(){
     toast('Could not load the schedule — showing the last loaded data.', true);
     return;
   }
-  fohSchedStaff = (res[0].data || []).filter(function(s){ return s.in_schedule!==false; });   // Admin "show in schedule" toggle (foh_staff.in_schedule); null/absent = shown
+  // ⚠ Deactivating someone used to erase them from every week they had ALREADY
+  // worked. foh_roster rows are never deleted when a person leaves, but the grid
+  // filtered staff on `active` alone, so a finished week rendered short — 30 of 31
+  // rows every day of 24–30 Aug 2026, Iliaz Ismailov's five 16:00–02:00 shifts
+  // simply absent — and the "Total hours" footer, which sums this same array, was
+  // quietly short by them. No row, no marker, no message. Seven former staff hold
+  // 83 working shifts in the last 45 days. (Francesco, 2 Sep 2026)
+  //
+  // Keep anyone who is active OR who holds a roster row in the window being drawn.
+  // Nobody new appears in a future week: a leaver with no rows there is still gone.
+  var fohRostered = {};
+  (res[1].data || []).forEach(function(r){ fohRostered[r.staff_id] = 1; });
+  fohSchedStaff = (res[0].data || []).filter(function(s){
+    return s.in_schedule!==false && (s.active !== false || fohRostered[s.id]);
+  });   // in_schedule = the Admin "show in schedule" toggle; null/absent = shown
   fohSchedRoster = {};
   (res[1].data || []).forEach(function(r){
     fohSchedRoster[fohSchedRosterKey(r.staff_id, String(r.work_date).slice(0,10))] = r;
@@ -5177,6 +5193,8 @@ function fohSchedWeekTableHtml(weekStart, opts){
         '<span class="sch-ord">'+upBtn+dnBtn+'</span>' +
         '<span class="sch-del-btn" onclick="fohSchedConfirmDelete(event,\''+sid+'\')">×</span>' +
         staff.name +
+        // Shown, but never mistaken for someone still on the team.
+        (staff.active === false ? '<span title="No longer active — shown because they were rostered in this period" style="margin-left:6px;font-size:9.5px;letter-spacing:.06em;text-transform:uppercase;background:#E4DBCC;color:#4E4433;border-radius:8px;padding:2px 6px;font-weight:700;vertical-align:1px">left</span>' : '') +
         ((fohSchedPlanMode && fohKplStaff && !fohKplStaff.some(function(x){ return x.id === sid; })) ? '<span class="sch-plan-newbadge">NEW</span>' : '') +
         (staff.emp_id ? '<span class="sch-emp-id">'+staff.emp_id+'</span>' : '') + '</td>';
       html += '<td class="sch-td-role" onclick="fohSchedEditRole(event,\''+sid+'\')" style="cursor:pointer">' +
@@ -6641,7 +6659,8 @@ async function fohKrtLoadRange(numWeeks){
   var from = formatDate(addDays(fohSchedWeekStart,-7));
   var to   = formatDate(addDays(fohSchedWeekStart, numWeeks*7+6));
   var res = await Promise.all([
-    sb.from('foh_staff').select('*').eq('active',true).order('sort_order'),
+    // Same as fohLoadSchedData -- active is applied below, against the roster.
+    sb.from('foh_staff').select('*').order('sort_order'),
     sb.from('foh_roster').select('*').gte('work_date',from).lte('work_date',to).limit(8000),
     sb.from('foh_events').select('*').gte('event_date',from).lte('event_date',to).limit(3000)
   ]);
@@ -6652,7 +6671,21 @@ async function fohKrtLoadRange(numWeeks){
     toast('Could not load the schedule — showing the last loaded data.', true);
     return;
   }
-  fohSchedStaff = (res[0].data||[]).filter(function(s){ return s.in_schedule!==false; });
+  // ⚠ Deactivating someone used to erase them from every week they had ALREADY
+  // worked. foh_roster rows are never deleted when a person leaves, but the grid
+  // filtered staff on `active` alone, so a finished week rendered short — 30 of 31
+  // rows every day of 24–30 Aug 2026, Iliaz Ismailov's five 16:00–02:00 shifts
+  // simply absent — and the "Total hours" footer, which sums this same array, was
+  // quietly short by them. No row, no marker, no message. Seven former staff hold
+  // 83 working shifts in the last 45 days. (Francesco, 2 Sep 2026)
+  //
+  // Keep anyone who is active OR who holds a roster row in the window being drawn.
+  // Nobody new appears in a future week: a leaver with no rows there is still gone.
+  var fohRostered = {};
+  (res[1].data || []).forEach(function(r){ fohRostered[r.staff_id] = 1; });
+  fohSchedStaff = (res[0].data || []).filter(function(s){
+    return s.in_schedule!==false && (s.active !== false || fohRostered[s.id]);
+  });
   fohSchedRoster = {}; (res[1].data||[]).forEach(function(r){ fohSchedRoster[fohSchedRosterKey(r.staff_id, String(r.work_date).slice(0,10))]=r; });
   fohSchedEvents = {}; if(res[2] && !res[2].error){ (res[2].data||[]).forEach(function(e){ var d=String(e.event_date).slice(0,10); (fohSchedEvents[d]=fohSchedEvents[d]||[]).push({slot:e.slot||1,name:e.name}); }); }
 }
