@@ -330,6 +330,7 @@ function render(menus, bevs, alc, packs){
     '<a href="mailto:reservations@robertos.ae" style="color:var(--vino)">reservations@robertos.ae</a>.<br><br>'+
     (noPrice ? '' : 'All prices are in AED and inclusive of 5% VAT, 7% DIFC Authority Fee and 10% Service Charge.<br>')+
     'Our chefs will do their best to accommodate your dietary requirements.</div></div>';
+  if(/class="codes"/.test(h)) h += '<div class="sect" style="font-size:11px;color:var(--ink-faint);font-family:var(--font-body)">The letters after each dish are allergens: A alcohol · D dairy · E egg · G gluten · H homemade · N nuts · R raw · S shellfish · V vegetarian.</div>';
   el('card').innerHTML = h;
 }
 load();

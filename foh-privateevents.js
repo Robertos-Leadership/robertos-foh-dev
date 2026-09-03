@@ -83,6 +83,9 @@ var PE_LEAD_SOURCES = ['Walk-in','Phone call','WhatsApp','Email','Instagram / so
 // reading "all clear". Existing dishes need the G tag applied in Chef Corner.
 var PE_ALL_CODES = ['D','E','G','H','N','R','S','V'];
 var PE_ALLERGEN_WORDS = {D:'dairy', E:'egg', G:'gluten', H:'homemade', N:'nuts', R:'raw', S:'shellfish', V:'vegetarian'};
+// Printed once under any guest document that shows the letters — bare codes with
+// no key on the same page cannot be acted on, by the guest or the kitchen.
+var PE_ALG_KEY_LINE = 'The letters after each dish are allergens: A alcohol · D dairy · E egg · G gluten · H homemade · N nuts · R raw · S shellfish · V vegetarian.';
 // A plain-language allergen line for staff-facing screens — never a bare "(–)"
 // or a lone "(S)". "Allergens: shellfish, nuts" / "Allergens: none".
 function peAllergenText(alg){
@@ -4932,6 +4935,7 @@ function peProposalHTML(e, noPrice){
         (d.description?'<br><span class="d">'+peEsc(d.description)+'</span>':'')+'</div>';
     });
   });
+  if(/class="codes"/.test(body)) body += '<div class="d" style="font-size:10.5px;color:#4F4535;margin:6px 0 2px">'+PE_ALG_KEY_LINE+'</div>';
   var bev = e.bev_package_id ? peBevById(e.bev_package_id) : null;
   if(bev){
     body += '<div class="sec">Beverage</div><div class="dish">'+peEsc(bev.name)+(bev.duration_hours?' — '+bev.duration_hours+' hours':'')+

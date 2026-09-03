@@ -143,6 +143,8 @@ function render(data){
   // menu — a set-menu booking carries its food in set_menu, not in event_items, so
   // this used to print the heading "The food — <menu name>" with nothing under it.
   var groups = [['Cold','Cold'],['Hot','Hot'],['Dessert','Dolci']];
+  // The letters after a dish are only useful with the key on the same page.
+  var ALG_KEY = 'The letters after each dish are allergens: A alcohol · D dairy · E egg · G gluten · H homemade · N nuts · R raw · S shellfish · V vegetarian.';
   var menu = data.menu||[];
   var sm = data.setMenu;
   if(sm && (sm.courses||[]).length){
@@ -158,6 +160,7 @@ function render(data){
           (d?'<br><span class="ds">'+esc(d)+'</span>':'')+'</div>';
       });
     });
+    if(/class="cd"/.test(h)) h += '<div class="dish" style="margin-top:10px"><span class="cd">'+ALG_KEY+'</span></div>';
     h += '</div>';
   } else if(menu.length || ev.package_label){
     h += '<div class="sect"><div class="sect-h">The food'+(ev.package_label?' — '+esc(ev.package_label):'')+'</div>';
@@ -170,6 +173,7 @@ function render(data){
           (d.description?'<br><span class="ds">'+esc(d.description)+'</span>':'')+'</div>';
       });
     });
+    if(/class="cd"/.test(h)) h += '<div class="dish" style="margin-top:10px"><span class="cd">'+ALG_KEY+'</span></div>';
     h += '</div>';
   }
 
