@@ -344,7 +344,7 @@ function renderReviews(){
 // than waiting 30 days — an honest small number beats an invented big one.
 function grDeltaHead(board){
   var b = board.find(function(x){ return x.since; });
-  return b ? ('New since '+grDate(b.since)) : 'New ratings';
+  return b ? ('New ratings since '+grDate(b.since)) : 'New ratings';
 }
 function grDeltaPill(v, hero){
   if(v.newToday || v.delta==null){
@@ -359,6 +359,18 @@ function grDeltaPill(v, hero){
   var txt = (neg?'−':'+')+grNum(Math.abs(v.delta||0))+(hero?(' ratings since '+grDate(v.since)):'');
   return hero ? '<div class="gr-delta">'+txt+'</div>'
               : '<span class="gr-vel'+(big?' gr-vel-hot':'')+'">'+txt+'</span>';
+}
+
+// Reported from the app on 2 Sep 2026, on this page, verbatim:
+// "I dont undrastand 26% or 26 reviews +". A bar that fills a track with a
+// bare number beside it reads as a percentage — and this page carries TWO
+// charts drawn with identical bars whose numbers are not the same kind of
+// thing at all: the race counts REVIEWS, the one below it averages STARS out
+// of 5. Neither said so. So every bar chart now carries a column heading that
+// names its own unit, in the same type as the table headings elsewhere on the
+// page, and the delta columns say what they are a delta OF.
+function grRaceHead(unit){
+  return '<div class="gr-race-hd"><div>Venue</div><div></div><div>'+grEsc(unit)+'</div></div>';
 }
 
 // One stat tile: uppercase label, serif figure, quiet sub-line.
@@ -509,6 +521,7 @@ function grRaceHTML(){
     + '</div>');
   h.push('<div class="gr-race-basis">Every review counted once, on the day the guest wrote it</div>');
   h.push('<div class="gr-race">');
+  h.push(grRaceHead('Reviews'));
   rows.forEach(function(x){
     var pct = x.n > 0 ? Math.max(4, Math.round(x.n/max*100)) : 2;
     // No spike flag on these bars, deliberately: a spike is a fault in
@@ -605,8 +618,16 @@ function grReconHTML(){
   if(!rows.length) return '';
 
   var h = ['<div class="gr-card">'];
+  // The headings must stay SHORT. Spelling them out in full ("Reviews guests
+  // wrote" / "Google's total moved") widened the table past its column on a
+  // laptop and pushed the explanation column off the right edge behind a
+  // scrollbar — seen on screen before shipping. So the unit is named in a
+  // basis line above the table instead, the same as the race card does it,
+  // and only "published" → "move" changes in the heading, which is what makes
+  // the "+25" in that column mean something.
+  h.push('<div class="gr-race-basis gr-race-basis-top">Reviews guests wrote, beside how far Google’s own published total moved over the same days</div>');
   h.push('<div class="gr-scrollx"><table class="gr-rec">'
-    + '<tr><th>Venue</th><th class="n">Guests wrote</th><th class="n">Google published</th><th></th></tr>');
+    + '<tr><th>Venue</th><th class="n">Guests wrote</th><th class="n">Google’s move</th><th></th></tr>');
   rows.forEach(function(x){
     // The GAP is the headline where it is big — that is the thing worth
     // acting on. A one-night spike only gets the column when the two totals
@@ -685,7 +706,9 @@ function grQualityHTML(){
   // Scale from 3.0 so the gap between a 4.7 and a 3.9 is visible, not a
   // near-identical pair of full bars.
   var lo = 3.0;
-  var h = ['<div class="gr-card">','<div class="gr-race">'];
+  var h = ['<div class="gr-card">',
+    '<div class="gr-race-basis gr-race-basis-top">The average number of stars guests gave, out of 5</div>',
+    '<div class="gr-race">', grRaceHead('Stars')];
   rows.forEach(function(x){
     var thin = x.n < MIN;
     var pct = Math.max(4, Math.round(((x.avg-lo)/(5-lo))*100));
