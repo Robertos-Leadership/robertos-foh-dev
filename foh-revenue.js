@@ -1253,6 +1253,12 @@ function revRenderMonth(){
   // nothing on screen has ever said how they relate, so the gap between them is spelled out.
   if(T>0 && mb!=null && Math.abs(T-mb)>=1){
     h.push('<div class="rev-alloc rev-mut" style="display:block;margin:8px 2px 0;font-size:12px">The target is <b>'+revMoney(Math.abs(T-mb)).replace('AED ','')+'</b> '+(T>mb?'above':'below')+' the monthly budget. The <b>budget</b> is the benchmark the month is judged on; the <b>target</b> is the internal stretch.</div>');
+  } else if(T>0 && mb!=null){   // revTgtEqBudget — target and budget are the SAME figure this
+    // month, so the two rows above print an identical number. Without a line here that reads as
+    // a copy-paste error on screen, which is exactly what the reconciliation sentence exists to
+    // prevent. Say they match rather than hiding the target row: a benchmark that silently
+    // disappears is worse than one that repeats.
+    h.push('<div class="rev-alloc rev-mut" style="display:block;margin:8px 2px 0;font-size:12px">The <b>target</b> matches the monthly budget this month, so both rows above show the same figure. The <b>budget</b> is the benchmark the month is judged on; the <b>target</b> is the internal stretch.</div>');
   } else if(T>0 && mb==null){
     h.push('<div class="rev-alloc rev-mut" style="display:block;margin:8px 2px 0;font-size:12px">No monthly budget is set, so the budget above comes from the weekday rates pattern. The <b>target</b> is the internal stretch.</div>');
   }
