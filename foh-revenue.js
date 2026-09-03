@@ -1482,7 +1482,7 @@ function revRenderForecast(){
   h.push('<div class="rev-budget-bar"><label class="rev-lbl" style="margin:0">Monthly target</label>'
     +'<input id="rev-fc-target" type="number" inputmode="decimal" class="rev-inp" style="width:150px" value="'+(hasT?fc.target:'')+'" placeholder="1800000" onkeydown="if(event.key===\'Enter\')revFcSaveTarget()">'
     +'<button class="rev-btn" onclick="revFcSaveTarget()">Set</button>'
-    +(hasT?'<span class="rev-alloc rev-mut">Task-force target for '+revMonthLabel(p).split(' ')[0]+'</span>':'<span class="rev-alloc rev-mut">Enter the target (e.g. 1,800,000) to see the gap.</span>')+'</div>');
+    +(hasT?'<span class="rev-alloc rev-mut">Target for '+revMonthLabel(p).split(' ')[0]+'</span>':'<span class="rev-alloc rev-mut">Enter the target (e.g. 1,800,000) to see the gap.</span>')+'</div>');
   // cards
   h.push('<div class="rev-cards">');
   h.push('<div class="rev-card"><div class="rev-k">Pure-trend forecast</div><div class="rev-v">'+revMoney(fc.trend)+'</div><div class="rev-sub">'+fc.trading+' trading days · run-rate only</div></div>');
