@@ -424,6 +424,25 @@ async function revSaveMonthlyBudget(){
   else { if(typeof toast==='function') toast('Saved ✓'); }
 }
 
+// Set the monthly TARGET for the period on screen. The Forecast tab has a target box too, but it
+// is clamped to the month AFTER the current one (revFcFirstPeriod), so the month actually being
+// traded could not be corrected anywhere in the app - a stale target just sat on the card. The
+// budget box beside this one never had that clamp; the asymmetry was accidental. Empty clears it.
+async function revSaveMonthlyTarget(){
+  var R=revInit(), p=R.period, v=revNum('rev-monthly-target');
+  var had=(p in R.targets), prev=R.targets[p];   // snapshot for revert on failure
+  if(v!=null) R.targets[p]=v; else delete R.targets[p];
+  renderMain();
+  var res=await sb.from('rev_targets').upsert({period:p, monthly_target:v},{onConflict:'period'});
+  if(res.error){
+    if(had) R.targets[p]=prev; else delete R.targets[p];   // never leave an unsaved figure looking real
+    renderMain();
+    console.error('rev monthly target',res.error);
+    alert('Could not save monthly target — NOT stored (reverted on screen): '+res.error.message);
+  }
+  else { if(typeof toast==='function') toast('Saved ✓'); }
+}
+
 // ── Edit a day (Restaurant/Lounge x Lunch/Dinner) ──
 function revNum(id){ var el=document.getElementById(id); if(!el) return null; var v=el.value.trim(); if(v==='') return null; v=Number(v.replace(/[^0-9.\-]/g,'')); return isFinite(v)?v:null; }
 function revEditDay(ds){
@@ -1153,6 +1172,17 @@ function revRenderMonth(){
           ? '<span class="rev-alloc rev-pos">Allocated '+revMoney(m.budgetTotal)+' = budget &#10003;</span>'
           : '<span class="rev-alloc">Allocated '+revMoney(m.budgetTotal)+' / budget '+revMoney(mb)+' <b>('+(allocD>=0?'+':'−')+revMoney(Math.abs(allocD)).replace('AED ','')+')</b></span>')
       : '<span class="rev-alloc rev-mut">Distributes across days by weekday pattern. Leave empty to use the rates pattern.</span>')
+    +'</div>');
+  // Monthly target, beside the budget. revMonthlyTargetBar - the Forecast tab cannot reach the
+  // month in service, so without this the running month's target is unreachable from the app.
+  var mt=(R.targets&&R.targets[p])||0;
+  h.push('<div class="rev-budget-bar">'
+    +'<label class="rev-lbl" style="margin:0">Monthly target</label>'
+    +'<input id="rev-monthly-target" type="number" inputmode="decimal" class="rev-inp" style="width:150px" value="'+(mt>0?mt:'')+'" placeholder="e.g. 2000000" onkeydown="if(event.key===&#39;Enter&#39;)revSaveMonthlyTarget()">'
+    +'<button class="rev-btn" onclick="revSaveMonthlyTarget()">Set</button>'
+    +(mt>0
+      ? '<span class="rev-alloc rev-mut">The internal stretch. The <b>budget</b> above is what the month is judged on.</span>'
+      : '<span class="rev-alloc rev-mut">No target set for this month. Leave empty to keep it that way.</span>')
     +'</div>');
   // Trust guard: name any ended nights with no closing report, so MTD is never silently short.
   h.push(revUnfiledBanner(p));
