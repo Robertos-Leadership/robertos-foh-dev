@@ -1217,6 +1217,7 @@ function revRenderMonth(){
   h.push('<div class="rev-section-h">Review — '+revMonthLabel(p)+' vs '+revMonthLabel(rv.prevPeriod)+' (matched window, through day '+rv.windowDay+')</div>');
   function rrow(label,o,money){ return '<tr><td>'+label+'</td><td>'+(money?revMoney(o.prev):Math.round(o.prev).toLocaleString())+'</td><td>'+(money?revMoney(o.cur):Math.round(o.cur).toLocaleString())+'</td><td class="'+revPctClass(o.chg)+'">'+revPct(o.chg)+'</td></tr>'; }
   h.push('<div class="rev-grid-wrap"><table class="rev-grid"><thead><tr><th>Metric</th><th>'+revMonthLabel(rv.prevPeriod).split(' ')[0]+'</th><th>'+revMonthLabel(p).split(' ')[0]+'</th><th>Change</th></tr></thead><tbody>');
+  h.push('<tr><td>Trading days</td><td>'+rv.tradingDays.prev+'</td><td>'+rv.tradingDays.cur+'</td><td class="'+(rv.tradingDays.cur===rv.tradingDays.prev?'rev-mut':'rev-neg')+'">'+(rv.tradingDays.cur===rv.tradingDays.prev?'matched':'not matched')+'</td></tr>');
   h.push(rrow('Net sales',rv.net,true));
   h.push(rrow('Avg net / day',rv.avgDay,true));
   h.push(rrow('Covers',rv.covers,false));
@@ -1224,6 +1225,7 @@ function revRenderMonth(){
   h.push(rrow('Restaurant spend/cover',rv.venueRest,true));
   h.push(rrow('Lounge spend/cover',rv.venueLoun,true));
   h.push('</tbody></table></div>');
+  if(rv.tradingDays.cur!==rv.tradingDays.prev) h.push('<div class="rev-alloc rev-mut" style="display:block;margin:8px 2px 0;font-size:12px">The two windows do not hold the same number of trading nights (<b>'+rv.tradingDays.prev+'</b> vs <b>'+rv.tradingDays.cur+'</b>) &mdash; Sundays and any closed night are not counted. <b>Net sales</b> and <b>Covers</b> above are raw totals over unequal nights, so read <b>Avg net / day</b> and <b>Avg spend / cover</b> as the like-for-like comparison.</div>');
   // weekday averages
   h.push('<div class="rev-section-h">Avg net by weekday (apples-to-apples)</div>');
   h.push('<div class="rev-grid-wrap"><table class="rev-grid"><thead><tr><th>Weekday</th><th>'+revMonthLabel(rv.prevPeriod).split(' ')[0]+' avg</th><th>'+revMonthLabel(p).split(' ')[0]+' avg</th><th>Change</th></tr></thead><tbody>');
