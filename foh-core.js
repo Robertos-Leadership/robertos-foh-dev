@@ -1437,6 +1437,18 @@ function admAttention(){
       cta:'See who' });
   }
 
+  // A signer who has left cannot be un-ticked from their own page, because they
+  // are not on it any more — so this band is the only place it can surface.
+  var sgs = admSignersStale();
+  if(sgs.loaded && sgs.n){
+    if(sgs.emptied.length) out.push({ sev:'warn', go:'people',
+      text:'Everyone approved to sign <b>' + admEsc(sgs.emptied.join('</b> and <b>')) + '</b> has left &mdash; so it is open to the whole team until somebody is ticked again.',
+      cta:'Clear who has left', act:'admSignersTidy()' });
+    else out.push({ sev:'note', go:'people',
+      text:'<b>' + sgs.n + '</b> ' + (sgs.n===1?'person is':'people are') + ' still approved to tap-sign but ' + (sgs.n===1?'has':'have') + ' left &mdash; their tick cannot be reached from their own page any more.',
+      cta:'Clear who has left', act:'admSignersTidy()' });
+  }
+
   // Settings that are costing money or are not switched on at all.
   if(state.admVipCfg===null) out.push({ sev:'note', go:'settings',
     text:'Flagging public figures in Reservations is <b>not set up</b> &mdash; it needs its table creating once.',
@@ -2105,6 +2117,74 @@ async function admToggleVipScan(on){
   // otherwise switching on here appears to do nothing until a reload.
   if(typeof RESV !== 'undefined'){ RESV.loaded = false; RESV.enabled = null; RESV.rows = {}; }
   toast(on ? 'On — Reservations will flag possible public figures.' : 'Off — no name checks will run.');
+  renderMain();
+}
+
+// The actions that can be tap-signed. Was written out by hand in three places;
+// a fourth action added to two of them would have been invisible to the stale
+// check below, which is the one that has to know about all of them.
+var ADM_SIGNER_ACTS = [['closing_report','Closing report'], ['roster','Roster to HR']];
+
+// ── Who is still approved to sign but is no longer here ────────────────────
+// This goes wrong on its own, quietly, and there was no way to see it: the tick
+// lives inside a PERSON's panel on the People screen, and somebody who has left
+// is not on that screen any more. So the last place the tick can be seen is the
+// one place it can no longer be reached. Alessandro Viscardi sat in the
+// closing-report list for months after leaving; nobody could have noticed.
+//
+// It matters because the gate fails OPEN, deliberately: if every approved signer
+// has gone, fohPickPerson offers the WHOLE team rather than nobody, so the
+// closing report can still be signed at 2am. Good behaviour — but it must not be
+// silent, or a list that has quietly emptied looks exactly like a list nobody
+// ever set.
+//
+// ⚠ Reads state.adminFoh, which is EMPTY until loadAdminUsers resolves. Without
+// the loaded guard every signer reads as gone and this screen would announce the
+// gate is wide open while it is perfectly fine.
+function admSignersStale(){
+  var sg = state.adminSigners || {};
+  var loaded = !!(state.adminFoh && state.adminFoh.length);
+  var live = {};
+  (state.adminFoh || []).forEach(function(x){ live[String(x.id)] = 1; });
+  var gone = {}, emptied = [], n = 0;
+  if(loaded){
+    ADM_SIGNER_ACTS.forEach(function(a){
+      var ids = (sg[a[0]] || []).map(String);
+      if(!ids.length) return;                 // not restricted at all — nothing can be stale
+      var g = ids.filter(function(id){ return !live[id]; });
+      if(!g.length) return;
+      g.forEach(function(id){ gone[id] = 1; });
+      n += g.length;
+      if(g.length === ids.length) emptied.push(a[1]);   // every approved signer has left
+    });
+  }
+  return { loaded:loaded, n:n, ids:Object.keys(gone), emptied:emptied };
+}
+
+// Clear ONLY the people who have left. Everyone still here keeps their tick —
+// this must never read as "it wiped my signers".
+async function admSignersTidy(){
+  var st = admSignersStale();
+  if(!st.loaded){ toast('Still loading the staff list — try that again in a second.', true); return; }
+  if(!st.n){ toast('Nothing to clear — everyone who can tap-sign is still here.'); return; }
+  if(!confirm('Clear ' + st.n + ' ' + (st.n===1?'person':'people') + ' who have left from the tap-sign lists?\n\n'
+    + 'Only people who are no longer on the staff list are removed. Everyone still here keeps their tick.')) return;
+  var sg = state.adminSigners || {}, live = {};
+  (state.adminFoh || []).forEach(function(x){ live[String(x.id)] = 1; });
+  var next = {};
+  Object.keys(sg).forEach(function(k){
+    next[k] = (sg[k] || []).map(String).filter(function(id){ return live[id]; });
+  });
+  var prev = state.adminSigners;
+  state.adminSigners = next;                  // show it straight away
+  var res = await sb.from('app_config').upsert(
+    { key:'signers', value:next, updated_at:new Date().toISOString() }, { onConflict:'key' });
+  if(res.error){
+    state.adminSigners = prev;                // put the screen back — it must not claim a save that failed
+    toast('Could not save that: ' + res.error.message, true);
+    renderMain(); return;
+  }
+  toast(st.n + (st.n===1?' person':' people') + ' cleared — only people who are still here can tap-sign now.');
   renderMain();
 }
 
@@ -4025,7 +4105,7 @@ function admDetailFull(p){
     // Same control as the modules above it, for the same reason: this was the
     // last row of loose pills in the panel, and two different-looking things
     // that both mean "on/off" read as two different kinds of setting.
-    var sg=state.adminSigners||{}, ACTS=[['closing_report','Closing report'],['roster','Roster to HR']];
+    var sg=state.adminSigners||{}, ACTS=ADM_SIGNER_ACTS;
     var st=ACTS.map(function(a){
       var on=(sg[a[0]]||[]).indexOf(p.id)>-1;
       return '<button class="px-acc'+(on?' on':'')+'" onclick="admSignerToggle(\''+a[0]+'\',\''+admEsc(String(p.id))+'\')">'
@@ -4158,7 +4238,7 @@ function admDetailHTML(p){
     parts.push('<div class="px-dsec"><div class="px-dlbl">App access — '+admEsc(email)+'</div><div class="adm-ticks">'+mods+editTick+adm+'</div><div class="adm-ticks" style="margin-top:7px;"><span class="adm-emails-lbl">Emails:</span>'+notif+'</div><div style="margin-top:9px;"><button class="px-mini px-mini-red" onclick="adminDeleteUser(\''+admEsc(email)+'\')">Remove login</button></div></div>');
   }
   if(p.src==='foh'){
-    var sg=state.adminSigners||{}; var ACTS=[['closing_report','Closing report'],['roster','Roster to HR']];
+    var sg=state.adminSigners||{}; var ACTS=ADM_SIGNER_ACTS;
     var ticks=ACTS.map(function(a){ var on=(sg[a[0]]||[]).indexOf(p.id)!==-1; return '<label class="adm-tick"><input type="checkbox" '+(on?'checked':'')+' onchange="admSignerToggle(\''+a[0]+'\',\''+admEsc(String(p.id))+'\')"> '+a[1]+'</label>'; }).join('');
     parts.push('<div class="px-dsec"><div class="px-dlbl">Can tap-sign</div><div class="adm-ticks">'+ticks+'</div></div>');
   }
@@ -4894,7 +4974,7 @@ const FOH_SEND_SUPER = { '1212': 'Admin', '0000': 'Cost Controller' };
 function fohPickPerson(actionLabel, actionKey, opts){
   opts=opts||{};
   return new Promise(function(resolve){
-    var done=false, people=[], code='';
+    var done=false, people=[], code='', fpkWarn='';
     function onKey(e){ if(e.key==='Escape') finish(null); }
     function finish(v){ if(done) return; done=true; var o=document.getElementById('fpk-ovl'); if(o) o.remove(); document.removeEventListener('keydown',onKey); resolve(v); }
     function box(){ return document.getElementById('fpk-box'); }
@@ -4919,6 +4999,7 @@ function fohPickPerson(actionLabel, actionKey, opts){
         }).join('');
       b.innerHTML='<div style="font-family:Georgia,serif;color:#6B1F2A;font-size:19px;">Who’s doing this?</div>'
         +'<div style="font-size:12.5px;color:#4F4535;margin:2px 0 12px;">Tap your name to '+admEsc(actionLabel)+'. It’s recorded.</div>'
+        +fpkWarn
         +(useSearch?'<input id="fpk-search" placeholder="Search your name…" style="width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid #d8cbb6;border-radius:9px;font-size:15px;margin-bottom:12px;">':'')
         +'<div id="fpk-list" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:9px;max-height:44vh;overflow:auto;">'+(html||'<div style="color:#4F4535;font-size:13px;padding:8px;">No match.</div>')+'</div>'
         +'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:14px;border-top:0.5px solid #ece3d3;padding-top:12px;">'
@@ -4974,6 +5055,17 @@ function fohPickPerson(actionLabel, actionKey, opts){
       var cfg=(res[1]&&res[1].data&&res[1].data[0])?(res[1].data[0].value||{}):{};
       var ids=(actionKey && cfg[actionKey] && cfg[actionKey].length)?cfg[actionKey]:null;
       people = ids ? all.filter(function(p){ return ids.indexOf(p.id)!==-1; }) : all;
+      // Fails OPEN on purpose: a list that has emptied must never mean nobody can
+      // sign the closing report at 2am. But it says so, because until now an
+      // emptied list and a list nobody ever set looked identical — the picker
+      // simply showed the whole team either way, for as long as that lasted.
+      // Only when a list WAS set (ids) and everyone on it has gone.
+      if(ids && !people.length){
+        people = all;
+        fpkWarn = '<div style="background:#FBF0E6;border:0.5px solid #E0C4BE;border-radius:9px;padding:9px 11px;margin:0 0 12px;font-size:12.5px;color:#6B1F2A;line-height:1.45;">'
+          + '<b>Everyone is listed below.</b> The people approved for this have all left the team, so it is open to everyone tonight. '
+          + 'It is already flagged on the Admin screen &mdash; carry on.</div>';
+      }
       if(!people.length) people=all;
       people.sort(function(a,b){ return rankSec(a.section)-rankSec(b.section)||(a.name||'').localeCompare(b.name||''); });
       showNames('');
