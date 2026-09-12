@@ -13,9 +13,10 @@
 // ════════════════════════════════════════════════════════════
 const FROM = "Roberto's DIFC FOH <reports@kitchenteam.robertos.ae>";   // verified Resend domain
 
-// Defaults if the app sends nothing (Beverage/Tobacco to Aung; cc Asarudeen, Manuel, Jad).
+// Defaults if the app sends nothing (Beverage/Tobacco to Aung; cc Asarudeen, Manuel).
+// Jad Ballout removed 12 Sep 2026 (left the company).
 const DEFAULT_TO = ["ahtwe@robertos.ae"];
-const DEFAULT_CC = ["amohamed@robertos.ae", "mpetrosino@robertos.ae", "jballout@robertos.ae"];
+const DEFAULT_CC = ["amohamed@robertos.ae", "mpetrosino@robertos.ae"];
 
 const cors = {
   "Access-Control-Allow-Origin": "*",

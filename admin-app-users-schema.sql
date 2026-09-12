@@ -22,7 +22,7 @@ create policy "app_users auth" on app_users for all to authenticated using (true
 -- Seed the three current people (safe to re-run — won't overwrite existing rows)
 insert into app_users (email, name, modules, is_admin) values
   ('fguarracino@robertos.ae','Francesco Guarracino', array['events','operations','revenue','stocktake'], true),
-  ('jballout@robertos.ae',  'Jad Ballout',           array['events','operations','stocktake'],          false),
+  -- Jad Ballout removed 12 Sep 2026 (left the company); his login is banned.
   ('ahtwe@robertos.ae',     'Aung Htwe',             array['events','operations','revenue','stocktake'], false)
 on conflict (email) do nothing;
 
