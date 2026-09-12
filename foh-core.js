@@ -1323,6 +1323,17 @@ async function admRemove(src,id){
   var client=src==='foh'?sb:sbKitchen, table=src==='foh'?'foh_staff':'staff';
   var res=await client.from(table).update({active:false}).eq('id',id);
   if(res.error){ alert('Could not remove: '+res.error.message); return; }
+  // "They stop appearing in rosters" has to be true. The FOH schedule keeps
+  // anyone still holding a roster row in the week being drawn, so deactivating
+  // alone leaves them standing on every week they were already booked into —
+  // the defect Jins Thomas reported on 12 Sep 2026. Clear the days in FRONT of
+  // them; past days are the record of hours worked and are never touched.
+  // (Kitchen's grid filters on active, so its list needs no equivalent.)
+  if(src==='foh'){
+    var today=(typeof fohSchedTodayStr==='function') ? fohSchedTodayStr() : new Date().toISOString().slice(0,10);
+    var fr=await sb.from('foh_roster').delete().eq('staff_id',id).gt('work_date',today);
+    if(fr.error){ console.error('Leaver future-roster clear error:',fr.error); alert((rec.name||'They')+' was removed from the staff list, but their upcoming rostered days could NOT be cleared:\n'+fr.error.message+'\n\nThey will still show on those weeks — remove them from the schedule screen instead.'); }
+  }
   adminRefresh();
 }
 
@@ -4958,6 +4969,25 @@ async function fohLoadSchedData(){
   }
 }
 
+// ── Who belongs on the days being drawn ──
+// fohLoadSchedData keeps a leaver in fohSchedStaff while they hold a roster row
+// ANYWHERE in the loaded window (weekStart-7 .. +13), so that a finished week
+// still shows the shifts they really worked. That window is wider than any one
+// screen, so without this second test a leaver also stands on every other week
+// in it — an empty row that nothing can shift, which is what "I tried to remove
+// them from the schedule but couldn't" meant (Jins Thomas, 12 Sep 2026).
+// Active people always show: you have to be able to roster an empty week.
+function fohSchedHasRowIn(sid, dates){
+  for(var i=0;i<dates.length;i++){
+    if(fohSchedRoster[fohSchedRosterKey(sid, dates[i])]) return true;
+    if(fohSchedPlanMode && typeof fohKplDraft!=='undefined' && fohKplDraft && fohKplDraft[sid+'|'+dates[i]]) return true;
+  }
+  return false;
+}
+function fohSchedVisibleIn(list, dates){
+  return list.filter(function(s){ return s.active!==false || fohSchedHasRowIn(s.id, dates); });
+}
+
 async function fohLoadAttendance(){
   var from = formatDate(addDays(fohSchedWeekStart, -1));
   var to   = formatDate(addDays(fohSchedWeekStart, 8));
@@ -5179,8 +5209,9 @@ function fohSchedWeekTableHtml(weekStart, opts){
   }
   html += '<td colspan="'+(moveCol?3:2)+'"></td></tr>';
 
+  var fohVisDates = days.map(formatDate);
   FOH_SECTIONS.forEach(function(sec){
-    var allStaff = fohSchedStaff.filter(function(s){ return s.section === sec.key; });
+    var allStaff = fohSchedVisibleIn(fohSchedStaff.filter(function(s){ return s.section === sec.key; }), fohVisDates);
     if(!allStaff.length && !showEmpty) return;
     html += '<tr class="sch-station-hdr"><td colspan="'+span+'">' + sec.label + '</td></tr>';
     allStaff.forEach(function(staff, sidx){
@@ -5270,7 +5301,7 @@ function fohRenderSchedDay(){
   var total=0, clockedIn=0;
   var sections='';
   FOH_SECTIONS.forEach(function(sec){
-    var working = fohSchedStaff.filter(function(s){
+    var working = fohSchedVisibleIn(fohSchedStaff, [today]).filter(function(s){
       if(s.section !== sec.key) return false;
       var row = fohSchedRoster[fohSchedRosterKey(s.id, today)];
       return !row || row.status === 'working';
@@ -5637,7 +5668,12 @@ async function fohSchedUndoLast(){
     try{
       if(upserts.length){ var r=await sb.from('foh_roster').upsert(upserts,{onConflict:'staff_id,work_date'}); if(r.error) throw r.error; }
       for(var i=0;i<deletes.length;i++){ var d=deletes[i]; var dr=await sb.from('foh_roster').delete().eq('staff_id',d.staffId).eq('work_date',d.date); if(dr.error) throw dr.error; }
+      // Undoing a "remove person" has to put the PERSON back, not only their days.
+      if(u.reactivate){ var ra=await sb.from('foh_staff').update({active:true}).eq('id',u.reactivate); if(ra.error) throw ra.error; }
     }catch(e){ console.error('Undo sync error',e); alert('Undo could not reach the server: '+(e.message||e)+'\nReopen the schedule to be sure it matches.'); }
+    // The name may have left fohSchedStaff entirely, so rebuild from the database
+    // rather than guess — the grid must show what was just written, not a patch of it.
+    if(u.reload){ await fohLoadSchedData(); fohRenderSchedWeek(); fohSchedRenderUndoBtn(); }
   }
 }
 // Permanent toolbar button (in the schedule toolbar). Always visible — enabled with
@@ -5774,6 +5810,22 @@ function fohSchedMoveStaff(event, staffId, dir){
 }
 
 // ── Delete staff ──
+// ⚠ Removing someone used to do ONE thing: set foh_staff.active=false. That was
+// enough while the grid filtered on `active` — but since 2 Sep the grid keeps
+// anyone who still holds a roster row in the window being drawn, so that a
+// finished week keeps the shifts they really worked (see fohLoadSchedData). The
+// two together made Remove look like it did nothing: the name vanished for as
+// long as the screen stayed up and was back on the next load, for ever, with no
+// way to shift it. On 12 Sep 2026 Jad and Christiansen were BOTH already
+// active=false and BOTH still standing on next week's grid, 9 rows each, because
+// the roster rows out in front of them were never cleared. (Jins Thomas, Tell us.)
+//
+// Remove now does both halves: deactivate the person AND clear every roster row
+// AFTER today, so they come off every future week. Today and every past day are
+// untouched — those hours were really worked — and the person stays on screen
+// wherever they still hold a row, carrying the LEFT tag. That is exactly what a
+// reload renders, so the screen can no longer disagree with the database.
+// Undoable: the cleared rows are snapshotted first.
 function fohSchedConfirmDelete(event, staffId){
   event.stopPropagation();
   if(!fohSchedGuard(null)) return;
@@ -5791,11 +5843,66 @@ function fohSchedConfirmDelete(event, staffId){
     fohRenderSchedWeek(); fohSchedPlanSaveDraft();
     return;
   }
-  if(!confirm('Remove '+staff.name+' from roster? This cannot be undone.')) return;
-  fohSchedStaff=fohSchedStaff.filter(function(s){ return s.id!==staffId; });
+  fohSchedRemoveLeaver(staff);
+}
+
+// Clear a leaver off every day still in front of them. Read the rows FIRST (the
+// count and the dates go in the question, and the rows go in the undo snapshot),
+// then ask, then write. A failed read changes nothing and says so — the one thing
+// this must never do is half-remove someone and leave the screen looking finished.
+async function fohSchedRemoveLeaver(staff){
+  var today = fohSchedTodayStr();   // Dubai wall clock, not the device's
+  var sel = await sb.from('foh_roster').select('*').eq('staff_id', staff.id).gt('work_date', today).order('work_date');
+  if(sel.error){
+    console.error('Leaver lookup error:', sel.error);
+    alert('Could not check ' + staff.name + '’s upcoming days: ' + sel.error.message + '\n\nNothing was changed — try again.');
+    return;
+  }
+  var future = sel.data || [];
+  var dstr = function(r){ return String(r.work_date).slice(0,10); };
+  // Carry the month: a range like "Sun 13 – Sun 20" is unreadable across a month end.
+  var dlab = function(ds){ try{ return new Date(ds+'T12:00:00').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'}); }catch(e){ return ds; } };
+  var msg = 'Remove ' + staff.name + ' from the schedule?\n\n';
+  if(future.length){
+    var f=dstr(future[0]), l=dstr(future[future.length-1]);
+    msg += '• Their ' + future.length + ' upcoming day' + (future.length===1?'':'s') + ' (' + dlab(f) + (l!==f?(' – '+dlab(l)):'') + ') will be cleared, so they come off every week from tomorrow on.\n';
+  } else {
+    msg += '• They have nothing booked ahead — there is nothing left to clear.\n';
+  }
+  msg += '• Today and every week they already worked stay exactly as they are, with a LEFT tag, so the hours stay right.\n\nYou can Undo this.';
+  if(!confirm(msg)) return;
+
+  // Snapshot BEFORE the writes so Undo can put every cleared day back — and the
+  // person with them, if this is what took them off the team.
+  fohSchedUndoStack.push({
+    label: 'remove ' + staff.name + ' from the schedule',
+    cells: future.map(function(r){ var d=dstr(r); return { staffId:staff.id, date:d, key:fohSchedRosterKey(staff.id,d), prev:JSON.parse(JSON.stringify(r)) }; }),
+    reactivate: (staff.active!==false) ? staff.id : null,
+    reload: true
+  });
+  if(fohSchedUndoStack.length>25) fohSchedUndoStack.shift();
+  fohSchedRenderUndoBtn();
+
+  future.forEach(function(r){ delete fohSchedRoster[fohSchedRosterKey(staff.id, dstr(r))]; });
+  staff.active = false;
+  // Keep the name only where they still hold a row in the window on screen — the
+  // same test fohLoadSchedData applies. Dropping it outright is what made the
+  // removal look like it worked and then undo itself on the next load.
+  var stillHere = Object.keys(fohSchedRoster).some(function(k){ return k.indexOf(staff.id+'|')===0; });
+  if(!stillHere) fohSchedStaff = fohSchedStaff.filter(function(s){ return s.id!==staff.id; });
   fohRenderSchedWeek();
-  sb.from('foh_staff').update({active:false}).eq('id',staffId)
-    .then(function(res){ if(res.error){ console.error('Delete error:',res.error); fohLoadSchedData().then(fohRenderSchedWeek); } });
+
+  if(FOH_DEV_READ_ONLY) return;
+  var up = await sb.from('foh_staff').update({active:false}).eq('id', staff.id);
+  var del = future.length ? await sb.from('foh_roster').delete().eq('staff_id', staff.id).gt('work_date', today) : {error:null};
+  if(up.error || del.error){
+    console.error('Remove staff error:', up.error || del.error);
+    fohSchedUndoStack.pop(); fohSchedRenderUndoBtn();
+    toast('Could not remove ' + staff.name + ' — putting the schedule back.', true);
+    await fohLoadSchedData(); fohRenderSchedWeek();
+    return;
+  }
+  toast(staff.name + ' removed' + (future.length?(' — ' + future.length + ' upcoming day' + (future.length===1?'':'s') + ' cleared'):'') + '. Past weeks keep their shifts.');
 }
 
 // ── Add staff ──
@@ -6014,8 +6121,10 @@ function fohSchedMultiWeekTableHtml(weekStart, numWeeks){
   }});
   html += '<td colspan="3"></td></tr>';
 
+  var fohKrtVisDates = [];
+  weeks.forEach(function(ws){ for(var vd=0; vd<7; vd++) fohKrtVisDates.push(formatDate(addDays(ws,vd))); });
   FOH_SECTIONS.forEach(function(sec){
-    var allStaff = fohSchedStaff.filter(function(s){ return s.section===sec.key; });
+    var allStaff = fohSchedVisibleIn(fohSchedStaff.filter(function(s){ return s.section===sec.key; }), fohKrtVisDates);
     html += '<tr class="sch-station-hdr"><td colspan="'+COLS+'"><span class="krt-secband">'+sec.label+'</span></td></tr>';
     allStaff.forEach(function(staff, xi){
       var sid=staff.id, mpid='fsmpM'+String(sid).replace(/-/g,'');
@@ -7111,7 +7220,7 @@ function fohSchedPrint(){
   }
   html+='<td colspan="2" style="border:1px solid #ccc;background:#f6eedd"></td></tr>';
   FOH_SECTIONS.forEach(function(sec){
-    var stStaff=fohSchedStaff.filter(function(s){ return s.section===sec.key; });
+    var stStaff=fohSchedVisibleIn(fohSchedStaff.filter(function(s){ return s.section===sec.key; }), days.map(formatDate));
     if(!stStaff.length) return;
     var secColor = FOH_SECTION_PRINT_COLOR[sec.key] || '#ece3d3';
     html+='<tr><td colspan="11" style="background:'+secColor+';color:#2f2a28;font-weight:800;font-size:13px;letter-spacing:1px;text-transform:uppercase;border:1px solid #d8cbb8;padding:3px 8px">'+sec.label+'</td></tr>';
@@ -7480,7 +7589,7 @@ async function fohSchedSendToHR(_downloadOnly){
 
     // Data rows by section
     FOH_SECTIONS.forEach(function(sec){
-      var stStaff = fohSchedStaff.filter(function(s){ return s.section===sec.key; });
+      var stStaff = fohSchedVisibleIn(fohSchedStaff.filter(function(s){ return s.section===sec.key; }), days.map(formatDate));
       if(!stStaff.length) return;
 
       var stRow = sheet.addRow([sec.label.toUpperCase()]);
