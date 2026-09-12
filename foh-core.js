@@ -2167,7 +2167,7 @@ async function admSignersTidy(){
   var st = admSignersStale();
   if(!st.loaded){ toast('Still loading the staff list — try that again in a second.', true); return; }
   if(!st.n){ toast('Nothing to clear — everyone who can tap-sign is still here.'); return; }
-  if(!confirm('Clear ' + st.n + ' ' + (st.n===1?'person':'people') + ' who have left from the tap-sign lists?\n\n'
+  if(!confirm('Clear ' + st.n + ' ' + (st.n===1?'person who has':'people who have') + ' left from the tap-sign lists?\n\n'
     + 'Only people who are no longer on the staff list are removed. Everyone still here keeps their tick.')) return;
   var sg = state.adminSigners || {}, live = {};
   (state.adminFoh || []).forEach(function(x){ live[String(x.id)] = 1; });
