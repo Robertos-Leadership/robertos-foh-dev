@@ -4457,6 +4457,7 @@ async function saveChangePassword(){
 
 function showLogin(){
   document.getElementById('login').classList.add('open');
+  fohResetPane('signin');
   document.getElementById('landing').style.display = 'none';
   document.getElementById('app').style.display = 'none';
   const err = document.getElementById('login-error');
@@ -4494,6 +4495,149 @@ function startApp(){
 }
 
 // ── REVENUE MODULE moved to foh-revenue.js (loaded after this script, before foh-closing.js). See FOH file split. ──
+
+// ── FORGOT PASSWORD ────────────────────────────────────────────────────────
+// Reported 10 Sep 2026 by Chef Andrea: "Forgot my log in credential, my usual
+// password doesn't work." The login screen offered him nothing at all -- the
+// only recovery that existed was Francesco running reset-foh-password.ps1 by
+// hand, and nothing on screen told anyone even to ask.
+//
+// This deliberately does NOT use sb.auth.resetPasswordForEmail(). That call is
+// broken three ways on this project and every one of them fails SILENTLY --
+// all three read off the Management API on 12 Sep 2026:
+//   1. smtp_host is null. With no custom SMTP, Supabase's own sender delivers
+//      only to project TEAM MEMBERS, so a @robertos.ae address never gets it.
+//   2. rate_limit_email_sent = 2 -- two auth emails per hour for the whole app.
+//   3. site_url = http://localhost:3000 and uri_allow_list is empty, so the
+//      link in the email would send the person to localhost:3000.
+// The app would have said "check your email" and no email would ever arrive.
+//
+// So recovery runs through the `password-reset` edge function on Resend -- the
+// transport that already delivers the closing report -- and uses a typed CODE
+// rather than a clicked link. A code behaves the same on the phone, the tablet
+// and the laptop, and no redirect setting can break it.
+var FOH_RESET_EMAIL = '';
+
+function fohResetPane(which){
+  document.getElementById('login-form-signin').style.display = (which === 'signin') ? 'block' : 'none';
+  document.getElementById('login-reset-ask').style.display   = (which === 'ask')    ? 'block' : 'none';
+  document.getElementById('login-reset-set').style.display   = (which === 'set')    ? 'block' : 'none';
+}
+
+function fohResetNote(msg){
+  var el = document.getElementById('login-note');
+  if (!msg){ el.style.display = 'none'; el.textContent = ''; return; }
+  el.innerHTML = msg;
+  el.style.display = 'block';
+}
+
+function fohResetOpen(){
+  // Carry over whatever they already typed -- making someone retype their own
+  // email address straight after failing to log in is a small insult.
+  document.getElementById('reset-email').value = (document.getElementById('login-email').value || '').trim();
+  document.getElementById('reset-ask-error').textContent = '';
+  fohResetNote('');
+  fohResetPane('ask');
+  document.getElementById('reset-email').focus();
+}
+
+function fohResetCancel(){
+  document.getElementById('login-error').textContent = '';
+  fohResetPane('signin');
+}
+
+// One place that talks to the function, so both steps fail the same way.
+async function fohResetCall(payload){
+  try {
+    var r = await fetch(SUPABASE_URL + '/functions/v1/password-reset', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY,
+                 'Authorization': 'Bearer ' + SUPABASE_KEY },
+      body: JSON.stringify(payload)
+    });
+    var data = await r.json().catch(function(){ return {}; });
+    if (r.ok && data && data.ok) return { ok: true };
+    return { ok: false, error: (data && data.error) || 'Something went wrong. Please try again.' };
+  } catch (e) {
+    // fetch only throws when the network itself failed -- say that, rather
+    // than blaming the code they just typed.
+    return { ok: false, error: 'No connection. Check the wifi and try again.' };
+  }
+}
+
+async function fohResetSend(again){
+  var email = again ? FOH_RESET_EMAIL : (document.getElementById('reset-email').value || '').trim();
+  var errEl = document.getElementById(again ? 'reset-set-error' : 'reset-ask-error');
+  var btn   = document.getElementById(again ? 'reset-set-btn' : 'reset-send-btn');
+  var label = btn.textContent;
+  errEl.textContent = '';
+  if (!email || email.indexOf('@') === -1){
+    errEl.textContent = 'Enter the email address you sign in with.';
+    return;
+  }
+  btn.disabled = true; btn.textContent = 'Sending...';
+  var res = await fohResetCall({ action: 'request', email: email });
+  btn.disabled = false; btn.textContent = label;
+  if (!res.ok){ errEl.textContent = res.error; return; }
+
+  FOH_RESET_EMAIL = email;
+  // Deliberately says "if". The function never reveals whether an address has
+  // an account, and neither should the screen in front of it.
+  document.getElementById('reset-sent-note').innerHTML =
+    'If <strong>' + fohEsc(email) + '</strong> has an account, a 6-digit code is on its way. ' +
+    'It works for 15 minutes. If it is not there in a minute, look in your junk folder.';
+  if (!again){
+    document.getElementById('reset-code').value = '';
+    document.getElementById('reset-pw1').value  = '';
+    document.getElementById('reset-pw2').value  = '';
+    document.getElementById('reset-set-error').textContent = '';
+    fohResetPane('set');
+    document.getElementById('reset-code').focus();
+  } else {
+    // Already on this pane, so the note above is the only thing that can move.
+    // Say so in the place they are looking, not in a corner toast.
+    document.getElementById('reset-set-error').textContent = '';
+    document.getElementById('reset-code').value = '';
+    document.getElementById('reset-code').focus();
+  }
+}
+
+async function fohResetConfirm(){
+  var code = (document.getElementById('reset-code').value || '').replace(/\D/g, '');
+  var p1 = document.getElementById('reset-pw1').value;
+  var p2 = document.getElementById('reset-pw2').value;
+  var errEl = document.getElementById('reset-set-error');
+  var btn = document.getElementById('reset-set-btn');
+  errEl.textContent = '';
+  // Everything they can fix themselves is checked BEFORE a try is spent on
+  // the code -- five wrong tries kills it, and a typo in the repeat box
+  // should not cost one of them.
+  if (code.length !== 6){ errEl.textContent = 'Enter the 6-digit code from the email.'; return; }
+  if (p1.length < 8){ errEl.textContent = 'Password must be at least 8 characters.'; return; }
+  if (p1 !== p2){ errEl.textContent = 'The two passwords do not match.'; return; }
+
+  btn.disabled = true; btn.textContent = 'Setting...';
+  var res = await fohResetCall({ action: 'confirm', email: FOH_RESET_EMAIL, code: code, password: p1 });
+  btn.disabled = false; btn.textContent = 'Set new password';
+  if (!res.ok){ errEl.textContent = res.error; return; }
+
+  // Straight back to a sign-in that is already half done for them, and the
+  // confirmation sits in the panel they are looking at rather than in a
+  // corner toast that fades.
+  document.getElementById('login-email').value = FOH_RESET_EMAIL;
+  document.getElementById('login-password').value = '';
+  document.getElementById('login-error').textContent = '';
+  fohResetNote('Password changed. Sign in with your new one.');
+  fohResetPane('signin');
+  document.getElementById('login-password').focus();
+}
+
+// The note shows the address back to the person who typed it, so it must not
+// be able to carry markup into the panel.
+function fohEsc(s){
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+                  .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
 
 async function signIn(){
   const email = document.getElementById('login-email').value.trim();

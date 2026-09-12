@@ -145,6 +145,47 @@
     margin-top: 14px;
     text-align: center;
   }
+  /* The way out of a forgotten password. Someone reading it is already stuck,
+     so it is --vino #6B1F2A on the #F8F4EC panel (10.3:1) at 13px and
+     underlined, with a 44px tap target -- not a faint 10px grey line. */
+  .login-alt {
+    display: flex;
+    justify-content: center;
+    gap: 22px;
+    flex-wrap: wrap;
+    margin-top: 8px;
+  }
+  .login-link {
+    background: none;
+    border: none;
+    min-height: 44px;
+    padding: 11px 4px;
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+    color: var(--vino);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    cursor: pointer;
+  }
+  .login-link:hover { color: var(--vino-dark); }
+  .login-link:focus-visible { outline: 2px solid var(--vino); outline-offset: 2px; }
+  .login-note {
+    font-size: 13px;
+    line-height: 1.55;
+    color: var(--text);
+    background: rgba(201,168,76,0.14);
+    border-left: 2px solid var(--gold);
+    padding: 11px 13px;
+    margin-bottom: 20px;
+    text-align: left;
+  }
+  /* 16px+ so iOS does not zoom the page when the code field is tapped. */
+  .login-code {
+    font-size: 22px;
+    letter-spacing: 0.42em;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+  }
   .login-foot {
     position: absolute;
     bottom: 22px;

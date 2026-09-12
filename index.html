@@ -134,7 +134,7 @@ if ('serviceWorker' in navigator) {
 }
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<link rel="stylesheet" href="foh-styles.css?v=20260903a">
+<link rel="stylesheet" href="foh-styles.css?v=20260912b">
 </head>
 <body>
 
@@ -145,13 +145,43 @@ if ('serviceWorker' in navigator) {
     <div class="login-kicker">Management Access</div>
     <div class="login-title">Manager</div>
     <div class="login-divider"></div>
-    <div class="login-form">
+    <div class="login-form" id="login-form-signin">
+      <div class="login-note" id="login-note" style="display:none"></div>
       <label class="login-label" for="login-email">Email</label>
       <input class="login-input" id="login-email" type="email" autocomplete="username">
       <label class="login-label" for="login-password">Password</label>
       <input class="login-input" id="login-password" type="password" autocomplete="current-password" onkeydown="if(event.key==='Enter')signIn()">
       <button class="login-btn" id="login-btn" onclick="signIn()">Sign In</button>
       <div class="login-error" id="login-error"></div>
+      <div class="login-alt"><button type="button" class="login-link" onclick="fohResetOpen()">Forgot your password?</button></div>
+    </div>
+
+    <!-- PASSWORD RESET — step 1: ask for a code. See fohResetOpen() in foh-core.js
+         for why this is a code on Resend and not Supabase's own reset link. -->
+    <div class="login-form" id="login-reset-ask" style="display:none">
+      <div class="login-note">Enter the email address you sign in with and we'll send you a 6-digit code.</div>
+      <label class="login-label" for="reset-email">Your work email</label>
+      <input class="login-input" id="reset-email" type="email" autocomplete="username" onkeydown="if(event.key==='Enter')fohResetSend()">
+      <button class="login-btn" id="reset-send-btn" onclick="fohResetSend()">Email me a code</button>
+      <div class="login-error" id="reset-ask-error"></div>
+      <div class="login-alt"><button type="button" class="login-link" onclick="fohResetCancel()">Back to sign in</button></div>
+    </div>
+
+    <!-- PASSWORD RESET — step 2: the code, then the password they choose -->
+    <div class="login-form" id="login-reset-set" style="display:none">
+      <div class="login-note" id="reset-sent-note"></div>
+      <label class="login-label" for="reset-code">6-digit code</label>
+      <input class="login-input login-code" id="reset-code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="000000">
+      <label class="login-label" for="reset-pw1">New password (min 8 characters)</label>
+      <input class="login-input" id="reset-pw1" type="password" autocomplete="new-password">
+      <label class="login-label" for="reset-pw2">Repeat new password</label>
+      <input class="login-input" id="reset-pw2" type="password" autocomplete="new-password" onkeydown="if(event.key==='Enter')fohResetConfirm()">
+      <button class="login-btn" id="reset-set-btn" onclick="fohResetConfirm()">Set new password</button>
+      <div class="login-error" id="reset-set-error"></div>
+      <div class="login-alt">
+        <button type="button" class="login-link" onclick="fohResetSend(true)">Send a new code</button>
+        <button type="button" class="login-link" onclick="fohResetCancel()">Back to sign in</button>
+      </div>
     </div>
   </div>
   <div class="login-foot">Roberto's &middot; Dubai DIFC</div>
@@ -421,7 +451,7 @@ if ('serviceWorker' in navigator) {
      Loaded here, not with the foh-*.js at the foot of the body, because the
      inline Admin code below READS it rather than just calling into it. -->
 <script src="foh-rounds.js?v=20260731a"></script>
-<script src="foh-core.js?v=20260912a"></script>
+<script src="foh-core.js?v=20260912b"></script>
 <script src="foh-events.js?v=20260731a"></script>
 <script src="foh-privateevents.js?v=20260903a"></script>
 <script src="foh-revenue.js?v=20260903d"></script>
