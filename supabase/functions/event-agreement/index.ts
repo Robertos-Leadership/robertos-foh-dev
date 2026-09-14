@@ -135,7 +135,7 @@ function termsHtml(ev: any, bev: any, totals: { total: number | null; discount?:
       (n.guestsMin ? " for a minimum guarantee of <b>" + esc(n.guestsMin) + " guests</b>" : "") +
       ". Should consumption fall below this amount, the difference is charged as a venue fee. " +
       "Additional guests or amendments must be notified in writing at least 48 hours prior to the event, subject to approval and availability. " +
-      priceClause"
+      priceClause
     : "Food and beverage of <b>AED " + money(n.quoted) + "</b> for a minimum guarantee of <b>" + esc(n.guestsMin || "—") + " guests</b>. " +
       "Additional guests or amendments must be notified in writing at least 48 hours prior to the event, subject to approval and availability. " +
       "Additional guests will be charged at the same per-guest rate with prior intimation and confirmation. " +
