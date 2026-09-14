@@ -352,9 +352,15 @@ function fohNewSeen(key){
 function fohMarkSeen(key){
   try{ localStorage.setItem('foh_new_'+key+'_'+(state.userEmail||''), '1'); }catch(e){}
 }
+// HR (is_hr) opens Admin too, but only the People screen: logins, employee IDs,
+// module access. Admin and HR themselves are granted by an Admin only — the
+// database enforces that (app_users RLS), this just keeps the screen honest.
+function fohIsAdmin(){ return !!(state.access && state.access.isAdmin); }
+function fohIsHrOnly(){ return !!(state.access && state.access.isHr && !state.access.isAdmin); }
+function fohCanAdmin(){ return fohIsAdmin() || fohIsHrOnly(); }
 function fohBlocked(module){
   var m=moduleOf(module);
-  if(m==='admin') return !(state.access && state.access.isAdmin);
+  if(m==='admin') return !fohCanAdmin();
   var mods=(state.access && state.access.modules) ? state.access.modules : FOH_DEFAULT_MODULES;
   return mods.indexOf(m)===-1;
 }
@@ -382,7 +388,7 @@ function applyFohAccess(){
   var rrn=document.getElementById('mod-new-resreports');
   if(rrn) rrn.style.display = fohNewSeen('reservations') ? 'none' : '';
   var ad=document.getElementById('mod-card-admin');
-  if(ad) ad.style.display = (state.access && state.access.isAdmin) ? '' : 'none';
+  if(ad) ad.style.display = fohCanAdmin() ? '' : 'none';
   // Section labels hide when every module inside them is hidden for this user.
   var s1=document.getElementById('sec-daily');
   if(s1) s1.style.display = (!fohBlocked('operations') || !fohBlocked('events')) ? '' : 'none';
@@ -635,9 +641,9 @@ async function loadFohAccess(){
   if(e && !state._loginLogged){ state._loginLogged=true; logAppUsage('login'); }   // once per visit (fresh sign-in or restored session)
   if(e){
     try{
-      var r=await sb.from('app_users').select('modules,is_admin,name').eq('email',e).limit(1);
+      var r=await sb.from('app_users').select('modules,is_admin,is_hr,name').eq('email',e).limit(1);
       if(r.error) throw r.error;
-      if(r.data && r.data[0]) state.access={ modules:r.data[0].modules||[], isAdmin:!!r.data[0].is_admin, name:r.data[0].name };
+      if(r.data && r.data[0]) state.access={ modules:r.data[0].modules||[], isAdmin:!!r.data[0].is_admin, isHr:!!r.data[0].is_hr, name:r.data[0].name };
       else state.access={ modules:FOH_DEFAULT_MODULES.slice(), isAdmin:false, name:null };   // signed in but not in app_users yet
       // Last-known access for offline/flaky loads. Stamped with _at so the reader
       // can expire it — an unstamped cache (written before 7 Aug 2026) reads as
@@ -727,8 +733,16 @@ function loadAdminUsers(){
     sbKitchen.from('staff').select('*').eq('active',true),
     sb.from('app_config').select('value').eq('key','signers').limit(1),
     sb.from('app_config').select('value').eq('key','vip_scan').limit(1),
-    sb.from('app_config').select('value').eq('key','reviews_competitors').limit(1)
+    sb.from('app_config').select('value').eq('key','reviews_competitors').limit(1),
+    sb.functions.invoke('manage-login',{ body:{ action:'list' } }).catch(function(e){ return { error:e }; })
   ]).then(function(res){
+    // Who actually has a password login, and whose was removed. null = could not
+    // be read, and the panel then says nothing rather than guessing.
+    state.adminLogins=null;
+    if(res[6] && res[6].data && res[6].data.ok){
+      state.adminLogins={};
+      (res[6].data.logins||[]).forEach(function(l){ state.adminLogins[l.email]=l; });
+    }
     state.adminUsers   = res[0].error ? [] : (res[0].data||[]);
     state.adminFoh     = res[1].error ? [] : (res[1].data||[]);
     state.adminKitchen = res[2].error ? [] : (res[2].data||[]);
@@ -755,7 +769,7 @@ async function adminSave(u){
   return true;
 }
 async function adminToggle(email, mod){
-  var u=adminFind(email); if(!u) return;
+  var u=adminFind(email); if(!u || !admMayEdit(u)) return;
   u.modules=u.modules||[];
   var i=u.modules.indexOf(mod);
   if(i===-1) u.modules.push(mod); else u.modules.splice(i,1);
@@ -764,13 +778,14 @@ async function adminToggle(email, mod){
   if(email===(state.userEmail||'').toLowerCase()) loadFohAccess();
 }
 async function adminToggleAdmin(email){
+  if(!fohIsAdmin()) return;
   var u=adminFind(email); if(!u) return;
   u.is_admin=!u.is_admin; renderMain();
   await adminSave(u);
   if(email===(state.userEmail||'').toLowerCase()) loadFohAccess();
 }
 async function adminToggleNotify(email, key){
-  var u=adminFind(email); if(!u) return;
+  var u=adminFind(email); if(!u || !admMayEdit(u)) return;
   u.notify=u.notify||[];
   var i=u.notify.indexOf(key);
   if(i===-1) u.notify.push(key); else u.notify.splice(i,1);
@@ -791,7 +806,7 @@ function admIsEventsEditor(login){
   return (typeof PE_EDITORS!=='undefined') && PE_EDITORS.indexOf((login.email||'').toLowerCase()) >= 0;
 }
 async function adminToggleEventsEdit(email){
-  var u=adminFind(email); if(!u) return;
+  var u=adminFind(email); if(!u || !admMayEdit(u)) return;
   var isCore = (typeof PE_EDITORS!=='undefined') && PE_EDITORS.indexOf((email||'').toLowerCase()) >= 0;
   var want = !admIsEventsEditor(u);
   // Clear both markers first so the row can never hold a contradictory pair,
@@ -811,12 +826,61 @@ async function adminAddUser(){
   var u={email:em,name:nm||em,modules:['events','operations','revenue','stocktake'],is_admin:false};
   if(await adminSave(u)){ state.adminUsers.push(u); renderMain(); }
 }
+// Removing a login used to DELETE the app_users row — and a signed-in user with
+// no row gets the default modules, so the person kept working. It now goes
+// through manage-login: the login is blocked, signed out on every device, and
+// the row stays with its modules and emails emptied.
 async function adminDeleteUser(email){
-  if(!confirm('Remove '+email+' from the access list?')) return;
-  var res=await sb.from('app_users').delete().eq('email', email);
-  if(res.error){ alert('Could not remove: '+res.error.message); return; }
-  state.adminUsers=(state.adminUsers||[]).filter(function(u){ return u.email!==email; });
-  renderMain();
+  var u=adminFind(email); if(u && !admMayEdit(u)) return;
+  if((email||'').toLowerCase()===(state.userEmail||'').toLowerCase()){ alert('You can’t remove your own login.'); return; }
+  if(!confirm('Remove the login for '+email+'?\n\nThey are signed out on every device straight away and can no longer sign in. Their module access and email alerts are cleared. Their name and past records stay, and you can give them a login again later.')) return;
+  var d=await admLoginCall({ action:'revoke', email:email });
+  if(!d) return;
+  admToast('Login removed');
+  adminRefresh();
+}
+function adminIsLocked(u){ return !!u && (u.is_admin || u.is_hr) && !fohIsAdmin(); }
+function admMayEdit(u){
+  if(!adminIsLocked(u)) return true;
+  alert('Only an Admin can change '+(u.name||u.email)+'’s access.');
+  return false;
+}
+async function adminToggleHr(email){
+  if(!fohIsAdmin()) return;
+  var u=adminFind(email); if(!u) return;
+  var want=!u.is_hr;
+  var res=await sb.from('app_users').update({ is_hr:want, updated_at:new Date().toISOString() }).eq('email',email);
+  if(res.error){ alert('Could not save: '+res.error.message); return; }
+  u.is_hr=want; renderMain();
+  admAfterRender(function(){ try{admApplyFilter();}catch(e){} });
+}
+// One door to the manage-login edge function. Returns the reply, or null after
+// telling the person in words what went wrong.
+async function admLoginCall(body){
+  try{
+    var res=await sb.functions.invoke('manage-login',{ body:body });
+    var d=res.data;
+    if(res.error && !d){ try{ d=await res.error.context.json(); }catch(e){} }
+    if(!d || !d.ok){ alert((d && d.error) || 'Could not reach the login service. Check the connection and try again.'); return null; }
+    return d;
+  }catch(e){ alert('Could not reach the login service: '+((e && e.message) || e)); return null; }
+}
+// 'none' | 'active' | 'removed' | null when the status could not be read
+function admLoginState(email){
+  if(!state.adminLogins) return null;
+  var l=state.adminLogins[(email||'').toLowerCase()];
+  if(!l) return 'none';
+  return l.banned ? 'removed' : 'active';
+}
+function admLoginLine(login){
+  if(adminIsLocked(login)) return '<div class="px-dhint" style="margin:6px 0 10px;">Only an Admin can change an Admin or HR person’s access.</div>';
+  var st=admLoginState(login.email), ee=admEsc(login.email), txt='', btn='Set a password';
+  if(st==='none'){ txt='No password yet — they can’t sign in.'; btn='Create their login'; }
+  else if(st==='removed'){ txt='Login removed — they can’t sign in.'; btn='Give them a login again'; }
+  else if(st==='active'){ txt='Can sign in.'; btn='Set a new password'; }
+  return '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:6px 0 10px;">'
+    +(txt?'<span class="px-dhint" style="margin:0;">'+txt+'</span>':'')
+    +'<button class="px-mini" onclick="admPasswordOpen(\''+ee+'\')">'+btn+'</button></div>';
 }
 function adminRefresh(){ state.adminLoaded=false; loadAdminUsers(); }
 function adminOpenSupabase(){ window.open(SUPA_USERS_URL,'_blank','noopener'); }
@@ -1608,12 +1672,13 @@ function renderAdmin(){
   if(!state.adminLoaded){ loadAdminUsers(); return '<div class="loading">Loading…</div>'; }
   window.__admWide = window.innerWidth>=760;
   var v=(state.adminView||'overview');
+  if(fohIsHrOnly()){ v='people'; state.adminView='people'; }
   // Which sections have something waiting, so the nav itself says where the work
   // is. Without this the chips are six identical words and the only way to find
   // an empty email list is to open every one of them.
   var flag={};
   try{ admSections().forEach(function(s){ if(s.flag) flag[s.k]=1; }); }catch(e){}
-  var tabs='<div class="adm-wrap" style="padding-bottom:0;"><div class="adm-toggle">'
+  var tabs=fohIsHrOnly() ? '' : '<div class="adm-wrap" style="padding-bottom:0;"><div class="adm-toggle">'
     + ADM_VIEWS.map(function(t){
         return '<button class="'+(v===t.k?'on':'')+'" onclick="admSetView(\''+t.k+'\')">'
           + admEsc(t.n) + (flag[t.k]?'<i class="adm-tabdot"></i>':'') + '</button>';
@@ -1627,6 +1692,7 @@ function renderAdmin(){
   return '<style>'+ADM_CSS+'</style>'+tabs+body;
 }
 function admSetView(v){
+  if(fohIsHrOnly()) v='people';
   state.adminView=v;
   // The overview READS usage and feedback, so it has to pull them itself. It is
   // the landing screen, so this is also what makes the other tabs feel instant.
@@ -1765,7 +1831,7 @@ function admMailGridHTML(){
 // Tick a cell on. Adding is harmless and instantly undone by tapping again, so
 // unlike removal it does not stop to confirm.
 async function admMailAdd(key, email){
-  var u=adminFind(email); if(!u) return;
+  var u=adminFind(email); if(!u || !admMayEdit(u)) return;
   if((u.notify||[]).indexOf(key)!==-1) return;
   u.notify=(u.notify||[]).concat([key]);
   renderMain();
@@ -1974,7 +2040,7 @@ async function admMailAddSave(key){
 // A receive-only row with nothing left to receive is deleted rather than left
 // behind, so the People screen doesn't fill up with empty rows over time.
 async function admMailRemove(key,email){
-  var u=adminFind(email); if(!u) return;
+  var u=adminFind(email); if(!u || !admMayEdit(u)) return;
   var nt=ADMIN_NOTIFY.filter(function(x){return x.k===key;})[0];
   if(!confirm('Stop sending “'+(nt?nt.n:key)+'” to '+(u.name||email)+'?\n\nThis only changes this email. Their access to the app is not touched.')) return;
   u.notify=(u.notify||[]).filter(function(k){ return k!==key; });
@@ -4062,6 +4128,7 @@ function admDetailFull(p){
     // The summary states it; the controls below stay for changing it.
     var sum=[];
     if(p.login.is_admin) sum.push('<span class="px-sum-adm">Admin</span>');
+    if(p.login.is_hr) sum.push('<span class="px-sum-adm">HR</span>');
     sum.push('<b>'+nMod+'</b> of '+ADMIN_MODULES.length+' module'+(ADMIN_MODULES.length===1?'':'s'));
     if(admIsEventsEditor(p.login)) sum.push('can create &amp; send events');
     sum.push('<b>'+notifs.length+'</b> email'+(notifs.length===1?'':'s'));
@@ -4079,8 +4146,10 @@ function admDetailFull(p){
     // them: one grants the whole admin area, the other lets someone send to a
     // guest. Each says what it means, because "Admin" alone does not.
     var powers=''
-      +admPowerRow('Admin', 'Can open this Admin area and change anyone&rsquo;s access.',
+      +(fohIsAdmin() ? admPowerRow('Admin', 'Can open this Admin area and change anyone&rsquo;s access.',
           p.login.is_admin, 'adminToggleAdmin(\''+ee+'\')')
+        +admPowerRow('HR', 'Can add and remove logins, set employee IDs and give any access except Admin. Sees People only in Admin.',
+          p.login.is_hr, 'adminToggleHr(\''+ee+'\')') : '')
       +admPowerRow('Events: create &amp; send', 'Can build a private event and send proposals to guests, not just read them.',
           admIsEventsEditor(p.login), 'adminToggleEventsEdit(\''+ee+'\')');
 
@@ -4093,6 +4162,7 @@ function admDetailFull(p){
     loginSec='<div class="px-psec">'
       +'<div class="px-pslbl">App access &middot; '+ee+'</div>'
       +'<div class="px-sum">'+sum.join('<span class="px-sum-sep">&middot;</span>')+'</div>'
+      +admLoginLine(p.login)
       +'<div class="px-accgrid">'+acc+'</div>'
       +'<div class="px-pslbl" style="margin-top:14px;">Permissions</div>'+powers
       +'<div class="px-pslbl" style="margin-top:14px;">Email alerts</div><div class="px-accgrid">'+notif+'</div>'
@@ -4118,7 +4188,7 @@ function admDetailFull(p){
   // someone's access, placed mid-panel among toggles, one row from where the
   // thumb lands.
   var danger=[];
-  if(p.login) danger.push('<button class="px-prm" onclick="adminDeleteUser(\''+admEsc(p.login.email)+'\')">Remove login</button>');
+  if(p.login && admLoginState(p.login.email)!=='removed' && admLoginState(p.login.email)!=='none' && !adminIsLocked(p.login)) danger.push('<button class="px-prm" onclick="adminDeleteUser(\''+admEsc(p.login.email)+'\')">Remove login</button>');
   if(!off) danger.push('<button class="px-prm" onclick="admRemove(\''+p.src+'\',\''+admEsc(String(p.id))+'\')">Remove from '+(p.src==='kitchen'?'Kitchen':'FOH')+' staff</button>');
   var removeSec=danger.length?'<div class="px-danger">'+danger.join('')+'</div>':'';
   return '<div class="px-panel"><div class="px-phead"><span class="px-av lg">'+admEsc(admIni(p.name))+'</span><div style="min-width:0;"><div class="px-pname">'+admEsc(p.name)+'</div><div class="px-prole">'+admEsc(p.role||(off?'Office / HQ':''))+' · '+admEsc(p.where)+'</div><div class="px-rb">'+admBadges(p)+'</div></div></div>'
@@ -4233,9 +4303,10 @@ function admDetailHTML(p){
     var canEditEv=admIsEventsEditor(p.login);
     var hasEventsMod=(p.login.modules||[]).indexOf('privateevents')!==-1;
     var editTick='<label class="adm-tick adm-editcap" title="Create events and send guest emails — not just view"><input type="checkbox" '+(canEditEv?'checked':'')+' onchange="adminToggleEventsEdit(\''+admEsc(email)+'\')"> Events: create &amp; send</label>'+((canEditEv&&!hasEventsMod)?'<span class="px-dhint" style="margin-left:2px">(also tick “Events” so they can open it)</span>':'');
-    var adm='<label class="adm-tick adm-admin"><input type="checkbox" '+(p.login.is_admin?'checked':'')+' onchange="adminToggleAdmin(\''+admEsc(email)+'\')"> Admin</label>';
+    var adm=fohIsAdmin() ? '<label class="adm-tick adm-admin"><input type="checkbox" '+(p.login.is_admin?'checked':'')+' onchange="adminToggleAdmin(\''+admEsc(email)+'\')"> Admin</label>'
+      +'<label class="adm-tick adm-admin"><input type="checkbox" '+(p.login.is_hr?'checked':'')+' onchange="adminToggleHr(\''+admEsc(email)+'\')"> HR</label>' : '';
     var notif=ADMIN_NOTIFY.map(function(nt){ var on=(p.login.notify||[]).indexOf(nt.k)!==-1; return '<label class="adm-tick adm-notif"><input type="checkbox" '+(on?'checked':'')+' onchange="adminToggleNotify(\''+admEsc(email)+'\',\''+nt.k+'\')"> '+nt.n+'</label>'; }).join('');
-    parts.push('<div class="px-dsec"><div class="px-dlbl">App access — '+admEsc(email)+'</div><div class="adm-ticks">'+mods+editTick+adm+'</div><div class="adm-ticks" style="margin-top:7px;"><span class="adm-emails-lbl">Emails:</span>'+notif+'</div><div style="margin-top:9px;"><button class="px-mini px-mini-red" onclick="adminDeleteUser(\''+admEsc(email)+'\')">Remove login</button></div></div>');
+    parts.push('<div class="px-dsec"><div class="px-dlbl">App access — '+admEsc(email)+'</div><div class="adm-ticks">'+mods+editTick+adm+'</div><div class="adm-ticks" style="margin-top:7px;"><span class="adm-emails-lbl">Emails:</span>'+notif+'</div><div style="margin-top:9px;">'+admLoginLine(p.login)+((admLoginState(email)==='removed'||admLoginState(email)==='none'||adminIsLocked(p.login))?'':'<button class="px-mini px-mini-red" onclick="adminDeleteUser(\''+admEsc(email)+'\')">Remove login</button>')+'</div></div>');
   }
   if(p.src==='foh'){
     var sg=state.adminSigners||{}; var ACTS=ADM_SIGNER_ACTS;
@@ -4275,10 +4346,10 @@ function admSelectAll(cb){
 function admClearSel(){ state.adminSel={}; renderMain(); admAfterRender(function(){ try{admApplyFilter();}catch(e){} }); }
 async function admBulkRemove(){
   var keys=Object.keys(state.adminSel||{}); if(!keys.length) return;
-  if(!confirm('Remove '+keys.length+' selected '+(keys.length===1?'person':'people')+'?\n\nStaff are deactivated (their records are kept); logins are deleted. You can re-add later.')) return;
+  if(!confirm('Remove '+keys.length+' selected '+(keys.length===1?'person':'people')+'?\n\nStaff are deactivated (their records are kept); office logins are blocked and signed out. You can re-add later.')) return;
   var people=admBuildPeople(), byKey={}; people.forEach(function(p){ byKey[admKey(p)]=p; });
   for(var i=0;i<keys.length;i++){ var p=byKey[keys[i]]; if(!p) continue;
-    if(p.src==='office'){ await sb.from('app_users').delete().eq('email',p.id); }
+    if(p.src==='office'){ var lu=adminFind(p.id); if(lu && adminIsLocked(lu)) continue; await admLoginCall({ action:'revoke', email:p.id }); }
     else { var client=p.src==='foh'?sb:sbKitchen, table=p.src==='foh'?'foh_staff':'staff'; await client.from(table).update({active:false}).eq('id',p.id); }
   }
   state.adminSel={}; adminRefresh();
@@ -4387,24 +4458,47 @@ if(typeof document!=='undefined' && typeof window!=='undefined' && !window.__adm
 // ── add a login (the old "Users & Access" add-flow, now a modal) ──
 function admAddLoginOpen(key){
   var nm=''; if(key){ var p=admByKey(key); if(p) nm=p.name; }
+  state.admPwEmail=null;
   admModalOpen('Add a login',
-    '<div class="pm-hint" style="margin-bottom:6px;">First create the email + password in Supabase (turn ON “Auto Confirm User”), then add the email here so it appears in the list. New logins start with every module — untick what they shouldn’t see.</div>'
-    +'<div style="margin:6px 0 12px;"><button class="px-mini" onclick="adminOpenSupabase()">Open Supabase to create the password ↗</button></div>'
-    +admFieldText('pm-login-email','Email','','name@robertos.ae')
-    +admFieldText('pm-login-name','Full name',nm),
-    '<button class="btn btn-sm" onclick="admModalClose()">Cancel</button><button id="pm-save" class="btn btn-gold" onclick="admAddLoginSave()">Add to list</button>');
+    '<div class="pm-hint" style="margin-bottom:6px;">Creates their sign-in straight away. Give them the email and the starting password in person or on WhatsApp — they can change it from the home screen. They start with Activations and Closing Report; tick anything else after.</div>'
+    +admFieldText('pm-login-email','Work email','','name@robertos.ae')
+    +admFieldText('pm-login-name','Full name',nm)
+    +admFieldText('pm-login-pw','Starting password','','At least 8 characters.'),
+    '<button class="btn btn-sm" onclick="admModalClose()">Cancel</button><button id="pm-save" class="btn btn-gold" onclick="admAddLoginSave()">Create login</button>');
+  admPwNoAutofill();
+}
+function admPasswordOpen(email){
+  var u=adminFind(email); if(u && !admMayEdit(u)) return;
+  state.admPwEmail=email;
+  var st=admLoginState(email);
+  admModalOpen(st==='active' ? 'Set a new password' : 'Create their login',
+    '<div class="pm-hint" style="margin-bottom:6px;"><b>'+admEsc(email)+'</b> — '
+      +(st==='active' ? 'their old password stops working straight away.' : 'they can sign in as soon as you save.')
+      +' Tell them the password in person or on WhatsApp; they can change it from the home screen.</div>'
+    +admFieldText('pm-login-pw','Password','','At least 8 characters.'),
+    '<button class="btn btn-sm" onclick="admModalClose()">Cancel</button><button id="pm-save" class="btn btn-gold" onclick="admAddLoginSave()">Save password</button>');
+  admPwNoAutofill();
+}
+function admPwNoAutofill(){
+  var i=document.getElementById('pm-login-pw');
+  if(i){ i.setAttribute('autocomplete','off'); i.setAttribute('autocapitalize','off'); i.setAttribute('spellcheck','false'); }
 }
 async function admAddLoginSave(){
-  var em=(admVal('pm-login-email')||'').trim().toLowerCase();
-  var nm=(admVal('pm-login-name')||'').trim();
-  if(!em){ alert('Type the email first.'); return; }
-  if(adminFind(em)){ alert('That email is already in the list.'); return; }
-  var u={email:em,name:nm||em,modules:['events','operations','revenue','stocktake'],is_admin:false,notify:[]};
-  var btn=document.getElementById('pm-save'); if(btn){ btn.disabled=true; btn.textContent='Adding…'; }
-  var ok=await adminSave(u);
-  if(!ok){ if(btn){ btn.disabled=false; btn.textContent='Add to list'; } return; }
-  state.adminUsers=state.adminUsers||[]; state.adminUsers.push(u);
-  admModalClose(); renderMain();
+  var fixed=state.admPwEmail;
+  var em=(fixed || admVal('pm-login-email')).trim().toLowerCase();
+  var nm=admVal('pm-login-name').trim();
+  var pw=admVal('pm-login-pw');
+  if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)){ alert('Type their work email first.'); return; }
+  if(pw.length<8){ alert('The password needs at least 8 characters.'); return; }
+  var ex=adminFind(em); if(ex && !admMayEdit(ex)) return;
+  var btn=document.getElementById('pm-save'), label=btn?btn.textContent:'';
+  if(btn){ btn.disabled=true; btn.textContent='Saving…'; }
+  var d=await admLoginCall({ action:'create', email:em, name:nm, password:pw, modules:FOH_DEFAULT_MODULES.slice() });
+  if(!d){ if(btn){ btn.disabled=false; btn.textContent=label; } return; }
+  state.admPwEmail=null;
+  admModalClose();
+  admToast(d.created ? 'Login created for '+em : 'Password set for '+em);
+  adminRefresh();
 }
 
 // ── paste a column of employee IDs from Excel (Name [tab] Code) ──
