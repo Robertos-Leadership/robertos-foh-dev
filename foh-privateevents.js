@@ -92,7 +92,54 @@ function peAllergenText(alg){
   var list = (alg||[]).map(function(c){ return PE_ALLERGEN_WORDS[c]||String(c).toLowerCase(); });
   return 'Allergens: ' + (list.length ? list.join(', ') : 'none');
 }
-var PE_GROSS = 1.23585;   // 10% SC + 7% DIFC + 5% VAT compounding — net = gross / PE_GROSS
+// What a guest PAYS, divided by this, is net. 10% service + 7% DIFC fee on net,
+// 5% VAT on net+service = 1.225 — finance's own figure (Aung's price review, Aug
+// 2026: a 98 all-inclusive dish nets 80). This was 1.23585 (the three compounded)
+// until 14 Sep 2026, which understated every events net by about 0.9%.
+var PE_GROSS = 1.225;
+// ── The 7% DIFC Authority Fee moves OUT of the price on Wed 16 Sep 2026 ──────
+// Approved price list (Aung, finance; approved by Justin). From that date a menu
+// price carries 10% service and 5% VAT only, and the 7% fee is added to the bill:
+//   net = menu price ÷ 1.155 · fee = net × 7% · guest pays = net × 1.225
+// Francesco, 14 Sep 2026: event quotes follow the menu — price plus the 7% fee.
+// A booking keeps the old all-inclusive terms when the event is before the date,
+// when it was signed before it, or when its deposit was already taken on the old
+// figure (listed by id below — this list is closed and never grows).
+var PE_FEE_FROM = '2026-09-16';
+var PE_MENU_DIV = 1.155;
+var PE_FEE_KEEP_INCLUSIVE = [
+  'bfaf6ab0-69ea-4ac0-846a-2dab6245d3fe'   // Gracia Valladian, 17 Sep — deposit paid on the all-inclusive minimum
+];
+var PE_PRICE_NOTE = 'All prices are in AED and inclusive of 10% Service Charge and 5% VAT, subject to an additional 7% DIFC Authority Fee.';
+var PE_PRICE_NOTE_OLD = 'All prices are in AED inclusive of 5% VAT, 7% DIFC Authority Fee and 10% Service Charge.';
+function peFeeApplies(e){
+  if(!e) return true;
+  if(e.id && PE_FEE_KEEP_INCLUSIVE.indexOf(e.id) >= 0) return false;
+  if(e.signed_at && String(e.signed_at).slice(0,10) < PE_FEE_FROM) return false;
+  if(e.event_date && String(e.event_date).slice(0,10) < PE_FEE_FROM) return false;
+  return true;
+}
+// The fee on an amount at menu prices, in whole dirhams, worked so the fee and the
+// total always add up on the page: fee = round(amount × 1.225/1.155) − amount.
+function peFeeOn(e, amt){
+  if(amt == null || amt === '') return null;
+  if(!peFeeApplies(e)) return 0;
+  var a = Math.round(Number(amt));
+  return Math.round(a * PE_GROSS / PE_MENU_DIV) - a;
+}
+// What the guest actually pays for an amount quoted at menu prices.
+function pePayable(e, amt){
+  if(amt == null || amt === '') return null;
+  if(!peFeeApplies(e)) return Number(amt);
+  return Math.round(Number(amt)) + peFeeOn(e, amt);
+}
+function pePriceNote(e){ return peFeeApplies(e) ? PE_PRICE_NOTE : PE_PRICE_NOTE_OLD; }
+// The line printed under a menu-price amount on a guest document.
+function peFeeLineHTML(e, amt){
+  var f = peFeeOn(e, amt);
+  if(!f) return '';
+  return '<br><span class="d">plus 7% DIFC Authority Fee AED '+peMoney(f)+' — total AED '+peMoney(pePayable(e, amt))+'</span>';
+}
 var PE_TIERS = [{n:'Classic',p:10},{n:'Elevated',p:20},{n:'Signature',p:35}];
 // Wizard scaling — there is NO piece cap per guest or per dish (a guest may have
 // 30 pcs of one thing — it's their budget). The only real cap is VARIETY (see
@@ -1861,11 +1908,11 @@ function peEventValue(e){
   // ordinary calculation below is the right one again.
   if(peHasOptions(e) && !peChosenOption(e)){
     var vals = peOptionValues(e);
-    if(vals.length) return Math.min.apply(null, vals);
+    if(vals.length) return pePayable(e, Math.min.apply(null, vals));
   }
   var v = peAgBase(e);                       // respects pricing_type — min spend means the minimum
-  if(v != null && v !== 0) return v;
-  if(e.min_spend) return Number(e.min_spend);
+  if(v != null && v !== 0) return pePayable(e, v);
+  if(e.min_spend) return pePayable(e, Number(e.min_spend));
   // Minimum-spend pricing picked, amount not typed yet. peAgBase returns null
   // there ON PURPOSE — nothing can be signed against an empty minimum and that
   // gate stays. But for REPORTING, valuing it at nothing hid a real menu with
@@ -1873,7 +1920,7 @@ function peEventValue(e){
   // what the menu and the guest count already come to. (31 Aug 2026)
   if(e.pricing_type==='min_spend'){
     var mt = peCalcTotals(e);
-    if(mt.total) return mt.total;
+    if(mt.total) return pePayable(e, mt.total);
   }
   return null;
 }
@@ -1909,8 +1956,9 @@ function peInPipeline(e){ var s = peStage(e); return s === 'prospect' || s === '
 // A converted booking with no date is real money we cannot schedule — it must be
 // visible and chased, never silently dropped the way it used to be.
 function peNeedsDate(e){ return peIsConverted(e) && !e.event_date; }
-// Every price in this module is what the client is quoted: GROSS, carrying 10%
-// service + 7% DIFC + 5% VAT (PE_GROSS). Finance books the net. Andrea asked to
+// Every VALUE this module reports is what the client pays: GROSS, carrying 10%
+// service + 7% DIFC + 5% VAT (PE_GROSS) — from 16 Sep 2026 that is the menu-price
+// quote plus the 7% fee (pePayable). Finance books the net. Andrea asked to
 // see "both numbers", so nothing is ever shown without saying which it is.
 function peNetOf(gross){ return (gross == null) ? null : gross / PE_GROSS; }
 // The other direction — what a NET figure is worth at the price a client is
@@ -2903,13 +2951,18 @@ function peCalcTotals(e){
   // A courtesy discount comes off the very end — never taking the total below 0.
   var discount = subtotal!=null ? Math.min(Math.max(0, Number(e.discount)||0), subtotal) : Math.max(0, Number(e.discount)||0);
   var total = subtotal!=null ? Math.max(0, subtotal - discount) : null;
-  var foodCostPct = foodPP ? (cost/(foodPP/PE_GROSS))*100 : null;
+  // From 16 Sep 2026 the quote is at menu prices and the 7% fee goes on top.
+  var feeOn = peFeeApplies(e);
+  var fee = total!=null ? peFeeOn(e, total) : null;
+  var payable = total!=null ? pePayable(e, total) : null;
+  var foodCostPct = foodPP ? (cost/(foodPP/(feeOn?PE_MENU_DIV:PE_GROSS)))*100 : null;
   // The real total charged once the night ran (more guests / extra bar / off-menu),
   // typed by hand after the event. When set it is what the report counts — but the
   // quoted `total` above (and the signed agreement + deposit) never move.
   var actual = (e.actual_revenue!=null && e.actual_revenue!=='') ? Math.max(0, Number(e.actual_revenue)) : null;
   return { foodComputed:foodComputed, foodPP:foodPP, bevPP:bevPP, perGuest:perGuest,
            subtotal:subtotal, discount:discount, total:total, actual:actual,
+           feeOn:feeOn, fee:fee, payable:payable,
            pcs:pcs, foodCostPct:foodCostPct, missingAllergens:missing,
            noPrice:noPrice, noCost:noCost, items:items };
 }
@@ -2925,8 +2978,10 @@ function peAgBase(e){
   }
   return t.total;   // already has the discount taken off
 }
+// What the guest pays on the agreement: the quoted base plus the 7% fee when it applies.
+function peAgPayable(e){ return pePayable(e, peAgBase(e)); }
 function peDepositAmt(e){
-  var base = peAgBase(e);
+  var base = peAgPayable(e);
   var pct = e.deposit_pct==null ? 50 : Number(e.deposit_pct);
   return (base!=null && pct>0) ? Math.round(base*pct/100) : 0;
 }
@@ -3139,7 +3194,7 @@ function peRenderEvent(){
     '<b style="font-size:14px;color:#400207">'+(t.actual!=null
       ? 'AED '+peMoney(t.actual)+' <span style="font-size:10.5px;font-weight:400;color:#4F4535">· actual on the night</span>'
       : (t.total!=null
-        ? 'AED '+peMoney(t.total)+' <span style="font-size:10.5px;font-weight:400;color:#4F4535">· '+peMoney(t.perGuest)+'/guest</span>'
+        ? 'AED '+peMoney(t.total)+' <span style="font-size:10.5px;font-weight:400;color:#4F4535">· '+peMoney(t.perGuest)+'/guest'+(t.fee?' · AED '+peMoney(t.payable)+' with the 7% fee':'')+'</span>'
         : (e.min_spend ? 'Min spend AED '+peMoney(e.min_spend) : 'AED — <span style="font-size:10.5px;font-weight:400;color:#4F4535">set food + guests</span>')))+'</b></div>';
 
   // facts — a new event shows only the 4 essentials; the rest live under
@@ -3288,6 +3343,7 @@ function peRenderEvent(){
       (agBase!=null
         ? (e.pricing_type==='min_spend'?'Minimum spend':'Quoted price')+': <b style="color:#400207">AED '+peMoney(agBase)+'</b>'+
           (agDisc>0?' <span style="color:#4A6B2E">(after AED '+peMoney(agDisc)+' courtesy)</span>':'')+
+          (peFeeOn(e, agBase)?' + 7% DIFC fee AED '+peMoney(peFeeOn(e, agBase))+' = <b style="color:#400207">AED '+peMoney(peAgPayable(e))+'</b> to pay':'')+
           (agPct>0?' · deposit '+agPct+'%: <b style="color:#400207">AED '+peMoney(agDep)+'</b>':' · no deposit — balance on the day')
         : (e.pricing_type==='min_spend'
             ? '<span style="color:#B00020;cursor:pointer;text-decoration:underline" onclick="peScrollToField(\'min_spend\',\'Type the minimum spend in the facts above\')">▲ Set the minimum spend above first.</span>'
@@ -3358,6 +3414,16 @@ function peRenderEvent(){
   if(t.discount>0){
     h += '<div class="pe-tot-row"><span>Discount / courtesy</span><b style="color:#4A6B2E">− AED '+peMoney(t.discount)+'</b></div>'+
       '<div class="pe-tot-row" style="border-top:1px solid #DCC9B2;margin-top:4px;padding-top:7px"><span>Total</span><b>AED '+peMoney(t.total)+'</b></div>';
+  }
+  // The 7% DIFC Authority Fee goes on top of the menu-price total (from 16 Sep 2026).
+  if(t.fee){
+    h += '<div class="pe-tot-row"><span>+ 7% DIFC Authority Fee</span><b>AED '+peMoney(t.fee)+'</b></div>'+
+      '<div class="pe-tot-row" style="border-top:1px solid #DCC9B2;margin-top:4px;padding-top:7px"><span>Guest pays</span><b style="color:#400207">AED '+peMoney(t.payable)+'</b></div>';
+  } else if(t.total && !t.feeOn){
+    h += '<div style="font-size:11px;color:#4F4535;margin-top:4px">All-inclusive — this booking keeps the terms from before 16 Sep 2026 (no 7% fee on top).</div>';
+  }
+  if(isMin && msAmt && peFeeOn(e, msAmt)){
+    h += '<div style="font-size:11.5px;color:#574232;margin-top:4px">Minimum spend AED '+peMoney(msAmt)+' + 7% DIFC fee = <b>AED '+peMoney(pePayable(e, msAmt))+'</b></div>';
   }
   // Only compare once something is actually priced. Comparing against a total of 0
   // told her every untouched minimum-spend booking was short by its whole minimum —
@@ -3561,7 +3627,7 @@ function peEveningCardHTML(e, ce){
   });
   h += '<div style="margin-top:10px;background:#EEF3E4;border:1px solid #C3D3A6;border-radius:9px;padding:9px 12px;font-size:12.5px;color:#3F5222">'+
     '<b>One price for the whole evening</b> — '+(t.total!=null
-      ? 'AED '+peMoney(t.total)+(e.guests?' for '+e.guests+' guests':'')
+      ? 'AED '+peMoney(t.total)+(e.guests?' for '+e.guests+' guests':'')+(t.fee?' + 7% DIFC fee = AED '+peMoney(t.payable):'')
       : (e.min_spend ? 'minimum spend AED '+peMoney(e.min_spend) : 'set the food and guests above'))+
     '. The guest sees the rooms and the times, and <b>one total</b>.</div>';
   return h + '</div>';
@@ -4960,7 +5026,7 @@ function peProposalHTML(e, noPrice){
       body += '<div class="dish" style="font-size:15px">Option '+peEsc(o.key)+(o.name?' — '+peEsc(o.name):'')+
         '<br><span class="d">'+[o.area?peEsc(o.area):'', g?g+' guests':''].filter(Boolean).join(' · ')+
         (o.note?'<br>'+peEsc(o.note):'')+'</span>'+
-        ((tot!=null && !noPrice) ? '<br>'+(o.min_spend ? 'Minimum spend AED '+peMoney(tot) : 'AED '+peMoney(tot)+' — everything included') : '')+
+        ((tot!=null && !noPrice) ? '<br>'+(o.min_spend ? 'Minimum spend AED '+peMoney(tot) : 'AED '+peMoney(tot)+(peFeeApplies(e)?' — service charge and VAT included':' — everything included'))+peFeeLineHTML(e, tot) : '')+
         '</div>';
     });
     body += '<div class="d" style="margin-top:10px">Let us know which one you would like and we will hold it for you.</div>';
@@ -4980,7 +5046,8 @@ function peProposalHTML(e, noPrice){
     body += '<div class="rule" style="margin-top:26px"></div><div class="sec">Your event</div>'+
       '<div class="dish" style="font-size:15px">'+priceLine+
       (t.discount>0?'<br><span class="d" style="color:#5B6737">including a courtesy of AED '+peMoney(t.discount)+'</span>':'')+
-      '<br><span class="d">'+(t.items.length?'Canapé selection':'Menu')+(bev?' and '+(bev.duration_hours?bev.duration_hours+'-hour ':'')+'beverage package':'')+' — everything included</span></div>';
+      '<br><span class="d">'+(t.items.length?'Canapé selection':'Menu')+(bev?' and '+(bev.duration_hours?bev.duration_hours+'-hour ':'')+'beverage package':'')+(t.feeOn?' — service charge and VAT included':' — everything included')+'</span>'+
+      peFeeLineHTML(e, t.total)+'</div>';
   } else if(e.min_spend){
     // The minimum the guest is actually charged. A courtesy discount comes off it
     // here exactly as peAgBase, peDepositAmt and the signed agreement already take
@@ -4990,13 +5057,14 @@ function peProposalHTML(e, noPrice){
     var msBase = Math.max(0, Number(e.min_spend) - msDisc);
     body += '<div class="rule" style="margin-top:26px"></div><div class="sec">Your event</div>'+
       '<div class="dish" style="font-size:15px">Minimum spend AED '+peMoney(msBase)+
-      (msDisc>0?'<br><span class="d" style="color:#5B6737">including a courtesy of AED '+peMoney(msDisc)+'</span>':'')+'</div>';
+      (msDisc>0?'<br><span class="d" style="color:#5B6737">including a courtesy of AED '+peMoney(msDisc)+'</span>':'')+
+      peFeeLineHTML(e, msBase)+'</div>';
   }
   // Nothing stands in for the money on a no-price proposal — no placeholder, no
   // "pricing to follow". The VAT sentence goes with it: it is a statement about
   // prices, and there are none on this document.
   body += '<div class="ft">Our Chefs will do their best to accommodate your dietary requirements, please inform your waiter.'+
-    (noPrice ? '' : '<br>All prices are in AED inclusive of 5% VAT, 7% DIFC Authority Fee and 10% Service Charge.')+
+    (noPrice ? '' : '<br>'+pePriceNote(e))+
     peAlgLegend(body)+'</div>';
   return peDocShell('Roberto\'s proposal', body);
 }
@@ -5029,7 +5097,8 @@ function peBriefBodyHTML(e){
     : rowHTML('Food', '<b style="color:#B00020">NO MENU YET — do not prep</b>');
   var bev = e.bev_package_id ? peBevById(e.bev_package_id) : null;
   body += row('Beverage', bev ? bev.name+(bev.price_pp!=null?' · AED '+peMoney(bev.price_pp)+'/guest':' · price on the proposal') : (e.bev_mode==='dry'?'DRY EVENT — no alcohol served (soft drinks & water)':'—'));
-  body += row('Estimated total', t.total ? 'AED '+peMoney(t.total) : '—')+row('Minimum spend', e.min_spend?'AED '+peMoney(e.min_spend):'—');
+  body += row('Estimated total', t.total ? 'AED '+peMoney(t.total)+(t.fee?' + 7% DIFC fee AED '+peMoney(t.fee)+' = AED '+peMoney(t.payable):'') : '—')+
+    row('Minimum spend', e.min_spend?'AED '+peMoney(e.min_spend)+(peFeeOn(e, e.min_spend)?' + 7% DIFC fee = AED '+peMoney(pePayable(e, e.min_spend)):''):'—');
   body += row('Dietary', e.dietary)+row('Payment', e.payment_terms);
   // When the BOOKING last changed — not when the paper was printed. This used to be
   // new Date() plus whoever was holding the screen, so the one line a chef would use
@@ -5041,7 +5110,7 @@ function peBriefBodyHTML(e){
   body += '</table>';
   body += peSetMenuPrepHTML(e);
   body += peKitchenPrepHTML(e, t);
-  body += '<div class="ft">All prices inclusive of 5% VAT, 7% DIFC authority fee and 10% service charge.</div>';
+  body += '<div class="ft">'+pePriceNote(e)+'</div>';
   return body;
 }
 function peFunctionSheetHTML(e){ return peDocShell('Roberto’s — event brief', peBriefBodyHTML(e)); }
@@ -7356,7 +7425,7 @@ function peTmSheetHTML(editable){
                  .map(function(k){ return k+' - '+PE_ALG_NAMES[k]; }).join(' | ');
   h += '</div><div class="ft">Our Chefs will do their best to accommodate your dietary requirements, please inform your waiter.'+
        // The VAT line is meaningless without a price, so it only appears with one.
-       (t.price && m.price!=null ? '<br>All prices are in AED inclusive of 5% VAT, 7% DIFC Authority Fee and 10% Service Charge.' : '')+
+       (t.price && m.price!=null ? '<br>'+PE_PRICE_NOTE : '')+
        (legend ? '<br>'+legend : '')+'</div>';
   return h;
 }
@@ -7579,7 +7648,7 @@ function peCmPrintMenu(key){
     });
   });
   body += '<div class="ft">Our Chefs will do their best to accommodate your dietary requirements, please inform your waiter.<br>'+
-    (m.price!=null?'All prices are in AED inclusive of 5% VAT, 7% DIFC Authority Fee and 10% Service Charge.':'')+
+    (m.price!=null?PE_PRICE_NOTE:'')+
     peAlgLegend(body)+'</div>';
   pePrintHTML(peDocShell(m.name, body));
 }
@@ -7873,7 +7942,7 @@ function peGuestEmailHTML(title, intro, name, note, inner, noPrice){
     '<p style="font-size:13.5px">'+intro+'</p>'+
     inner+
     '<p style="font-size:13.5px;margin-top:26px">Simply reply to this email to check availability or tailor anything to your occasion — it will be our pleasure.</p>'+
-    '<div class="ft">'+(noPrice?'':'All prices are in AED and inclusive of 5% VAT, 7% DIFC Authority Fee and 10% Service Charge.<br>')+
+    '<div class="ft">'+(noPrice?'':PE_PRICE_NOTE+'<br>')+
     'Our Chefs will do their best to accommodate your dietary requirements.</div>';
   return peDocShell(title, body);
 }
@@ -8146,7 +8215,7 @@ async function peSaveDish(id){
   var tier = null, sell = null;
   if(cost!=null){
     for(var i=0;i<PE_TIERS.length;i++){
-      var maxCost = (PE_TIERS[i].p/PE_GROSS)*0.25;
+      var maxCost = (PE_TIERS[i].p/PE_MENU_DIV)*0.25;
       if(cost <= maxCost*1.05){ tier = PE_TIERS[i].n; sell = PE_TIERS[i].p; break; }
     }
     if(!tier){ tier='Signature'; sell=35; }
@@ -8782,7 +8851,7 @@ function peRenderSetMenuLib(){
   var smLibRow = function(m, opts){
     opts = opts || {};
     var mm=peNormSM(m); var pending=mm.price==null;
-    var costPct = (mm.cost!=null && mm.price) ? Math.round((mm.cost/(mm.price/PE_GROSS))*100) : null;
+    var costPct = (mm.cost!=null && mm.price) ? Math.round((mm.cost/(mm.price/PE_MENU_DIV))*100) : null;
     return '<div class="pe-dishrow" data-smid="'+(m.id||'')+'" data-cust="'+(mm.custom?'1':'0')+'" data-smname="'+peEsc(mm.name)+'" style="opacity:'+(mm.active===false?.45:1)+';cursor:'+(canChef?'grab':'default')+';touch-action:pan-y">'+
       '<span>'+(canChef?'<span style="color:#C0B49F;margin-right:7px;letter-spacing:-1px" title="Drag to reorder, or onto the other list">⁙</span>':'')+'<b style="color:#400207">'+peEsc(mm.name)+'</b> '+
       (pending?'<span title="With no price this menu is filtered out of every booking dropdown" style="background:#FAEEDA;color:#854F0B;font-size:11px;padding:2px 9px;border-radius:20px;margin-left:2px">Price pending — the desk cannot pick it</span>':'· AED '+peMoney(mm.price)+'/guest')+
@@ -9019,7 +9088,7 @@ function pePackPrint(id){
     });
   }
   body += '<div class="ft">Our Chefs will do their best to accommodate your dietary requirements, please inform your waiter.<br>'+
-    (p.price_pp!=null?'All prices are in AED inclusive of 5% VAT, 7% DIFC Authority Fee and 10% Service Charge.':'')+
+    (p.price_pp!=null?PE_PRICE_NOTE:'')+
     peAlgLegend(body)+'</div>';
   pePrintHTML(peDocShell(p.name, body));
 }
@@ -9972,7 +10041,8 @@ function peRenderGuided(){
         '<div style="background:#F3E9DA;border-radius:10px;padding:14px;text-align:center;margin:12px 0 10px">'+
         '<div style="font-size:12px;color:#4F4535">'+peEsc(g.name||'Booking')+(g.date?' · '+peDLabel(g.date):'')+'</div>'+
         '<div style="font-size:18px;color:#400207;font-weight:600;margin:3px 0">'+(guests?guests+' guests':'—')+' · AED '+peMoney(total)+'</div>'+
-        '<div style="font-size:11px;color:#4F4535">'+peEsc(foodLbl)+(bev?' · '+peEsc(bev.name):(g.bevId==='dry'?' · no alcohol — soft drinks & water':''))+' — everything included</div></div>'+
+        '<div style="font-size:11px;color:#4F4535">'+peEsc(foodLbl)+(bev?' · '+peEsc(bev.name):(g.bevId==='dry'?' · no alcohol — soft drinks & water':''))+
+          (peFeeApplies({event_date:g.date}) ? ' — service charge and VAT included'+(guests?' · plus 7% DIFC Authority Fee AED '+peMoney(peFeeOn({event_date:g.date}, total))+' = AED '+peMoney(pePayable({event_date:g.date}, total)):'') : ' — everything included')+'</div></div>'+
         '<div style="font-size:11.5px;color:#2E6B34;margin-bottom:12px">Nothing is sent until you choose below.</div>';
       if(g.email){
         h += '<button class="pe-btn pe-primary" style="width:100%;box-sizing:border-box;padding:13px;margin-bottom:8px" onclick="peGuideFinish(\'send\')"'+(g.busy?' disabled':'')+'>'+(g.busy?'Working…':'Send proposal (they sign online)')+'</button>';
@@ -10176,7 +10246,7 @@ function peTargetCardHTML(mk, K){
     h += '<div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap">'+
       '<div style="flex:1;min-width:150px"><div class="pe-lbl">Revenue target (net)</div>'+
         '<div style="font-family:\'Playfair Display\',serif;font-size:19px;color:#400207">AED '+peMoney(tv)+'</div>'+
-        '<div style="font-size:11px;color:#4F4535">AED '+peMoney(peGrossOf(tv))+' at menu prices</div></div>'+
+        '<div style="font-size:11px;color:#4F4535">AED '+peMoney(peGrossOf(tv))+' paid by guests (service, VAT and 7% fee in)</div></div>'+
       '<div style="flex:1;min-width:150px"><div class="pe-lbl">Converted so far (net)</div>'+
         '<div style="font-family:\'Playfair Display\',serif;font-size:19px;color:#400207">AED '+peMoney(netConv)+'</div>'+
         '<div style="font-size:11px;color:#4F4535">AED '+peMoney(K.month.v)+' gross</div></div>'+
@@ -10685,7 +10755,7 @@ function peQuickPrint(){
     });
   });
   body += '<div class="ft">Our Chefs will do their best to accommodate your dietary requirements, please inform your waiter.<br>'+
-    'All prices are in AED inclusive of 5% VAT, 7% DIFC Authority Fee and 10% Service Charge.'+
+    PE_PRICE_NOTE+
     peAlgLegend(body)+'</div>';
   pePrintHTML(peDocShell(peQuick.title, body));
 }

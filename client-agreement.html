@@ -194,7 +194,9 @@ function render(data){
     var incl = hasFoodDoc ? (data.bev ? 'food and beverage package' : 'food') : (data.bev ? 'beverage package' : 'everything');
     h += '<div class="sect"><div class="total"><b>'+
       (data.pricing_type==='min_spend' ? 'Minimum spend — AED '+money(data.quoted) : (ev.guests?ev.guests+' guests · ':'')+'AED '+money(data.quoted))+
-      '</b><div class="d">Everything included — '+incl+', inclusive of all taxes and service'+
+      '</b><div class="d">'+(data.fee
+        ? 'Service charge and VAT included — '+incl+'<br>plus 7% DIFC Authority Fee AED '+money(data.fee)+' — <b>total AED '+money(data.payable)+'</b>'
+        : 'Everything included — '+incl+', inclusive of all taxes and service')+
       (data.deposit_pct>0?'<br>Deposit to confirm: '+data.deposit_pct+'% — AED '+money(data.deposit):'')+'</div></div></div>';
   }
 
@@ -214,7 +216,7 @@ function render(data){
       '<div class="err" id="sg-err"></div></div>';
   }
 
-  h += '<div class="ft">Roberto’s Club LTD · Gate Village No. 1, DIFC, Dubai<br>All prices are in AED and inclusive of 5% VAT, 7% DIFC authority fee and 10% service charge.<br>D - Dairy | E - Egg | G - Gluten | H - Homemade | N - Nuts | R - Raw | S - Shellfish | V - Vegetarian</div>';
+  h += '<div class="ft">Roberto’s Club LTD · Gate Village No. 1, DIFC, Dubai<br>'+esc(data.price_note||'All prices are in AED and inclusive of 5% VAT, 7% DIFC authority fee and 10% service charge.')+'<br>D - Dairy | E - Egg | G - Gluten | H - Homemade | N - Nuts | R - Raw | S - Shellfish | V - Vegetarian</div>';
   el('card').innerHTML = h;
 }
 

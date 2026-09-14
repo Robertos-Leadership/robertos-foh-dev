@@ -12,6 +12,10 @@
 //
 // Wording rule (Francesco, 3 Jul 2026): ALL prices inclusive of 5% VAT,
 // 7% DIFC authority fee and 10% service charge — everywhere.
+// CHANGED from Wed 16 Sep 2026 (approved price list, Aung / Justin): a price
+// carries 10% service and 5% VAT only, and the 7% DIFC Authority Fee is added
+// on top. Francesco, 14 Sep 2026: event quotes follow the menu. The rule below
+// MUST stay identical to peFeeApplies in foh-privateevents.js.
 //
 // Deploy with verify_jwt=false (public, token-gated like event-client-menu).
 // Secrets used: SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY (auto), RESEND_API_KEY.
@@ -35,6 +39,25 @@ async function deskList(sb: any): Promise<string[]> {
       .filter((e: string) => typeof e === "string" && e.includes("@"));
     return to.length ? to : NOTIFY_FALLBACK;
   } catch { return NOTIFY_FALLBACK; }
+}
+const FEE_FROM = "2026-09-16";
+const MENU_DIV = 1.155, BILL_DIV = 1.225;
+const FEE_KEEP_INCLUSIVE = ["bfaf6ab0-69ea-4ac0-846a-2dab6245d3fe"]; // deposit taken on the all-inclusive minimum
+const NOTE_NEW = "All prices are in AED and inclusive of 10% service charge and 5% VAT, subject to an additional 7% DIFC Authority Fee.";
+const NOTE_OLD = "All prices are in AED, inclusive of 5% VAT, 7% DIFC authority fee and 10% service charge.";
+// deno-lint-ignore no-explicit-any
+function feeApplies(ev: any): boolean {
+  if (ev.id && FEE_KEEP_INCLUSIVE.indexOf(ev.id) >= 0) return false;
+  if (ev.signed_at && String(ev.signed_at).slice(0, 10) < FEE_FROM) return false;
+  if (ev.event_date && String(ev.event_date).slice(0, 10) < FEE_FROM) return false;
+  return true;
+}
+// deno-lint-ignore no-explicit-any
+function feeOn(ev: any, amt: number | null): number | null {
+  if (amt == null) return null;
+  if (!feeApplies(ev)) return 0;
+  const a = Math.round(Number(amt));
+  return Math.round(a * BILL_DIV / MENU_DIV) - a;
 }
 const BANK = { name: "Roberto's Club LTD", bank: "Commercial Bank of Dubai", iban: "AE830230000001002196200", swift: "CBDUAEADXXX" };
 
@@ -83,10 +106,12 @@ function agreementNumbers(ev: any, totals: { total: number | null; discount?: nu
     ? (Number(ev.min_spend) ? Math.max(0, Number(ev.min_spend) - disc) : null)
     : totals.total;
   const pct = ev.deposit_pct == null ? 50 : Number(ev.deposit_pct);
-  const deposit = quoted != null && pct > 0 ? Math.round(quoted * pct / 100) : 0;
+  const fee = feeOn(ev, quoted);
+  const payable = quoted != null ? (fee ? Math.round(quoted) + fee : quoted) : null;
+  const deposit = payable != null && pct > 0 ? Math.round(payable * pct / 100) : 0;
   const guestsMin = ev.guests_min || ev.guests || null;
   const discount = totals.discount != null ? totals.discount : disc;
-  return { pricingType, quoted, pct, deposit, guestsMin, discount };
+  return { pricingType, quoted, pct, deposit, guestsMin, discount, fee, payable };
 }
 
 // The agreement terms with the event's numbers filled in. This is the ONE
@@ -95,6 +120,12 @@ function agreementNumbers(ev: any, totals: { total: number | null; discount?: nu
 // deno-lint-ignore no-explicit-any
 function termsHtml(ev: any, bev: any, totals: { total: number | null; discount?: number }): string {
   const n = agreementNumbers(ev, totals);
+  const priceClause = n.fee
+    ? "<b>All quoted prices are inclusive of 10% service charge and 5% VAT. A 7% DIFC Authority Fee of AED " + money(n.fee) +
+      " is added, making AED " + money(n.payable) + " payable.</b>"
+    : feeApplies(ev)
+      ? "<b>All quoted prices are inclusive of 10% service charge and 5% VAT, subject to an additional 7% DIFC Authority Fee.</b>"
+      : "<b>All quoted prices are inclusive of 5% VAT, 7% DIFC authority fee and 10% service charge.</b>";
   const sec = (t: string, body: string) =>
     '<div style="margin-top:16px"><div style="font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:#7A8B4A">' + t + "</div>" +
     '<div style="font-size:13px;line-height:1.65;color:#3A2A1E;margin-top:3px">' + body + "</div></div>";
@@ -104,11 +135,11 @@ function termsHtml(ev: any, bev: any, totals: { total: number | null; discount?:
       (n.guestsMin ? " for a minimum guarantee of <b>" + esc(n.guestsMin) + " guests</b>" : "") +
       ". Should consumption fall below this amount, the difference is charged as a venue fee. " +
       "Additional guests or amendments must be notified in writing at least 48 hours prior to the event, subject to approval and availability. " +
-      "<b>All quoted prices are inclusive of 5% VAT, 7% DIFC authority fee and 10% service charge.</b>"
+      priceClause"
     : "Food and beverage of <b>AED " + money(n.quoted) + "</b> for a minimum guarantee of <b>" + esc(n.guestsMin || "—") + " guests</b>. " +
       "Additional guests or amendments must be notified in writing at least 48 hours prior to the event, subject to approval and availability. " +
       "Additional guests will be charged at the same per-guest rate with prior intimation and confirmation. " +
-      "<b>All quoted prices are inclusive of 5% VAT, 7% DIFC authority fee and 10% service charge.</b>";
+      priceClause;
 
   const courtesy = n.discount > 0
     ? " This price already includes a courtesy of AED " + money(n.discount) + "."
@@ -186,7 +217,8 @@ function signedDocHtml(ev: any, items: any[], dishById: Record<string, any>, bev
     row("Food", esc(ev.package_label || (items.length ? "Canapé selection" : ""))) +
     row("Beverage", bev ? esc(bev.name) + (bev.duration_hours ? " — " + bev.duration_hours + " hours" : "") : (ev.bev_mode === "dry" ? "Dry event — no alcohol served (soft drinks &amp; water)" : "—")) +
     row(n.pricingType === "min_spend" ? "Minimum spend" : "Quoted price",
-      n.quoted != null ? "AED " + money(n.quoted) + (n.discount > 0 ? " — includes a courtesy of AED " + money(n.discount) : "") + " — inclusive of all taxes and service" : "—") +
+      n.quoted != null ? "AED " + money(n.quoted) + (n.discount > 0 ? " — includes a courtesy of AED " + money(n.discount) : "") +
+        (n.fee ? " — inclusive of service and VAT, plus 7% DIFC Authority Fee AED " + money(n.fee) + " = AED " + money(n.payable) + " payable" : " — inclusive of all taxes and service") : "—") +
     row("Deposit", n.pct > 0 ? n.pct + "% — AED " + money(n.deposit) : "None — balance on the day") +
     row("Remarks", esc(ev.agreement_remarks)) +
     "</table>" +
@@ -197,7 +229,7 @@ function signedDocHtml(ev: any, items: any[], dishById: Record<string, any>, bev
     (signed.designation ? " — " + esc(signed.designation) : "") +
     "<br>Date &amp; time: " + esc(signed.at) + " (Dubai)" +
     '<br><span style="font-size:11px;color:#8B7355">I have read and understood the General Terms &amp; Conditions of Special Event Reservations at Roberto&rsquo;s.</span></div>' +
-    '<div style="text-align:center;font-size:9.5px;color:#A5876B;margin-top:30px;line-height:1.7">Roberto&rsquo;s Club LTD · Gate Village No. 1, DIFC, Dubai · All prices in AED, inclusive of 5% VAT, 7% DIFC authority fee and 10% service charge.</div>' +
+    '<div style="text-align:center;font-size:9.5px;color:#A5876B;margin-top:30px;line-height:1.7">Roberto&rsquo;s Club LTD · Gate Village No. 1, DIFC, Dubai · ' + (feeApplies(ev) ? NOTE_NEW : NOTE_OLD) + '</div>' +
     "</body></html>";
 }
 
@@ -282,6 +314,7 @@ Deno.serve(async (req) => {
         setMenu,
         bev: bev ? { name: bev.name, duration_hours: bev.duration_hours, includes: bev.includes } : null,
         quoted: nums.quoted, pricing_type: nums.pricingType, deposit_pct: nums.pct, deposit: nums.deposit,
+        fee: nums.fee || 0, payable: nums.payable, price_note: feeApplies(ev) ? NOTE_NEW : NOTE_OLD,
         termsHtml: termsHtml(ev, bev, totals),
         signed: ev.signed_at ? { at: ev.signed_at, name: ev.signed_name, designation: ev.signed_designation } : null,
         // Once signed, the client must see the document they actually signed — not a
