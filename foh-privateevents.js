@@ -3195,7 +3195,7 @@ function peRenderEvent(){
       ? 'AED '+peMoney(t.actual)+' <span style="font-size:10.5px;font-weight:400;color:#4F4535">· actual on the night</span>'
       : (t.total!=null
         ? 'AED '+peMoney(t.total)+' <span style="font-size:10.5px;font-weight:400;color:#4F4535">· '+peMoney(t.perGuest)+'/guest'+(t.fee?' · AED '+peMoney(t.payable)+' with the 7% fee':'')+'</span>'
-        : (e.min_spend ? 'Min spend AED '+peMoney(e.min_spend) : 'AED — <span style="font-size:10.5px;font-weight:400;color:#4F4535">set food + guests</span>')))+'</b></div>';
+        : (e.min_spend ? 'Min spend AED '+peMoney(e.min_spend)+(peFeeOn(e, e.min_spend)?' <span style="font-size:10.5px;font-weight:400;color:#4F4535">· AED '+peMoney(pePayable(e, e.min_spend))+' with the 7% fee</span>':'') : 'AED — <span style="font-size:10.5px;font-weight:400;color:#4F4535">set food + guests</span>')))+'</b></div>';
 
   // facts — a new event shows only the 4 essentials; the rest live under
   // "More details" and auto-open the moment any of them holds real data.
@@ -3473,13 +3473,13 @@ function peRenderEvent(){
       '<b style="font-size:14px;color:#400207">After the event — real revenue</b>'+
       '<div style="font-size:11.5px;color:#4F4535;margin:4px 0 9px">More guests showed up, or extra bar / off-menu spend? Put the <b>real final total</b> here — it becomes this event’s revenue in the monthly report. You can also just raise the guest count above. Leave this blank to keep the quoted '+(t.total!=null?'AED '+peMoney(t.total):'amount')+'.</div>'+
       '<div class="pe-lbl">Real total charged (AED)</div>'+
-      '<input class="pe-in" type="number" min="0" step="50" value="'+(actSet?peEsc(actVal):'')+'" placeholder="'+(t.total!=null?peMoney(t.total):'quoted total')+'" onchange="peFact(this,\'actual_revenue\',\''+e.id+'\')"'+(ce?'':' disabled')+'>'+
+      '<input class="pe-in" type="number" min="0" step="50" value="'+(actSet?peEsc(actVal):'')+'" placeholder="'+(t.payable!=null?peMoney(t.payable):'quoted total')+'" onchange="peFact(this,\'actual_revenue\',\''+e.id+'\')"'+(ce?'':' disabled')+'>'+
       (ce
         ? '<div style="margin-top:8px"><button class="pe-btn sec sm" onclick="peSrRevenueOffer(\''+e.id+'\')">Pull the check from SevenRooms</button>'+
           '<span style="font-size:11px;color:#5C3D2E;margin-left:8px">the till figure for the night — confirm against Simphony</span></div>'
         : '')+
       (actSet
-        ? '<div style="margin-top:8px;font-size:12.5px;color:#2E6B34">✓ The report counts <b>AED '+peMoney(actVal)+'</b> for this event'+((t.total!=null && Math.round(actVal)!==Math.round(t.total))?' <span style="color:#4F4535">(quoted was AED '+peMoney(t.total)+')</span>':'')+'.</div>'
+        ? '<div style="margin-top:8px;font-size:12.5px;color:#2E6B34">✓ The report counts <b>AED '+peMoney(actVal)+'</b> for this event'+((t.payable!=null && Math.round(actVal)!==Math.round(t.payable))?' <span style="color:#4F4535">(quoted was AED '+peMoney(t.payable)+(t.fee?' with the 7% fee':'')+')</span>':'')+'.</div>'
         : '')+
       (srSourced
         ? '<div style="margin-top:6px;font-size:11.5px;color:#8A2A1A;background:#FBF0D6;border:1px solid #E4CE8E;border-radius:8px;padding:7px 9px">From <b>SevenRooms</b> (POS check) — not yet checked against Simphony. Type the Simphony figure over it to confirm.</div>'
@@ -9694,7 +9694,11 @@ function peWizPick(mix, guests, pool){
 }
 function peWizCalc(){
   var guests = parseInt(peWiz.guests,10)||0;
-  var budget = Number(peWiz.budget)||0;
+  // The guest's budget is what they will PAY. From 16 Sep 2026 the 7% DIFC fee is
+  // added on top of menu prices, so the proposal is built to the budget less the fee.
+  var budgetIn = Number(peWiz.budget)||0;
+  var wizFee = peFeeApplies({event_date: peWiz.date || null});
+  var budget = wizFee ? Math.floor(budgetIn * PE_MENU_DIV / PE_GROSS) : budgetIn;
   var bev = (peWiz.bev==='none' || peWiz.bev==='dry') ? null : (peWiz.bev ? peBevById(peWiz.bev) : undefined);
   if(!guests || !budget || bev===undefined) return {ready:false};
   if(guests < 15) return {ready:false, err:'Canapé receptions start at 15 guests — for smaller groups use a normal event.'};
@@ -9727,7 +9731,7 @@ function peWizCalc(){
   // the budget still isn't spent, OR the library is too thin/cheap to absorb it.
   // Then we say so and OFFER to add real value rather than parking the money.
   var addValue = foodUnspentPP >= 20 && mix.pcs >= PE_WIZ_SANE_PCS - 3;
-  return {ready:true, guests:guests, budget:budget, bev:bev, bevPP:bevPP, bevTotal:bevTotal, balance:balance,
+  return {ready:true, guests:guests, budget:budget, budgetIn:budgetIn, wizFee:wizFee, bev:bev, bevPP:bevPP, bevTotal:bevTotal, balance:balance,
           foodPP:foodPP, mix:mix, picked:picked, realFoodPP:realFoodPP, total:total, gap:budget-total,
           cap:peWizCap(guests), excl:exclOn, foodUnspentPP:foodUnspentPP,
           addValue:addValue, addValueTotal:Math.round(foodUnspentPP*guests)};
@@ -9778,11 +9782,13 @@ function peWizOutHTML(){
   var h = '<div class="pe-card" style="background:#F7EEE2;border-color:rgba(201,168,76,0.5)">'+
     '<div style="font-size:14.5px;color:#400207;font-weight:600;margin-bottom:8px">'+summary+'</div>'+
     '<div class="pe-lbl" style="color:#574232">The math — every number from your own prices</div>'+
+    (w.wizFee ? mrow('Guest budget AED '+peMoney(w.budgetIn)+' less the 7% DIFC fee', 'AED '+peMoney(w.budget)+' at menu prices') : '')+
     (w.bev ? mrow('Beverage — '+peEsc(w.bev.name)+(w.bev.duration_hours?' ('+w.bev.duration_hours+'h)':''), w.guests+' × AED '+peMoney(w.bevPP)+' = AED '+peMoney(w.bevTotal))
            : mrow('Beverage', peWiz.bev==='dry' ? 'no alcohol — soft drinks & water (AED 0)' : 'none — whole budget on food'))+
     mrow('Balance for food', 'AED '+peMoney(w.balance)+' → AED '+peMoney(w.foodPP)+' / guest')+
     mrow('Canapé selection — '+w.mix.pcs+' pieces/guest', [w.mix.s?w.mix.s+' Signature':null, w.mix.e?w.mix.e+' Elevated':null, w.mix.c?w.mix.c+' Classic':null].filter(Boolean).join(' + '))+
     mrow('Proposal total', w.guests+' × AED '+peMoney(w.realFoodPP+w.bevPP)+' = AED '+peMoney(w.total))+
+    (w.wizFee ? mrow('Guest pays with the 7% DIFC fee', 'AED '+peMoney(pePayable({event_date:peWiz.date||null}, w.total))) : '')+
     (w.gap<0
       ? '<div style="font-size:12px;margin-top:4px;color:#B00020">AED '+peMoney(-w.gap)+' OVER budget</div>'
       : w.addValue
