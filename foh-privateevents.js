@@ -208,6 +208,7 @@ function peNormSM(m){
            cost:(m.cost!=null ? m.cost : (m.cost_pp!=null ? m.cost_pp : null)),
            line:(m.line||''), courses:(m.courses||[]), pdf:(m.pdf||null),
            custom:!!m.is_custom, basedOn:(m.based_on||null),
+           festive:(m.collection==='festive'), until:(m.available_until||null),
            eventId:(m.event_id||null), priceMode:(m.price_mode||'supplement'),
            detail:(m.detail||null),
            active:(m.active!==false) };
@@ -229,13 +230,14 @@ function peSetMenusRaw(){ return peState.setMenus || []; }
 // peSmResort, so "the array order" and "what the chef sees" are the same thing -
 // which is what lets a drop index computed off the screen be written straight back.
 function peSmShelf(custom){
-  return (peState.setMenus||[]).filter(function(m){ return !!m.is_custom === !!custom; });
+  if(custom === 'fest') return (peState.setMenus||[]).filter(function(m){ return m.collection === 'festive'; });
+  return (peState.setMenus||[]).filter(function(m){ return m.collection !== 'festive' && !!m.is_custom === !!custom; });
 }
 // Mirror of the server's ORDER BY. After a reorder we re-sort in place rather
 // than refetching, so the list cannot flicker back to the old order first.
 function peSmResort(){
   (peState.setMenus||[]).sort(function(a,b){
-    var ac=a.is_custom?1:0, bc=b.is_custom?1:0; if(ac!==bc) return ac-bc;
+    var ac=a.collection==='festive'?2:(a.is_custom?1:0), bc=b.collection==='festive'?2:(b.is_custom?1:0); if(ac!==bc) return ac-bc;
     var as=(a.sort_order==null?999:a.sort_order), bs=(b.sort_order==null?999:b.sort_order);
     if(as!==bs) return as-bs;
     return String(a.name||'').localeCompare(String(b.name||''));
@@ -250,8 +252,30 @@ function peSetMenusAll(){ return peSetMenusRaw().map(peNormSM); }
 // with no special case. It is hidden from the chef's library and from the
 // booking dropdown — those are for the designed menus.
 function peSmIsCustom(m){ return !!(m && m.custom); }
+// ── Festive menus (Francesco, 15 Sep 2026) ───────────────────────────────────
+// Sophie needs the season's set menus in one place, and the kitchen uploads them
+// in Chef Corner exactly like a set menu. They are a THIRD shelf of the same
+// event_set_menus table (collection = 'festive'), so the proposal, agreement,
+// kitchen brief and guest pages resolve them by key with no special case.
+// On sale until 31 Dec of the season they were saved in; after that they leave
+// every events-desk list by themselves (bookings already on one keep it).
+function peSmIsFestive(m){ return !!(m && (m.festive === true || m.collection === 'festive')); }
+function peSmSeasonEnd(){ return String(peToday()).slice(0,4)+'-12-31'; }
+function peSmSeasonOver(m){
+  if(!peSmIsFestive(m)) return false;
+  var u = m.until || m.available_until;
+  return !!u && String(peToday()) > String(u).slice(0,10);
+}
+function peSmUntilLabel(m){
+  var u = m && (m.until || m.available_until);
+  return u ? peDLabel(String(u).slice(0,10))+' '+String(u).slice(0,4) : '';
+}
+// What the events desk can offer from the festive shelf right now.
+function peSetMenusFestive(){
+  return peSetMenusAll().filter(function(m){ return peSmIsFestive(m) && m.active!==false && !peSmSeasonOver(m); });
+}
 // The designed menus only — the chef's library and the pickers.
-function peSetMenusDesigned(){ return peSetMenusAll().filter(function(m){ return !peSmIsCustom(m); }); }
+function peSetMenusDesigned(){ return peSetMenusAll().filter(function(m){ return !peSmIsCustom(m) && !peSmIsFestive(m); }); }
 // Only active, priced menus can be picked into a quote.
 function peSetMenusSel(){ return peSetMenusDesigned().filter(function(m){ return m.active!==false && m.price!=null; }); }
 function peSetMenuByKey(k){
@@ -290,7 +314,7 @@ function peSetMenusPick(){
 // library; the pause is the only thing that decides what can be sold.
 function peSetMenusBookable(){
   return peSetMenusAll().filter(function(m){
-    return m.active!==false && !(/-sharing$/.test(m.key) && peSmFamily(m.key));
+    return m.active!==false && !peSmSeasonOver(m) && !(/-sharing$/.test(m.key) && peSmFamily(m.key));
   });
 }
 // ── One dropdown shape, in the chef's order ──────────────────────────────────
@@ -300,8 +324,9 @@ function peSetMenusBookable(){
 // standard menus is how a bespoke price reaches the wrong guest.
 function peSetMenuOptGroups(selKey, needPrice){
   var rows = peSetMenusBookable().filter(function(m){ return needPrice ? m.price!=null : true; });
-  return [['Set menus', false], ['Customised for a booking', true]].map(function(g){
-    var list = rows.filter(function(m){ return peSmIsCustom(m) === g[1]; });
+  var kind = function(m){ return peSmIsFestive(m) ? 'fest' : (peSmIsCustom(m) ? 'cust' : 'std'); };
+  return [['Set menus', 'std'], ['Festive menus', 'fest'], ['Customised for a booking', 'cust']].map(function(g){
+    var list = rows.filter(function(m){ return kind(m) === g[1]; });
     if(!list.length) return '';
     return '<optgroup label="'+g[0]+'">'+list.map(function(m){
       return '<option value="'+peEsc(m.key)+'"'+(selKey && selKey===m.key ? ' selected' : '')+'>'+
@@ -5724,7 +5749,7 @@ async function peSendPaymentLink(id){
 
 // ── library (chef dishes / Manuel beverage / packages) ───────────────────────
 function peRenderChefCorner(){
-  var tab = (peState.chefTab === 'set' || peState.chefTab === 'alacarte') ? peState.chefTab : 'canape';
+  var tab = (peState.chefTab === 'set' || peState.chefTab === 'festive' || peState.chefTab === 'alacarte') ? peState.chefTab : 'canape';
   var h = peHeader('chef');
   // The count has to be the SAME count the library below prints, or the band is
   // a second version of the truth. Dishes: peRenderDishLib's own total.
@@ -5733,10 +5758,15 @@ function peRenderChefCorner(){
   var lede, stand;
   if(tab==='set'){
     var nSet = peSetMenusLoaded() ? peSetMenusDesigned().length : 0;
-    var nCust = peSetMenusLoaded() ? (peSetMenusAll().length - nSet) : 0;
+    var nCust = peSetMenusLoaded() ? peSetMenusAll().filter(peSmIsCustom).length : 0;
     lede  = nSet ? (nSet + ' set menu' + (nSet===1?'':'s') + (nCust?' + '+nCust+' customised':'')) : 'Set menus';
     stand = 'Plated set menus — saved here they appear in the events desk booking dropdown, the guest proposal and the kitchen brief.'+
             (nCust?' The customised menus below were tailored for one booking each; they can still reach a guest, so they are yours to cost and pause too.':'');
+  } else if(tab==='festive'){
+    var fAll = peSetMenusLoaded() ? peSetMenusAll().filter(peSmIsFestive) : [];
+    var fLive = fAll.filter(function(m){ return m.active!==false && !peSmSeasonOver(m); }).length;
+    lede  = fAll.length ? (fAll.length + ' festive menu' + (fAll.length===1?'':'s') + (fLive!==fAll.length ? ' · '+fLive+' on sale' : '')) : 'Festive menus';
+    stand = 'The season’s set menus. Upload them here like any set menu — they appear straight away under Menu packages → Festive menus and in the booking dropdown, and leave the events desk by themselves after 31 December.';
   } else if(tab==='alacarte'){
     var nAlc = peAlcAll().length;
     lede  = nAlc ? (nAlc + ' dish' + (nAlc===1?'':'es') + ' on the printed menu') : 'The à la carte';
@@ -5751,11 +5781,12 @@ function peRenderChefCorner(){
   // under Menu packages → Canapé packages. One thing, said twice. The tab is
   // gone; every action it carried (PDF, View, Pause, Delete) moved onto the rows
   // in Menu packages, so nothing was lost with it.
-  var tabs = [['canape','Canap\u00e9 library'],['set','Set menus'],['alacarte','\u00c0 la carte']];
+  var tabs = [['canape','Canap\u00e9 library'],['set','Set menus'],['festive','Festive menus'],['alacarte','\u00c0 la carte']];
   h += '<div class="pe-tabs" style="margin-bottom:12px">'+tabs.map(function(t){
     return '<span class="pe-tab'+(tab===t[0]?' on':'')+'" onclick="peState.chefTab=\''+t[0]+'\';renderMain()">'+t[1]+'</span>';
   }).join('')+'</div>';
   h += (tab==='set') ? peRenderSetMenuLib()
+     : (tab==='festive') ? peRenderSetMenuLib(true)
      : (tab==='alacarte') ? peRenderAlaCarte(true)     // true = this is the chef's copy, editable
      : peRenderDishLib();
   return h+PE_FOOT;
@@ -5776,7 +5807,7 @@ function peRenderPacksView(){
   // #15 — canapé packages are now a first-class tab (not a grey footer link).
   // Set menus + beverage stay on ONE screen so the guest still gets everything
   // ticked — a set menu, a few beverage packages, or a mix — in ONE email, one tap.
-  var tabs = [['menus','Set menus & beverage'],['canape','Canapé packages'],['alacarte','À la carte'],['custom','Customise a menu']];
+  var tabs = [['menus','Set menus & beverage'],['canape','Canapé packages'],['alacarte','À la carte'],['custom','Customise a menu'],['festive','Festive menus']];
   h += '<div class="pe-tabs" style="margin-bottom:12px">'+tabs.map(function(t){
     return '<span class="pe-tab'+(tab===t[0]?' on':'')+'" onclick="peState.packsTab=\''+t[0]+'\';renderMain()">'+t[1]+'</span>';
   }).join('')+'</div>';
@@ -5795,6 +5826,7 @@ function peRenderPacksView(){
     return h+PE_FOOT;
   }
   if(tab==='custom'){ h += peRenderCustomise(); return h+PE_FOOT; }
+  if(tab==='festive'){ h += peRenderFestiveSend(bevs); return h+PE_FOOT; }
   h += '<div style="font-size:12px;color:#4F4535;margin-bottom:10px">Tick anything below — a set menu, dishes from the à la carte, beverage packages, or a mix — and the guest receives it all in ONE branded email, or one WhatsApp with one link.</div>';
   // The canapé link stays where she has always found it — on Guest link. No
   // second copy of it here; one thing in one place.
@@ -5870,14 +5902,7 @@ function peRenderPacksView(){
     });
     h += '</div>';
   }
-  h += '<div class="pe-card"><div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap"><b style="color:#400207">Beverage packages</b>'+peSelLinks('bev')+'</div>'+
-    '<div style="font-size:11px;color:#4F4535;margin:2px 0 8px">Guest prices only — costs never leave the Beverage corner.</div>'+
-    (bevs.length?bevs.map(function(b){
-      return '<div class="pe-dishrow"><span><label style="cursor:pointer"><input type="checkbox" class="pe-mp-check" data-kind="bev" data-key="'+b.id+'" onchange="peMpCount()" style="accent-color:#400207;margin-right:8px;vertical-align:-2px">'+
-        '<b>'+peEsc(b.name)+'</b>'+(b.duration_hours?' · '+b.duration_hours+'h':'')+(b.price_pp!=null?' · AED '+peMoney(b.price_pp)+' / guest':' · price on the proposal')+'</label><br>'+
-        '<span style="font-size:11px;color:#4F4535">'+peEsc(b.includes||'')+'</span></span>'+
-        (b.pdf?'<span style="display:flex;gap:6px;flex-shrink:0"><button class="pe-btn sec sm" onclick="window.open(\''+b.pdf+'\',\'_blank\')">Open PDF</button></span>':'')+'</div>';
-    }).join(''):'<div style="font-size:12px;color:#4F4535">No packages yet — Manuel adds them in the Beverage corner.</div>')+'</div>';
+  h += peMpBevCardHTML(bevs);
   h += peMenuPackEmailForm();
   // Arriving from "Email" on a customised menu, the box is already ticked —
   // but the summary line and the Send button only update on a change event, so
@@ -7900,6 +7925,52 @@ function peRenderPacksLibView(){
   h += peRenderPackLib();
   return h+PE_FOOT;
 }
+// The beverage packages card, shared by Set menus & beverage and Festive menus.
+function peMpBevCardHTML(bevs){
+  var h = '';
+  h += '<div class="pe-card"><div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap"><b style="color:#400207">Beverage packages</b>'+peSelLinks('bev')+'</div>'+
+    '<div style="font-size:11px;color:#4F4535;margin:2px 0 8px">Guest prices only — costs never leave the Beverage corner.</div>'+
+    (bevs.length?bevs.map(function(b){
+      return '<div class="pe-dishrow"><span><label style="cursor:pointer"><input type="checkbox" class="pe-mp-check" data-kind="bev" data-key="'+b.id+'" onchange="peMpCount()" style="accent-color:#400207;margin-right:8px;vertical-align:-2px">'+
+        '<b>'+peEsc(b.name)+'</b>'+(b.duration_hours?' · '+b.duration_hours+'h':'')+(b.price_pp!=null?' · AED '+peMoney(b.price_pp)+' / guest':' · price on the proposal')+'</label><br>'+
+        '<span style="font-size:11px;color:#4F4535">'+peEsc(b.includes||'')+'</span></span>'+
+        (b.pdf?'<span style="display:flex;gap:6px;flex-shrink:0"><button class="pe-btn sec sm" onclick="window.open(\''+b.pdf+'\',\'_blank\')">Open PDF</button></span>':'')+'</div>';
+    }).join(''):'<div style="font-size:12px;color:#4F4535">No packages yet — Manuel adds them in the Beverage corner.</div>')+'</div>';
+  return h;
+}
+// ── Menu packages → Festive menus ───────────────────────────────────────────
+// Sophie's festive season in one place: what the kitchen uploaded in Chef Corner
+// → Festive menus, ready to tick and send with beverage packages in ONE email.
+// Read-only here — the menus are the kitchen's, like the à la carte.
+function peRenderFestiveSend(bevs){
+  var list = peSetMenusFestive();
+  var ended = peSetMenusAll().filter(function(m){ return peSmIsFestive(m) && m.active!==false && peSmSeasonOver(m); }).length;
+  var h = '<div style="font-size:12px;color:#4F4535;margin-bottom:10px">The season’s set menus, uploaded by the kitchen in '+
+    '<span style="color:#400207;text-decoration:underline;cursor:pointer" onclick="peState.chefTab=\'festive\';peGo(\'chef\')">Chef corner → Festive menus</span>. '+
+    'Tick one or more — with beverage packages if you like — and the guest receives it all in one email or one WhatsApp. They can also be put on a booking from its Food card.</div>';
+  h += '<div class="pe-card"><div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap"><b style="color:#400207">Festive menus</b>'+(list.length>1?peSelLinks('food'):'')+'</div>'+
+    (list.length ? list.map(function(m){
+      return '<div class="pe-dishrow"><span><label style="cursor:pointer"><input type="checkbox" class="pe-mp-check" data-kind="food" data-key="'+peEsc(m.key)+'" onchange="peMpCount()" style="accent-color:#400207;margin-right:8px;vertical-align:-2px">'+
+        '<b>'+peEsc(m.name)+'</b>'+(m.price!=null?' · AED '+peMoney(m.price)+' / person':' · <span style="background:#FAEEDA;color:#854F0B;font-size:10.5px;padding:1px 8px;border-radius:20px">price on the proposal</span>')+'</label><br>'+
+        '<span style="font-size:11px;color:#4F4535">'+peEsc(m.line||peSmSummary(m.courses))+'</span>'+
+        (m.until?'<br><span style="font-size:11px;color:#2E6B34">On sale until '+peEsc(peSmUntilLabel(m))+'</span>':'')+'</span>'+
+        '<span style="display:flex;gap:6px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end">'+
+        '<button class="pe-btn sec sm" onclick="peCmOpen(\''+peSmEsc(m.key)+'\')">View</button>'+
+        '<button class="pe-btn sec sm" onclick="peWaShareMenu(\''+peSmEsc(m.key)+'\')">WhatsApp</button>'+
+        (m.pdf?'<button class="pe-btn sec sm" onclick="window.open(\''+m.pdf+'\',\'_blank\')">Open PDF</button>':'')+
+        '</span></div>';
+    }).join('')
+    : '<div style="font-size:12px;color:#4F4535">'+(peSetMenusLoaded()
+        ? 'No festive menus on sale yet — the kitchen adds them in Chef corner → Festive menus, and they appear here straight away.'
+        : 'The menus did not load — check the connection and reopen Menu packages.')+'</div>')+
+    (ended ? '<div style="font-size:11px;color:#6B5E4E;margin-top:8px">'+ended+' festive menu'+(ended===1?'':'s')+' from a past season '+(ended===1?'is':'are')+' hidden — the kitchen can put '+(ended===1?'it':'them')+' back on sale in Chef corner.</div>' : '')+
+    '</div>';
+  if(list.length){
+    h += peMpBevCardHTML(bevs);
+    h += peMenuPackEmailForm();
+  }
+  return h;
+}
 function peMenuPackEmailForm(){
   if(!peCanEdit()) return '';   // read-only users browse the menus; sending is the editors'
   return '<div class="pe-card" style="border-color:rgba(201,168,76,0.5)"><b style="color:#400207">Send to the guest</b>'+
@@ -8385,9 +8456,9 @@ function peSmDraftFrom(courses){
   });
 }
 // smKnown is per-menu — it must never carry one menu's dishes into the next.
-function peSmNew(){ peState.editSetMenuId='new'; peState.smDraft=[{name:'',choose:false,lines:[]}]; peState.smName=''; peState.smText=''; peState.smPdf=null; peState.smBrandDoc=false; peState.smCost=null; peState.smPrice=null; peState.smKnown=null; renderMain(); }
+function peSmNew(fest){ peState.smFestive=!!fest; peState.editSetMenuId='new'; peState.smDraft=[{name:'',choose:false,lines:[]}]; peState.smName=''; peState.smText=''; peState.smPdf=null; peState.smBrandDoc=false; peState.smCost=null; peState.smPrice=null; peState.smKnown=null; renderMain(); }
 function peSmEdit(id){ var m=peNormSM(peSmRawById(id)); peState.editSetMenuId=id; peState.smDraft=peSmDraftFrom(m&&m.courses); peState.smKnown=null; peSmSplitCodesFromNames(); peSmRemember(); peState.smName=(m&&m.name)||''; peState.smText=''; peState.smPdf=null; peState.smBrandDoc=false; peState.smCost=null; peState.smPrice=null; renderMain(); }
-function peSmCancel(){ peState.editSetMenuId=null; peState.smDraft=null; peState.smName=''; peState.smText=''; peState.smPdf=null; peState.smBrandDoc=false; peState.smCost=null; peState.smPrice=null; peState.smKnown=null; renderMain(); }
+function peSmCancel(){ peState.smFestive=false; peState.editSetMenuId=null; peState.smDraft=null; peState.smName=''; peState.smText=''; peState.smPdf=null; peState.smBrandDoc=false; peState.smCost=null; peState.smPrice=null; peState.smKnown=null; renderMain(); }
 // ── chef uploads the designed menu PDF ───────────────────────────────────────
 // One upload does two jobs: the text is read out and laid into courses by the
 // same "Structure it" flow the paste box uses, and the file itself is stored
@@ -8824,7 +8895,8 @@ function peSmBookingFor(key){
   }
   return null;
 }
-function peRenderSetMenuLib(){
+function peRenderSetMenuLib(festive){
+  var fest = !!festive;
   var raw = (peState.editSetMenuId && peState.editSetMenuId!=='new') ? peSmRawById(peState.editSetMenuId) : null;
   var editing = peState.editSetMenuId==='new' || !!raw;
   var curPrice = raw ? (raw.price_pp!=null?raw.price_pp:(raw.price!=null?raw.price:null)) : null;
@@ -8843,8 +8915,11 @@ function peRenderSetMenuLib(){
     // bookings already quoted keep theirs.
     var priceRow = '<input class="pe-in" id="pe-sm-price" type="number" min="0" style="max-width:190px" value="'+peEsc(priceVal2)+'" placeholder="e.g. 395">'+
       '<div style="font-size:11px;color:#4F4535;margin-top:5px">The price a new quote starts from. Bookings already quoted keep the price they were given. Left empty, the menu reads “Price pending” and stays out of the events-desk dropdown.</div>';
-    h += '<div class="pe-card"><b style="color:#400207">'+(raw?'Edit set menu':'New set menu')+'</b>'+
-      '<div style="font-size:11px;color:#4F4535;margin:2px 0 10px">Saved here it appears in the events desk dropdown, the guest proposal and the kitchen brief.</div>'+
+    var edFest = raw ? raw.collection==='festive' : !!peState.smFestive;
+    h += '<div class="pe-card"><b style="color:#400207">'+(raw?'Edit ':'New ')+(edFest?'festive menu':'set menu')+'</b>'+
+      '<div style="font-size:11px;color:#4F4535;margin:2px 0 10px">'+(edFest
+        ? 'Saved here it appears under Menu packages → Festive menus, in the booking dropdown, the guest proposal and the kitchen brief — on sale until '+peEsc(peSmUntilLabel({available_until: (raw&&raw.available_until) || peSmSeasonEnd()}))+'.'
+        : 'Saved here it appears in the events desk dropdown, the guest proposal and the kitchen brief.')+'</div>'+
       '<div class="pe-lbl">Menu name</div><input class="pe-in" id="pe-sm-name" value="'+peEsc(peState.smName||'')+'" placeholder="e.g. Vegetarian set menu">'+
       '<div style="margin-top:10px;background:#F4EEE1;border:1px dashed #C9B48E;border-radius:10px;padding:11px">'+
         '<div class="pe-lbl" style="color:#574232">Paste the menu — the app lays out the courses for you</div>'+
@@ -8888,7 +8963,9 @@ function peRenderSetMenuLib(){
         (raw?'<button class="pe-btn sec" style="margin-left:auto;color:#B00020;border-color:#B00020" onclick="peToggleSetMenu(\''+raw.id+'\','+(raw.active===false?'true':'false')+')">'+(raw.active===false?'Reactivate':'Retire menu')+'</button>':'')+
       '</div></div>';
   } else {
-    h += '<div style="margin-bottom:10px"><button class="pe-btn" onclick="peSmNew()">+ Add set menu</button></div>';
+    h += '<div style="margin-bottom:10px">'+(fest
+      ? (peCanEditChef() ? '<button class="pe-btn" onclick="peSmNew(true)">+ Add festive menu</button>' : '')
+      : '<button class="pe-btn" onclick="peSmNew()">+ Add set menu</button>')+'</div>';
   }
   // The chef owns every menu that can reach a guest (Francesco, 31 Aug 2026).
   // Customised menus used to be hidden here — but they are sendable from Menu
@@ -8896,8 +8973,8 @@ function peRenderSetMenuLib(){
   // correct or pause was still being sold. They now get their own section below,
   // kept separate so the designed library does not fill up with one bespoke row
   // per booking.
-  var list = peSetMenusRaw().filter(function(m){ return !m.is_custom; });
-  var customList = peSetMenusRaw().filter(function(m){ return !!m.is_custom; });
+  var list = fest ? peSmShelf('fest') : peSmShelf(false);
+  var customList = fest ? [] : peSmShelf(true);
   // ── Is the margin check actually running? ──
   // Every menu already says "no cost yet" on its own row, but nobody was told
   // that it is ALL of them — so the 27% guard reads as "nothing is over target"
@@ -8944,6 +9021,11 @@ function peRenderSetMenuLib(){
         ? ' <span style="font-size:11px;color:'+(costPct==null?'#8B7355':(costPct<=27?'#2E6B34':'#B00020'))+'">· cost '+peMoney(mm.cost)+(costPct!=null?' ('+costPct+'% of net'+(costPct<=27?'':' — above 27% target')+')':'')+'</span>'
         : ' <span style="font-size:11px;color:#B00020">· no cost yet — chef to add</span>')+
       (mm.active===false?' <span style="font-size:11px;color:#4F4535">· retired</span>':'')+
+      (mm.festive
+        ? (peSmSeasonOver(mm)
+            ? '<br><span style="font-size:11px;color:#B00020">Season over — ended '+peEsc(peSmUntilLabel(mm))+', out of new quotes</span>'
+            : '<br><span style="font-size:11px;color:#2E6B34">On sale until '+peEsc(peSmUntilLabel(mm))+'</span>')
+        : '')+
       (opts.forBooking!==undefined
         ? '<br><span style="font-size:11px;color:#6B4A33">'+(opts.forBooking
             ? 'Built for ' + peEsc(opts.forBooking)
@@ -8964,6 +9046,7 @@ function peRenderSetMenuLib(){
       '<span class="pe-acts w5">'+
         (mm.key?'<button class="pe-btn sec sm" onclick="peCmPrintMenu(\''+peEsc(mm.key)+'\')">PDF</button>'+
                 '<button class="pe-btn sec sm" onclick="peCmOpen(\''+peEsc(mm.key)+'\')">View</button>':'')+
+        (m.id && mm.festive && peSmSeasonOver(mm) && canChef ? '<button class="pe-btn sec sm" onclick="peSmFestiveRenew(\''+m.id+'\')">Use again this season</button>' : '')+
         (m.id?'<button class="pe-btn sec sm" onclick="peSmEdit(\''+m.id+'\')">Edit</button>'+
               // Pause without opening the menu first. Retiring keeps existing
               // bookings on it and only takes it out of new quotes.
@@ -8975,6 +9058,15 @@ function peRenderSetMenuLib(){
     '</div>';
   };
   peSmDragInit();
+  if(fest){
+    h += '<div style="margin:4px 0 8px"><b style="color:#400207;font-size:14px">Festive menus</b>'+
+      '<div style="font-size:12px;color:#4F4535;margin-top:3px">'+list.length+' menu'+(list.length===1?'':'s')+
+      ' for the season. '+(canChef&&list.length>1?'<b>Drag a menu up or down to set the order.</b> ':'')+
+      'Unless paused, each can be sent and put on a booking until 31 December.</div></div>';
+    h += '<div class="pe-card" id="pe-smzone-fest">'+(list.length?list.map(function(m){ return smLibRow(m); }).join('')
+        :'<div style="font-size:12px;color:#4F4535">No festive menus yet'+(canChef?' — tap “+ Add festive menu” and upload the PDF or Word file':'')+'.</div>')+'</div>';
+    return h;
+  }
   h += '<div style="margin:4px 0 8px"><b style="color:#400207;font-size:14px">Standard menus</b>'+
     '<div style="font-size:12px;color:#4F4535;margin-top:3px">'+list.length+' menu'+(list.length===1?'':'s')+
     ' — the everyday library. '+(canChef?'<b>Drag a menu up or down to set the order, or onto the other list to move it.</b> ':'')+'Anything not paused can be put on a booking, whichever list it sits in.</div></div>';
@@ -9047,10 +9139,11 @@ async function peSaveSetMenu(id){
   // re-reads the courses so an edit here reaches the guest.
   else if(peState.smBrandDoc) row.pdf = 'client-setmenu.html?m='+encodeURIComponent(row.key);
   if(!id) row.created_by=peActor();
+  if(!id && peState.smFestive){ row.collection = 'festive'; row.available_until = peSmSeasonEnd(); }
   // A brand new menu lands at the BOTTOM of its shelf. Without this it takes the
   // column default and jumps in among menus the chef has already put in order.
   if(!id){
-    var tail = peSmShelf(!!row.is_custom).reduce(function(mx, m){
+    var tail = peSmShelf(row.collection==='festive' ? 'fest' : !!row.is_custom).reduce(function(mx, m){
       return Math.max(mx, (m.sort_order==null?0:m.sort_order));
     }, 0);
     row.sort_order = tail + 10;
@@ -9072,8 +9165,8 @@ async function peSaveSetMenu(id){
     : ('created'+(priceVal!=null ? ' at AED '+peMoney(priceVal)+'/guest' : ' with no price yet')));
   if(id){ peState.setMenus = peState.setMenus.map(function(m){ return m.id===id ? r.data : m; }); }
   else { if(!Array.isArray(peState.setMenus)) peState.setMenus=[]; peState.setMenus.push(r.data); }
-  peState.editSetMenuId=null; peState.smDraft=null; peState.smName=''; peState.smText=''; peState.smPdf=null; peState.smBrandDoc=false;
-  peToast(priceVal!=null ? 'Set menu saved ✓ — ready for the events desk' : 'Set menu saved ✓ — it stays out of the events-desk dropdown until it has a price');
+  peState.editSetMenuId=null; peState.smDraft=null; peState.smName=''; peState.smText=''; peState.smPdf=null; peState.smBrandDoc=false; peState.smFestive=false;
+  peToast(r.data.collection==='festive' ? (priceVal!=null ? 'Festive menu saved ✓ — Sophie can send it now' : 'Festive menu saved ✓ — it stays out of the booking dropdown until it has a price') : priceVal!=null ? 'Set menu saved ✓ — ready for the events desk' : 'Set menu saved ✓ — it stays out of the events-desk dropdown until it has a price');
   renderMain();
 }
 // Retire is for a menu that is off for a while — the Netflix menu between two
@@ -9244,10 +9337,12 @@ function peSmDragInit(){
 }
 function peSmZones(){
   return { std: document.getElementById('pe-smzone-std'),
-           cust: document.getElementById('pe-smzone-cust') };
+           cust: document.getElementById('pe-smzone-cust'),
+           fest: document.getElementById('pe-smzone-fest') };
 }
 function peSmZoneAt(x, y){
   var z = peSmZones();
+  if(z.fest) return 'fest';   // the Festive tab has one shelf: reorder only
   if(!z.std || !z.cust) return null;
   var rs = z.std.getBoundingClientRect(), rc = z.cust.getBoundingClientRect();
   if(y>=rs.top && y<=rs.bottom) return 'std';
@@ -9280,7 +9375,7 @@ function peSmAutoScrollTick(){
 // to show in different order not only between standard and costumized".)
 function peSmDropAt(x, y){
   var zone = peSmZoneAt(x, y); if(!zone) return null;
-  var z = peSmZones(), el = (zone==='std') ? z.std : z.cust;
+  var z = peSmZones(), el = (zone==='fest') ? z.fest : (zone==='std') ? z.std : z.cust;
   if(!el) return null;
   var d = peSmDrag && peSmDrag.d;
   var rows = [].slice.call(el.querySelectorAll('[data-smid]'));
@@ -9311,14 +9406,14 @@ function peSmDropLine(t){
 }
 function peSmDragHighlight(x, y){
   var z = peSmZones(), over = peSmZoneAt(x, y);
-  [['std',z.std],['cust',z.cust]].forEach(function(p){
+  [['std',z.std],['cust',z.cust],['fest',z.fest]].forEach(function(p){
     if(p[1]) p[1].style.background = (over===p[0]) ? '#F6EEDC' : '';
   });
   peSmDropLine(peSmDropAt(x, y));
 }
 function peSmDragPaint(on){
   var z = peSmZones();
-  [z.std, z.cust].forEach(function(el){
+  [z.std, z.cust, z.fest].forEach(function(el){
     if(!el) return;
     el.style.outline = on ? '2px dashed #C9A84C' : '';
     el.style.outlineOffset = on ? '3px' : '';
@@ -9389,7 +9484,7 @@ function peSmDragUp(ev){
   d.row.style.opacity = '';
   document.body.style.userSelect = '';
   try{ if(d.pid!=null && d.row.releasePointerCapture) d.row.releasePointerCapture(d.pid); }catch(e){}
-  var z = peSmZones(); [z.std,z.cust].forEach(function(el){ if(el) el.style.background = ''; });
+  var z = peSmZones(); [z.std,z.cust,z.fest].forEach(function(el){ if(el) el.style.background = ''; });
   peSmDragPaint(false);
   // Read the drop target BEFORE clearing the drag. peSmDropAt skips the row being
   // dragged, and it finds that row through peSmDrag.d - so clearing first made it
@@ -9398,7 +9493,7 @@ function peSmDragUp(ev){
   var t = armed ? peSmDropAt(ev.clientX, ev.clientY) : null;
   peSmDrag.d = null;
   if(!armed || !t) return;
-  peSmApplyDrop(id, t.zone==='cust', t.index);
+  peSmApplyDrop(id, t.zone==='fest' ? 'fest' : t.zone==='cust', t.index);
 }
 // A drop is now "this shelf, this slot". Crossing shelves and reordering inside
 // one are the same gesture and the same write - keeping them apart is what made
@@ -9407,8 +9502,10 @@ async function peSmApplyDrop(id, toCustom, index){
   if(!peCanEditChef()){ peToast('View only \u2014 the kitchen team order the set menus', true); return; }
   var moved = null; (peState.setMenus||[]).forEach(function(x){ if(x.id===id) moved = x; });
   if(!moved) return;
-  var wasCustom = !!moved.is_custom, nowCustom = !!toCustom;
-  var before = peSmShelf(nowCustom);
+  var toFest = (toCustom === 'fest');
+  if(toFest !== (moved.collection === 'festive')) return;   // festive menus only reorder inside their own shelf
+  var wasCustom = !!moved.is_custom, nowCustom = toFest ? wasCustom : !!toCustom;
+  var before = peSmShelf(toFest ? 'fest' : nowCustom);
   var shelf = before.filter(function(m){ return m.id !== id; });
   index = Math.max(0, Math.min(index, shelf.length));
   shelf.splice(index, 0, moved);
@@ -9463,6 +9560,18 @@ async function peSmSetCustom(id, toCustom){
   peState.setMenus.forEach(function(x){ if(x.id===id) x.is_custom=on; });
   peSmLog(m.key, m.name, 'moved to the '+(on?'customised':'standard')+' shelf');
   peToast('“'+m.name+'” is now a '+(on?'customised':'standard')+' menu — drag it back to undo');
+  renderMain();
+}
+// A festive menu whose season ended comes back for THIS season in one tap.
+async function peSmFestiveRenew(id){
+  if(!peCanEditChef()){ peToast('View only — the kitchen team change the set menus', true); return; }
+  var m = peSmRawById(id); if(!m) return;
+  var until = peSmSeasonEnd();
+  var r = await sb.from('event_set_menus').update({available_until:until, updated_at:new Date().toISOString()}).eq('id', id);
+  if(r.error){ peToast('NOT changed — '+String(r.error.message||'').slice(0,80), true); return; }
+  m.available_until = until;
+  peSmLog(m.key, m.name, 'back on sale for the season, until '+until);
+  peToast('“'+m.name+'” is on sale again until '+peSmUntilLabel({available_until: until}));
   renderMain();
 }
 async function peToggleSetMenu(id, active){
