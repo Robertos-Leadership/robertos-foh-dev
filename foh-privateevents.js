@@ -8772,6 +8772,56 @@ function peSmMoveCourse(i, dir){
   var t = d[i]; d[i] = d[j]; d[j] = t;
   renderMain();
 }
+// A menu written the way menus are printed — dish name on one line, its
+// description on the next — used to be laid out with every description as a
+// dish of its own. Festive set menus A and B (15 Sep 2026) went out like that:
+// the guest page showed descriptions as dishes and a guest could "choose"
+// "Gratin tomato eggplant, buffalo mozzarella, basil" as their main.
+//
+// So after every lay-out, look at each course. Connector lines ("&", "+",
+// "and") are never dishes and go. Then, only if the WHOLE course reads as
+// name/description pairs, fold each description onto its dish. All-or-nothing
+// per course: a plain list of dishes ("Plain croissant", "Vanilla croissant")
+// must never have one dish swallowed as another's description.
+function peSmLineIsDesc(name, line){
+  var codeRe = /\(([A-Za-z]{1,3})\)/;
+  var n = String(name||'').replace(/\s*\([A-Za-z]{1,3}\)/g,'').trim();
+  var d = String(line||'').replace(/\s*\([A-Za-z]{1,3}\)/g,'').trim();
+  if(!n || !d) return false;
+  var wn = n.split(/\s+/).length, wd = d.split(/\s+/).length;
+  if(d.indexOf(',')>=0 && n.indexOf(',')<0) return true;              // "Gratin tomato eggplant, buffalo mozzarella"
+  if(codeRe.test(name) && !codeRe.test(line) && wd > wn) return true;  // the codes sit on the dish line
+  if(wd >= wn+3) return true;                                          // far longer than the name
+  return false;
+}
+function peSmPairDescriptions(){
+  var folded = 0;
+  (peState.smDraft||[]).forEach(function(c){
+    var lines = (c.lines||[]).map(function(s){ return String(s||'').trim(); })
+      .filter(function(s){ return s && !/^(?:&|\+|and|e|or|o|-|–|—|\/|·)$/i.test(s); });
+    c.lines = lines;
+    if(lines.length < 2 || lines.length % 2) return;
+    var desc = c.desc||{};
+    for(var i=0;i<lines.length;i+=2){
+      if(desc[lines[i+1]]!=null || desc[lines[i]]!=null) return;   // the lay-out already knew better
+      if(!peSmLineIsDesc(lines[i], lines[i+1])) return;
+    }
+    var nd = Object.assign({}, desc), na = Object.assign({}, c.allg||{}), out = [];
+    for(var j=0;j<lines.length;j+=2){
+      var name = lines[j], codes = [];
+      // Codes written at the end of the description still belong to the dish.
+      var text = lines[j+1].replace(/\s*\(([A-Za-z]{1,3})\)/g, function(_, code){ codes.push(code.toUpperCase()); return ''; })
+        .replace(/\s+,/g, ',').replace(/,(?=\S)/g, ', ').trim();
+      nd[name] = text;
+      if(codes.length && !Object.prototype.hasOwnProperty.call(na, name) && !/\([A-Za-z]{1,3}\)/.test(name)) na[name] = codes;
+      out.push(name); folded++;
+    }
+    c.lines = out;
+    c.desc = Object.keys(nd).length ? nd : null;
+    c.allg = Object.keys(na).length ? na : null;
+  });
+  return folded;
+}
 function peSmSlug(n){ return String(n||'menu').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,32)+'-'+Date.now().toString(36).slice(-4); }
 // Offline fallback parser: turns "Course: a, b · Secondi (choice): x / y" into
 // the courses structure. The chef confirms/edits everything before saving.
@@ -8821,7 +8871,7 @@ async function peStructureMenu(){
   try{
     var r=await sb.functions.invoke('revenue-assistant',{ body:{
       max_tokens:900,
-      system:'You convert a pasted restaurant set menu into strict JSON and nothing else. Output ONLY a JSON object of the form {"name": string, "courses": [ {"name": string, "items": [string], "desc": {string: string}} OR {"name": string, "choose": 1, "options": [string], "desc": {string: string}} ]}. A course where the guest picks one dish (words like choice, choose, or, either) becomes a choose course with options; every other course lists its dishes as items. Keep dish names short. When the text describes a dish (its ingredients or preparation), put that one-line English description in the course\'s desc object keyed by the exact dish name; omit desc when there are none. ALLERGENS: the menu may carry codes in brackets after a dish, like "Ricciola (R)(S)" or "Branzino(D)(N)". Never delete them and never invent them — copy them verbatim into the desc text for that dish. They are a safety declaration, not decoration. No commentary, no markdown code fences.',
+      system:'You convert a pasted restaurant set menu into strict JSON and nothing else. Output ONLY a JSON object of the form {"name": string, "courses": [ {"name": string, "items": [string], "desc": {string: string}} OR {"name": string, "choose": 1, "options": [string], "desc": {string: string}} ]}. A course where the guest picks one dish (words like choice, choose, or, either) becomes a choose course with options; every other course lists its dishes as items. Keep dish names short. When the text describes a dish (its ingredients or preparation), put that one-line English description in the course\'s desc object keyed by the exact dish name; omit desc when there are none. Menus often print the description on its own line under the dish name — that line is the desc, NEVER another item or option. Lines like "&" or "and" are not dishes. ALLERGENS: the menu may carry codes in brackets after a dish, like "Ricciola (R)(S)" or "Branzino(D)(N)". Never delete them and never invent them — copy them verbatim into the desc text for that dish. They are a safety declaration, not decoration. No commentary, no markdown code fences.',
       messages:[{role:'user',content:txt}]
     }});
     if(!r.error && r.data && r.data.text) parsed=peParseMenuJson(r.data.text);
@@ -8830,8 +8880,12 @@ async function peStructureMenu(){
   if(!parsed || !parsed.courses || !parsed.courses.length){ peState.smBusy=false; peToast('Could not read that — add the courses by hand below', true); renderMain(); return; }
   if(!(peState.smName||'').trim() && parsed.name) peState.smName=parsed.name;
   peState.smDraft=peSmDraftFrom(parsed.courses);
+  var folded=peSmPairDescriptions();
+  peSmSplitCodesFromNames();
   peState.smBusy=false;
-  peToast('Laid out '+parsed.courses.length+' course'+(parsed.courses.length>1?'s':'')+' — check and edit below ✓');
+  // Folding is a judgement call — say so, so the chef looks at "What the guest will read".
+  peToast('Laid out '+parsed.courses.length+' course'+(parsed.courses.length>1?'s':'')+
+    (folded ? ' — '+folded+' description'+(folded>1?'s were on their own lines and now sit under their dishes.':' was on its own line and now sits under its dish.')+' Check “What the guest will read” below' : ' — check and edit below ✓'), !!folded);
   renderMain();
 }
 function peSmCourseHTML(c,i){
