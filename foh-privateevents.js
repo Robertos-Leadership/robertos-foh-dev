@@ -35,10 +35,11 @@ var peState = {
   editSetMenuId:null, smDraft:null, smName:'', smText:'', smBusy:false
 };
 
-// Who the event brief goes to. The live list lives in app_users.notify ('event_brief')
-// and is managed on Admin → Emails, so it changes without a deploy. This array is the
-// FALLBACK only — used if that read returns nobody, so the brief can never go to no one.
-var PE_TEAM_CC = ['fguarracino@robertos.ae','dvalla@robertos.ae','jthomas@robertos.ae','mpetrosino@robertos.ae','astellacci@robertos.ae','afalcone@robertos.ae','rmazouz@robertos.ae','reservations@robertos.ae','aviscardi@robertos.ae','kvukotic@robertos.ae','ahtwe@robertos.ae','asacchi@skelmore.com','amahmoud@skelmore.com'];
+// Who the event brief goes to lives in app_users.notify ('event_brief'), managed on
+// Admin → Emails, and NOWHERE else. There used to be a hardcoded fallback list here
+// (PE_TEAM_CC). It went stale — on 15 Sep 2026 it still mailed A. Viscardi and missed
+// Sophie, Diego Tella and Ouafaa — so Francesco had it dropped. If the list cannot be
+// read, the picker says so and opens with nobody ticked (see peSendCoordEmail).
 var PE_TARGETS = {
   cells: {'Vegetarian|Cold':7,'Fish|Cold':7,'Beef|Cold':6,'Vegetarian|Hot':7,'Fish|Hot':6,'Beef|Hot':7,'Dessert|Dessert':5},
   serve: {Cold:20, Hot:20, Dessert:5},
@@ -5464,6 +5465,7 @@ function pePickRecipients(opts){
   bg.innerHTML = '<div class="pe-modal" style="max-width:440px">'+
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px"><b style="color:#400207;font-size:15px">'+peEsc(opts.title||'Send email')+'</b><span class="pe-x" onclick="this.closest(\'.pe-modal-bg\').remove()">✕</span></div>'+
     (opts.subtitle?'<div style="font-size:12px;color:#4F4535;margin-bottom:6px">'+peEsc(opts.subtitle)+'</div>':'')+
+    (opts.warn?'<div style="background:#FBF0D8;border:1px solid #E6C766;border-radius:8px;padding:8px 10px;margin:4px 0 8px;font-size:12px;color:#6B4A00">'+peEsc(opts.warn)+'</div>':'')+
     '<div style="font-size:11px;color:#4F4535;margin-bottom:4px">Tap to include or leave out. Add anyone else below.</div>'+
     '<div id="pe-rcp-list" style="max-height:44vh;overflow-y:auto">'+standard.map(row).join('')+'</div>'+
     '<div style="display:flex;gap:6px;margin-top:10px"><input class="pe-in" id="pe-rcp-add" placeholder="Add another email…" style="flex:1" onkeydown="if(event.key===\'Enter\'){event.preventDefault();peRcpAdd();}"><button class="pe-btn sec sm" onclick="peRcpAdd()">Add</button></div>'+
@@ -5502,9 +5504,9 @@ function peRcpAdd(){
 // The brief's recipient list, read live from Admin -> Emails (app_users.notify).
 // It goes through the fn_notify_list RPC because RLS only lets a person read their
 // OWN app_users row unless they're an admin — a plain select here would show Valentina
-// one name and quietly send to the wrong team. Anything unexpected (RPC not there yet,
-// network, empty list) falls back to PE_TEAM_CC: a brief that reaches the old standard
-// team is recoverable, one that reaches nobody is not.
+// one name and quietly send to the wrong team.
+// Returns {emails, failed}. No substitute list on failure: a brief quietly sent to an
+// out-of-date team is how a person who left keeps getting it and a new one never does.
 async function peBriefTeam(){
   try{
     var r = await sb.rpc('fn_notify_list', {p_key:'event_brief'});
@@ -5512,12 +5514,11 @@ async function peBriefTeam(){
     var rows = r.data || [];
     var emails = rows.map(function(x){ return String(x.email||'').trim(); })
                      .filter(function(x){ return x.indexOf('@')>0; });
-    if(!emails.length) return PE_TEAM_CC.slice();
     // Names come from the same rows, so the picker reads like people even for someone
     // added on the Emails screen today and never listed in PE_PEOPLE.
     rows.forEach(function(x){ if(x.email && x.name) PE_PEOPLE[x.email]=x.name; });
-    return emails;
-  }catch(err){ return PE_TEAM_CC.slice(); }
+    return { emails:emails, failed:!emails.length };
+  }catch(err){ return { emails:[], failed:true }; }
 }
 async function peSendCoordEmail(id){
   if(!peCanEdit()){ peToast('View only — ask Katarina, Andrea or Francesco to make changes', true); return; }
@@ -5528,11 +5529,13 @@ async function peSendCoordEmail(id){
   if(!e.event_date) missing.push('the date');
   if(!e.guests) missing.push('the guest count');
   if(missing.length && !(await peConfirm({title:'Some basics are missing', html:'This event is still missing <b>'+peEsc(missing.join(', '))+'</b>.<br><br>Send the brief to the team anyway?', ok:'Send anyway', cancel:'Go back', danger:true}))) return;
-  var standard = (state.userEmail?[state.userEmail]:[]).concat(await peBriefTeam());
+  var team = await peBriefTeam();
+  var standard = (state.userEmail?[state.userEmail]:[]).concat(team.emails);
   standard = standard.filter(function(x,i){ return standard.indexOf(x)===i; });
   pePickRecipients({
     title:'Send the event brief', subtitle:(e.client_name||'Event')+' · '+peDLabel(e.event_date),
-    standard:standard, checked:standard, you:state.userEmail,
+    warn: team.failed ? 'Couldn’t load the team list from Admin → Emails. Nobody is ticked — add who should get this brief, or close and try again.' : '',
+    standard:standard, checked:(team.failed ? [] : standard), you:state.userEmail,
     onSend:function(list){ peDoSendCoord(id, list); }
   });
 }
