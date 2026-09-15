@@ -47,6 +47,7 @@ const NOTE_NEW = "All prices are in AED and inclusive of 10% service charge and 
 const NOTE_OLD = "All prices are in AED, inclusive of 5% VAT, 7% DIFC authority fee and 10% service charge.";
 // deno-lint-ignore no-explicit-any
 function feeApplies(ev: any): boolean {
+  if (ev.fee_included === true) return false; // Sophie included the 7% in the price for this client (15 Sep 2026)
   if (ev.id && FEE_KEEP_INCLUSIVE.indexOf(ev.id) >= 0) return false;
   if (ev.signed_at && String(ev.signed_at).slice(0, 10) < FEE_FROM) return false;
   if (ev.event_date && String(ev.event_date).slice(0, 10) < FEE_FROM) return false;

@@ -114,6 +114,9 @@ var PE_PRICE_NOTE = 'All prices are in AED and inclusive of 10% Service Charge a
 var PE_PRICE_NOTE_OLD = 'All prices are in AED inclusive of 5% VAT, 7% DIFC Authority Fee and 10% Service Charge.';
 function peFeeApplies(e){
   if(!e) return true;
+  // Sophie, 15 Sep 2026: some clients agreed all-inclusive terms with her in the past.
+  // She can include the 7% in the price on their proposal — only she (see peCanIncludeFee).
+  if(e.fee_included === true) return false;
   if(e.id && PE_FEE_KEEP_INCLUSIVE.indexOf(e.id) >= 0) return false;
   if(e.signed_at && String(e.signed_at).slice(0,10) < PE_FEE_FROM) return false;
   if(e.event_date && String(e.event_date).slice(0,10) < PE_FEE_FROM) return false;
@@ -134,6 +137,19 @@ function pePayable(e, amt){
   return Math.round(Number(amt)) + peFeeOn(e, amt);
 }
 function pePriceNote(e){ return peFeeApplies(e) ? PE_PRICE_NOTE : PE_PRICE_NOTE_OLD; }
+// Who may include the 7% in the price for one proposal. Francesco, 15 Sep 2026:
+// Sophie only — granted as app_users.modules 'events_fee_included', and enforced
+// again in the database (trigger events_desk_fee_included_guard_t).
+function peCanIncludeFee(){
+  return !!(state.access && (state.access.modules||[]).indexOf('events_fee_included') >= 0);
+}
+// The fee this booking would carry on the standard terms — what the guest is spared
+// when it is included. Staff-only; never printed on a guest document.
+function peFeeWaivedAmt(e, amt){
+  if(amt == null || amt === '') return null;
+  var std = {}; for(var k in e) std[k] = e[k]; std.fee_included = false;
+  return peFeeOn(std, amt);
+}
 // The line printed under a menu-price amount on a guest document.
 function peFeeLineHTML(e, amt){
   var f = peFeeOn(e, amt);
@@ -3352,6 +3368,7 @@ function peRenderEvent(){
                 : '<span style="color:#B00020;cursor:pointer;text-decoration:underline" onclick="peScrollToCard(\'food\')">▲ Add the menu or a set food price first — the quoted price comes from it.</span>')))+
       '</div>';
   }
+  h += peFeeIncludedHTML(e, agBase);
   // Payment link (from the Telr portal) — shown signed OR unsigned, because the
   // link is usually generated AFTER signing. It's an ops field, not a contract
   // term, so it saves quietly (no void). While empty, the agreement promises no
@@ -4046,6 +4063,72 @@ async function peSaveField(id, field, value, opts){
 // identical. peSaveField degrades gracefully if the column isn't in the DB yet.
 function peSetPriceDisplay(id, mode){
   peSaveField(id, 'price_display', mode==='pp' ? 'pp' : 'total');
+}
+
+// ── 7% DIFC fee included in the price (agreed terms with this client) ─────
+// Sophie, 15 Sep 2026. The proposal falls back to the all-inclusive terms every
+// pre-16-Sep booking already uses: one price, no fee line, the old wording.
+function peFeeIncludedHTML(e, agBase){
+  var waived = peFeeWaivedAmt(e, agBase);
+  var stdApplies = peFeeWaivedAmt(e, 1000) !== 0;
+  var can = peCanIncludeFee() && !e.signed_at;
+  if(e.fee_included){
+    var by = [e.fee_included_by, e.fee_included_at ? peDLabel(String(e.fee_included_at).slice(0,10)) : ''].filter(Boolean).join(', ');
+    return '<div style="margin-top:12px;background:#FFF6E0;border:1px solid #E8C979;border-radius:10px;padding:10px 12px;font-size:12.5px;color:#4F3A12">'+
+      '<b>7% DIFC fee included in the price</b> — terms already agreed with this client. The guest sees one all-inclusive price.'+
+      (e.fee_included_reason ? '<div style="margin-top:4px">Why: '+peEsc(e.fee_included_reason)+'</div>' : '')+
+      (by ? '<div style="font-size:11px;color:#6B5E4E;margin-top:2px">Set by '+peEsc(by)+'</div>' : '')+
+      (waived ? '<div style="font-size:11.5px;color:#8A2A1A;margin-top:5px">Staff only: the guest pays <b>AED '+peMoney(waived)+' less</b> than on standard terms — Roberto’s still pays the fee.</div>' : '')+
+      (can ? '<div style="margin-top:8px"><button class="pe-btn sec sm" onclick="peFeeIncludedOff(\''+e.id+'\')">Add the 7% back on top</button></div>' : '')+
+      '</div>';
+  }
+  if(!can || !stdApplies) return '';
+  return '<div style="margin-top:10px;font-size:12px"><span style="color:#6B1F2A;text-decoration:underline;cursor:pointer" onclick="peAskFeeIncluded(\''+e.id+'\')">Already agreed all-inclusive with this client? Include the 7% DIFC fee in the price</span></div>';
+}
+function peAskFeeIncluded(id){
+  var e = peEvById(id); if(!e) return;
+  if(!peCanIncludeFee()){ peToast('Only Sophie can include the 7% fee in the price', true); return; }
+  if(e.signed_at){ peToast('This agreement is signed — its terms are frozen', true); return; }
+  var waived = peFeeWaivedAmt(e, peAgBase(e));
+  var bg = document.createElement('div'); bg.className='pe-modal-bg';
+  bg.addEventListener('click', function(ev){ if(ev.target===bg) bg.remove(); });
+  bg.innerHTML = '<div class="pe-modal" style="max-width:440px">'+
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px"><b style="color:#400207">Include the 7% DIFC fee in the price?</b><span class="pe-x" onclick="this.closest(\'.pe-modal-bg\').remove()">✕</span></div>'+
+    '<div style="font-size:12.5px;color:#6B4A33;margin:6px 0 10px;line-height:1.55">The proposal, agreement and deposit show <b>one all-inclusive price</b> with no fee line, worded “inclusive of 5% VAT, 7% DIFC Authority Fee and 10% Service Charge”.'+
+      (waived ? '<br><span style="color:#8A2A1A">The guest pays <b>AED '+peMoney(waived)+' less</b> than on standard terms.</span>' : '')+'</div>'+
+    '<div class="pe-lbl">Why — what was agreed with this client?</div>'+
+    '<textarea class="pe-in" id="pe-feeinc-note" rows="2" maxlength="300" placeholder="e.g. Returning client — all-inclusive terms agreed on their 2025 events"></textarea>'+
+    '<div id="pe-feeinc-err" style="font-size:11.5px;color:#B00020;min-height:15px;margin-top:3px"></div>'+
+    '<div style="display:flex;gap:8px;margin-top:6px"><button class="pe-btn" onclick="peFeeIncludedOn(\''+id+'\')">Include the fee</button>'+
+    '<button class="pe-btn sec" onclick="this.closest(\'.pe-modal-bg\').remove()">Cancel</button></div></div>';
+  document.body.appendChild(bg);
+  setTimeout(function(){ var t = document.getElementById('pe-feeinc-note'); if(t) t.focus(); }, 30);
+}
+async function peFeeIncludedOn(id){
+  var t = document.getElementById('pe-feeinc-note');
+  var why = t ? t.value.trim() : '';
+  if(!why){ var er = document.getElementById('pe-feeinc-err'); if(er) er.textContent = 'Write what was agreed, so the team knows why this client pays no fee on top.'; return; }
+  var ok = await peSetFeeIncluded(id, true, why);
+  if(ok){ var bg = t && t.closest('.pe-modal-bg'); if(bg) bg.remove(); }
+}
+async function peFeeIncludedOff(id){
+  if(!(await peConfirm({title:'Add the 7% back on top?', body:'The proposal goes back to standard terms: menu prices plus the 7% DIFC Authority Fee, and the deposit follows the higher total.', ok:'Add it back'}))) return;
+  peSetFeeIncluded(id, false, null);
+}
+async function peSetFeeIncluded(id, on, why){
+  var e = peEvById(id); if(!e) return false;
+  if(!peCanIncludeFee()){ peToast('Only Sophie can change this', true); return false; }
+  if(e.signed_at){ peToast('This agreement is signed — its terms are frozen', true); return false; }
+  var patch = { fee_included:on, fee_included_reason:on?why:null, fee_included_by:on?peActor():null,
+                fee_included_at:on?new Date().toISOString():null, updated_at:new Date().toISOString(), updated_by:peActor() };
+  var r = await sb.from('events_desk').update(patch).eq('id', id);
+  if(r.error){ peToast('NOT saved — '+(r.error.message||'check connection'), true); return false; }
+  Object.keys(patch).forEach(function(k){ e[k] = patch[k]; });
+  sb.from('event_log').insert({event_id:id, action:'edited', actor:peActor(),
+    detail:(on ? '7% DIFC fee included in the price — '+why : '7% DIFC fee added back on top').slice(0,400)}).then(function(){ peLoadLog(id); });
+  peToast(on ? 'Saved ✓ — one all-inclusive price, no fee line' : 'Saved ✓ — 7% fee added back on top');
+  renderMain();
+  return true;
 }
 
 // ── #5 — the run of the evening: add / edit / remove a space ───────────────
@@ -5595,7 +5678,7 @@ async function peEmailAgreement(id){
     var r = await sb.functions.invoke('send-event-email', { body:{
       to: peSendTo(e.contact_email, sender), reply_to:sender, from_name:peSenderName(),
       subject: 'Your event proposal & agreement — Roberto’s'+(e.event_date?' · '+peDLabel(e.event_date):''),
-      html: peGuestEmailHTML('Your Event Agreement', intro, e.contact_name||e.client_name, null, inner)
+      html: peGuestEmailHTML('Your Event Agreement', intro, e.contact_name||e.client_name, null, inner, false, e)
     }});
     if(r.error || (r.data&&r.data.error)) throw (r.error||r.data.error);
     if(peState.voided) delete peState.voided[id];   // re-sent — clear the void banner
@@ -5629,7 +5712,7 @@ async function peSendPaymentLink(id){
     var r = await sb.functions.invoke('send-event-email', { body:{
       to: peSendTo(e.contact_email, sender), reply_to:sender, from_name:peSenderName(),
       subject:'Your deposit payment link — Roberto’s'+(e.event_date?' · '+peDLabel(e.event_date):''),
-      html: peGuestEmailHTML('Your Deposit Payment', intro, e.contact_name||e.client_name, null, inner)
+      html: peGuestEmailHTML('Your Deposit Payment', intro, e.contact_name||e.client_name, null, inner, false, e)
     }});
     if(r.error || (r.data&&r.data.error)) throw (r.error||r.data.error);
     peToast('Payment link sent to '+e.contact_email+' ✓');
@@ -7933,7 +8016,9 @@ async function peCanapeLinkReady(){
   return peState.canapeViewOk;
 }
 function peBaseUrl(){ return location.origin + location.pathname.replace(/[^\/]*$/, ''); }
-function peGuestEmailHTML(title, intro, name, note, inner, noPrice){
+// ev = the booking, when the email is about one: its price note follows its terms
+// (all-inclusive before 16 Sep or when Sophie included the fee). Menu emails pass none.
+function peGuestEmailHTML(title, intro, name, note, inner, noPrice, ev){
   var body = '<div class="brand">'+peLogoImg()+'</div><div class="rule"></div>'+
     '<h2>'+peEsc(title)+'</h2>'+
     '<div class="sub">DIFC, Dubai · private dining &amp; events</div>'+
@@ -7942,7 +8027,7 @@ function peGuestEmailHTML(title, intro, name, note, inner, noPrice){
     '<p style="font-size:13.5px">'+intro+'</p>'+
     inner+
     '<p style="font-size:13.5px;margin-top:26px">Simply reply to this email to check availability or tailor anything to your occasion — it will be our pleasure.</p>'+
-    '<div class="ft">'+(noPrice?'':PE_PRICE_NOTE+'<br>')+
+    '<div class="ft">'+(noPrice?'':(ev?pePriceNote(ev):PE_PRICE_NOTE)+'<br>')+
     'Our Chefs will do their best to accommodate your dietary requirements.</div>';
   return peDocShell(title, body);
 }

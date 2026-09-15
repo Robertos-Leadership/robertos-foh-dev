@@ -170,7 +170,7 @@ Deno.serve(async (req) => {
     // ── event mode: token-gated, as before ──
     if (!/^[a-f0-9]{16,64}$/.test(token)) return json({ error: "Invalid link" }, 400);
     const ev = await sb.from("events_desk")
-      .select("id,client_name,company,event_date,time_from,time_to,area,guests,status,client_selection")
+      .select("id,client_name,company,event_date,time_from,time_to,area,guests,status,client_selection,fee_included")
       .eq("client_token", token).limit(1);
     if (ev.error || !ev.data || !ev.data.length) return json({ error: "This link is no longer available" }, 404);
     const row = ev.data[0];
@@ -184,7 +184,8 @@ Deno.serve(async (req) => {
         mode: "event",
         event: {
           client_name: row.client_name, company: row.company, event_date: row.event_date,
-          time_from: row.time_from, time_to: row.time_to, area: row.area, guests: row.guests
+          time_from: row.time_from, time_to: row.time_to, area: row.area, guests: row.guests,
+          fee_included: row.fee_included === true
         },
         dishes: dishes.data,
         preselected: (items.data || []).map((i) => i.dish_id),

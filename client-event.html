@@ -114,7 +114,7 @@ async function load(){
   }catch(e){ fail('Could not load the menu — please check your connection and reopen the link.'); }
 }
 
-var feeEventDate = '';
+var feeEventDate = '', feeIncluded = false;
 function render(data){
   var ev = data.event || {};
   (data.dishes||[]).forEach(function(d){ dishById[d.id] = d; });
@@ -122,6 +122,7 @@ function render(data){
   if(data.selection && data.selection.dish_ids) (data.selection.dish_ids).forEach(function(id){ picked[id] = true; });
   var groups = [['Cold','Cold canapés'],['Hot','Hot canapés'],['Dessert','Dolci']];
   feeEventDate = ev.event_date ? String(ev.event_date).slice(0,10) : '';
+  feeIncluded = ev.fee_included === true;   // all-inclusive terms agreed with this client
   var dt = ev.event_date ? new Date(ev.event_date+'T12:00:00').toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'}) : '';
   var open = data.mode==='open';
   var h = '<div class="brand"><img src="robertos-logo-wordmark.svg" alt="Roberto’s"></div>'+
@@ -171,7 +172,7 @@ function render(data){
        '<textarea id="cl-note" maxlength="900">'+esc(data.selection&&data.selection.note||'')+'</textarea></div>';
   h += '<div class="btnrow"><button class="btn" id="cl-send" onclick="send()">Send selection to Roberto’s</button>'+
        '<div class="ft">Our events team will come back to you to confirm availability and final details.<br>'+
-       ((feeEventDate && feeEventDate < '2026-09-16') ? 'All prices are in AED and inclusive of 5% VAT, 7% DIFC Authority Fee and 10% Service Charge.<br>' : 'All prices are in AED and inclusive of 10% Service Charge and 5% VAT, subject to an additional 7% DIFC Authority Fee.<br>')+
+       (feeIncluded || (feeEventDate && feeEventDate < '2026-09-16') ? 'All prices are in AED and inclusive of 5% VAT, 7% DIFC Authority Fee and 10% Service Charge.<br>' : 'All prices are in AED and inclusive of 10% Service Charge and 5% VAT, subject to an additional 7% DIFC Authority Fee.<br>')+
        'A alcohol · D dairy · E egg · G gluten · H homemade · N nuts · R raw · S shellfish · V vegetarian</div></div>';
   el('card').innerHTML = h;
   document.body.classList.toggle('nogc', guestCount < 15);
@@ -259,7 +260,7 @@ function counts(){
     if(any && guestCount >= 15){
       // From 16 Sep 2026 prices include 10% service and 5% VAT; the 7% DIFC fee is added.
       var fDate = (feeEventDate || (el('cl-date')||{}).value || '');
-      var feeOn = !fDate || fDate >= '2026-09-16';
+      var feeOn = !feeIncluded && (!fDate || fDate >= '2026-09-16');
       var withFee = feeOn ? Math.round(Math.round(total) * 1.225 / 1.155) : Math.round(total);
       tl.innerHTML = '<b>Estimated total: AED '+Math.round(total).toLocaleString('en-US')+'</b> · about AED '+Math.round(total/guestCount).toLocaleString('en-US')+' per guest'+
         (feeOn ? '<br><span style="font-size:11px">plus 7% DIFC Authority Fee — about AED '+withFee.toLocaleString('en-US')+' in total</span>' : '')+
