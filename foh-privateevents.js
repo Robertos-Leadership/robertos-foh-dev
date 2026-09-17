@@ -3577,6 +3577,11 @@ function peRenderEvent(){
     // version, which is a different document built by different code. She had no
     // way to see what she was sending before sending it.
     '<button class="pe-btn sec" onclick="pePreviewClient(\''+e.id+'\')">Preview what the client sees</button>'+
+    // A file instead of a link, for a guest who wants to forward or keep it.
+    '<div style="display:flex;gap:7px;flex-wrap:wrap">'+
+      '<button class="pe-btn sec" style="flex:1 1 150px" onclick="peSaveProposalPdf(\''+e.id+'\')">Save proposal as PDF</button>'+
+      '<button class="pe-btn sec" style="flex:1 1 150px" onclick="peSaveProposalPdf(\''+e.id+'\',true)">PDF: menu only, no prices</button>'+
+    '</div>'+
     (hasMail?'':'<div style="font-size:11px;color:#8A2A1A;margin:-3px 2px 2px">Add the client email above to send.</div>')+
     // Once signed AND a Telr link is pasted on the Agreement card, one named,
     // confirmed, logged send to collect the deposit. (Deposit-paid stays a manual flip.)
@@ -5178,6 +5183,27 @@ function peProposalHTML(e, noPrice){
   return peDocShell('Roberto\'s proposal', body);
 }
 function pePrintProposal(id){ var e = peEvById(id); if(e) pePrintHTML(peProposalHTML(e)); }
+// Sophie, 17 Sep 2026: "an option to export as a pdf to send a proposal as
+// appose to the links". Some guests want a file they can forward, not a link.
+// The browser's own "Save as PDF" keeps the text sharp and the links live, and
+// it takes the document <title> as the file name, so the title carries the
+// client and the date, never "Roberto's proposal.pdf" for every booking.
+function peProposalPdfName(e, noPrice){
+  var parts = ['Roberto’s '+(noPrice?'menu':'proposal')];
+  if(e.client_name) parts.push(String(e.client_name).trim());
+  if(e.event_date){
+    var d = new Date(String(e.event_date).slice(0,10)+'T12:00:00');
+    if(!isNaN(d)) parts.push(d.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}));
+  }
+  // characters a file name cannot carry on Windows or macOS
+  return parts.join(' - ').replace(/[\\\/:*?"<>|]+/g,' ').replace(/\s+/g,' ').trim();
+}
+function peSaveProposalPdf(id, noPrice){
+  var e = peEvById(id); if(!e) return;
+  var html = peProposalHTML(e, !!noPrice).replace(/<title>[\s\S]*?<\/title>/, '<title>'+peEsc(peProposalPdfName(e, noPrice))+'</title>');
+  pePrintHTML(html);
+  peToast('In the print window choose “Save as PDF”, then attach the file to your email');
+}
 // The branded internal Event Brief — the whole team's one-page source of truth.
 // Used both for the printout and for the email to the team (same document).
 function peBriefBodyHTML(e){
