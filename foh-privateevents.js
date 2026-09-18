@@ -799,7 +799,9 @@ async function peLoadAll(force){
       // Loaded non-fatally: if the read fails the module still opens and the
       // Clients screen says so, rather than showing an empty book that looks
       // like nobody has ever enquired.
-      peFetchAllPaged(function(){ return sb.from('event_clients').select('*').order('last_enquiry_at',{ascending:false}); })
+      peFetchAllPaged(function(){ return sb.from('event_clients').select('*').order('last_enquiry_at',{ascending:false}); }),
+      // res[12] — the Micros-key requests already sent to Aung, per booking (see peMicrosKeyAuto).
+      sb.from('event_log').select('event_id,detail,created_at').eq('action','micros_key').order('created_at',{ascending:true})
     ]);
     // event_set_menus (res[5]) is loaded non-fatally so the module still opens if
     // the read fails — but it is NOT silently replaced by the built-in seed any
@@ -814,6 +816,10 @@ async function peLoadAll(force){
     peState.packs  = res[4].data||[];
     peState.clients   = (res[11] && !res[11].error) ? (res[11].data||[]) : [];
     peState.clientsOk = !!(res[11] && !res[11].error);
+    peState.microsKey = {};
+    if(res[12] && !res[12].error) (res[12].data||[]).forEach(function(l){
+      (peState.microsKey[l.event_id] = peState.microsKey[l.event_id] || []).push(l);
+    });
     // ── Set menus: never quietly substitute the built-in copy ──
     // This used to be `...length) ? res[5].data : PE_SET_MENUS`, so a FAILED read
     // silently fell back to the three menus written into this file. Two of them
@@ -3610,6 +3616,7 @@ function peRenderEvent(){
     '<div style="display:flex;flex-direction:column;gap:7px">'+
     '<button class="pe-btn" onclick="peSendCoordEmail(\''+e.id+'\')">'+(peBriefSent(e)?'Re-send the event brief to the team':'Send the event brief to the team')+'</button>'+
     (peBriefSent(e)?'<div style="font-size:11.5px;color:#2E5B30;margin:-3px 2px 2px">Sent '+peDLabel(String(peState.briefSent[e.id]).slice(0,10))+' ✓</div>':'')+
+    peMicrosKeyLineHTML(e)+
     '<button class="pe-btn sec" onclick="pePrintFunctionSheet(\''+e.id+'\')">Print the event brief</button>'+
     '</div></div>';
   h += '</div></div>';
@@ -5587,7 +5594,159 @@ async function peDoSendCoord(id, list){
     renderMain();
   }catch(err){
     peToast('Email NOT sent — '+String(err&&err.message||err).slice(0,120), true);
+    return;
   }
+  // Only after the brief has really gone. Its own try/catch and its own toast: a
+  // Micros mail that fails must never read as the brief failing, or the reverse.
+  await peMicrosKeyAuto(id);
+}
+// ── Micros key for a customised menu ─────────────────────────────────────────
+// Chef Andrea, through "Tell us", 15 Sep 2026: once a customised menu for an event
+// AND its function sheet exist, Aung has to be asked for a Micros key with a price —
+// even if the costing is not done. Until now nothing told him: the Kitchen's Micros
+// request is built from recipes, and a menu built for one booking is not a recipe,
+// so the till had no key for it unless someone remembered to write to him.
+//
+// When: the event brief (the function sheet) has gone to the team AND the booking's
+// food is a customised menu with a price. Whichever of the two happens second fires
+// it — sending the brief, or saving a customised menu onto a booking already briefed.
+// Once per menu at a price: the log carries "<menu key> @ AED <price>", so re-sending
+// the brief does not mail him again, but a new menu or a new price does.
+// Who: the Kitchen's own Micros setting (micros_settings — Admin panel in the Kitchen
+// app), the same To and copy line as every other Micros request. The address below
+// is the fallback for a read that fails, never the source.
+// No price, no request: a key made at AED 0 is a till that charges nothing.
+var PE_MICROS_FALLBACK = 'ahtwe@robertos.ae';
+function peMicrosMenu(e){
+  var k = e && e.set_menu && e.set_menu.key;
+  var m = k ? peSetMenuByKey(k) : null;
+  return peSmIsCustom(m) ? m : null;
+}
+function peMicrosAsked(e){
+  var l = e && peState.microsKey && peState.microsKey[e.id];
+  return (l && l.length) ? l[l.length-1] : null;
+}
+function peMicrosMark(m){ return m.key+' @ AED '+Math.round(Number(m.price)); }
+function peMicrosPriced(m){ return !!m && m.price!=null && Number(m.price) > 0; }
+// asked already for exactly this menu at exactly this price?
+function peMicrosCurrent(e, m){
+  var last = peMicrosAsked(e);
+  return !!(last && m && String(last.detail||'').indexOf(peMicrosMark(m)) >= 0);
+}
+function peMicrosName(to){ return String(to||'').toLowerCase()===PE_MICROS_FALLBACK ? 'Aung' : (to||'Aung'); }
+async function peMicrosWho(){
+  try{
+    if(typeof sbKitchen === 'undefined') throw new Error('no kitchen client');
+    var r = await sbKitchen.from('micros_settings').select('send_to,send_cc').eq('id',1).maybeSingle();
+    if(r.error) throw r.error;
+    var d = r.data || {};
+    var to = String(d.send_to||'').trim();
+    if(to.indexOf('@') < 1) throw new Error('no address set');
+    var cc = (d.send_cc||[]).map(function(x){ return String(x||'').trim(); }).filter(function(x){ return x.indexOf('@') > 0; });
+    return { to:to, cc:cc };
+  }catch(err){ return { to:PE_MICROS_FALLBACK, cc:[] }; }
+}
+function peMicrosKeyHTML(e, m, again){
+  var title = peTmDefaultTitle(m);
+  var P = 'font-size:14px;line-height:1.6;margin:0 0 10px';
+  var courses = (m.courses||[]).map(function(c){
+    var list = (c.choose ? c.options : c.items) || [];
+    return '<li><b>'+peEsc(c.name)+'</b>'+(c.choose?' <i>(guest chooses one)</i>':'')+' — '+peEsc(list.join(', '))+'</li>';
+  }).join('');
+  var terms = peFeeApplies(e)
+    ? 'inclusive of 10% service charge and 5% VAT; the 7% DIFC Authority Fee is added on the bill, not inside this price'
+    : 'this booking is on all-inclusive terms — 10% service charge, 5% VAT and the 7% DIFC Authority Fee are inside this price';
+  return '<div style="font-family:Arial,Helvetica,sans-serif;color:#2a1a10;max-width:640px">'+
+    '<div style="background:#410207;color:#f5ede0;padding:14px 18px">'+
+      '<div style="font-family:Georgia,serif;font-size:19px;font-weight:700">Roberto’s DIFC — Micros key needed</div>'+
+      '<div style="font-size:12px;opacity:.85;margin-top:3px">Customised event menu'+(again?' · changed since the last request':'')+'</div></div>'+
+    '<p style="'+P+';margin-top:14px">Please create a <b>Micros key</b> for this event menu'+(again?' — <b>the menu or its price has changed since we last asked</b>':'')+':</p>'+
+    '<table style="border-collapse:collapse;font-size:14px;margin:0 0 12px">'+
+      '<tr><td style="padding:4px 12px 4px 0;color:#6b5a45">Menu</td><td style="padding:4px 0"><b>'+peEsc(title)+'</b></td></tr>'+
+      '<tr><td style="padding:4px 12px 4px 0;color:#6b5a45">Price</td><td style="padding:4px 0"><b>AED '+peMoney(m.price)+' per guest</b></td></tr>'+
+      '<tr><td style="padding:4px 12px 4px 0;color:#6b5a45">Event</td><td style="padding:4px 0">'+peEsc(e.client_name||e.company||'—')+(e.company&&e.client_name?' · '+peEsc(e.company):'')+'</td></tr>'+
+      '<tr><td style="padding:4px 12px 4px 0;color:#6b5a45">Date</td><td style="padding:4px 0">'+peEsc(e.event_date?peDLabel(e.event_date)+' '+String(e.event_date).slice(0,4):'—')+'</td></tr>'+
+      '<tr><td style="padding:4px 12px 4px 0;color:#6b5a45">Guests</td><td style="padding:4px 0">'+peEsc(e.guests||'—')+'</td></tr>'+
+    '</table>'+
+    '<p style="font-size:12px;line-height:1.5;color:#6b5a45;margin:0 0 12px">The price is the menu price per guest, '+terms+'.</p>'+
+    (m.cost==null ? '<p style="'+P+'"><b>The costing is not done yet.</b> Please create the key with this price now, so the event can be charged on the night — the cost will follow.</p>' : '')+
+    (courses ? '<div style="font-family:Georgia,serif;font-size:15px;font-weight:700;margin:6px 0 4px">What is on the menu</div><ul style="font-size:13px;line-height:1.6;margin:0 0 12px;padding-left:20px">'+courses+'</ul>' : '')+
+    '<p style="'+P+'">Replying to all with the key number keeps the answer with the kitchen and the events desk.</p>'+
+    '<div style="font-size:11px;color:#8a7a55;border-top:1px solid #e1d3c2;padding-top:10px;margin-top:16px">Sent automatically from Roberto’s FOH · Events, when the function sheet went to the team.</div></div>';
+}
+// Fires on its own. Silent when there is nothing to do; says so when it cannot.
+async function peMicrosKeyAuto(id){
+  var e = peEvById(id); if(!e) return;
+  var m = peMicrosMenu(e); if(!m) return;
+  if(!peBriefSent(e)) return;
+  if(!peMicrosPriced(m)){
+    peToast('Aung was NOT asked for a Micros key — “'+peTmDefaultTitle(m)+'” has no price yet. Price the menu, then press “Ask Aung for the Micros key”.', true);
+    return;
+  }
+  if(peMicrosCurrent(e, m)) return;
+  await peMicrosKeySend(id);
+}
+// The button on the booking: for the menu that had no price at the time, a failed
+// send, or a booking briefed before this existed. Asks first — it is a send.
+async function peMicrosKeyAsk(id){
+  if(!peCanEdit()){ peToast('View only — ask Katarina, Andrea or Francesco to make changes', true); return; }
+  var e = peEvById(id); if(!e) return;
+  var m = peMicrosMenu(e); if(!m) return;
+  if(!peMicrosPriced(m)){ peToast('“'+peTmDefaultTitle(m)+'” has no price yet — a Micros key needs one.', true); return; }
+  var who = await peMicrosWho();
+  if(!(await peConfirm({ title:'Ask '+peMicrosName(who.to)+' for the Micros key?',
+      html:'A Micros key for <b>'+peEsc(peTmDefaultTitle(m))+'</b> at <b>AED '+peMoney(m.price)+' per guest</b> goes to <b>'+peEsc(who.to)+'</b>'+
+        (who.cc.length?', copying '+peEsc(who.cc.join(', ')):'')+'.',
+      ok:'Send', cancel:'Not now' }))) return;
+  await peMicrosKeySend(id, who);
+}
+async function peMicrosKeySend(id, who){
+  var e = peEvById(id); if(!e) return;
+  var m = peMicrosMenu(e); if(!m || !peMicrosPriced(m)) return;
+  who = who || await peMicrosWho();
+  var again = !!peMicrosAsked(e);
+  var seen = {}, list = [];
+  [who.to].concat(who.cc, state.userEmail ? [state.userEmail] : []).forEach(function(a){
+    var v = String(a||'').trim(), k = v.toLowerCase();
+    if(v.indexOf('@') > 0 && !seen[k]){ seen[k] = 1; list.push(v); }
+  });
+  var title = peTmDefaultTitle(m);
+  var subject = (again ? 'Micros key — menu changed — ' : 'Micros key needed — ')+title+' · AED '+peMoney(m.price)+'/guest · '+
+    (e.client_name||e.company||'event')+(e.event_date?' · '+peDLabel(e.event_date):'');
+  try{
+    var body = { to:list.slice(0,25), from_name:peSenderName(), subject:subject, html:peMicrosKeyHTML(e, m, again) };
+    if(state.userEmail) body.reply_to = state.userEmail;
+    var r = await sb.functions.invoke('send-event-email', { body:body });
+    if(r.error || (r.data&&r.data.error)) throw (r.error||r.data.error);
+  }catch(err){
+    peToast('Micros key request NOT sent to '+peMicrosName(who.to)+' — '+String(err&&err.message||err).slice(0,110), true);
+    return;
+  }
+  var detail = ('Micros key → '+who.to+' · '+peMicrosMark(m)+' · '+title).slice(0,400);
+  (peState.microsKey = peState.microsKey || {});
+  (peState.microsKey[id] = peState.microsKey[id] || []).push({ event_id:id, detail:detail, created_at:new Date().toISOString() });
+  var lg = await sb.from('event_log').insert({ event_id:id, action:'micros_key', detail:detail, actor:peActor() });
+  peToast(lg.error
+    ? 'Micros key request sent to '+peMicrosName(who.to)+', but it could not be written on the booking — '+String(lg.error.message||'').slice(0,80)
+    : peMicrosName(who.to)+' asked for a Micros key — '+title+' at AED '+peMoney(m.price)+'/guest ✓', !!lg.error);
+  peLoadLog(id);
+  renderMain();
+}
+// The line under "Send the event brief": where the Micros key stands for this booking.
+function peMicrosKeyLineHTML(e){
+  var m = peMicrosMenu(e); if(!m) return '';
+  var last = peMicrosAsked(e), cur = peMicrosCurrent(e, m), ce = peCanEdit();
+  var btn = function(label){ return ce ? '<button class="pe-btn sec" onclick="peMicrosKeyAsk(\''+e.id+'\')">'+label+'</button>' : ''; };
+  if(!peMicrosPriced(m))
+    return '<div style="font-size:11.5px;color:#8A2A1A;margin:-3px 2px 2px">Micros key: this customised menu has <b>no price</b>, so Aung has not been asked. Price it first.</div>';
+  if(cur)
+    return '<div style="font-size:11.5px;color:#2E5B30;margin:-3px 2px 2px">Micros key asked of Aung '+peDLabel(String(last.created_at).slice(0,10))+' — AED '+peMoney(m.price)+'/guest ✓</div>';
+  if(last)
+    return '<div style="font-size:11.5px;color:#6B4A00;margin:-3px 2px 2px">The menu or its price changed after Aung was asked for the Micros key.</div>'+btn('Ask Aung again for the Micros key');
+  return (peBriefSent(e)
+      ? '<div style="font-size:11.5px;color:#6B4A00;margin:-3px 2px 2px">Micros key: Aung has not been asked yet.</div>'
+      : '<div style="font-size:11.5px;color:#4F4535;margin:-3px 2px 2px">Micros key: Aung is asked automatically when the brief goes to the team.</div>')+
+    btn('Ask Aung for the Micros key');
 }
 // What the client sees in their inbox. A set-menu dinner is not a canape proposal.
 function peProposalSubject(e){
@@ -7912,6 +8071,7 @@ async function peCmSave(){
       ? 'Saved ✓ — it’s the food on that booking, and it goes out with the proposal'
       : 'Saved ✓ — tick it under “Set menus & beverage” to send it to a guest');
     if(cm.eventId) peGo('event', cm.eventId); else renderMain();
+    if(cm.eventId) await peMicrosKeyAuto(cm.eventId);
   }catch(err){
     peState.cmBusy = false; renderMain();
     peToast('NOT saved — '+String(err&&err.message||err).slice(0,120), true);
