@@ -2818,6 +2818,8 @@ function peRenderCalendar(){
   var y=M.y, mo=M.mo, first=M.first, startDow=M.startDow, days=M.days, byDate=M.byDate;
   var mLbl=M.mLbl, monthCount=M.monthCount, heldCount=M.heldCount, mConv=M.mConv, mPipe=M.mPipe;
   var h = peHeader('calendar');
+  if(!peState.hlLoaded && !peState.hlLoading) peLoadHighlights();
+  var hlBy = peHlByDate(mk);
   h += '<div style="margin-bottom:12px"><div class="pe-title">Calendar</div>'+
     '<div style="font-size:12px;color:#4F4535">Every booking on the day it lands. Tap one to open it.</div></div>';
   // Month header — a calm branded bar: prev · month + count · today · next
@@ -2836,7 +2838,8 @@ function peRenderCalendar(){
     '<button class="pe-btn sec sm" onclick="peCalPrint(document.getElementById(\'pe-cal-money\').checked)">Print this month</button>'+
     '<label style="font-size:12px;color:#6E5844;display:flex;align-items:center;gap:6px">'+
       '<input type="checkbox" id="pe-cal-money" style="accent-color:#400207">Include the money</label>'+
-    '<span style="font-size:11px;color:#574232">Landscape A4 · names, guests, time and area</span></div>';
+    '<span style="font-size:11px;color:#574232">Landscape A4 · names, guests, time and area</span>'+
+    '<button class="pe-btn sm" style="margin-left:auto" onclick="peHlOpen(null)">&#9733; Add to kitchen home</button></div>';
   // colour legend — a tidy card so the meaning of each colour is always in view
   var legend = [['sent','Proposal sent'],['confirmed','Confirmed'],['deposit','Deposit paid'],['draft','Draft'],['done','Done'],['lost','Lost']];
   h += '<div style="display:flex;flex-wrap:wrap;gap:7px 14px;background:#FBF7F1;border:1px solid rgba(107,31,42,0.14);border-radius:10px;padding:9px 13px;margin-bottom:12px;font-size:11.5px;color:#5A3A1E">'+legend.map(function(l){
@@ -2874,16 +2877,17 @@ function peRenderCalendar(){
           (bo?'&#9679; ':'')+peEsc((e.client_name||e.company||'?'))+(e.guests?' · '+e.guests:'')+
           (peIsMultiSpace(e)?' <span style="opacity:.75">'+(peSpaceList(e).length)+' spaces</span>':'')+
           (v?'<br><span style="opacity:.75">'+peMoney(v)+'</span>':'')+'</div>';
-      }).join('')+'</div>';
+      }).join('')+(hlBy[ds]||[]).map(peHlChip).join('')+'</div>';
   }
   h += '</div>';
   // narrow screens: a stacked agenda list (the 7-col grid is unreadable on a phone)
-  var agendaDates = Object.keys(byDate).sort();
+  var agendaDates = Object.keys(byDate).concat(Object.keys(hlBy).filter(function(k){ return !byDate[k]; })).sort();
   h += '<div class="pe-agenda">';
   if(!agendaDates.length){ h += '<div style="font-size:12px;color:#4F4535;padding:10px 2px">No events this month.</div>'; }
   agendaDates.forEach(function(ds){
     h += '<div style="font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#4F4535;margin:10px 2px 4px">'+peEsc(peDLabel(ds))+'</div>';
-    byDate[ds].forEach(function(r){
+    (hlBy[ds]||[]).forEach(function(x){ h += peHlAgendaCard(x); });
+    (byDate[ds]||[]).forEach(function(r){
       var e = r.e, pm = peStatusMeta(e.status);
       // The run of the evening, so a two-space booking reads as one evening in
       // order rather than as a single room that is only half the truth.
@@ -2895,8 +2899,147 @@ function peRenderCalendar(){
     });
   });
   h += '</div>';
+  h += peHlStrip();
   h += peLeadsStrip();
   return h+PE_FOOT;
+}
+// ── On the kitchen home screen ──────────────────────────────────────────────
+// Danilo, 4 Sep 2026: "next week Netflix wants to come and try the event menu for
+// 2 people - we could easily forget it, because there is no reminder, only words.
+// It wouldn't happen if Katarina or the events manager could highlight the food
+// tasting on the main screen." The kitchen home only ever showed bookings whose
+// team brief had gone out, so the desk had started creating fake bookings called
+// "food tasting" and sending a brief for them - which then counted as bookings.
+// A highlight is its own thing: a line on the kitchen home screen, never a booking,
+// never in a count or a total. Table kitchen_highlights (FOH), read by the kitchen
+// through the kitchen-events feed. Anyone who can open Events can add one - it is
+// a reminder for the kitchen, not a change to the desk (peCanEditChef).
+async function peLoadHighlights(){
+  peState.hlLoading = true;
+  try{
+    var r = await sb.from('kitchen_highlights').select('*').is('removed_at', null)
+      .order('on_date',{ascending:true}).order('time_from',{ascending:true}).limit(500);
+    if(r.error) throw r.error;
+    peState.hl = r.data||[]; peState.hlOk = true;
+  }catch(err){
+    console.warn('[kitchen highlights] load failed', err);
+    peState.hl = []; peState.hlOk = false;
+  }
+  peState.hlLoaded = true; peState.hlLoading = false;
+  if(peState.view==='calendar' || document.querySelector('.pe-cal')) renderMain();
+}
+function peHlByDate(mk){
+  var by = {};
+  (peState.hl||[]).forEach(function(x){
+    var d = String(x.on_date||'').slice(0,10);
+    if(d && peMonthKey(d)===mk) (by[d] = by[d]||[]).push(x);
+  });
+  return by;
+}
+function peHlLine(x){ return [x.guests?x.guests+' guests':'', x.time_from||''].filter(Boolean).join(' · '); }
+function peHlChip(x){
+  return '<div class="pe-cal-ev" style="background:#FFF4D6;color:#5A3A00;border:1px solid #C9A227;border-left:4px solid #C9A227" onclick="peHlOpen(\''+x.id+'\')" title="'+
+    peEsc('On the kitchen home screen: '+x.title+(x.note?' - '+x.note:''))+'">&#9733; '+peEsc(x.title)+(x.guests?' · '+x.guests:'')+'</div>';
+}
+function peHlAgendaCard(x){
+  return '<div class="pe-card" style="padding:9px 12px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;gap:8px;cursor:pointer;background:#FFF9E8;border-color:#C9A227" onclick="peHlOpen(\''+x.id+'\')">'+
+    '<span><b style="font-size:13px;color:#2C1810">&#9733; '+peEsc(x.title)+'</b>'+(peHlLine(x)?' · '+peEsc(peHlLine(x)):'')+
+    (x.note?'<br><span style="font-size:11px;color:#4F4535">'+peEsc(x.note)+'</span>':'')+'</span>'+
+    '<span class="pe-pill" style="background:#FFF4D6;color:#5A3A00;border:1px solid #C9A227;white-space:nowrap">Kitchen home</span></div>';
+}
+// Everything from today on, whatever month is showing - so what the kitchen is
+// being told is one glance, not a hunt through the months.
+function peHlStrip(){
+  if(peState.hlLoaded && peState.hlOk === false)
+    return '<div style="margin:18px 2px 7px;font-size:12px;color:#B00020">Couldn’t load what is on the kitchen home screen — check the connection.</div>';
+  var today = peToday();
+  var up = (peState.hl||[]).filter(function(x){ return String(x.on_date).slice(0,10) >= today; });
+  if(!up.length) return '';
+  var h = '<div style="margin:18px 2px 7px"><span class="pe-lbl" style="margin:0;font-size:11px;color:#7F5C00">&#9733; On the kitchen home screen ('+up.length+')</span></div>';
+  up.forEach(function(x){
+    h += '<div class="pe-card" style="padding:8px 12px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;gap:8px;cursor:pointer;background:#FFF9E8;border-color:#C9A227" onclick="peHlOpen(\''+x.id+'\')">'+
+      '<span><b style="font-size:13px;color:#2C1810">'+peEsc(x.title)+'</b>'+(peHlLine(x)?' · '+peEsc(peHlLine(x)):'')+
+      (x.note?'<br><span style="font-size:11px;color:#4F4535">'+peEsc(x.note)+'</span>':'')+'</span>'+
+      '<span style="font-size:12px;color:#6B4A33;white-space:nowrap">'+peEsc(peDLabel(x.on_date))+'</span></div>';
+  });
+  return h;
+}
+function peHlOpen(id){
+  var x = id ? (peState.hl||[]).find(function(r){ return r.id===id; }) : null;
+  var can = peCanEditChef();
+  if(!x && !can){ peToast('View only — you don’t have the Events module', true); return; }
+  var old = document.querySelector('.pe-modal-bg'); if(old) old.remove();
+  var today = peToday();
+  // A new one lands on today if today's month is showing, else on the 1st of the
+  // month being looked at - never on a date in a month nobody is looking at.
+  var defDate = (peState.month && peState.month !== today.slice(0,7)) ? peState.month+'-01' : today;
+  var v = x || { on_date:defDate, time_from:'', title:'', guests:'', note:'' };
+  var dis = can ? '' : ' disabled';
+  var bg = document.createElement('div'); bg.className='pe-modal-bg';
+  bg.addEventListener('click', function(ev){ if(ev.target===bg) bg.remove(); });
+  bg.innerHTML = '<div class="pe-modal" style="max-width:460px">'+
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px"><b style="color:#400207">&#9733; '+(x?'On the kitchen home screen':'Add to the kitchen home screen')+'</b><span class="pe-x" onclick="this.closest(\'.pe-modal-bg\').remove()">✕</span></div>'+
+    '<div style="font-size:11.5px;color:#4F4535;margin-bottom:10px;line-height:1.5">The kitchen sees this on its home screen from two weeks before, next to the events. It is a reminder, not a booking — it is never counted in the calendar or the money.</div>'+
+    '<div class="pe-lbl">What</div><input class="pe-in" id="pe-hl-title" maxlength="120" placeholder="e.g. Netflix — tasting of the event menu"'+dis+' value="'+peEsc(v.title||'')+'">'+
+    '<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">'+
+      '<div style="flex:1 1 140px"><div class="pe-lbl">Date</div><input class="pe-in" type="date" id="pe-hl-date"'+dis+' value="'+peEsc(String(v.on_date||'').slice(0,10))+'"></div>'+
+      '<div style="flex:1 1 100px"><div class="pe-lbl">Time</div><input class="pe-in" type="time" id="pe-hl-time"'+dis+' value="'+peEsc(v.time_from||'')+'"></div>'+
+      '<div style="flex:0 1 90px"><div class="pe-lbl">Guests</div><input class="pe-in" type="number" min="0" max="5000" inputmode="numeric" id="pe-hl-guests"'+dis+' value="'+peEsc(v.guests==null?'':v.guests)+'"></div>'+
+    '</div>'+
+    '<div class="pe-lbl" style="margin-top:8px">Note for the kitchen</div><textarea class="pe-in" id="pe-hl-note" rows="3" maxlength="500" placeholder="e.g. Event 6 Oct, set menu — they taste the full menu"'+dis+'>'+peEsc(v.note||'')+'</textarea>'+
+    (x && x.created_by ? '<div style="font-size:11px;color:#6B5E4E;margin-top:6px">Added by '+peEsc(String(x.created_by).split('@')[0])+'</div>' : '')+
+    (can ? '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">'+
+      '<button class="pe-btn" id="pe-hl-save" onclick="peHlSave('+(x?'\''+x.id+'\'':'null')+')">'+(x?'Save':'Put it on the kitchen home')+'</button>'+
+      (x?'<button class="pe-btn sec" style="color:#B00020;border-color:#B00020" onclick="peHlRemove(\''+x.id+'\')">Take it off</button>':'')+
+      '<button class="pe-btn sec" onclick="this.closest(\'.pe-modal-bg\').remove()">Cancel</button></div>' : '')+
+    '</div>';
+  document.body.appendChild(bg);
+  if(can && !x){ var t = document.getElementById('pe-hl-title'); if(t) t.focus(); }
+}
+async function peHlSave(id){
+  if(!peCanEditChef()){ peToast('View only — you don’t have the Events module', true); return; }
+  var g = function(k){ var el = document.getElementById('pe-hl-'+k); return el ? String(el.value||'').trim() : ''; };
+  var title = g('title'), date = g('date'), time = g('time'), guests = g('guests'), note = g('note');
+  if(!title){ peToast('Say what it is — the kitchen reads this line', true); var t=document.getElementById('pe-hl-title'); if(t) t.focus(); return; }
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(date)){ peToast('Pick the day it happens', true); return; }
+  var gn = null;
+  if(guests !== ''){
+    gn = Number(guests);
+    if(!isFinite(gn) || gn < 0 || gn > 5000 || Math.floor(gn) !== gn){ peToast('Guests must be a whole number', true); return; }
+  }
+  var row = { on_date:date, time_from:time||null, title:title, guests:gn, note:note||null, updated_at:new Date().toISOString() };
+  var btn = document.getElementById('pe-hl-save'); if(btn){ btn.disabled = true; btn.textContent = 'Saving…'; }
+  var r;
+  if(id) r = await sb.from('kitchen_highlights').update(row).eq('id', id).select();
+  else { row.created_by = state.userEmail || peActor(); r = await sb.from('kitchen_highlights').insert(row).select(); }
+  if(r.error || !r.data || !r.data.length){
+    console.warn('[kitchen highlights] save failed', r.error);
+    peToast('Not saved — check the connection and try again', true);
+    if(btn){ btn.disabled = false; btn.textContent = id?'Save':'Put it on the kitchen home'; }
+    return;
+  }
+  var bg = document.querySelector('.pe-modal-bg'); if(bg) bg.remove();
+  var d = String(date).slice(0,10);
+  peToast(id ? 'Saved ✓' : 'On the kitchen home screen ✓ — they see it from '+peDLabel(peHlFrom(d)));
+  peState.month = peMonthKey(d);
+  await peLoadHighlights();
+}
+// The kitchen shows the next 14 days; tell the person when it will appear.
+function peHlFrom(d){
+  var t = peToday(), x = new Date(d+'T12:00:00'); x.setDate(x.getDate()-14);
+  var f = x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0')+'-'+String(x.getDate()).padStart(2,'0');
+  return f < t ? t : f;
+}
+async function peHlRemove(id){
+  if(!peCanEditChef()){ peToast('View only — you don’t have the Events module', true); return; }
+  var x = (peState.hl||[]).find(function(r){ return r.id===id; }); if(!x) return;
+  if(!(await peConfirm({title:'Take it off the kitchen home?', html:'<b>'+peEsc(x.title)+'</b> on '+peEsc(peDLabel(x.on_date))+' will no longer show on the kitchen home screen.', ok:'Take it off', cancel:'Keep it', danger:true}))) return;
+  // Soft: the row stays, stamped, so a mistake is recoverable.
+  var r = await sb.from('kitchen_highlights').update({ removed_at:new Date().toISOString(), removed_by:state.userEmail || peActor() }).eq('id', id).select();
+  if(r.error || !r.data || !r.data.length){ peToast('Not removed — check the connection', true); return; }
+  var bg = document.querySelector('.pe-modal-bg'); if(bg) bg.remove();
+  peToast('Taken off the kitchen home ✓');
+  await peLoadHighlights();
 }
 // Leads and undated confirmed bookings belong to no month, so a calendar can never
 // show them — and until now nothing else did either: an undated booking was invisible
