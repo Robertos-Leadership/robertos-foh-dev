@@ -1262,7 +1262,7 @@ function peScrollTop(){
   '.pe-flag{display:flex;gap:6px;align-items:flex-start;font-size:12px;padding:4px 0}'+
   '.pe-chip{font-size:11px;border:1px solid rgba(107,31,42,0.3);border-radius:10px;padding:3px 9px;cursor:pointer;display:inline-block;margin:0 4px 4px 0;color:var(--vino)}'+
   '.pe-chip.on{background:var(--vino);color:var(--cream)}'+
-  '.pe-cal{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}'+
+  '.pe-cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}'+
   '.pe-cal-h{font-size:10px;letter-spacing:.07em;text-transform:uppercase;color:#4F4535;text-align:center;padding:6px 0;font-weight:700;background:#F3EEE6;border-radius:7px}'+
   '.pe-cal-h.we{color:#544418}'+
   '.pe-cal-d{min-height:92px;background:#fff;border:1px solid rgba(107,31,42,0.12);border-radius:9px;padding:5px 6px;font-size:11px}'+
