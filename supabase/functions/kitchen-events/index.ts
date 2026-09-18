@@ -11,6 +11,11 @@
 // Handles BOTH canapé menus (event_items) AND plated set menus, resolved from the
 // data-driven event_set_menus library by key. Beverage-only events are flagged.
 //
+// Also returns `highlights`: what the events desk (or the chef) put on the
+// kitchen home screen by hand from the FOH Events calendar - a client food
+// tasting, a site visit, anything that is not a briefed booking and so would
+// otherwise live "only in words" (Danilo, 4 Sep 2026). Table kitchen_highlights.
+//
 // GET (header x-proxy-secret: Kitchen), optional ?days=N caps the horizon.
 // Deploy with verify_jwt=false. Secrets: SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY (auto).
 // ════════════════════════════════════════════════════════════
@@ -52,6 +57,27 @@ Deno.serve(async (req) => {
       dateFilter += "&event_date=lte." + new Date(nowD.getTime() + days * 24 * 3600 * 1000).toISOString().slice(0, 10);
     }
 
+    // Highlights first, and on EVERY return below: a day with a tasting and no
+    // briefed booking must still reach the kitchen. A failed read is loud (null,
+    // not []) so the kitchen can say it could not check rather than show nothing.
+    let hlFilter = "&on_date=gte." + today;
+    if (days >= 1 && days <= 3650) {
+      hlFilter += "&on_date=lte." + new Date(nowD.getTime() + days * 24 * 3600 * 1000).toISOString().slice(0, 10);
+    }
+    let highlights: unknown[] | null = null;
+    try {
+      const hlR = await sb(
+        "kitchen_highlights?removed_at=is.null" + hlFilter +
+        "&select=id,on_date,time_from,title,guests,note&order=on_date.asc,time_from.asc&limit=200",
+      );
+      const hl = await hlR.json();
+      // deno-lint-ignore no-explicit-any
+      if (Array.isArray(hl)) highlights = hl.map((h: any) => ({
+        id: h.id, date: h.on_date, time_from: h.time_from || null, title: h.title,
+        guests: h.guests, note: h.note || null,
+      }));
+    } catch (_e) { highlights = null; }
+
     // Drafts are included ON PURPOSE (3 Aug 2026). A brief can be sent for an
     // event that is still a draft, and it was: the kitchen got an email telling
     // them to cook for 12 on the Tuesday while this feed deliberately returned
@@ -65,7 +91,7 @@ Deno.serve(async (req) => {
       "&order=event_date.asc&limit=200",
     );
     const evsAll = await evR.json();
-    if (!Array.isArray(evsAll) || !evsAll.length) return json({ today, count: 0, events: [] });
+    if (!Array.isArray(evsAll) || !evsAll.length) return json({ today, count: 0, events: [], highlights });
 
     // "Brief sent" = the send was LOGGED, which only happens after the email
     // actually leaves. Previously this filtered on brief_token, but that is
@@ -85,7 +111,7 @@ Deno.serve(async (req) => {
         .map((l: { event_id: string }) => l.event_id),
     );
     const evs = evsAll.filter((e: { id: string }) => briefed.has(e.id));
-    if (!evs.length) return json({ today, count: 0, events: [] });
+    if (!evs.length) return json({ today, count: 0, events: [], highlights });
 
     const ids = evs.map((e: { id: string }) => e.id);
     const itR = await sb("event_items?event_id=in.(" + ids.join(",") + ")&select=event_id,dish_id,pcs_per_guest,comp,qty_confirmed");
@@ -95,7 +121,7 @@ Deno.serve(async (req) => {
     // deno-lint-ignore no-explicit-any
     const dishById: Record<string, any> = {};
     if (dishIds.length) {
-      const dR = await sb("event_dishes?id=in.(" + dishIds.join(",") + ")&select=id,name,serve,allergens,min_order");
+      const dR = await sb("event_dishes?id=in.(" + dishIds.join(",") + ")&select=id,name,serve,allergens,min_order,description");
       for (const d of await dR.json()) dishById[d.id] = d;
     }
 
@@ -132,17 +158,39 @@ Deno.serve(async (req) => {
         kind = "set";
         const sm = smByKey[ev.set_menu.key];
         const choices = (ev.set_menu.choices) || {};
+        // A set menu stores plain dish NAMES in courses[].items / .options, and
+        // the wording and allergens beside them in courses[].desc / .allg -
+        // keyed by the same name. Both were dropped on the way here, so the
+        // kitchen's set-menu sheet showed a bare list: no description AND no
+        // allergens, where the canape sheet had at least the allergens.
+        // Older menus still carry the codes inside the prose ("...cartoccio
+        // style (R)(S)"), so read both and let the structured field win - the
+        // same rule the FOH documents use, so the two can never disagree.
+        const ALG_RE = /\s*\(([A-Za-z]{1,3})\)/g;
+        // deno-lint-ignore no-explicit-any
+        const descOf = (c: any, dish: string) =>
+          String((c && c.desc && c.desc[dish]) || "").replace(ALG_RE, "").trim();
+        // deno-lint-ignore no-explicit-any
+        const algOf = (c: any, dish: string) => {
+          if (c && c.allg && Object.prototype.hasOwnProperty.call(c.allg, dish)) return c.allg[dish] || [];
+          const t = String((c && c.desc && c.desc[dish]) || "");
+          const out: string[] = [];
+          ALG_RE.lastIndex = 0;
+          let m: RegExpExecArray | null;
+          while ((m = ALG_RE.exec(t)) !== null) out.push(m[1].toUpperCase());
+          return out;
+        };
         // deno-lint-ignore no-explicit-any
         if (sm && Array.isArray(sm.courses)) for (const c of sm.courses as any[]) {
           const cname = c.name || "";
           if (Array.isArray(c.options) && c.choose) {
             for (const o of c.options) {
               const n = Number((choices[cname] || {})[o]) || 0;
-              menu.push({ name: o, group: cname, qty: (n || null), unit: "portions", per_guest: null, sub: "guests choice", allergens: [], comp: false, unconfirmed: !n, min_flag: null });
+              menu.push({ name: o, group: cname, qty: (n || null), unit: "portions", per_guest: null, sub: "guests choice", desc: descOf(c, o), allergens: algOf(c, o), comp: false, unconfirmed: !n, min_flag: null });
             }
           } else if (Array.isArray(c.items)) {
             for (const it of c.items) {
-              menu.push({ name: it, group: cname, qty: (g || null), unit: "portions", per_guest: null, sub: "", allergens: [], comp: false, unconfirmed: false, min_flag: null });
+              menu.push({ name: it, group: cname, qty: (g || null), unit: "portions", per_guest: null, sub: "", desc: descOf(c, it), allergens: algOf(c, it), comp: false, unconfirmed: false, min_flag: null });
             }
           }
         }
@@ -159,6 +207,12 @@ Deno.serve(async (req) => {
           const total = g ? Math.ceil(pcs * g) : null;
           return {
             name: d.name, group: d.serve, qty: total, unit: "pcs", per_guest: pcs,
+            // What the dish IS, not just what it is called. A chef cannot cook
+            // "Sea bass tart" from the name and cannot hand it to the pass as a
+            // menu; the wording was recorded in Chef Corner and simply never
+            // asked for here, so the kitchen's own sheet was the one document
+            // that did not carry it.
+            desc: d.description || "",
             allergens: d.allergens || [], comp: !!it.comp,
             unconfirmed: it.qty_confirmed === false,
             min_flag: (total != null && d.min_order && total < d.min_order) ? d.min_order : null,
@@ -185,7 +239,7 @@ Deno.serve(async (req) => {
       };
     });
 
-    return json({ today, count: events.length, events });
+    return json({ today, count: events.length, events, highlights });
   } catch (e) {
     return json({ error: String((e as Error)?.message || e).slice(0, 200) }, 500);
   }
