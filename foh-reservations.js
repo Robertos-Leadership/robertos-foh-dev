@@ -57,8 +57,19 @@ function resEsc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/<
 // report. Simphony stays the only source for "what did we take".
 //
 // LT_GROSS_TO_NET is defined once in foh-core.js -- read it, never re-type 1.225.
-function resGrossToNet(){ return (typeof LT_GROSS_TO_NET === 'number' && LT_GROSS_TO_NET > 0) ? LT_GROSS_TO_NET : 1.225; }
-function resNet(gross){ return (Number(gross)||0) / resGrossToNet(); }
+// The divisor depends on the NIGHT (see fohSubtotalToNetDiv in foh-core.js). A row
+// without its own date belongs to the night on screen; with no night chosen, tonight.
+function resNetDate(dateISO){
+  if(dateISO) return String(dateISO).slice(0,10);
+  if(typeof RES !== 'undefined' && RES && RES.date) return String(RES.date).slice(0,10);
+  return (typeof chkToday === 'function') ? chkToday().iso : new Date(Date.now()+4*3600000).toISOString().slice(0,10);
+}
+function resGrossToNet(dateISO){
+  var d = resNetDate(dateISO);
+  return (typeof fohSubtotalToNetDiv === 'function') ? fohSubtotalToNetDiv(d) : ((typeof LT_GROSS_TO_NET === 'number' && LT_GROSS_TO_NET > 0) ? LT_GROSS_TO_NET : 1.225);
+}
+function resNet(gross, dateISO){ return (Number(gross)||0) / resGrossToNet(dateISO); }
+function resNetRuleText(){ return (typeof FOH_NET_RULE === 'string') ? FOH_NET_RULE : 'Net = gross ÷ 1.225 (10% service + 7% municipality on net, then 5% VAT)'; }
 function resMoney0(n){ return Number(n||0).toLocaleString('en-US',{maximumFractionDigits:0}); }
 // The gross on a booking. Prefers the new `gross` field (check SUBTOTAL) and
 // falls back to the old `spend` (check TOTAL, i.e. subtotal + tips) only while an
@@ -97,14 +108,14 @@ function resHeads(r){ return Number(r && r.pax) || 0; }
 // Takes an explicit rows list so the date-range export can count a night that is
 // NOT the one on screen. No argument = tonight's book, exactly as before.
 function resNightMoney(rowsIn){
-  var out = { gross:0, heads:0, bookings:0 };
+  var out = { gross:0, heads:0, bookings:0, net:0 };
   var rows = rowsIn || (RES.data && RES.data.reservations) || [];
   rows.forEach(function(r){
     var g = resGrossOf(r);
     if(!g) return;
     out.gross += g; out.heads += resHeads(r); out.bookings++;
+    out.net += resNet(g, r.date);
   });
-  out.net = resNet(out.gross);
   return out;
 }
 // One booking's money: gross, net, and the average per person.
@@ -114,9 +125,9 @@ function resSpendCell(r){
   // that says why beats both a blank cell (reads as "nothing here") and a 0
   // (reads as "they spent nothing").
   if(!g) return '<i class="res-sp-none" title="No check linked to this booking in SevenRooms yet">&mdash;</i>';
-  var n = resNet(g), heads = resHeads(r);
+  var n = resNet(g, r.date), heads = resHeads(r);
   var pp = heads ? '<div class="res-sp-pp">'+resMoney0(g/heads)+' &middot; '+resMoney0(n/heads)+' per guest</div>' : '';
-  return '<div class="res-sp" title="Gross AED '+resMoney0(g)+' (menu price, what the guest paid) &#10;Net AED '+resMoney0(n)+' (gross / '+resGrossToNet()+')'
+  return '<div class="res-sp" title="Gross AED '+resMoney0(g)+' (menu price, what the guest paid) &#10;Net AED '+resMoney0(n)+' (gross / '+resGrossToNet(r.date)+')'
     + (heads?' &#10;Over '+heads+' guest'+(heads===1?'':'s'):'')+'">'
     + '<div class="res-sp-g"><small>AED </small>'+resMoney0(g)+'</div>'
     + '<div class="res-sp-n"><small>AED </small>'+resMoney0(n)+' net</div>'
@@ -1428,9 +1439,9 @@ function resExportSheets(rows, money){
       // averages down and read as "this table spent nothing".
       line = line.concat(g ? [
         Math.round(g * 100) / 100,
-        Math.round(resNet(g) * 100) / 100,
+        Math.round(resNet(g, r.date) * 100) / 100,
         heads ? Math.round(g / heads * 100) / 100 : null,
-        heads ? Math.round(resNet(g) / heads * 100) / 100 : null
+        heads ? Math.round(resNet(g, r.date) / heads * 100) / 100 : null
       ] : [null, null, null, null]);
     }
     return line;
@@ -1471,7 +1482,7 @@ function resExportSummary(rows, money){
       ['', 'For what the venue actually took, use the Revenue module or the closing report.'],
       ['', 'The average PER GUEST is reliable (within about 2% of Simphony); the TOTAL is not.'],
       [],
-      ['How net is worked out', 'Net = gross ÷ ' + resGrossToNet() + '  (10% service + 7% municipality on net, then 5% VAT)'],
+      ['How net is worked out', resNetRuleText()],
       ['What gross means', 'The menu-price total on the guest’s check - what they actually paid.'],
       [],
       ['The Lifetime columns', 'Visits, Lifetime spend and Lifetime net per cover are SevenRooms’ own figures for that guest AT THIS VENUE across their whole history - not this night.'],
@@ -1883,6 +1894,7 @@ async function resRangeRun(){
       try{
         var pay = await resFetchDaysheet(d);
         var rows = (pay && pay.reservations) || [];
+        rows.forEach(function(r){ if(r && !r.date) r.date = d; });
         if(rows.length){
           await resHistoryForRows(rows);
           anyRows = true;
@@ -2034,7 +2046,7 @@ async function resRangeRun(){
         'Measured against Simphony it runs roughly 83-98% of the real net, and the gap moves night to night.',
         'For what the venue actually took, use the Revenue module or the closing report.',
         'The average PER GUEST is reliable (within about 2% of Simphony); the TOTAL is not.',
-        'Net = gross ÷ ' + resGrossToNet() + '  (10% service + 7% municipality on net, then 5% VAT). Gross is the menu-price total on the guest’s check.',
+        resNetRuleText() + ' Gross is the menu-price total on the guest’s check.',
         'Covers and Bookings are SevenRooms’ own counts for the night. Guests on those counts only the bookings that carry a check.'
       ].forEach(function(t){
         var r = sws.addRow(['', t]);
@@ -2189,11 +2201,11 @@ function renderReservations(){
       // how many that was. "AED 24,436 over 12 of 22 bookings" is a figure a
       // manager can act on; the same number with the coverage hidden is one they
       // would wrongly read as the room's takings.
-      var aGross = 0, aHeads = 0, aN = 0;
-      if(money) list.forEach(function(r){ var g = resGrossOf(r); if(!g) return; aGross += g; aHeads += resHeads(r); aN++; });
+      var aGross = 0, aNet = 0, aHeads = 0, aN = 0;
+      if(money) list.forEach(function(r){ var g = resGrossOf(r); if(!g) return; aGross += g; aNet += resNet(g, r.date); aHeads += resHeads(r); aN++; });
       h.push('<div class="res-area">'+resEsc(k)+' <span>'+list.length+' reservation'+(list.length===1?'':'s')+' &middot; '+cov+' covers'
-        + (aGross ? ' &middot; <b>AED '+resMoney0(aGross)+'</b> gross &middot; AED '+resMoney0(resNet(aGross))+' net'
-                    + (aHeads?' &middot; AED '+resMoney0(resNet(aGross)/aHeads)+' net per guest':'')
+        + (aGross ? ' &middot; <b>AED '+resMoney0(aGross)+'</b> gross &middot; AED '+resMoney0(aNet)+' net'
+                    + (aHeads?' &middot; AED '+resMoney0(aNet/aHeads)+' net per guest':'')
                     + ' <i>(' + aN + ' of ' + list.length + ' with a check)</i>' : '')
         + '</span></div>');
       h.push('<div class="res-tbl">');
@@ -2296,7 +2308,7 @@ function renderReservations(){
       h.push('<div class="res-foot res-foot-money">Spend covers the '+resNum(withMoney)+' of '+resNum(totalRes)
         + ' booking'+(totalRes===1?'':'s')+' with a check linked in SevenRooms, so it is <b>not</b> the night&rsquo;s takings &mdash; a walk-in with no booking has nothing to attach a check to. '
         + 'For what the venue actually took, use Revenue or the closing report. Net = gross &divide; '+resGrossToNet()
-        + ' (10% service + 7% municipality, then 5% VAT).</div>');
+        + (resGrossToNet() < 1.2 ? ' (menu prices from 16 Sep 2026 include 10% service and 5% VAT; the 7% DIFC fee is added on top).</div>' : ' (10% service + 7% municipality, then 5% VAT).</div>'));
     } else if(totalRes){
       h.push('<div class="res-foot res-foot-money">No checks are linked to this night in SevenRooms yet &mdash; it posts them on a delay, so the newest night usually fills in later. '
         + 'Blank here means <b>not posted yet</b>, not that nobody spent anything.</div>');

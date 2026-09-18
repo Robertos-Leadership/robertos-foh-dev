@@ -575,6 +575,19 @@ async function fohLoadHubStats(){
 // Fails silently to a muted note; never blocks the landing.
 var _liveTonightAt = 0;
 var LT_GROSS_TO_NET = 1.225;
+// From Wed 16 Sep 2026 menu prices no longer include the 7% DIFC Authority Fee —
+// it is added to the bill (approved price list, Aung / Justin). A SevenRooms check
+// SUBTOTAL is the menu-price total, so from that night it nets at ÷ 1.155 (10%
+// service + 5% VAT), not ÷ 1.225. The check TOTAL used by the live strip above
+// still carries the fee and still nets at ÷ 1.225. Shipped 16 Sep 14:10 Dubai BEFORE any
+// real SevenRooms check had closed, on the Simphony test check (110.00 + fee 6.67 =
+// 116.67, total ÷ subtotal 1.061); the 16:30 and 17 Sep 08:30 measurements confirm it.
+var FOH_FEE_FROM = '2026-09-16';
+function fohSubtotalToNetDiv(dateISO){
+  var d = dateISO ? String(dateISO).slice(0,10) : '';
+  return (d && d >= FOH_FEE_FROM) ? 1.155 : LT_GROSS_TO_NET;
+}
+var FOH_NET_RULE = 'Net = gross ÷ 1.225 up to 15 Sep 2026 (menu prices included service, the 7% DIFC fee and VAT); ÷ 1.155 from 16 Sep 2026 (menu prices include service and VAT, the 7% fee is added on top).';
 async function fohLoadLiveTonight(){
   var bar = document.getElementById('live-tonight');
   if(!bar) return;

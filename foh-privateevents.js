@@ -2586,6 +2586,8 @@ function peSrRevenueOffer(id){
     }
     var html = cands.map(function(x, i){
       var r = x.r, amt = Math.round(Number(r.gross));
+      // From 16 Sep 2026 the check subtotal is at menu prices; the 7% DIFC fee sits on top.
+      if(date >= PE_FEE_FROM) amt = Math.round(amt * PE_GROSS / PE_MENU_DIV);
       var meta = [r.area, r.time, (r.pax!=null?r.pax+' guest'+(r.pax===1?'':'s'):null)].filter(Boolean).join(' · ');
       return '<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid rgba(107,31,42,.10)">'+
         '<div style="flex:1;min-width:0">'+
@@ -10186,7 +10188,7 @@ function peRenderWizard(){
     '</div><div class="pe-grid3" style="margin-top:8px">'+
     '<div><div class="pe-lbl">Area</div><select class="pe-in" onchange="peWiz.area=this.value">'+PE_AREAS.map(function(a){ return '<option'+(peWiz.area===a?' selected':'')+'>'+a+'</option>'; }).join('')+'</select></div>'+
     '<div><div class="pe-lbl">Guests</div>'+peStepWrap('<input class="pe-in" type="number" min="15" value="'+peEsc(peWiz.guests)+'" onchange="peWizSet(\'guests\',this.value)" placeholder="e.g. 30">')+'</div>'+
-    '<div><div class="pe-lbl">Total budget (AED, incl. VAT &amp; service)</div><input class="pe-in" type="text" inputmode="numeric" id="pe-w-budget" value="'+(peWiz.budget?Number(peWiz.budget).toLocaleString('en-US'):'')+'" oninput="peWizBudget(this)" placeholder="e.g. 15,000"><div id="pe-w-budget-echo" style="font-size:12px;color:#4F4535;margin-top:3px">'+(peWiz.budget?'= <b style="color:#400207">AED '+Number(peWiz.budget).toLocaleString('en-US')+'</b>':'&nbsp;')+'</div></div>'+
+    '<div><div class="pe-lbl">Total budget (AED, all in — VAT, service &amp; 7% DIFC fee)</div><input class="pe-in" type="text" inputmode="numeric" id="pe-w-budget" value="'+(peWiz.budget?Number(peWiz.budget).toLocaleString('en-US'):'')+'" oninput="peWizBudget(this)" placeholder="e.g. 15,000"><div id="pe-w-budget-echo" style="font-size:12px;color:#4F4535;margin-top:3px">'+(peWiz.budget?'= <b style="color:#400207">AED '+Number(peWiz.budget).toLocaleString('en-US')+'</b>':'&nbsp;')+'</div></div>'+
     '</div><div style="margin-top:8px"><div class="pe-lbl">Beverage package the guest wants</div>'+
     '<select class="pe-in" onchange="peWizSet(\'bev\',this.value)"><option value="" '+(peWiz.bev===''?'selected':'')+'>Choose…</option>'+
     '<option value="none"'+(peWiz.bev==='none'?' selected':'')+'>No beverage package — whole budget on food</option>'+

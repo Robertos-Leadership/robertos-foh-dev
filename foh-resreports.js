@@ -437,7 +437,7 @@ function rrProf(id){
 // The sentence every money figure in this module has to carry. Written once so
 // eleven reports cannot end up saying it eight different ways.
 var RR_MONEY_NOTE = [
-  'Money here is the SevenRooms check on a booking. Gross is the menu-price total the guest paid; net is gross ÷ ' + (typeof resGrossToNet==='function'?resGrossToNet():1.225) + ' (10% service + 7% municipality on net, then 5% VAT).',
+  'Money here is the SevenRooms check on a booking. Gross is the menu-price total on the check. ' + (typeof FOH_NET_RULE==='string' ? FOH_NET_RULE : 'Net is gross ÷ 1.225 (10% service + 7% municipality on net, then 5% VAT).'),
   'The AVERAGE PER GUEST is reliable — within about 2% of Simphony. The TOTAL is not, and must never be quoted as takings: it only covers bookings with a check linked, which runs 83–98% of the real figure and moves night to night. A walk-in served without a booking has nothing to attach a check to.',
   'For what the venue actually took, use the Revenue module or the closing report.'
 ];
@@ -717,11 +717,11 @@ function rrRepChannel(pull, opt, money){
   var goneNs = gone.filter(function(r){ return r.state === 'noshow'; }).length;
   var goneCx = gone.length - goneNs;
   var ch = {}, order = [];
-  var totB = 0, totC = 0, totG = 0, totWith = 0;
+  var totB = 0, totC = 0, totG = 0, totN = 0, totWith = 0;
   var months = rrMonthsIn(rows, pull.from, pull.to);
   rows.forEach(function(r){
     var k = String(r.booked_by || '').trim() || 'Not recorded';
-    var c = ch[k] || (ch[k] = { k:k, bookings:0, covers:0, gross:0, heads:0, withCheck:0, m:{} });
+    var c = ch[k] || (ch[k] = { k:k, bookings:0, covers:0, gross:0, net:0, heads:0, withCheck:0, m:{} });
     if(!c.bookings) order.push(k);
     c.bookings++; totB++;
     var pax = Number(r.pax)||0;
@@ -730,7 +730,7 @@ function rrRepChannel(pull, opt, money){
     var mm = c.m[ml] || (c.m[ml] = { b:0, c:0 });
     mm.b++; mm.c += pax;
     var g = resGrossOf(r);
-    if(g){ c.gross += g; c.heads += resHeads(r); c.withCheck++; totG += g; totWith++; }
+    if(g){ var gn = resNet(g, r.date); c.gross += g; c.net += gn; c.heads += resHeads(r); c.withCheck++; totG += g; totN += gn; totWith++; }
   });
   order.sort(function(a,b){ return ch[b].covers - ch[a].covers; });
   var out = order.map(function(k){
@@ -743,14 +743,14 @@ function rrRepChannel(pull, opt, money){
       // "Spend per guest" report already worked this way, so now they match.
       rrPct(c.withCheck, c.bookings),
       c.gross ? Math.round(c.gross*100)/100 : null,
-      c.gross ? Math.round(resNet(c.gross)*100)/100 : null,
-      (c.gross && c.heads) ? Math.round(resNet(c.gross)/c.heads*100)/100 : null
+      c.gross ? Math.round(c.net*100)/100 : null,
+      (c.gross && c.heads) ? Math.round(c.net/c.heads*100)/100 : null
     ]);
     return line;
   });
   var tot = ['TOTAL', totB, 100, totC, 100];
   if(money) tot = tot.concat([totWith, rrPct(totWith, totB),
-    Math.round(totG*100)/100, Math.round(resNet(totG)*100)/100, null]);
+    Math.round(totG*100)/100, Math.round(totN*100)/100, null]);
   out.push(tot);
   var head = ['Channel','Bookings that happened','% of those','Covers','% of covers'];
   var widths = [30,18,12,10,12];
@@ -884,27 +884,27 @@ function rrRepSpendGuest(pull, opt, money){
     rows.forEach(function(r){
       var k = keyOf(r);
       if(k == null) return;
-      var b = g[k] || (g[k] = { k:k, bookings:0, covers:0, withCheck:0, heads:0, gross:0 });
+      var b = g[k] || (g[k] = { k:k, bookings:0, covers:0, withCheck:0, heads:0, gross:0, net:0 });
       if(b.bookings === 0) order.push(k);
       b.bookings++; b.covers += Number(r.pax)||0;
       var gr = resGrossOf(r);
-      if(gr){ b.withCheck++; b.heads += resHeads(r); b.gross += gr; }
+      if(gr){ b.withCheck++; b.heads += resHeads(r); b.gross += gr; b.net += resNet(gr, r.date); }
     });
     order.sort();
-    var T = { bookings:0, covers:0, withCheck:0, heads:0, gross:0 };
+    var T = { bookings:0, covers:0, withCheck:0, heads:0, gross:0, net:0 };
     var out = order.map(function(k){
       var b = g[k];
-      T.bookings+=b.bookings; T.covers+=b.covers; T.withCheck+=b.withCheck; T.heads+=b.heads; T.gross+=b.gross;
+      T.bookings+=b.bookings; T.covers+=b.covers; T.withCheck+=b.withCheck; T.heads+=b.heads; T.gross+=b.gross; T.net+=b.net;
       return [b.k, b.bookings, b.covers, b.withCheck, rrPct(b.withCheck, b.bookings),
               b.gross ? Math.round(b.gross*100)/100 : null,
-              b.gross ? Math.round(resNet(b.gross)*100)/100 : null,
+              b.gross ? Math.round(b.net*100)/100 : null,
               (b.gross && b.heads) ? Math.round(b.gross/b.heads*100)/100 : null,
-              (b.gross && b.heads) ? Math.round(resNet(b.gross)/b.heads*100)/100 : null];
+              (b.gross && b.heads) ? Math.round(b.net/b.heads*100)/100 : null];
     });
     out.push(['TOTAL', T.bookings, T.covers, T.withCheck, rrPct(T.withCheck, T.bookings),
-              Math.round(T.gross*100)/100, Math.round(resNet(T.gross)*100)/100,
+              Math.round(T.gross*100)/100, Math.round(T.net*100)/100,
               T.heads ? Math.round(T.gross/T.heads*100)/100 : null,
-              T.heads ? Math.round(resNet(T.gross)/T.heads*100)/100 : null]);
+              T.heads ? Math.round(T.net/T.heads*100)/100 : null]);
     return { name: label,
       head: [label.replace(/^By /,'').replace(/^./,function(c){return c.toUpperCase();}),
              'Bookings','Covers','With a check','% with a check','Gross (AED)','Net (AED)','Gross per guest (AED)','Net per guest (AED)'],
