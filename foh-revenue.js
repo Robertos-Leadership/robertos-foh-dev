@@ -196,6 +196,36 @@ function revMonthData(p){
   var budgetToDate=0; days.forEach(function(x){ if(x.d<=windowDay) budgetToDate+=x.budget; });
   return {period:p,days:days,mtdNet:mtdNet,budgetTotal:budgetTotal,budgetToDate:budgetToDate,coversAct:coversAct,tradingDays:tradingDays,windowDay:windowDay};
 }
+// What each remaining night must take for the month to land on its budget. The gap
+// (month budget - net so far) is spread over the nights still to come IN PROPORTION TO THEIR
+// OWN BUDGET, so the weekday pattern holds: a Saturday carries five times a Monday.
+// Only the month in service gets this - a closed month has no nights left, a future one no gap.
+// Remaining = tonight onward (Dubai operational night), not yet filed, with a budget. A night
+// that has already ended unfiled gets no figure: revUnfiledBanner chases it, and the gap
+// recalculates once it is filed. Display-only: the stored budget is never touched.
+function revRequired(p,m){
+  if(revMonthState(p)!=='current' || !m.budgetTotal) return null;
+  var todayIso=(typeof RC!=='undefined'&&RC.dubaiBusinessDate)?RC.dubaiBusinessDate(new Date()):null;
+  var fromDay=(todayIso&&todayIso.slice(0,7)===p)?Number(todayIso.slice(8,10)):m.windowDay+1;
+  var rem=m.days.filter(function(x){ return x.d>=fromDay && x.net==null && x.budget>0; });
+  if(!rem.length) return null;
+  var remBudget=0; rem.forEach(function(x){ remBudget+=x.budget; });
+  var gap=m.budgetTotal-m.mtdNet, f=gap/remBudget, byDay={};
+  rem.forEach(function(x){ byDay[x.d]=gap>0?x.budget*f:0; });
+  return {gap:gap,nights:rem.length,remBudget:remBudget,factor:f,byDay:byDay,met:gap<=0};
+}
+function revRequiredBanner(q,m){
+  if(!q) return '';
+  var box='border-radius:6px;padding:10px 14px;margin:0 0 12px;font-size:13px;line-height:1.5;';
+  if(q.met) return '<div style="'+box+'background:rgba(41,110,72,.08);border:1px solid rgba(41,110,72,.35);color:#296E48">'
+    +'&#10003; <b>Month budget reached</b> &mdash; '+revMoney(-q.gap)+' over '+revMoney(m.budgetTotal)+', with '+q.nights+' trading night'+(q.nights>1?'s':'')+' still to come.</div>';
+  var pct=Math.round((q.factor-1)*100);
+  var pctTxt=(pct>=0?'+':'&minus;')+Math.abs(pct)+'% on plan';
+  return '<div style="'+box+'background:rgba(107,31,42,.06);border:1px solid rgba(107,31,42,.30);color:var(--vino,#6B1F2A)">'
+    +'<b>'+revMoney(q.gap)+' still needed</b> for the '+revMoney(m.budgetTotal)+' month budget &middot; '
+    +q.nights+' trading night'+(q.nights>1?'s':'')+' left &middot; <b>each remaining night needs '+pctTxt+'</b>'
+    +' (see <b>Required</b> below).</div>';
+}
 // Trading nights in this month that have ALREADY ENDED but have no revenue entered.
 // An unfiled night silently drops out of MTD while its budget still counts, so the
 // month reads "behind" when it isn't — a silent, misleading gap. This NEVER alters a
@@ -1189,6 +1219,9 @@ function revRenderMonth(){
   // Trust guard: name any night that booked revenue against a zero budget (a Sunday buyout),
   // so its "outperformance" is never read as real.
   h.push(revNoBudgetBanner(p));
+  // Catch-up: what the rest of the month must take to land on budget, weekday-weighted.
+  var req=revRequired(p,m);
+  h.push(revRequiredBanner(req,m));
   // summary cards
   h.push('<div class="rev-cards">');
   h.push('<div class="rev-card"><div class="rev-k">MTD net sales</div><div class="rev-v">'+revMoney(m.mtdNet)+'</div><div class="rev-sub">'+m.tradingDays+' trading days</div></div>');
@@ -1225,7 +1258,7 @@ function revRenderMonth(){
   }
   // month grid
   h.push('<div class="rev-section-h">Daily — '+revMonthLabel(p)+'</div>');
-  h.push('<div class="rev-grid-wrap rev-grid-scroll"><table class="rev-grid"><thead><tr><th>Day</th><th>Net (actual)</th><th>Budget</th><th>vs Budget</th><th>Covers</th><th>Avg/cover</th></tr></thead><tbody>');
+  h.push('<div class="rev-grid-wrap rev-grid-scroll"><table class="rev-grid"><thead><tr><th>Day</th><th>Net (actual)</th><th>Budget</th>'+(req?'<th>Required</th>':'')+'<th>vs Budget</th><th>Covers</th><th>Avg/cover</th></tr></thead><tbody>');
   m.days.forEach(function(d){
     var sun=d.closed; // Sunday — normally closed, but enterable if opened (e.g. private event)
     var noBudget=(sun && d.budget===0);
@@ -1237,12 +1270,25 @@ function revRenderMonth(){
       +'<td class="rev-day">'+d.weekday.slice(0,3)+' '+d.d+'</td>'
       +'<td>'+netCell+'</td>'
       +'<td class="rev-mut">'+budgetCell+'</td>'
+      +(req?'<td style="font-weight:600;color:var(--vino,#6B1F2A)">'+(req.byDay[d.d]==null?'<span class="rev-mut" style="font-weight:400">—</span>':(req.met?'<span class="rev-pos">met</span>':revMoney(req.byDay[d.d])))+'</td>':'')
       +'<td class="'+vsCls+'">'+vsCell+'</td>'
       +'<td>'+(d.totalCov!=null?d.totalCov:'—')+'</td>'
       +'<td>'+(d.avgCover!=null?revMoney(d.avgCover).replace('AED ',''):'—')+'</td></tr>');
   });
-  h.push('<tr class="rev-total"><td>MTD</td><td>'+revMoney(m.mtdNet)+'</td><td>'+revMoney(m.budgetTotal)+'</td><td colspan="3"></td></tr>');
+  // The MTD row compares like with like: in the month in service, net so far against the budget
+  // of the nights up to the last filed one (budgetToDate) - never against the full month.
+  var mst=revMonthState(p), toDateRow=(mst==='current' && m.tradingDays>0);
+  var mtdBudget=toDateRow?m.budgetToDate:m.budgetTotal;
+  var mtdVs=(mst!=='future' && m.tradingDays>0)?(m.mtdNet-mtdBudget):null;
+  h.push('<tr class="rev-total"><td>MTD</td><td>'+revMoney(m.mtdNet)+'</td><td>'+revMoney(mtdBudget)+'</td>'
+    +(req?'<td>'+(req.met?'met':revMoney(req.gap))+'</td>':'')
+    +'<td class="'+(mtdVs==null?'':(mtdVs>=0?'rev-pos':'rev-neg'))+'">'+(mtdVs==null?'':((mtdVs>=0?'+':'')+revMoney(mtdVs).replace('AED ','')))+'</td><td colspan="2"></td></tr>');
+
   h.push('</tbody></table></div>');
+  if(toDateRow){
+    var lastD=m.days[m.windowDay-1];
+    h.push('<div class="rev-mut" style="font-size:12px;margin:6px 2px 0;line-height:1.5">MTD budget runs through '+lastD.weekday.slice(0,3)+' '+lastD.d+', the last night filed. Month budget '+revMoney(m.budgetTotal)+' = '+revMoney(m.budgetToDate)+' to date + '+revMoney(m.budgetTotal-m.budgetToDate)+' still to come.</div>');
+  }
   // Review
   h.push('<div class="rev-section-h">Review — '+revMonthLabel(p)+' vs '+revMonthLabel(rv.prevPeriod)+' (matched window, through day '+rv.windowDay+')</div>');
   function rrow(label,o,money){ return '<tr><td>'+label+'</td><td>'+(money?revMoney(o.prev):Math.round(o.prev).toLocaleString())+'</td><td>'+(money?revMoney(o.cur):Math.round(o.cur).toLocaleString())+'</td><td class="'+revPctClass(o.chg)+'">'+revPct(o.chg)+'</td></tr>'; }
