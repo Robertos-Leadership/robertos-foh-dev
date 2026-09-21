@@ -68,7 +68,12 @@ var FB_A = {
   BUILD:'Build it',
   SKIP: "Don't build",
   OKNP: 'OK, no problem',
-  SOLVE:'Important — find a solution'
+  SOLVE:'Important — find a solution',
+  // ── Added for the Learning section round (learning-andrea) ────────────────
+  // A design round: we propose how each part works and he either takes it or
+  // tells us his way. "Not yet" and "leave it" do not fit a proposal.
+  LIKE: 'Yes, like this',
+  OTHER:'My way — see my note'
 };
 
 // The three answers a round offers. A round picks one set via `ask:`.
@@ -86,7 +91,9 @@ var FB_ASK = {
   // set for its works:true items (see foh-feedback.html). A round that does not
   // set askOk still gets OK, so every existing round is untouched.
   BUILD:    [FB_A.BUILD, FB_A.SKIP],
-  CANT:     [FB_A.OKNP,  FB_A.SOLVE]
+  CANT:     [FB_A.OKNP,  FB_A.SOLVE],
+  // DESIGN — "here is how we would build it — like this, or your way?"
+  DESIGN:   [FB_A.LIKE,  FB_A.OTHER]
 };
 
 // How the phone page words each answer on its button.
@@ -101,11 +108,13 @@ FB_ASK_LABEL[FB_A.BUILD] = 'Yes — build the report';
 FB_ASK_LABEL[FB_A.SKIP]  = 'Don’t build this one';
 FB_ASK_LABEL[FB_A.OKNP]  = 'OK, no problem';
 FB_ASK_LABEL[FB_A.SOLVE] = 'This is important — try to find a solution';
+FB_ASK_LABEL[FB_A.LIKE]  = 'Yes, like this';
+FB_ASK_LABEL[FB_A.OTHER] = 'I want it differently — see my note';
 
 // Display order in Admin: loudest first. Every answer any round can produce must
 // be here or it renders no pill at all (the pills filter THIS list).
-var FB_ANSWER_ORDER = [FB_A.FIX, FB_A.PROB, FB_A.SOLVE, FB_A.GO, FB_A.BUILD, FB_A.NICE, FB_A.WAIT,
-                       FB_A.FINE, FB_A.OKNP, FB_A.NEVER, FB_A.LEAVE, FB_A.SKIP];
+var FB_ANSWER_ORDER = [FB_A.FIX, FB_A.PROB, FB_A.SOLVE, FB_A.OTHER, FB_A.GO, FB_A.BUILD, FB_A.LIKE,
+                       FB_A.NICE, FB_A.WAIT, FB_A.FINE, FB_A.OKNP, FB_A.NEVER, FB_A.LEAVE, FB_A.SKIP];
 
 // Which answers mean "he is asking us to DO something". An EXPLICIT set: this was
 // once inferred from position (indexOf(v) > 1), which quietly made any answer
@@ -120,9 +129,115 @@ FB_WORK_ANSWERS[FB_A.GO] = 1;
 // problem" are deliberately absent — they are her closing something down.
 FB_WORK_ANSWERS[FB_A.BUILD] = 1;
 FB_WORK_ANSWERS[FB_A.SOLVE] = 1;
+FB_WORK_ANSWERS[FB_A.LIKE] = 1;
+FB_WORK_ANSWERS[FB_A.OTHER] = 1;
 
 // ── The rounds. Newest first. ───────────────────────────────────────────────
 var FB_ROUNDS = {
+  // ── Learning section, for Andrea Falcone (Executive Development Chef) ─────
+  // Born from his "Tell us" idea of 21 Sep 2026 (inbox 7047ca62): a page to read
+  // and a short scored test, inside the Kitchen app. Nothing is built yet. Each
+  // item is OUR proposal and he answers "like this" or "my way" with a note.
+  // The three works:true items were already decided by Francesco on 21 Sep —
+  // shown so Andrea sees the whole picture and can still object.
+  'learning-andrea': {
+    name: 'Learning section — how do you want it built? (Andrea)',
+    email: {
+      subject: 'The Learning section — how do you want it built?',
+      body: ['Thank you for the idea of a learning section in the Kitchen app — a page to read and a short test. Francesco wants to build it, and wants it built <b>your</b> way.',
+             'We wrote down how we would build each part. <b>12 short questions</b>: for each one tap <b>Yes, like this</b> or <b>I want it differently</b> and tell us how in the note.',
+             'Nothing gets built until you answer.'],
+      cta: 'Tell us how to build it',
+      wa: 'Thank you for the idea of a learning section in the Kitchen app. Francesco wants to build it your way — we wrote down how we would build each part, 12 short questions. Tap "Yes, like this" or tell us your way in the note. Nothing gets built until you answer.'
+    },
+    title: 'The Learning section — how should it work?',
+    ask: FB_ASK.DESIGN,
+    okLabel: 'Already decided by Francesco',
+    intro: [
+      'Hi Andrea — you asked for a learning section in the Kitchen app: a page of information, then a small test with a score. Food technique, HACCP, finance for senior roles.',
+      'Francesco wants to build it, and you are the person who knows what the team needs to learn. So before we write any code, <b>we are asking you how it should work</b>.',
+      'Each question below says <b>how we would build it</b>. Where you agree, one tap. Where you don’t, tell us your way.'
+    ],
+    howto: 'Tap <b>Yes, like this</b> if our plan is right, or <b>I want it differently</b> and write your way in the note — the note is the most useful part.<br><br>The three marked <b>Already decided by Francesco</b> are there so you see the whole picture. If one of them is a problem for you, say so.<br><br>Answers save on this phone as you go, so you can stop and come back. Tap <b>Send my answers</b> when you are done.',
+    lastQ: 'You mentioned the Done training system. What did you like about it — and what annoyed you? And is there anything a learning section must do that is not on this list?',
+    items: [
+      { id:'l-who',
+        said: 'Who is it for?',
+        today: 'The <b>kitchen team first</b> — commis to sous chef. It works on a phone and on the kitchen screen. The floor team can get the same section later.',
+        label: 'Who it is for' },
+
+      { id:'l-first',
+        said: 'Which topics come first?',
+        today: 'We would start with three: <b>HACCP — cooling and reheating</b>, <b>the 14 allergens</b>, and <b>one knife technique</b>. Please write in the note the <b>first ten topics</b> you want, in order.',
+        label: 'First topics' },
+
+      { id:'l-write',
+        said: 'Who writes the pages?',
+        today: 'You give a topic — or one of our existing SOPs — and <b>Claude writes the page and the questions</b>. Francesco reads and approves it before anyone sees it. Nothing written by AI reaches the team without a chef checking it.<br><br>Do you also want to <b>write or upload your own</b> pages — your notes, photos, a PDF? Tell us in the note.',
+        label: 'Who writes the content' },
+
+      { id:'l-length',
+        said: 'How long is one page?',
+        today: '<b>One phone screen</b> — about 250 words and one photo. Three minutes to read. A bigger subject becomes two or three short pages, not one long one.',
+        label: 'Page length' },
+
+      { id:'l-photo',
+        said: 'Photos and video?',
+        today: 'Photos yes — one or two per page. <b>No video to start</b>: it is slow on a phone in the kitchen and takes much longer to make. If a technique really needs a video, tell us which one.',
+        label: 'Photos and video' },
+
+      { id:'l-test',
+        said: 'What does the test look like?',
+        today: '<b>5 questions, 4 choices each</b>, one right answer. The order of the choices changes every time, so nobody passes by remembering “it was the second one”.',
+        label: 'Test format' },
+
+      { id:'l-wrong',
+        said: 'What happens when someone gets a question wrong?',
+        today: 'At the end they see <b>which ones they missed</b>, the right answer, and one line explaining why. So the test also teaches.',
+        label: 'Showing the right answer' },
+
+      { id:'l-must',
+        said: 'Is it compulsory, or optional?',
+        today: 'Optional to start. Next step: <b>you assign a topic</b> to a person or a section with a deadline — for example every new starter does HACCP in their first week — and the app shows who has not done it yet.',
+        label: 'Compulsory or optional' },
+
+      { id:'l-renew',
+        said: 'Does a pass last forever?',
+        today: '<b>HACCP and allergens expire after 12 months</b> and must be taken again. Technique topics never expire.',
+        label: 'Pass expiry' },
+
+      { id:'l-senior',
+        said: 'Finance topics — who can see them?',
+        today: '<b>Sous chef and above</b>, read from each person’s job title in the staff list. Tell us if another role should see them, or if other topics should be for seniors only.',
+        label: 'Senior-only topics' },
+
+      { id:'l-lang',
+        said: 'Which language?',
+        today: '<b>English only to start.</b> The team survey already runs in 5 languages, so we can add translations later if the team needs them.',
+        label: 'Language' },
+
+      { id:'l-tool',
+        said: 'Inside our app, or youareal.ai?',
+        today: '<b>Inside our app</b>: no extra login, no subscription, and the scores sit next to the people they belong to. We would only look at youareal.ai if the app version is not good enough. If you have used youareal.ai, tell us what it does better.',
+        label: 'Our app or youareal.ai' },
+
+      { id:'d-id', works:true,
+        said: 'How do we know who took the test?',
+        today: 'Before the test, the person <b>types their employee ID</b>. An ID that is not on the staff list is refused.',
+        label: 'Employee ID before the test' },
+
+      { id:'d-scores', works:true,
+        said: 'Who sees the scores?',
+        today: 'Everyone’s scores are seen only by <b>the people Francesco ticks in Admin</b>. We suggest each person also sees their own score — tell us if not.',
+        label: 'Who sees scores' },
+
+      { id:'d-pass', works:true,
+        said: 'What is a pass?',
+        today: '<b>4 out of 5.</b> They can retake as many times as they like, and the best score is kept.',
+        label: 'Pass mark' }
+    ]
+  },
+
   // ── Reservations reporting, for Nicole (Head of Marketing) ────────────────
   // Different in shape to every round before it: nothing here is broken and
   // nothing is a fix. It is a MENU. She is choosing which reports get built,
