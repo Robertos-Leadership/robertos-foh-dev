@@ -145,10 +145,10 @@ var FB_ROUNDS = {
     email: {
       subject: 'The Learning section — how do you want it built?',
       body: ['Thank you for the idea of a learning section in the Kitchen app — a page to read and a short test. Francesco wants to build it, and wants it built <b>your</b> way.',
-             'We wrote down how we would build each part. <b>12 short questions</b>: for each one tap <b>Yes, like this</b> or <b>I want it differently</b> and tell us how in the note.',
+             'We wrote down how we would build each part. <b>17 short questions</b> — the first five are about the test questions themselves, the most important part: for each one tap <b>Yes, like this</b> or <b>I want it differently</b> and tell us how in the note.',
              'Nothing gets built until you answer.'],
       cta: 'Tell us how to build it',
-      wa: 'Thank you for the idea of a learning section in the Kitchen app. Francesco wants to build it your way — we wrote down how we would build each part, 12 short questions. Tap "Yes, like this" or tell us your way in the note. Nothing gets built until you answer.'
+      wa: 'Thank you for the idea of a learning section in the Kitchen app. Francesco wants to build it your way — we wrote down how we would build each part, 17 short questions — the first five are about where the test questions come from. Tap "Yes, like this" or tell us your way in the note. Nothing gets built until you answer.'
     },
     title: 'The Learning section — how should it work?',
     ask: FB_ASK.DESIGN,
@@ -161,6 +161,36 @@ var FB_ROUNDS = {
     howto: 'Tap <b>Yes, like this</b> if our plan is right, or <b>I want it differently</b> and write your way in the note — the note is the most useful part.<br><br>The three marked <b>Already decided by Francesco</b> are there so you see the whole picture. If one of them is a problem for you, say so.<br><br>Answers save on this phone as you go, so you can stop and come back. Tap <b>Send my answers</b> when you are done.',
     lastQ: 'You mentioned the Done training system. What did you like about it — and what annoyed you? And is there anything a learning section must do that is not on this list?',
     items: [
+      { id:'q-source',
+        said: 'Where do the test questions come from?',
+        today: 'Four possible sources — tell us which ones, and in what order:<br><br>'
+             + '<b>1. Our own recipes in the app.</b> 201 recipes are in there today; 181 have a written method, many with how it is stored once made and which plate it goes on. So: <i>“How is the veal stored once cooked?”</i>, <i>“Which allergens are in this dish?”</i>, <i>“Which plate does it go on?”</i> Specific to Roberto’s, and when a recipe changes, its questions change with it.<br>'
+             + '<b>2. Our SOPs.</b> How we do things here.<br>'
+             + '<b>3. General knowledge</b> — HACCP, technique, finance — written by Claude.<br>'
+             + '<b>4. Written by you</b>, for what only you know.<br><br>'
+             + 'Our plan: <b>recipes first</b>, then SOPs and general knowledge, and yours whenever you want to add them.',
+        label: 'Where test questions come from' },
+
+      { id:'q-check',
+        said: 'Who checks every answer is right before the team sees it?',
+        today: 'A wrong answer in a test teaches the wrong thing to everyone who takes it. Our plan: <b>every question is checked by a chef before it goes live</b> — by you, or by the head of that section. For HACCP the answers follow <b>Dubai Municipality</b> rules, not generic or UK ones. Tell us who should be the checker.',
+        label: 'Who checks the answers' },
+
+      { id:'q-gaps',
+        said: 'What about recipes with missing information?',
+        today: 'Only <b>127 of the 201</b> recipes have their allergens filled in, and only <b>9</b> have a photo. A question built from an incomplete recipe would teach “no allergens” when the truth is “nobody wrote them down”. Our plan: <b>a recipe only makes questions once it is complete</b>, and the app shows you which recipes are missing what — so the learning section also pushes the recipe book to be finished.',
+        label: 'Incomplete recipes' },
+
+      { id:'q-bank',
+        said: 'Is the retake the same test?',
+        today: 'No. Each topic has a <b>bank of about 15 questions</b> and every test picks 5 at random, so someone who retakes gets different questions and cannot just learn the answers.',
+        label: 'Question bank per topic' },
+
+      { id:'q-level',
+        said: 'One test for everyone, or by level?',
+        today: 'Our plan: <b>by level</b> — commis questions are about what they touch every day (storage, allergens, mise en place); chef de partie and above also get method, costing and running the section. Tell us where you would draw the lines.',
+        label: 'Tests by level' },
+
       { id:'l-who',
         said: 'Who is it for?',
         today: 'The <b>kitchen team first</b> — commis to sous chef. It works on a phone and on the kitchen screen. The floor team can get the same section later.',
