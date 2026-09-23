@@ -5756,6 +5756,8 @@ function fohSchedToggleSplit(){
 function fohSchedStatusChange(){
   var s=document.getElementById('foh-sch-status-sel').value;
   document.getElementById('foh-sch-time-fields').style.display=s==='working'?'block':'none';
+  // Blank is not something to copy/paste — a pasted or filled blank would wipe whole days.
+  var cb=document.getElementById('foh-sch-copy-btn'); if(cb) cb.style.display=s==='blank'?'none':'';
 }
 function fohSchedCloseModal(e){
   if(e && e.target!==document.getElementById('foh-sch-modal')) return;
@@ -5778,6 +5780,9 @@ async function fohSchedSaveShift(){
   var stationOverride=(status==='working' && chosenSec && chosenSec!==homeSec)?chosenSec:null;
   document.getElementById('foh-sch-modal').style.display='none';
   var key=fohSchedRosterKey(staffId,date);
+  // "Blank (+ add)" puts the day back to an empty cell — the row is removed, not
+  // saved as a status, so it reads exactly like a day nobody filled in. Undoable.
+  if(status==='blank'){ await fohSchedClearCell(staffId,date); fohSchedEditTarget=null; return; }
   var payload=Object.assign({},fohSchedRoster[key]||{},{
     staff_id:staffId, work_date:date, status:status,
     shift_start: status==='working'?(start||null):null,
@@ -5800,6 +5805,21 @@ async function fohSchedSaveShift(){
     console.error('Save error:',res.error); alert('Could not save the shift — NOT stored (reverted on screen): '+res.error.message);
   }
   fohSchedEditTarget=null;
+}
+
+async function fohSchedClearCell(staffId,date){
+  var key=fohSchedRosterKey(staffId,date);
+  var prevRow=fohSchedRoster[key];
+  if(!prevRow) return;   // already blank — nothing to undo, nothing to write
+  fohSchedPushUndo([{staffId:staffId, date:date}], 'clear '+((fohSchedStaff.find(function(x){return x.id===staffId;})||{}).name||'staff')+', '+fohSchedDayLabel(date));
+  delete fohSchedRoster[key];
+  fohRenderSchedWeek();   // in the Roster tool this captures the blank into the plan, like any edit
+  if(fohSchedPlanMode) return;
+  var res=await sb.from('foh_roster').delete().eq('staff_id',staffId).eq('work_date',date);
+  if(res.error){
+    fohSchedRoster[key]=prevRow; fohRenderSchedWeek();
+    console.error('Clear error:',res.error); toast('Day not cleared — check connection and tap the day again.', true);
+  }
 }
 
 // ── Day events (up to 2 per day, shown at the top of the schedule) ──
