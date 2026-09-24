@@ -5619,7 +5619,7 @@ function peCoordPrepHTML(e){
 }
 // Friendly names for the standard team, so the picker reads like people not emails.
 var PE_PEOPLE = {
-  'vdetoni@robertos.ae':'Valentina De Toni','dvalla@robertos.ae':'Danilo Valla','jthomas@robertos.ae':'Jins Thomas','mpetrosino@robertos.ae':'Manuel Petrosino',
+  'vdetoni@robertos.ae':'Valentina De Toni','dvalla@robertos.ae':'Danilo Valla','jthomas@robertos.ae':'Jins Thomas',
   'astellacci@robertos.ae':'Antonio Stellacci','afalcone@robertos.ae':'Andrea Falcone',
   'reservations@robertos.ae':'Reservations','asacchi@skelmore.com':'Andrea Sacchi',
   'kvukotic@robertos.ae':'Katarina Vukotic','rmazouz@robertos.ae':'R. Mazouz','aviscardi@robertos.ae':'A. Viscardi',

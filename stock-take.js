@@ -41,12 +41,13 @@ var STOCK_DEPTS = [
   { key:'tobacco',   label:'Tobacco',       fileHint:{ any:['tobacco'] } }
 ];
 
-// Review & send recipients (FOH). To Aung; cc Asarudeen and Manuel.
+// Review & send recipients (FOH). To Aung; cc Asarudeen.
 // ⚠ This list is hardcoded, so a leaver keeps receiving the venue's stock take
 // until someone edits it here — there is no screen for it. Jad Ballout removed
-// 12 Sep 2026 when he left; his login was banned the same day.
+// 12 Sep 2026 when he left; his login was banned the same day. Manuel Petrosino
+// removed 24 Sep 2026 when he left, same day as his login.
 var STOCK_EMAIL_TO = 'ahtwe@robertos.ae';
-var STOCK_EMAIL_CC = ['amohamed@robertos.ae','mpetrosino@robertos.ae'];
+var STOCK_EMAIL_CC = ['amohamed@robertos.ae'];
 
 // Super-user passcodes — grant stock-take access on their own, NOT linked to any
 // employee/roster record (so the holder never appears on the FOH schedule). Used
