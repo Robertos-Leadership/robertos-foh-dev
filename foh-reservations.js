@@ -45,8 +45,9 @@ function resEsc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/<
 // ── Per-reservation money (added 28 Jul 2026, asked for by Nicole) ────────────
 // She needs what a table actually spent, gross AND net, plus the average per
 // person. The gross is the SevenRooms check subtotal, which is the menu-price
-// total the guest paid; net is that / 1.225, the verified stack (10% service +
-// 7% municipality on net, 5% VAT on net+SC).
+// total the guest paid; net is that / 1.225 up to 15 Sep 2026 (10% service +
+// 7% municipality on net, 5% VAT on net+SC) and / 1.155 from 16 Sep 2026, when
+// the 7% moved onto the bill — see fohSubtotalToNetDiv in foh-core.js.
 //
 // THE THING TO NOT FORGET: these figures cover only the bookings SevenRooms has
 // a linked check for. A walk-in served without a booking has no reservation to
@@ -1411,7 +1412,7 @@ function resExportSheets(rows, money){
   //
   // Deliberately NOT exporting SevenRooms' `gross` lifetime field. It is not the
   // same thing as the Gross column on a booking: ours is the menu-price check
-  // total and divides by 1.225 to net, whereas SevenRooms' lifetime gross/net
+  // total and divides by 1.225 (to 15 Sep) / 1.155 (from 16 Sep) to net, whereas SevenRooms' lifetime gross/net
   // ratio runs anywhere from 1.0000 to 1.2764 across the 71 profiles on 24 Jul,
   // so it is some other basis. Two columns both called "gross" meaning two
   // different things in one file is how a report gets quietly misread.

@@ -1035,7 +1035,7 @@ function stReviewSend(){
   box.id='st-send-modal'; box.className='st-modal';
   box.innerHTML='<div class="st-modal-box" onclick="event.stopPropagation()">'+
     '<div style="font-weight:700;color:#410207;margin-bottom:4px">Send '+stEsc(stDeptLabel())+' stock take to Aung</div>'+
-    '<div style="font-size:12px;color:#4F4535;margin-bottom:14px">cc Asarudeen, Manuel &amp; Jad. Choose a format:</div>'+
+    '<div style="font-size:12px;color:#4F4535;margin-bottom:14px">cc '+stEsc(STOCK_EMAIL_CC.join(', '))+'. Choose a format:</div>'+
     '<button class="st-btn" style="width:100%;margin-bottom:10px;text-align:left;height:auto;padding:10px 12px" onclick="stSendEmail(\'excel\')"><b>Excel file</b><br><span style="font-size:11px;color:#4F4535">attached spreadsheet — for Aung\'s system</span></button>'+
     '<button class="st-btn" style="width:100%;margin-bottom:14px;text-align:left;height:auto;padding:10px 12px" onclick="stSendEmail(\'digital\')"><b>Digital format</b><br><span style="font-size:11px;color:#4F4535">the in-app layout, inside the email</span></button>'+
     '<div id="st-send-status" style="font-size:12px;min-height:16px;color:#7a1218;margin-bottom:8px"></div>'+
@@ -1058,7 +1058,8 @@ async function stSendEmail(mode){
     }
     var r=await fetch(SUPABASE_URL+'/functions/v1/send-stock-take', { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+SUPABASE_KEY}, body:JSON.stringify(body) });
     var d=await r.json().catch(function(){return{};});
-    if(r.ok){ var m=document.getElementById('st-send-modal'); if(m) m.remove(); toast('✓ Sent to Aung ('+(mode==='excel'?'Excel':'digital')+').'); }
+    if(r.ok && Array.isArray(d.failed) && d.failed.length){ if(statusEl){ statusEl.style.color='#7a1218'; statusEl.textContent='Sent, but not to: '+d.failed.map(function(f){ return (f&&f.to)||f; }).join(', '); } }
+    else if(r.ok){ var m=document.getElementById('st-send-modal'); if(m) m.remove(); toast('✓ Sent to Aung ('+(mode==='excel'?'Excel':'digital')+').'); }
     else if(statusEl){ statusEl.style.color='#7a1218'; statusEl.textContent='Send failed: '+(d.error||r.status); }
   }catch(e){ if(statusEl){ statusEl.style.color='#7a1218'; statusEl.textContent='Send failed: '+e.message; } }
 }

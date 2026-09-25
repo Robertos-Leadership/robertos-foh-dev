@@ -33,13 +33,14 @@ function opsSetView(v){ revInit().opsView=v; if(typeof renderMain==='function') 
 function opsRecentHTML(){
   var R=revInit();
   if(!R.opsRecent) return '<div class="rev-mut" style="padding:12px">Loading…</div>';
+  if(R.opsRecentError) return '<div class="rev-mut" style="padding:12px">Could not load recent reports — check connection and reopen.</div>';
   if(!R.opsRecent.length) return '<div class="rev-mut" style="padding:12px">No closing reports yet — start today’s above.</div>';
   function fdate(ds){ return new Date(String(ds).slice(0,10)+'T12:00:00').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'}); }
   var rows=R.opsRecent.map(function(r){
     var net=Number(r.rest_lunch_net||0)+Number(r.rest_dinner_net||0)+Number(r.lounge_lunch_net||0)+Number(r.lounge_dinner_net||0);
     var cov=Number(r.rest_lunch_covers||0)+Number(r.rest_dinner_covers||0)+Number(r.lounge_lunch_covers||0)+Number(r.lounge_dinner_covers||0);
     var nc=((r.comments_good||[]).length)+((r.comments_bad||[]).length);
-    return '<tr onclick="clOpen(\''+String(r.service_date).slice(0,10)+'\')"><td class="rev-day">'+fdate(r.service_date)+'</td><td>'+revMoney(net)+'</td><td>'+cov+'</td><td>'+(r.manager_pm||r.manager_am||'—')+'</td><td>'+(nc?nc+' note'+(nc>1?'s':''):'—')+'</td></tr>';
+    return '<tr onclick="clOpen(\''+String(r.service_date).slice(0,10)+'\')"><td class="rev-day">'+fdate(r.service_date)+'</td><td>'+revMoney(net)+'</td><td>'+cov+'</td><td>'+(typeof clEsc==='function'?clEsc(r.manager_pm||r.manager_am||'—'):'—')+'</td><td>'+(nc?nc+' note'+(nc>1?'s':''):'—')+'</td></tr>';
   }).join('');
   return '<div class="rev-grid-wrap"><table class="rev-grid"><thead><tr><th>Date</th><th>Net</th><th>Covers</th><th>Manager</th><th>Notes</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
 }
@@ -47,9 +48,10 @@ async function opsLoadRecent(){
   var R=revInit(); R.opsRecentLoaded=true;
   try{
     var res=await sb.from('closing_reports').select('service_date,rest_lunch_net,rest_dinner_net,lounge_lunch_net,lounge_dinner_net,rest_lunch_covers,rest_dinner_covers,lounge_lunch_covers,lounge_dinner_covers,manager_am,manager_pm,comments_good,comments_bad').order('service_date',{ascending:false}).limit(30);
+    R.opsRecentError=!!res.error;
     if(res.error){ R.opsRecent=[]; if(typeof toast==='function') toast('Could not load recent reports — check connection.', true); }
     else { R.opsRecent=(res.data||[]); }
-  }catch(e){ R.opsRecent=[]; if(typeof toast==='function') toast('Could not load recent reports — check connection.', true); }
+  }catch(e){ R.opsRecent=[]; R.opsRecentError=true; if(typeof toast==='function') toast('Could not load recent reports — check connection.', true); }
   if(state.currentTab==='operations'){ var box=document.getElementById('ops-recent'); if(box) box.innerHTML=opsRecentHTML(); }
 }
 

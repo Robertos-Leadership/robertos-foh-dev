@@ -19,7 +19,11 @@ function clEsc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</
 async function clOpen(ds){
   var C=clInit(); ds=ds||clToday(); C.date=ds;
   var row=null;
-  try{ var res=await sb.from('closing_reports').select('*').eq('service_date',ds).limit(1); if(!res.error && res.data && res.data.length) row=res.data[0]; }catch(e){}
+  // A failed read must not look like "no report yet": saving the blank form would
+  // overwrite the real night. Remember the failure and refuse to save that date.
+  C.loadFailed=null;
+  try{ var res=await sb.from('closing_reports').select('*').eq('service_date',ds).limit(1); if(res.error) C.loadFailed=ds; else if(res.data && res.data.length) row=res.data[0]; }catch(e){ C.loadFailed=ds; }
+  if(C.loadFailed && typeof toast==='function') toast('Could not load the saved closing report for '+ds+' — close and reopen before saving.', true);
   C.loadedRow=row;
   C.comps=(row&&Array.isArray(row.comps))?row.comps.slice():[];
   C.good=(row&&Array.isArray(row.comments_good))?row.comments_good.slice():[];
@@ -270,6 +274,7 @@ function revOpsDigest(){
 }
 async function clSave(andEmail){
   var C=clInit(), ds=clVal('cl-date')||C.date;
+  if(C.loadFailed && C.loadFailed===ds){ if(typeof toast==='function') toast('Not saved — the existing report for '+ds+' could not be loaded, so saving could overwrite it. Close and reopen, then try again.', true); return; }
   function sum(a,b){ return (a==null&&b==null)?null:((a||0)+(b||0)); }
   var rl=clNum('cl-rl-net'),rlc=clNum('cl-rl-cov'),rd=clNum('cl-rd-net'),rdc=clNum('cl-rd-cov');
   var ll=clNum('cl-ll-net'),llc=clNum('cl-ll-cov'),ld=clNum('cl-ld-net'),ldc=clNum('cl-ld-cov');

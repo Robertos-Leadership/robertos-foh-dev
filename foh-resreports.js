@@ -105,8 +105,15 @@ var RRN = { nights: {}, ok: null };   // date -> rows ; ok = did the feed honour
 // good news. The function now echoes `includes_cancelled`; if that is not true
 // the two cancellation reports refuse to draw rather than print a zero.
 // See the &include=all note in sevenrooms-sync/index.ts.
+// Tonight and last night are still moving (SevenRooms posts checks late), so they are
+// always re-read; only nights before that are served from the session cache.
+function rrNightSettled(d){
+  var y = new Date(RC.dubaiBusinessDate(new Date())+'T12:00:00'); y.setDate(y.getDate()-1);
+  var ys = y.getFullYear()+'-'+String(y.getMonth()+1).padStart(2,'0')+'-'+String(y.getDate()).padStart(2,'0');
+  return String(d) < ys;
+}
 async function rrFetchNight(d){
-  if(RRN.nights[d]) return RRN.nights[d];
+  if(RRN.nights[d] && rrNightSettled(d)) return RRN.nights[d];
   var r = await fetch(KITCHEN_URL + '/functions/v1/sevenrooms-sync?daysheet=' + d + '&include=all', {
     method:'POST',
     headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+KITCHEN_KEY, 'x-proxy-secret':KITCHEN_PROXY_SECRET }

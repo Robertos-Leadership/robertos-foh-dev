@@ -100,6 +100,7 @@ async function grLoad(){
       var r2 = await sb.from('google_reviews_daily').select('venue_key,snapshot_date,rating,user_rating_count,place_id')
                        .gte('snapshot_date', since).order('snapshot_date',{ascending:true});
       if(!r2.error) rows = r2.data || [];
+      else if(typeof toast==='function') toast('Today’s ratings were collected but could not be re-read — the figures shown may be yesterday’s. Reopen to refresh.', true);
     }
     GR.rows = rows;
     GR.loaded = true;
@@ -891,7 +892,7 @@ function grReviewHTML(rv, mine){
     + grLangTag(rv.lang) + grKeptTag(rv.first_seen) + '</div>');
   if(txt) h.push('<p class="gr-revtext">'+grEsc(txt.length>420 ? txt.slice(0,420)+'…' : txt)+'</p>');
   else h.push('<p class="gr-revtext gr-mut-sm">A rating with no words.</p>');
-  if(rv.maps_uri) h.push('<a class="gr-link" href="'+grEsc(rv.maps_uri)+'" target="_blank" rel="noopener">Read the full review on Google ›</a>');
+  if(rv.maps_uri && /^https:\/\//i.test(String(rv.maps_uri))) h.push('<a class="gr-link" href="'+grEsc(rv.maps_uri)+'" target="_blank" rel="noopener">Read the full review on Google ›</a>');
   h.push('</div>');
   return h.join('');
 }

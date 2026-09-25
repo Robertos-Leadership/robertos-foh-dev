@@ -930,8 +930,10 @@ function peMaybeRefresh(){
 }
 function peRefreshNow(){
   if(peState.loading){ peToast('Already refreshing…'); return; }
-  peLoadAll(true);
-  peToast('Refreshed ✓');
+  // Toast after the reload lands, so a failed load is not preceded by a success toast.
+  // peLoadAll only moves lastLoad on success; its own catch already toasts the failure.
+  var before = peState.lastLoad;
+  Promise.resolve(peLoadAll(true)).then(function(){ if(peState.lastLoad !== before) peToast('Refreshed ✓'); }).catch(function(){});
 }
 // "just now" / "4 min ago" / "14:32" — she should be able to see how old the screen is.
 function peFreshLabel(){

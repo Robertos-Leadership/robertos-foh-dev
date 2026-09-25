@@ -8219,12 +8219,15 @@ async function chkLoadVerifiers(){
 }
 async function chkLoad(){
   var C=chkInit();
-  try{ var res=await sb.from('foh_checklists').select('*').eq('check_date',C.date).eq('shift_type',C.type).eq('area','Restaurant').limit(1); C.row=(res.data&&res.data.length)?res.data[0]:null; }catch(e){ C.row=null; }
+  C.loadFailed=false;
+  try{ var res=await sb.from('foh_checklists').select('*').eq('check_date',C.date).eq('shift_type',C.type).eq('area','Restaurant').limit(1); if(res.error) C.loadFailed=true; C.row=(res.data&&res.data.length)?res.data[0]:null; }catch(e){ C.row=null; C.loadFailed=true; }
+  if(C.loadFailed) toast('Could not load this checklist — close and reopen before ticking, or the saved ticks could be overwritten.', true);
   chkRender();
 }
 function chkSetType(t){ var C=chkInit(); if(C.type===t && C.view!=='history') return; C.view='checklist'; C.type=t; chkExitHistoryUI(); chkLoad(); chkSubscribe(); }
 async function chkToggle(i){
   var C=chkInit();
+  if(C.loadFailed){ toast('Checklist did not load — close and reopen it before ticking.', true); return; }
   var hadRow=!!C.row;
   var prevChecked=Object.assign({}, (C.row&&C.row.checked)||{});
   var checked=Object.assign({}, prevChecked);
