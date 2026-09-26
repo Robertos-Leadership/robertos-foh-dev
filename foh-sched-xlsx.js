@@ -54,11 +54,13 @@ async function fohSchedSendToHR(_downloadOnly){
     var sheet = workbook.addWorksheet('FOH Roster',{
       pageSetup:{ paperSize:8, orientation:'landscape', fitToPage:true, fitToWidth:1, fitToHeight:1,
                   horizontalCentered:true, margins:{left:0.25,right:0.25,top:0.3,bottom:0.35,header:0.15,footer:0.15} },
-      headerFooter:{ oddFooter:'&L&8Roberto\'s DIFC · FOH Roster&R&8Printed &D &T' },
-      views:[{ state:'frozen', ySplit:4 }]
+      views:[{ state:'frozen', xSplit:1, ySplit:2 }]
     });
 
     var VINO='6B1F2A', SABBIA='F5F0E8', GOLD='C9A84C', DARK='3D0F15', LIGHT='F0EBE2';
+    // Footer date written out day-first (Excel's &D prints the US month/day on most setups)
+    var _n=new Date(), _p=function(x){ return (x<10?'0':'')+x; };
+    sheet.headerFooter.oddFooter='&L&9Roberto\'s DIFC · FOH Roster&R&9Printed '+_p(_n.getDate())+'/'+_p(_n.getMonth()+1)+'/'+_n.getFullYear()+' '+_p(_n.getHours())+':'+_p(_n.getMinutes());
 
     function vinoBorder(){
       return {top:{style:'thin',color:{argb:'FF'+GOLD}},bottom:{style:'thin',color:{argb:'FF'+GOLD}},left:{style:'thin',color:{argb:'FF'+GOLD}},right:{style:'thin',color:{argb:'FF'+GOLD}}};
@@ -72,23 +74,13 @@ async function fohSchedSendToHR(_downloadOnly){
 
     // Title
     var titleRow = sheet.addRow(["ROBERTO'S DIFC — FOH Roster: " + weekStr]);
-    titleRow.height = 40;
+    titleRow.height = 34;
     sheet.mergeCells(titleRow.number,1,titleRow.number,totalCols);
     titleRow.getCell(1).style = {
       font:{bold:true,size:20,color:{argb:'FF'+SABBIA},name:'Calibri'},
       fill:{type:'pattern',pattern:'solid',fgColor:{argb:'FF'+VINO}},
       alignment:{horizontal:'center',vertical:'middle'}
     };
-
-    var subRow = sheet.addRow(["Generated: " + new Date().toLocaleString('en-GB') + "   |   Week: " + weekStr]);
-    subRow.height = 20;
-    sheet.mergeCells(subRow.number,1,subRow.number,totalCols);
-    subRow.getCell(1).style = {
-      font:{size:11,color:{argb:'FF'+VINO},italic:true,name:'Calibri'},
-      fill:{type:'pattern',pattern:'solid',fgColor:{argb:'FF'+SABBIA}},
-      alignment:{horizontal:'center',vertical:'middle'}
-    };
-    sheet.addRow([]);
 
     // Header row
     var hdrCells = ['Name','Role'];
@@ -111,7 +103,7 @@ async function fohSchedSendToHR(_downloadOnly){
       if(!stStaff.length) return;
 
       var stRow = sheet.addRow([sec.label.toUpperCase()]);
-      stRow.height = 22;
+      stRow.height = 19;
       sheet.mergeCells(stRow.number,1,stRow.number,totalCols);
       stRow.getCell(1).style = {
         font:{bold:true,size:12,color:{argb:'FFFFFFF0'},name:'Calibri'},
@@ -140,7 +132,7 @@ async function fohSchedSendToHR(_downloadOnly){
         }
         rowData.push(wHours>0?(Math.round(wHours*10)/10)+'h':'', wDays||'');
         var dataRow=sheet.addRow(rowData);
-        dataRow.height=hasSplitRow?36:21;   // two lines when someone has a split shift
+        dataRow.height=hasSplitRow?33:19;   // two lines when someone has a split shift
         dataRow.eachCell({includeEmpty:true},function(cell,colNumber){
           var baseFont={size:12,name:'Calibri'};
           var col=colNumber-1;
