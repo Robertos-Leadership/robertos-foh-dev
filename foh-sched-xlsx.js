@@ -151,9 +151,12 @@ async function fohSchedSendToHR(_downloadOnly){
           else if(col>=rowData.length-2){ cell.style={font:Object.assign({bold:true,color:{argb:'FF'+VINO}},baseFont),fill:{type:'pattern',pattern:'solid',fgColor:{argb:'FF'+LIGHT}},border:hairBorder(),alignment:{horizontal:'center',vertical:'middle'}}; }
           else {
             var status=cellStatuses[col-2];
+            // OFF / leave cells: the same solid colours as the screen and the Print
+            // button (OFF = burgundy), white bold text — not pale grey.
+            var solid=(status!=='working'&&status!=='empty'&&typeof FOH_STATUS_PRINT_COLOR!=='undefined')?FOH_STATUS_PRINT_COLOR[status]:null;
             cell.style={
-              font:Object.assign({bold:true,color:{argb:fgColors[status]||'FF333333'}},baseFont),
-              fill:{type:'pattern',pattern:'solid',fgColor:{argb:fills[status]||'FFFFFFFF'}},
+              font:Object.assign({bold:true,color:{argb:solid?'FFFFFFFF':(fgColors[status]||'FF333333')}},baseFont),
+              fill:{type:'pattern',pattern:'solid',fgColor:{argb:solid?('FF'+solid.replace('#','').toUpperCase()):(fills[status]||'FFFFFFFF')}},
               border:hairBorder(),alignment:{horizontal:'center',vertical:'middle',wrapText:true}
             };
           }
