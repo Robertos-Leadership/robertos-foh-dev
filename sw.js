@@ -15,7 +15,7 @@
    controllerchange reload), a fresh deploy reaches every screen with no manual
    tap. To force a clean cache rebuild, bump the CACHE version string below. */
 
-const CACHE = 'robertos-foh-v20260925alg';
+const CACHE = 'robertos-foh-v20260926split';
 
 // Best-effort warm cache. The bare paths are precached on install; the real
 // runtime requests (some carry a ?v= cache-buster) are cached on the fly by the
@@ -28,6 +28,7 @@ const ASSETS = [
   // It is now a ~47KB shell: without these two the offline app is a blank page.
   // Any future extraction out of index.html MUST be added here as well.
   './foh-core.js',
+  './foh-sched-xlsx.js',   // split-shift Excel hotfix — overrides fohSchedSendToHR
   './foh-styles.css',
   './common.js',
   // Read by index.html and by BOTH link-only feedback pages (the questionnaire
