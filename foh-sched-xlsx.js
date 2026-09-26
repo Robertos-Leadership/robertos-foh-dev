@@ -1,5 +1,5 @@
-// ── Roster Excel / HR email — split-shift hotfix (26 Sep 2026) ──────────────
-// Loaded right AFTER foh-core.js, so this definition replaces the one there.
+// ── Roster Print + Excel / HR email — split-shift & A3 hotfix (26 Sep 2026) ─
+// Loaded right AFTER foh-core.js, so these definitions replace the ones there.
 // The old builder wrote only the first shift of a split (12:00-15:00 instead of
 // 12:00-15:00 + 19:00-01:00) and counted only its hours. Shipped as its own
 // small file so it could go live from a phone; fold it back into foh-core.js
@@ -49,7 +49,14 @@ async function fohSchedSendToHR(_downloadOnly){
     var workbook = new ExcelJS.Workbook();
     workbook.creator = "Roberto's FOH";
     workbook.created = new Date();
-    var sheet = workbook.addWorksheet('FOH Roster',{ pageSetup:{orientation:'landscape',fitToPage:true,fitToWidth:1} });
+    // Printed on A3 landscape and pinned up: whole week on ONE sheet, narrow
+    // margins, centred, header row repeated if Excel ever needs a second page.
+    var sheet = workbook.addWorksheet('FOH Roster',{
+      pageSetup:{ paperSize:8, orientation:'landscape', fitToPage:true, fitToWidth:1, fitToHeight:1,
+                  horizontalCentered:true, margins:{left:0.25,right:0.25,top:0.3,bottom:0.35,header:0.15,footer:0.15} },
+      headerFooter:{ oddFooter:'&L&8Roberto\'s DIFC · FOH Roster&R&8Printed &D &T' },
+      views:[{ state:'frozen', ySplit:4 }]
+    });
 
     var VINO='6B1F2A', SABBIA='F5F0E8', GOLD='C9A84C', DARK='3D0F15', LIGHT='F0EBE2';
 
@@ -60,24 +67,24 @@ async function fohSchedSendToHR(_downloadOnly){
       return {top:{style:'hair',color:{argb:'FFDDDDDD'}},bottom:{style:'hair',color:{argb:'FFDDDDDD'}},left:{style:'hair',color:{argb:'FFDDDDDD'}},right:{style:'hair',color:{argb:'FFDDDDDD'}}};
     }
 
-    sheet.columns = [{width:28},{width:22},{width:14},{width:14},{width:14},{width:14},{width:14},{width:14},{width:14},{width:13},{width:11}];
+    sheet.columns = [{width:30},{width:24},{width:17},{width:17},{width:17},{width:17},{width:17},{width:17},{width:17},{width:12},{width:12}];
     var totalCols = 11;
 
     // Title
     var titleRow = sheet.addRow(["ROBERTO'S DIFC — FOH Roster: " + weekStr]);
-    titleRow.height = 36;
+    titleRow.height = 40;
     sheet.mergeCells(titleRow.number,1,titleRow.number,totalCols);
     titleRow.getCell(1).style = {
-      font:{bold:true,size:16,color:{argb:'FF'+SABBIA},name:'Calibri'},
+      font:{bold:true,size:20,color:{argb:'FF'+SABBIA},name:'Calibri'},
       fill:{type:'pattern',pattern:'solid',fgColor:{argb:'FF'+VINO}},
       alignment:{horizontal:'center',vertical:'middle'}
     };
 
     var subRow = sheet.addRow(["Generated: " + new Date().toLocaleString('en-GB') + "   |   Week: " + weekStr]);
-    subRow.height = 18;
+    subRow.height = 20;
     sheet.mergeCells(subRow.number,1,subRow.number,totalCols);
     subRow.getCell(1).style = {
-      font:{size:9,color:{argb:'FF'+VINO},italic:true,name:'Calibri'},
+      font:{size:11,color:{argb:'FF'+VINO},italic:true,name:'Calibri'},
       fill:{type:'pattern',pattern:'solid',fgColor:{argb:'FF'+SABBIA}},
       alignment:{horizontal:'center',vertical:'middle'}
     };
@@ -88,10 +95,10 @@ async function fohSchedSendToHR(_downloadOnly){
     for(var di=0;di<days.length;di++) hdrCells.push(dayNames[di]+' '+days[di].toLocaleDateString('en-GB',{day:'numeric',month:'short'}));
     hdrCells.push('Total Hours','Days Worked');
     var hdrRow = sheet.addRow(hdrCells);
-    hdrRow.height = 32;
+    hdrRow.height = 34;
     hdrRow.eachCell(function(cell){
       cell.style = {
-        font:{bold:true,size:10,color:{argb:'FF'+SABBIA},name:'Calibri'},
+        font:{bold:true,size:12,color:{argb:'FF'+SABBIA},name:'Calibri'},
         fill:{type:'pattern',pattern:'solid',fgColor:{argb:'FF'+VINO}},
         alignment:{horizontal:'center',vertical:'middle',wrapText:true},
         border:vinoBorder()
@@ -104,10 +111,10 @@ async function fohSchedSendToHR(_downloadOnly){
       if(!stStaff.length) return;
 
       var stRow = sheet.addRow([sec.label.toUpperCase()]);
-      stRow.height = 20;
+      stRow.height = 22;
       sheet.mergeCells(stRow.number,1,stRow.number,totalCols);
       stRow.getCell(1).style = {
-        font:{bold:true,size:10,color:{argb:'FFFFFFF0'},name:'Calibri'},
+        font:{bold:true,size:12,color:{argb:'FFFFFFF0'},name:'Calibri'},
         fill:{type:'pattern',pattern:'solid',fgColor:{argb:'FF'+DARK}},
         alignment:{horizontal:'left',vertical:'middle',indent:1}
       };
@@ -123,7 +130,7 @@ async function fohSchedSendToHR(_downloadOnly){
           if(!entry || entry.status==='working'){
             var ts=entry?formatTime(entry.shift_start):'', te=entry?formatTime(entry.shift_end):'';
             var ts2=entry?formatTime(entry.shift_start2):'', te2=entry?formatTime(entry.shift_end2):'';   // split shift — same as the Print view
-            if(ts&&te){ var h=calcHours(ts,te,ts2,te2); wHours+=h; wDays++; if(ts2&&te2) hasSplitRow=true; rowData.push(ts+'-'+te+(ts2&&te2?('\n'+ts2+'-'+te2):'')); cellStatuses.push('working'); }
+            if(ts&&te){ var h=calcHours(ts,te,ts2,te2); wHours+=h; wDays++; if(ts2&&te2) hasSplitRow=true; rowData.push(ts+'–'+te+(ts2&&te2?('\n'+ts2+'–'+te2):'')); cellStatuses.push('working'); }
             else { rowData.push(''); cellStatuses.push('empty'); }
           } else {
             var meta=FOH_STATUS_META[entry.status]||{label:entry.status.toUpperCase()};
@@ -133,26 +140,25 @@ async function fohSchedSendToHR(_downloadOnly){
         }
         rowData.push(wHours>0?(Math.round(wHours*10)/10)+'h':'', wDays||'');
         var dataRow=sheet.addRow(rowData);
-        dataRow.height=hasSplitRow?30:18;   // two lines when someone has a split shift
+        dataRow.height=hasSplitRow?36:21;   // two lines when someone has a split shift
         dataRow.eachCell({includeEmpty:true},function(cell,colNumber){
-          var baseFont={size:10,name:'Calibri'};
+          var baseFont={size:12,name:'Calibri'};
           var col=colNumber-1;
           var fills={working:'FFFFFFFF',off:'FFF5F5F5',wo:'FFDBEAFE',sl:'FFFFF3C7',al:'FFD1FAE5',ph:'FFEDE9FE',em:'FFFEE2E2',tr:'FFCCFBF1',cat:'FFFFEDD5',fs:'FFE2E8F0',empty:'FFFFFFFF'};
           var fgColors={working:'FF333333',off:'FF999999',wo:'FF1e40af',sl:'FF92400e',al:'FF065f46',ph:'FF5b21b6',em:'FF991b1b',tr:'FF134e4a',cat:'FF9a3412',fs:'FF334155',empty:'FFCCCCCC'};
           if(col===0){ cell.style={font:Object.assign({bold:true},baseFont),fill:{type:'pattern',pattern:'solid',fgColor:{argb:'FF'+SABBIA}},border:hairBorder(),alignment:{vertical:'middle'}}; }
-          else if(col===1){ cell.style={font:Object.assign({italic:true,color:{argb:'FF888888'}},baseFont),fill:{type:'pattern',pattern:'solid',fgColor:{argb:'FF'+SABBIA}},border:hairBorder(),alignment:{vertical:'middle'}}; }
+          else if(col===1){ cell.style={font:Object.assign({italic:true,color:{argb:'FF555555'}},baseFont),fill:{type:'pattern',pattern:'solid',fgColor:{argb:'FF'+SABBIA}},border:hairBorder(),alignment:{vertical:'middle'}}; }
           else if(col>=rowData.length-2){ cell.style={font:Object.assign({bold:true,color:{argb:'FF'+VINO}},baseFont),fill:{type:'pattern',pattern:'solid',fgColor:{argb:'FF'+LIGHT}},border:hairBorder(),alignment:{horizontal:'center',vertical:'middle'}}; }
           else {
             var status=cellStatuses[col-2];
             cell.style={
-              font:Object.assign({bold:status!=='working'&&status!=='empty',color:{argb:fgColors[status]||'FF333333'}},baseFont),
+              font:Object.assign({bold:true,color:{argb:fgColors[status]||'FF333333'}},baseFont),
               fill:{type:'pattern',pattern:'solid',fgColor:{argb:fills[status]||'FFFFFFFF'}},
               border:hairBorder(),alignment:{horizontal:'center',vertical:'middle',wrapText:true}
             };
           }
         });
       });
-      sheet.addRow([]);
     });
 
     var xlsxBuffer = await workbook.xlsx.writeBuffer();
@@ -224,4 +230,70 @@ async function fohSchedSendToHR(_downloadOnly){
     alert('Failed: '+(err.message||err));
     if(btn){ btn.textContent='📧 Send to HR'; btn.disabled=false; }
   }
+}
+
+// ── Print (A3 landscape, one sheet; split shifts in full, same weight) ──
+function fohSchedPrint(){
+  var today=formatDate(new Date());
+  var days=[]; for(var i=0;i<7;i++) days.push(addDays(fohSchedWeekStart,i));
+  var dayNames=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  var weekStr=days[0].toLocaleDateString('en-GB',{day:'numeric',month:'short'})+' – '+
+    days[6].toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});
+  var html='<div style="margin-bottom:6px"><h2 style="font-size:18px;color:#410207;margin:0 0 2px">Roberto\'s DIFC — FOH Roster: '+weekStr+'</h2>'+
+    '<p style="font-size:10px;color:#4F4535;margin:0">Printed: '+new Date().toLocaleString('en-GB')+'</p></div>';
+  html+='<table style="width:100%;border-collapse:collapse;font-size:14px;table-layout:fixed"><thead><tr>'+
+    '<th style="background:#410207;color:#fff;padding:4px 5px;text-align:left;width:13%">Name</th>'+
+    '<th style="background:#410207;color:#fff;padding:4px 5px;text-align:left;width:11%">Role</th>';
+  for(var di=0;di<days.length;di++) html+='<th style="background:#410207;color:#fff;padding:4px 4px;font-size:13px">'+dayNames[di]+'<br><span style="font-size:11px;font-weight:400">'+days[di].toLocaleDateString('en-GB',{day:'numeric',month:'short'})+'</span></th>';
+  html+='<th style="background:#410207;color:#fff;padding:4px 4px;width:6%">Hours</th><th style="background:#410207;color:#fff;padding:4px 4px;width:5%">Days</th></tr></thead><tbody>';
+  // Events strip — one row across the top, up to 2 events per day
+  html+='<tr><td colspan="2" style="background:#5e0a10;color:#fff;font-weight:700;font-size:12px;letter-spacing:1px;text-transform:uppercase;border:1px solid #d8cbb8;padding:3px 7px">Events</td>';
+  for(var ev=0;ev<days.length;ev++){
+    var evDs=formatDate(days[ev]);
+    var dayEvs=fohSchedEvents[evDs]||[];
+    html+='<td style="border:1px solid #ccc;padding:2px 4px;text-align:center;font-size:12px;font-weight:700;color:#410207;background:#f6eedd">'+
+      (dayEvs.length?dayEvs.map(function(e){return fohEvEsc(e.name);}).join('<br>'):'')+'</td>';
+  }
+  html+='<td colspan="2" style="border:1px solid #ccc;background:#f6eedd"></td></tr>';
+  FOH_SECTIONS.forEach(function(sec){
+    var stStaff=fohSchedVisibleIn(fohSchedStaff.filter(function(s){ return s.section===sec.key; }), days.map(formatDate));
+    if(!stStaff.length) return;
+    var secColor = FOH_SECTION_PRINT_COLOR[sec.key] || '#ece3d3';
+    html+='<tr><td colspan="11" style="background:'+secColor+';color:#2f2a28;font-weight:800;font-size:13px;letter-spacing:1px;text-transform:uppercase;border:1px solid #d8cbb8;padding:3px 8px">'+sec.label+'</td></tr>';
+    stStaff.forEach(function(staff){
+      var wh=0, wd=0;
+      html+='<tr><td style="font-size:14px;font-weight:700;border:1px solid #ccc;border-left:5px solid '+secColor+'">'+staff.name+'</td>'+
+        '<td style="font-size:12px;color:#1a1a1a;font-weight:700;border:1px solid #ccc">'+staff.role+'</td>';
+      days.forEach(function(d){
+        var ds=formatDate(d);
+        var row=fohSchedRoster[fohSchedRosterKey(staff.id,ds)];
+        if(!row||row.status==='working'){
+          var ts=row?formatTime(row.shift_start):'', te=row?formatTime(row.shift_end):'';
+          var ts2=row?formatTime(row.shift_start2):'', te2=row?formatTime(row.shift_end2):'';
+          var h=calcHours(ts,te,ts2,te2); if(ts&&te){ wh+=h; wd++; }
+          var cell = ts&&te ? (ts+'–'+te + (ts2&&te2 ? '<br>'+ts2+'–'+te2 : '')) : '';
+          html+='<td style="padding:2px 4px;text-align:center;border:1px solid #ccc;font-size:14px;font-weight:600;white-space:nowrap'+(ts2&&te2?';background:#fbf6ec':'')+'">'+cell+'</td>';
+        } else {
+          var meta=FOH_STATUS_META[row.status]||{label:row.status.toUpperCase()};
+          if(row.status!=='off') wd++;
+          var pcol=FOH_STATUS_PRINT_COLOR[row.status]||'#777';
+          html+='<td style="padding:2px 4px;text-align:center;border:1px solid #ccc;background:'+pcol+';color:#fff;font-weight:700;font-size:13px">'+meta.label+'</td>';
+        }
+      });
+      html+='<td style="padding:2px 4px;text-align:center;font-weight:700;border:1px solid #ccc;font-size:14px">'+(wh>0?(Math.round(wh*10)/10)+'h':'—')+'</td>'+
+        '<td style="padding:2px 4px;text-align:center;border:1px solid #ccc;font-size:14px">'+(wd||'—')+'</td></tr>';
+    });
+  });
+  html+='</tbody></table>';
+  // A3 landscape, ONE sheet. The body is laid out at the exact printable width
+  // (420mm - 2x6mm) and, if the week is too tall for one page, scaled down just
+  // enough to fit — so a big team never spills a lone section onto page 2.
+  var fitJs='<script>(function(){var mm=96/25.4,availH=(297-12)*mm-4,h=document.body.scrollHeight;'+
+    'if(h>availH){document.body.style.zoom=(availH/h).toFixed(3);}})();<\/script>';
+  var printDoc='<!doctype html><html><head><title>FOH Roster</title><style>@page{size:A3 landscape;margin:6mm}html,body{margin:0}body{width:408mm;margin:0 auto;font-family:Arial,sans-serif;font-size:14px}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}table{width:100%}td{line-height:1.15;word-wrap:break-word}tr{page-break-inside:avoid}</style></head><body>'+html+fitJs+'</body></html>';
+  var w=window.open('','_blank');
+
+  if(!w){ alert('Pop-up blocked — allow pop-ups and try again.'); return; }
+  w.document.open(); w.document.write(printDoc); w.document.close();
+  w.focus(); setTimeout(function(){ w.print(); },150);
 }
