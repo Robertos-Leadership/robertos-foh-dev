@@ -712,7 +712,8 @@ var ADMIN_NOTIFY=[
   {k:'event_brief',   n:'Event brief to the team'},
   {k:'roster_foh',    n:'FOH roster to HR'},
   {k:'roster_kitchen',n:'Kitchen roster to HR'},
-  {k:'market_order_kitchen',n:'Kitchen market order'}
+  {k:'market_order_kitchen',n:'Kitchen market order'},
+  {k:'stocktake_kitchen',n:'Kitchen stock take'}
 ];
 // Which send function answers "Check who really gets it" for each list, and
 // whether that email has a fixed addressee (HR) that is not on this screen.
@@ -722,7 +723,8 @@ var ADM_MAIL_CHECK={
   roster_foh:            {fn:'send-roster',         body:{check:true, source:'FOH'},     hr:true,  what:'roster email'},
   roster_kitchen:        {fn:'send-roster',         body:{check:true, source:'KITCHEN'}, hr:true,  what:'roster email'},
   closing_report_kitchen:{fn:'send-closing-report', body:{check:true},                   hr:false, what:'Kitchen closing report'},
-  market_order_kitchen:  {fn:'send-market-order',   body:{check:true},                   hr:false, what:'Kitchen market order'}
+  market_order_kitchen:  {fn:'send-market-order',   body:{check:true},                   hr:false, what:'Kitchen market order'},
+  stocktake_kitchen:     {fn:'send-stock-take',     body:{check:true, list:'stocktake_kitchen'}, hr:false, what:'Kitchen stock take'}
 };
 function admEsc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 // ── Explainer text folds away ───────────────────────────────────────────────
@@ -1741,7 +1743,7 @@ function admSetView(v){
    app_users.notify array. This screen is just a readable view of it, so a
    person can be added or dropped without a code change or a deploy. The
    edge functions (send-closing-report in both apps, send-roster,
-   send-market-order) read the same array at
+   send-market-order, send-stock-take) read the same array at
    send time, so a tick here applies to the very next send.
 
    Two deliberate rules:
@@ -1779,8 +1781,13 @@ var ADM_MAIL_ABOUT={
   market_order_kitchen:{
     when:'When someone presses “Email order” on the Kitchen market list.',
     note:'Everyone here receives the order. If the list is ever left empty it falls back to '
-        +'Danilo and Antonio Stellacci. The Kitchen stock take is not here — it has its own list '
-        +'in the Kitchen app (Stock take → Send → Manage recipients).'
+        +'Danilo and Antonio Stellacci.'
+  },
+  stocktake_kitchen:{
+    when:'When someone sends the monthly Kitchen stock take (Excel or digital).',
+    note:'Everyone here receives it. The Kitchen app shows these names on the send window. '
+        +'If the list is ever left empty it falls back to Aung, Danilo, Antonio Stellacci, '
+        +'Asarudeen and Francesco.'
   },
   events_desk:{
     when:'The moment a guest signs their agreement, or sends back their menu choices.',
