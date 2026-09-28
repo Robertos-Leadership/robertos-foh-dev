@@ -706,12 +706,24 @@ var ADMIN_MODULES=[{k:'events',n:'Activations'},{k:'privateevents',n:'Events'},{
 // here or on the Emails tab, never in code. The edge functions read the same keys,
 // so adding someone takes effect on the next send with no deploy.
 var ADMIN_NOTIFY=[
-  {k:'closing_report',n:'Closing-report email'},
+  {k:'closing_report',n:'FOH closing report'},
+  {k:'closing_report_kitchen',n:'Kitchen closing report'},
   {k:'events_desk',   n:'Guest replies & signed agreements'},
   {k:'event_brief',   n:'Event brief to the team'},
   {k:'roster_foh',    n:'FOH roster to HR'},
-  {k:'roster_kitchen',n:'Kitchen roster to HR'}
+  {k:'roster_kitchen',n:'Kitchen roster to HR'},
+  {k:'market_order_kitchen',n:'Kitchen market order'}
 ];
+// Which send function answers "Check who really gets it" for each list, and
+// whether that email has a fixed addressee (HR) that is not on this screen.
+// Every function here reads app_users.notify live and has a check mode that
+// returns the recipients without sending anything.
+var ADM_MAIL_CHECK={
+  roster_foh:            {fn:'send-roster',         body:{check:true, source:'FOH'},     hr:true,  what:'roster email'},
+  roster_kitchen:        {fn:'send-roster',         body:{check:true, source:'KITCHEN'}, hr:true,  what:'roster email'},
+  closing_report_kitchen:{fn:'send-closing-report', body:{check:true},                   hr:false, what:'Kitchen closing report'},
+  market_order_kitchen:  {fn:'send-market-order',   body:{check:true},                   hr:false, what:'Kitchen market order'}
+};
 function admEsc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 // ── Explainer text folds away ───────────────────────────────────────────────
 // The standing rule (4 Aug 2026): prose that explains how something WORKS is
@@ -1728,7 +1740,8 @@ function admSetView(v){
    Every recipient of every automatic email lives in ONE place: the
    app_users.notify array. This screen is just a readable view of it, so a
    person can be added or dropped without a code change or a deploy. The
-   edge functions (send-closing-report, send-roster) read the same array at
+   edge functions (send-closing-report in both apps, send-roster,
+   send-market-order) read the same array at
    send time, so a tick here applies to the very next send.
 
    Two deliberate rules:
@@ -1755,8 +1768,19 @@ function admNotifyList(key){
 // consequence of a tick rather than just naming a database key.
 var ADM_MAIL_ABOUT={
   closing_report:{
-    when:'Every night after the closing report is completed.',
+    when:'Every night after the FOH closing report is completed.',
     note:'Everyone here receives the full report.'
+  },
+  closing_report_kitchen:{
+    when:'Every night when a chef submits the Kitchen closing report.',
+    note:'Everyone here receives the full report. If the list is ever left empty it falls back to '
+        +'Francesco, Andrea Falcone, Danilo and Antonio Stellacci, so the report never goes to nobody.'
+  },
+  market_order_kitchen:{
+    when:'When someone presses “Email order” on the Kitchen market list.',
+    note:'Everyone here receives the order. If the list is ever left empty it falls back to '
+        +'Danilo and Antonio Stellacci. The Kitchen stock take is not here — it has its own list '
+        +'in the Kitchen app (Stock take → Send → Manage recipients).'
   },
   events_desk:{
     when:'The moment a guest signs their agreement, or sends back their menu choices.',
@@ -1896,9 +1920,9 @@ function admEmailsHTML(){
     // database the screen is drawn from — it can only ever agree with itself.
     // So this asks the SEND FUNCTION instead, over the same key and the same
     // lookup a real send uses, and prints what it says. Nothing is emailed.
-    if(nt.k==='roster_foh' || nt.k==='roster_kitchen'){
+    if(ADM_MAIL_CHECK[nt.k]){
       h.push('<div class="adm-set-row" style="padding-top:0;">'
-        +'<div class="adm-set-txt"><div class="adm-set-d">Ask the roster email who it would actually copy. Sends nothing.</div></div>'
+        +'<div class="adm-set-txt"><div class="adm-set-d">Ask the '+admEsc(ADM_MAIL_CHECK[nt.k].what)+' who it would actually reach. Sends nothing.</div></div>'
         +'<button class="px-mini" id="mlchk-btn-'+admEsc(nt.k)+'" onclick="admMailCheck(\''+admEsc(nt.k)+'\')">Check who really gets it</button>'
         +'</div>');
       h.push('<div id="mlchk-'+admEsc(nt.k)+'"></div>');
@@ -1954,13 +1978,15 @@ async function admMailCheck(key){
   var box=document.getElementById('mlchk-'+key);
   var btn=document.getElementById('mlchk-btn-'+key);
   if(!box) return;
+  var ck=ADM_MAIL_CHECK[key];
+  if(!ck) return;
   if(btn){ btn.disabled=true; btn.textContent='Checking…'; }
-  box.innerHTML='<div class="adm-set-note">Asking the roster email who it would copy…</div>';
+  box.innerHTML='<div class="adm-set-note">Asking the '+admEsc(ck.what)+' who it would reach…</div>';
   try{
-    var r=await fetch('https://zrpglswalgjbtghudmhu.supabase.co/functions/v1/send-roster',{
+    var r=await fetch('https://zrpglswalgjbtghudmhu.supabase.co/functions/v1/'+ck.fn,{
       method:'POST',
       headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+KITCHEN_KEY },
-      body:JSON.stringify({ check:true, source: key==='roster_foh' ? 'FOH' : 'KITCHEN' })
+      body:JSON.stringify(ck.body)
     });
     var d=await r.json();
     if(!r.ok) throw new Error(d.error||d.message||('The check failed ('+r.status+').'));
@@ -1972,18 +1998,18 @@ async function admMailCheck(key){
     var agree = want.length===have.length && want.every(function(e,i){ return e===have[i]; });
 
     var rows='<div class="adm-mail-list">'
-      +'<div class="adm-mail-row"><div class="adm-mail-who"><b>hr@robertos.ae</b>'
-      +'<span class="adm-mail-em">always the addressee — cannot be removed here</span></div></div>'
+      +(ck.hr ? '<div class="adm-mail-row"><div class="adm-mail-who"><b>hr@robertos.ae</b>'
+      +'<span class="adm-mail-em">always the addressee — cannot be removed here</span></div></div>' : '')
       +got.map(function(e){
           var u=(state.adminUsers||[]).filter(function(x){ return String(x.email||'').toLowerCase()===String(e).toLowerCase(); })[0];
           return '<div class="adm-mail-row"><div class="adm-mail-who"><b>'+admEsc((u&&u.name)||e)+'</b>'
-            +'<span class="adm-mail-em">'+admEsc(e)+' — copied</span></div></div>';
+            +'<span class="adm-mail-em">'+admEsc(e)+(ck.hr?' — copied':' — receives it')+'</span></div></div>';
         }).join('')
       +'</div>';
 
     if(d.usedFallback){
       box.innerHTML='<div class="adm-set-note adm-set-warn"><b>These ticks are being ignored.</b> '
-        +'The roster email could not read this screen'+(d.fallbackReason?' — '+admEsc(d.fallbackReason):'')
+        +'The '+admEsc(ck.what)+' could not read this screen'+(d.fallbackReason?' — '+admEsc(d.fallbackReason):'')
         +', so it is using a list written in code. Anyone added or removed here is having no effect. '
         +'The email itself is still going out, to these people:</div>'+rows;
     } else if(!agree){
@@ -1991,7 +2017,7 @@ async function admMailCheck(key){
         +'The email read this list live, but it does not match what is ticked above. '
         +'Someone may have changed it in another window — reload and check again.</div>'+rows;
     } else {
-      box.innerHTML='<div class="adm-set-note">✓ Checked just now. The roster email read this list live and would copy '
+      box.innerHTML='<div class="adm-set-note">✓ Checked just now. The '+admEsc(ck.what)+' read this list live and would reach '
         +'exactly the '+got.length+' '+(got.length===1?'person':'people')+' ticked above. Nothing was sent.</div>'+rows;
     }
   }catch(e){
