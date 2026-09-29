@@ -27,7 +27,9 @@ const FROM = "Roberto's DIFC Events <reports@kitchenteam.robertos.ae>";
 // list is now app_users.notify ('events_desk'), managed on Admin → Emails, so the desk
 // can change hands without a deploy. FALLBACK is used only if nobody is ticked, so a
 // signature can never be announced to no one.
-const NOTIFY_FALLBACK = ["kvukotic@robertos.ae"];
+// Katarina left 28 Sep 2026 — the fallback is now the shared reservations inbox,
+// which outlives any one person.
+const NOTIFY_FALLBACK = ["reservations@robertos.ae"];
 // deno-lint-ignore no-explicit-any
 async function deskList(sb: any): Promise<string[]> {
   try {

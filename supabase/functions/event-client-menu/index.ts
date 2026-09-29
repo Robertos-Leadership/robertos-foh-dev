@@ -43,7 +43,9 @@ const allowedDishes = (guests: number) => guests >= 30 ? 15 : (guests >= 20 ? 8 
 // ('events_desk'), managed on Admin → Emails, so the desk can change hands without a
 // deploy. The fallback is used only if nobody is ticked — an enquiry can never land
 // with no one told.
-const PE_NOTIFY_FALLBACK = ["kvukotic@robertos.ae"];
+// Katarina left 28 Sep 2026 — the fallback is now the shared reservations inbox,
+// which outlives any one person.
+const PE_NOTIFY_FALLBACK = ["reservations@robertos.ae"];
 const deskList = async (): Promise<string[]> => {
   try {
     const r = await fetch(Deno.env.get("SUPABASE_URL")! + "/rest/v1/app_users?select=email,notify", {

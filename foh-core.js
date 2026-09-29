@@ -56,7 +56,7 @@ if (FOH_IS_DEV_SITE) {
   document.body.appendChild(devBadge);
 }
 
-const TEAM = ['Francesco','Manuel','Alessandro','Nicole','Danilo','Alper','Katerina'];
+const TEAM = ['Francesco','Manuel','Alessandro','Nicole','Danilo','Alper'];  // Katerina left 28 Sep 2026
 const CHAMPIONS = TEAM; // all team members can be champions
 // Someone who has left is off the list above, so no NEW work can be given to them.
 // But a task they already own must keep showing their name: if the name is simply
@@ -1793,7 +1793,7 @@ var ADM_MAIL_ABOUT={
     when:'The moment a guest signs their agreement, or sends back their menu choices.',
     note:'This is the events desk itself — whoever is looking after enquiries. Everyone here is '
         +'told the moment a guest signs, and a guest replying to their proposal reaches this list. '
-        +'If it is ever left empty the emails fall back to Katarina, so a signature is never '
+        +'If it is ever left empty the emails fall back to the reservations inbox, so a signature is never '
         +'announced to nobody.'
   },
   event_brief:{

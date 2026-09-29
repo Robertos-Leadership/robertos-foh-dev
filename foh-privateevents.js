@@ -427,7 +427,7 @@ function peSenderName(){
 // staff can be added or removed without ever touching this code again:
 //   'events_editor'      -> granted (anyone)
 //   'events_editor_off'  -> revoked  (overrides a founder)
-var PE_EDITORS = ['asacchi@skelmore.com','fguarracino@robertos.ae','kvukotic@robertos.ae','onafid@robertos.ae'];
+var PE_EDITORS = ['asacchi@skelmore.com','fguarracino@robertos.ae','onafid@robertos.ae'];  // Katarina left 28 Sep 2026
 function peCanEdit(){
   // Access not loaded yet (state.access is null while loadFohAccess is running,
   // or before it has ever run) — deny until we actually know, rather than falling
@@ -445,7 +445,7 @@ function peCanEdit(){
 function peViewBanner(){
   if(peCanEdit()) return '';
   return '<div style="background:#F3ECE0;border:1px solid #D8CDBB;border-radius:10px;padding:9px 13px;margin-bottom:12px;font-size:12.5px;color:#6B5E4E">'+
-    'View only — changes are made by Katarina, Andrea or Francesco.</div>';
+    'View only — changes are made by Sophie, Ouafaa or Francesco.</div>';
 }
 // ── Who may work in the Chef Corner set-menu shelves ─────────────────────
 // NOT peCanEdit(). That is the EVENTS DESK right - create a booking, send an
@@ -1485,7 +1485,7 @@ function peRepliesHTML(){
     }).join('')+'</div>';
 }
 async function peReplyDone(id){
-  if(!peCanEdit()){ peToast('View only — ask Katarina, Andrea or Francesco to make changes', true); return; }
+  if(!peCanEdit()){ peToast('View only — ask Sophie, Ouafaa or Francesco to make changes', true); return; }
   var row = (peState.replies||[]).filter(function(r){ return r.id===id; })[0];
   if(!row) return;
   if(!(await peConfirm({title:'Clear this reply?',
@@ -1898,7 +1898,7 @@ function peRenderList(){
 }
 // Tidy-up modal for the empty drafts.
 function peTidyDrafts(){
-  if(!peCanEdit()){ peToast('View only — ask Katarina, Andrea or Francesco to make changes', true); return; }
+  if(!peCanEdit()){ peToast('View only — ask Sophie, Ouafaa or Francesco to make changes', true); return; }
   var old = document.querySelector('.pe-modal-bg'); if(old) old.remove();
   var empties = peState.events.filter(peIsEmptyDraft);
   var bg = document.createElement('div'); bg.className='pe-modal-bg';
@@ -1916,7 +1916,7 @@ function peTidyDrafts(){
   document.body.appendChild(bg);
 }
 async function peDeleteEmptyDraft(id){
-  if(!peCanEdit()){ peToast('View only — ask Katarina, Andrea or Francesco to make changes', true); return false; }
+  if(!peCanEdit()){ peToast('View only — ask Sophie, Ouafaa or Francesco to make changes', true); return false; }
   var e = peEvById(id); if(!e || e.status!=='draft') return true;
   var r = await sb.from('events_desk').delete().eq('id', id);
   if(r.error){ peToast('Delete failed — check connection', true); return false; }
@@ -2564,7 +2564,7 @@ function peSrCandidates(e, rows){
 // answered, then fills itself once SevenRooms replies.
 function peSrRevenueOffer(id){
   var e = peEvById(id); if(!e) return;
-  if(!peCanEdit()){ peToast('View only — ask Katarina, Andrea or Francesco to make changes', true); return; }
+  if(!peCanEdit()){ peToast('View only — ask Sophie, Ouafaa or Francesco to make changes', true); return; }
   var date = e.event_date ? String(e.event_date).slice(0,10) : null;
   if(!date){ peToast('Add the event date first, then I can look it up in SevenRooms.', true); return; }
   var bg = document.createElement('div'); bg.className='pe-modal-bg';
@@ -2616,7 +2616,7 @@ function peSrRevenueOffer(id){
 // is not silent, and it can be overwritten the moment the real number is known.
 async function peSrUseRevenue(id, amount, btn){
   var e = peEvById(id); if(!e) return;
-  if(!peCanEdit()){ peToast('View only — ask Katarina, Andrea or Francesco to make changes', true); return; }
+  if(!peCanEdit()){ peToast('View only — ask Sophie, Ouafaa or Francesco to make changes', true); return; }
   var amt = Math.max(0, Math.round(Number(amount))||0);
   var srName = btn && btn.getAttribute ? (btn.getAttribute('data-srname')||'') : '';
   var patch = { actual_revenue: amt, updated_at:new Date().toISOString(), updated_by:peActor() };
@@ -3098,7 +3098,7 @@ async function peInsertEvent(row){
   return r;
 }
 async function peNewEvent(){
-  if(!peCanEdit()){ peToast('View only — ask Katarina, Andrea or Francesco to make changes', true); return; }
+  if(!peCanEdit()){ peToast('View only — ask Sophie, Ouafaa or Francesco to make changes', true); return; }
   // handled_by defaults to whoever creates it (Andrea: "handler need to be there"),
   // so the field is filled by habit, not by extra typing.
   var row = { venue_id:'robertos-difc', status:'draft', updated_by:peActor(), handled_by:peActor(), payment_terms:'50% deposit to confirm, balance on the day' };
@@ -3192,7 +3192,7 @@ function peColMissing(err, col){
 // calm screen at a time. Reuses every real action; the full editor is one tap away.
 function peDaysSince(iso){ if(!iso) return null; var d = Math.floor((Date.now()-new Date(iso).getTime())/86400000); return d>=0?d:null; }
 function peGuideReminder(id){
-  if(!peCanEdit()){ peToast('View only — ask Katarina, Andrea or Francesco to make changes', true); return; }
+  if(!peCanEdit()){ peToast('View only — ask Sophie, Ouafaa or Francesco to make changes', true); return; }
   var e = peEvById(id); if(!e) return;
   if(e.contact_phone){ peWhatsApp(id, 'remind'); }
   else if(e.contact_email){ peEmailAgreement(id); }
@@ -3698,7 +3698,7 @@ function peRenderEvent(){
   if(!ce){
     // Read-only Documents: everything stays readable/printable, nothing sends.
     h += '<div class="pe-card" id="pe-card-docs" style="margin-top:12px"><b style="font-size:14px;color:#400207">Documents</b>'+
-      '<div style="font-size:11.5px;color:#4F4535;margin:4px 0 8px">View and print — sending is done by Katarina, Andrea or Francesco.</div>'+
+      '<div style="font-size:11.5px;color:#4F4535;margin:4px 0 8px">View and print — sending is done by Sophie, Ouafaa or Francesco.</div>'+
       '<div style="display:flex;flex-direction:column;gap:7px">'+
       '<button class="pe-btn sec" onclick="pePrintProposal(\''+e.id+'\')">Print / view the proposal (PDF)</button>'+
       '<button class="pe-btn sec" onclick="pePrintFunctionSheet(\''+e.id+'\')">Print / view the event brief</button>'+
@@ -3945,7 +3945,7 @@ var PE_FACT_NUM = { min_spend:1, food_price_pp:1, discount:1, actual_revenue:1 }
 // One auto-save handler for every facts-card field: coerces the value, keeps the
 // contract-void guard + Andrea's audit log, and always shows "Saved ✓".
 async function peFact(el, field, id){
-  if(!peCanEdit()){ peToast('View only — ask Katarina, Andrea or Francesco to make changes', true); renderMain(); return; }
+  if(!peCanEdit()){ peToast('View only — ask Sophie, Ouafaa or Francesco to make changes', true); renderMain(); return; }
   var e = peEvById(id); if(!e) return;
   var raw = el.value;
   // A typed client email must look like one — flag it inline and don't save the mistake.
@@ -4225,7 +4225,7 @@ async function peConfirmSend(e, forSigning, noPrice){
   });
 }
 async function peSaveField(id, field, value, opts){
-  if(!peCanEdit()){ peToast('View only — ask Katarina, Andrea or Francesco to make changes', true); return; }
+  if(!peCanEdit()){ peToast('View only — ask Sophie, Ouafaa or Francesco to make changes', true); return; }
   opts = opts || {};
   var e = peEvById(id); if(!e) return;
   var patch = {}; patch[field] = value; patch.updated_at = new Date().toISOString();
@@ -4466,7 +4466,7 @@ async function peApplyOption(id, key){
 // no way to contradict: '' = no package · 'dry' = no alcohol (soft drinks & water,
 // AED 0) · a package id = that package (alcohol-free ones still charge normally).
 async function peSetBeverage(id, val){
-  if(!peCanEdit()){ peToast('View only — ask Katarina, Andrea or Francesco to make changes', true); return; }
+  if(!peCanEdit()){ peToast('View only — ask Sophie, Ouafaa or Francesco to make changes', true); return; }
   var e = peEvById(id); if(!e) return;
   var patch = { updated_at:new Date().toISOString() };
   if(val==='dry'){ patch.bev_package_id = null; patch.bev_mode = 'dry'; }
@@ -4479,7 +4479,7 @@ async function peSetBeverage(id, val){
   renderMain();
 }
 async function peDeleteEvent(id){
-  if(!peCanEdit()){ peToast('View only — ask Katarina, Andrea or Francesco to make changes', true); return; }
+  if(!peCanEdit()){ peToast('View only — ask Sophie, Ouafaa or Francesco to make changes', true); return; }
   var e = peEvById(id); if(!e || e.status!=='draft') return;
   if(!(await peConfirm({title:'Delete this draft?', body:'Delete this draft event? This cannot be undone.', ok:'Delete', cancel:'Keep it', danger:true}))) return;
   // Belt-and-suspenders: remove the draft's child rows (dishes + history) first, so
@@ -4498,7 +4498,7 @@ async function peDeleteEvent(id){
   peGo('list');
 }
 async function peSetStatus(id, status){
-  if(!peCanEdit()){ peToast('View only — ask Katarina, Andrea or Francesco to make changes', true); return; }
+  if(!peCanEdit()){ peToast('View only — ask Sophie, Ouafaa or Francesco to make changes', true); return; }
   var e = peEvById(id); if(!e || e.status===status) return;
   if(status==='lost'){ peAskLostReason(id); return; }
   // #11 — Confirmed / Deposit paid are real commitments the kitchen and hostess
@@ -4560,7 +4560,7 @@ function peAskLostReason(id){
   document.body.appendChild(bg);
 }
 async function peConfirmLost(id){
-  if(!peCanEdit()){ peToast('View only — ask Katarina, Andrea or Francesco to make changes', true); return; }
+  if(!peCanEdit()){ peToast('View only — ask Sophie, Ouafaa or Francesco to make changes', true); return; }
   var bg = document.querySelector('.pe-modal-bg'); if(!bg) return;
   var chip = (bg.querySelector('#pe-lost-reasons .pe-chip.on'));
   var depBox = bg.querySelector('#pe-lost-deposit');
@@ -4591,7 +4591,7 @@ async function peLoadLostReasons(){
   }
 }
 async function peAddFollowup(id){
-  if(!peCanEdit()){ peToast('View only — ask Katarina, Andrea or Francesco to make changes', true); return; }
+  if(!peCanEdit()){ peToast('View only — ask Sophie, Ouafaa or Francesco to make changes', true); return; }
   var el = document.getElementById('pe-fu-note'); if(!el || !el.value.trim()) return;
   var r = await sb.from('event_log').insert({event_id:id, action:'followup', detail:el.value.trim().slice(0,500), actor:peActor()});
   if(r.error){ peToast('Note NOT saved — check connection', true); return; }
@@ -4615,7 +4615,7 @@ function peLogEditablePart(l){
   return l.action==='lost' ? d.slice(peLostPrefix(l).length) : d;
 }
 function peStartLogEdit(logId){
-  if(!peCanEdit()){ peToast('View only — ask Katarina, Andrea or Francesco to make changes', true); return; }
+  if(!peCanEdit()){ peToast('View only — ask Sophie, Ouafaa or Francesco to make changes', true); return; }
   peState.logEdit = logId;
   renderMain();
   var el = document.getElementById('pe-log-edit-'+logId);
@@ -4636,7 +4636,7 @@ function peRefreshLostReason(eventId){
   else delete peState.lostReasons[eventId];
 }
 async function peSaveLogEdit(eventId, logId){
-  if(!peCanEdit()){ peToast('View only — ask Katarina, Andrea or Francesco to make changes', true); return; }
+  if(!peCanEdit()){ peToast('View only — ask Sophie, Ouafaa or Francesco to make changes', true); return; }
   var el = document.getElementById('pe-log-edit-'+logId); if(!el) return;
   var txt = el.value.trim();
   if(!txt){ peToast('Write something, or use Delete to remove the line', true); return; }
@@ -4653,7 +4653,7 @@ async function peSaveLogEdit(eventId, logId){
   renderMain();
 }
 async function peDeleteLogLine(eventId, logId){
-  if(!peCanEdit()){ peToast('View only — ask Katarina, Andrea or Francesco to make changes', true); return; }
+  if(!peCanEdit()){ peToast('View only — ask Sophie, Ouafaa or Francesco to make changes', true); return; }
   var row = peLogRow(eventId, logId); if(!row) return;
   var own = row.action==='followup';
   if(!(await peConfirm({
@@ -4675,7 +4675,7 @@ async function peDeleteLogLine(eventId, logId){
 // #12 — applying a package replaces the current menu (like the beverage dropdown
 // replaces the drink). Confirm before overwriting a menu the user has tuned.
 async function peApplyPackage(eventId, packId){
-  if(!peCanEdit()){ peToast('View only — ask Katarina, Andrea or Francesco to make changes', true); renderMain(); return; }
+  if(!peCanEdit()){ peToast('View only — ask Sophie, Ouafaa or Francesco to make changes', true); renderMain(); return; }
   if(!packId){ renderMain(); return; }
   var pack = null; peState.packs.forEach(function(p){ if(p.id===packId) pack=p; });
   if(!pack) return;
@@ -4701,7 +4701,7 @@ async function peApplyPackage(eventId, packId){
 }
 // #12 — clear the whole menu (with a confirm), so a wrong package can be undone.
 async function peClearMenu(eventId){
-  if(!peCanEdit()){ peToast('View only — ask Katarina, Andrea or Francesco to make changes', true); return; }
+  if(!peCanEdit()){ peToast('View only — ask Sophie, Ouafaa or Francesco to make changes', true); return; }
   var cur = peState.items[eventId]||[];
   if(!cur.length){ peToast('No dishes to clear'); return; }
   if(!(await peConfirm({title:'Clear the menu?', html:'Remove all <b>'+cur.length+'</b> dishes from this event’s menu?', ok:'Clear menu', cancel:'Keep dishes', danger:true}))) return;
@@ -4814,7 +4814,7 @@ async function peAddItemQty(btn, eventId, dishId){
   if(ok){ btn.disabled = true; btn.textContent = 'Added ✓'; if(inp) inp.disabled = true; }
 }
 async function peAddItem(eventId, dishId, pcs){
-  if(!peCanEdit()){ peToast('View only — ask Katarina, Andrea or Francesco to make changes', true); return false; }
+  if(!peCanEdit()){ peToast('View only — ask Sophie, Ouafaa or Francesco to make changes', true); return false; }
   if(!(await peConfirmSignedEdit(eventId, 'the menu'))) return false;
   var p = Number(pcs)>0 ? Number(pcs) : 1;
   var r = await sb.from('event_items').insert({event_id:eventId, dish_id:dishId, pcs_per_guest:p, qty_confirmed:Number(pcs)>0}).select().single();
@@ -4824,7 +4824,7 @@ async function peAddItem(eventId, dishId, pcs){
   return true;
 }
 async function peRemoveItem(itemId){
-  if(!peCanEdit()){ peToast('View only — ask Katarina, Andrea or Francesco to make changes', true); return; }
+  if(!peCanEdit()){ peToast('View only — ask Sophie, Ouafaa or Francesco to make changes', true); return; }
   var evId = peEventOfItem(itemId);
   // Deleting the row cannot be undone, so name the dish before doing it.
   var it = null;
@@ -4844,7 +4844,7 @@ async function peRemoveItem(itemId){
   renderMain();
 }
 async function peSetPcs(itemId, val){
-  if(!peCanEdit()){ peToast('View only — ask Katarina, Andrea or Francesco to make changes', true); renderMain(); return; }
+  if(!peCanEdit()){ peToast('View only — ask Sophie, Ouafaa or Francesco to make changes', true); renderMain(); return; }
   var v = Number(val); if(!(v>0)){ peToast('Enter a quantity above 0', true); renderMain(); return; }
   var evId = peEventOfItem(itemId);
   if(evId && !(await peConfirmSignedEdit(evId, 'the menu quantities'))){ renderMain(); return; }
@@ -4865,7 +4865,7 @@ function peSetItemComp(itemId, on){
   });
 }
 async function peToggleComp(itemId, on){
-  if(!peCanEdit()){ peToast('View only — ask Katarina, Andrea or Francesco to make changes', true); renderMain(); return; }
+  if(!peCanEdit()){ peToast('View only — ask Sophie, Ouafaa or Francesco to make changes', true); renderMain(); return; }
   var evId = peEventOfItem(itemId);
   if(evId && !(await peConfirmSignedEdit(evId, 'the menu'))){ renderMain(); return; }
   var r = await sb.from('event_items').update({comp:!!on}).eq('id', itemId);
@@ -4882,7 +4882,7 @@ async function peToggleComp(itemId, on){
   renderMain();
 }
 async function peApplyClientSelection(eventId){
-  if(!peCanEdit()){ peToast('View only — ask Katarina, Andrea or Francesco to make changes', true); return; }
+  if(!peCanEdit()){ peToast('View only — ask Sophie, Ouafaa or Francesco to make changes', true); return; }
   var e = peEvById(eventId); if(!e || !e.client_selection) return;
   if(!(await peConfirmSignedEdit(eventId, 'the menu'))) return;
   var want = e.client_selection.dish_ids||[];
@@ -4991,7 +4991,7 @@ function peMenuChoicesUrl(e){
     ((e.food_price_pp!=null && e.food_price_pp!=='') ? '&p=' + Number(e.food_price_pp) : '');
 }
 function peCopyMenuChoicesLink(id){
-  if(!peCanEdit()){ peToast('View only — ask Katarina, Andrea or Francesco to make changes', true); return; }
+  if(!peCanEdit()){ peToast('View only — ask Sophie, Ouafaa or Francesco to make changes', true); return; }
   var e = peEvById(id); if(!e || !e.set_menu) return;
   var url = peMenuChoicesUrl(e);
   (navigator.clipboard ? navigator.clipboard.writeText(url) : Promise.reject()).then(function(){
@@ -5001,7 +5001,7 @@ function peCopyMenuChoicesLink(id){
 }
 // WhatsApp the pick-your-numbers link straight to the event's contact.
 function peWaMenuChoicesLink(id){
-  if(!peCanEdit()){ peToast('View only — ask Katarina, Andrea or Francesco to make changes', true); return; }
+  if(!peCanEdit()){ peToast('View only — ask Sophie, Ouafaa or Francesco to make changes', true); return; }
   var e = peEvById(id); if(!e || !e.set_menu) return;
   if(!e.contact_phone){ peToast('Add the client’s phone on the event first — then this sends in one tap', true); return; }
   var digits = String(e.contact_phone).replace(/[^0-9]/g,'');
@@ -5025,7 +5025,7 @@ function peWaShareMenu(key){
 // Pull the guest's submitted numbers and apply them to this event after a
 // preview — the newest submission for this event's link wins.
 async function peFetchMenuChoices(id){
-  if(!peCanEdit()){ peToast('View only — ask Katarina, Andrea or Francesco to make changes', true); return; }
+  if(!peCanEdit()){ peToast('View only — ask Sophie, Ouafaa or Francesco to make changes', true); return; }
   var e = peEvById(id); if(!e || !e.set_menu) return;
   var r = await sb.from('event_menu_choices').select('*').eq('token', e.client_token).order('created_at', {ascending:false}).limit(1);
   if(r.error){
@@ -5071,7 +5071,7 @@ async function peFetchMenuChoices(id){
 // A set menu REPLACES the menu, like peApplyPackage: confirm, then clear any
 // existing dishes — otherwise the guest proposal and kitchen brief print BOTH.
 async function peApplySetMenu(eventId){
-  if(!peCanEdit()){ peToast('View only — ask Katarina, Andrea or Francesco to make changes', true); return; }
+  if(!peCanEdit()){ peToast('View only — ask Sophie, Ouafaa or Francesco to make changes', true); return; }
   var sel = document.getElementById('pe-sm-sel'); if(!sel || !sel.value) return;
   var m = peSetMenuByKey(sel.value); if(!m) return;
   // An unpriced menu is allowed: on a minimum-spend booking the food carries no
@@ -5106,7 +5106,7 @@ async function peApplySetMenu(eventId){
 // per-course guest choices — Secondi/Dolci splits carry straight over, and a
 // course that stops being choose-style is simply ignored by every renderer.
 async function peSetMenuServe(eventId, key){
-  if(!peCanEdit()){ peToast('View only — ask Katarina, Andrea or Francesco to make changes', true); return; }
+  if(!peCanEdit()){ peToast('View only — ask Sophie, Ouafaa or Francesco to make changes', true); return; }
   var e = peEvById(eventId); if(!e || !e.set_menu || e.set_menu.key===key) return;
   var m = peSetMenuByKey(key); if(!m || m.price==null) return;
   if(!(await peConfirmSignedEdit(eventId, 'the menu'))){ renderMain(); return; }
@@ -5121,7 +5121,7 @@ async function peSetMenuServe(eventId, key){
 // Removing the set menu drops its per-guest price — never silently: the modal
 // names what the food price becomes (dishes total, or nothing) before it changes.
 async function peClearSetMenu(eventId){
-  if(!peCanEdit()){ peToast('View only — ask Katarina, Andrea or Francesco to make changes', true); return; }
+  if(!peCanEdit()){ peToast('View only — ask Sophie, Ouafaa or Francesco to make changes', true); return; }
   var e = peEvById(eventId); if(!e) return;
   var m = e.set_menu ? peSetMenuByKey(e.set_menu.key) : null;
   var t = peCalcTotals(e);
@@ -5139,7 +5139,7 @@ async function peClearSetMenu(eventId){
   renderMain();
 }
 async function peSetMenuCount(eventId, course, option, val){
-  if(!peCanEdit()){ peToast('View only — ask Katarina, Andrea or Francesco to make changes', true); renderMain(); return; }
+  if(!peCanEdit()){ peToast('View only — ask Sophie, Ouafaa or Francesco to make changes', true); renderMain(); return; }
   var e = peEvById(eventId); if(!e || !e.set_menu) return;
   var sm = JSON.parse(JSON.stringify(e.set_menu));
   sm.choices = sm.choices || {};
@@ -5153,7 +5153,7 @@ async function peSetMenuCount(eventId, course, option, val){
 // The guest's menu-change note (e.g. vegan main) — lives inside set_menu so it
 // travels with the menu and is cleared with it.
 async function peSetMenuNote(eventId, val){
-  if(!peCanEdit()){ peToast('View only — ask Katarina, Andrea or Francesco to make changes', true); renderMain(); return; }
+  if(!peCanEdit()){ peToast('View only — ask Sophie, Ouafaa or Francesco to make changes', true); renderMain(); return; }
   var e = peEvById(eventId); if(!e || !e.set_menu) return;
   var sm = JSON.parse(JSON.stringify(e.set_menu));
   var v = String(val||'').trim();
@@ -5624,7 +5624,7 @@ var PE_PEOPLE = {
   'vdetoni@robertos.ae':'Valentina De Toni','dvalla@robertos.ae':'Danilo Valla','jthomas@robertos.ae':'Jins Thomas',
   'astellacci@robertos.ae':'Antonio Stellacci','afalcone@robertos.ae':'Andrea Falcone',
   'reservations@robertos.ae':'Reservations','asacchi@skelmore.com':'Andrea Sacchi',
-  'kvukotic@robertos.ae':'Katarina Vukotic','rmazouz@robertos.ae':'R. Mazouz','aviscardi@robertos.ae':'A. Viscardi',
+  'rmazouz@robertos.ae':'R. Mazouz','aviscardi@robertos.ae':'A. Viscardi',
   'ahtwe@robertos.ae':'Aung Htwe','amahmoud@skelmore.com':'A. Mahmoud (Design)'
 };
 // A branded, tap-to-include recipient picker — replaces the raw prompt() box.
@@ -5701,7 +5701,7 @@ async function peBriefTeam(){
   }catch(err){ return { emails:[], failed:true }; }
 }
 async function peSendCoordEmail(id){
-  if(!peCanEdit()){ peToast('View only — ask Katarina, Andrea or Francesco to make changes', true); return; }
+  if(!peCanEdit()){ peToast('View only — ask Sophie, Ouafaa or Francesco to make changes', true); return; }
   var e = peEvById(id); if(!e) return;
   // P0 — the team can't act on a brief that's missing the basics.
   var missing = [];
@@ -5836,7 +5836,7 @@ async function peMicrosKeyAuto(id){
 // The button on the booking: for the menu that had no price at the time, a failed
 // send, or a booking briefed before this existed. Asks first — it is a send.
 async function peMicrosKeyAsk(id){
-  if(!peCanEdit()){ peToast('View only — ask Katarina, Andrea or Francesco to make changes', true); return; }
+  if(!peCanEdit()){ peToast('View only — ask Sophie, Ouafaa or Francesco to make changes', true); return; }
   var e = peEvById(id); if(!e) return;
   var m = peMicrosMenu(e); if(!m) return;
   if(!peMicrosPriced(m)){ peToast('“'+peTmDefaultTitle(m)+'” has no price yet — a Micros key needs one.', true); return; }
@@ -5902,7 +5902,7 @@ function peProposalSubject(e){
   return 'Your event proposal — Roberto’s';
 }
 async function peEmailProposal(id, noPrice){
-  if(!peCanEdit()){ peToast('View only — ask Katarina, Andrea or Francesco to make changes', true); return; }
+  if(!peCanEdit()){ peToast('View only — ask Sophie, Ouafaa or Francesco to make changes', true); return; }
   var e = peEvById(id); if(!e || !e.contact_email) return;
   if(!(await peConfirmSend(e, false, noPrice))) return;
   // The sender is copied (her inbox record of exactly what the client got)
@@ -5945,7 +5945,7 @@ async function peEmailProposal(id, noPrice){
 // enquiry message, so a client who had already been sent everything got "Thank you
 // for your enquiry" all over again.
 async function peWhatsApp(id, mode){
-  if(!peCanEdit()){ peToast('View only \u2014 ask Katarina, Andrea or Francesco to make changes', true); return; }
+  if(!peCanEdit()){ peToast('View only \u2014 ask Sophie, Ouafaa or Francesco to make changes', true); return; }
   var e = peEvById(id); if(!e || !e.contact_phone) return;
   if(!(await peConfirmSend(e))) return;
   var digits = String(e.contact_phone).replace(/[^0-9]/g,'');
@@ -5965,7 +5965,7 @@ async function peWhatsApp(id, mode){
     actor:peActor()});
 }
 function peCopyClientLink(id){
-  if(!peCanEdit()){ peToast('View only — ask Katarina, Andrea or Francesco to make changes', true); return; }
+  if(!peCanEdit()){ peToast('View only — ask Sophie, Ouafaa or Francesco to make changes', true); return; }
   var e = peEvById(id); if(!e) return;
   // The guest's menu page, so no price is required — but an empty one is still an
   // empty page with our name on it. Synchronous for the same clipboard reason as
@@ -6001,7 +6001,7 @@ function peAgreementUrl(e){
 // gate. It ran no checks at all, which is how an unpriced booking could reach a
 // guest reading "AED 0" under a live signature block.
 function peCopyAgreementLink(id){
-  if(!peCanEdit()){ peToast('View only — ask Katarina, Andrea or Francesco to make changes', true); return; }
+  if(!peCanEdit()){ peToast('View only — ask Sophie, Ouafaa or Francesco to make changes', true); return; }
   var e = peEvById(id); if(!e) return;
   // Deliberately the synchronous hard block, not peConfirmSend: awaiting a modal
   // spends the click's user-activation and the clipboard write is then refused by
@@ -6025,7 +6025,7 @@ function peViewSignedCopy(id){
   w.document.write(e.contract_snapshot); w.document.close();
 }
 async function peEmailAgreement(id){
-  if(!peCanEdit()){ peToast('View only — ask Katarina, Andrea or Francesco to make changes', true); return; }
+  if(!peCanEdit()){ peToast('View only — ask Sophie, Ouafaa or Francesco to make changes', true); return; }
   var e = peEvById(id); if(!e || !e.contact_email) return;
   if(!(await peConfirmSend(e, true))) return;
   var sender = state.userEmail || 'reservations@robertos.ae';
@@ -6056,7 +6056,7 @@ async function peEmailAgreement(id){
 // confirmed, and logged like every other send. Marking the deposit PAID stays the
 // existing manual status flip — this only delivers the link.
 async function peSendPaymentLink(id){
-  if(!peCanEdit()){ peToast('View only — ask Katarina, Andrea or Francesco to make changes', true); return; }
+  if(!peCanEdit()){ peToast('View only — ask Sophie, Ouafaa or Francesco to make changes', true); return; }
   var e = peEvById(id); if(!e) return;
   if(!e.payment_link){ peScrollToCard('food'); peToast('Paste the Telr payment link on the Agreement card first', true); return; }
   if(!e.contact_email){ peScrollToField('contact_email','Add the client email to send the payment link'); return; }
@@ -6347,7 +6347,7 @@ function peAlcPicksHTML(){
 // the kitchen brief prints in red. Appends rather than replaces — she may already
 // have typed something there, and losing it would be worse than the original bug.
 async function peAlcNoteToDietary(pickId){
-  if(!peCanEdit()){ peToast('View only — ask Katarina, Andrea or Francesco to make changes', true); return; }
+  if(!peCanEdit()){ peToast('View only — ask Sophie, Ouafaa or Francesco to make changes', true); return; }
   var p = (peState.alcPicks||[]).filter(function(x){ return x.id===pickId; })[0];
   if(!p || !p.note) return;
   var e = (peState.events||[]).filter(function(x){ return x.client_token===p.token; })[0];
@@ -6388,7 +6388,7 @@ async function peAlcLoadPicks(force){
 // "Done with it" clears the card — applied=true is the same flag the set-menu
 // choices already use, so nothing new had to be invented to track it.
 async function peAlcPickDone(id){
-  if(!peCanEdit()){ peToast('View only — ask Katarina, Andrea or Francesco to make changes', true); return; }
+  if(!peCanEdit()){ peToast('View only — ask Sophie, Ouafaa or Francesco to make changes', true); return; }
   var r = await sb.from('event_menu_choices').update({applied:true}).eq('id', id);
   if(r.error){ peToast('Could not clear it — '+String(r.error.message||'').slice(0,90), true); return; }
   peState.alcPicks = (peState.alcPicks||[]).filter(function(p){ return String(p.id)!==String(id); });
@@ -8109,7 +8109,7 @@ function peCmEmail(key){
 // that event with a menu that cannot be resolved — the proposal and the kitchen
 // brief would simply lose their food.
 async function peCmDelete(key){
-  if(!peCanEdit()){ peToast('View only — ask Katarina, Andrea or Francesco to make changes', true); return; }
+  if(!peCanEdit()){ peToast('View only — ask Sophie, Ouafaa or Francesco to make changes', true); return; }
   var m = peSetMenuByKey(key); if(!m) return;
   var used = (peState.events||[]).filter(function(e){ return e.set_menu && e.set_menu.key===key; });
   if(used.length){
@@ -8379,7 +8379,7 @@ function peWaDigits(phone){
   return d.length >= 11 ? d : '';
 }
 async function peSendMenuPackWa(){
-  if(!peCanEdit()){ peToast('View only — ask Katarina, Andrea or Francesco to make changes', true); return; }
+  if(!peCanEdit()){ peToast('View only — ask Sophie, Ouafaa or Francesco to make changes', true); return; }
   var g = function(id){ var el=document.getElementById(id); return el?el.value.trim():''; };
   var phone = g('pe-mp-phone'), name = g('pe-mp-name'), note = g('pe-mp-note');
   var pEl = document.getElementById('pe-mp-phone');
@@ -8550,7 +8550,7 @@ function peMenuPackEmailHTML(foodKeys, bevKeys, name, note, noPrice, alcIds, pic
   return peGuestEmailHTML(title, intro, name, note, inner, noPrice);
 }
 async function peSendMenuPack(){
-  if(!peCanEdit()){ peToast('View only — ask Katarina, Andrea or Francesco to make changes', true); return; }
+  if(!peCanEdit()){ peToast('View only — ask Sophie, Ouafaa or Francesco to make changes', true); return; }
   var g = function(id){ var el=document.getElementById(id); return el?el.value.trim():''; };
   var email = g('pe-mp-email'), name = g('pe-mp-name'), note = g('pe-mp-note');
   if(!email){ peToast('Type the guest’s email first', true); peInlineErr(document.getElementById('pe-mp-email'),'Type the guest’s email first.'); return; }
@@ -9671,7 +9671,7 @@ function pePackUsage(name){
   }).length;
 }
 async function peDeletePack(id){
-  if(!peCanEdit()){ peToast('View only \u2014 ask Katarina, Andrea or Francesco to make changes', true); return; }
+  if(!peCanEdit()){ peToast('View only \u2014 ask Sophie, Ouafaa or Francesco to make changes', true); return; }
   var p = pePackById(id); if(!p) return;
   var used = pePackUsage(p.name);
   if(!(await peConfirm({
@@ -9695,7 +9695,7 @@ function pePackOpen(id){
   window.open(peBaseUrl()+'client-menus.html?pack='+encodeURIComponent(id), '_blank');
 }
 async function peTogglePack(id, active){
-  if(!peCanEdit()){ peToast('View only — ask Katarina, Andrea or Francesco to make changes', true); return; }
+  if(!peCanEdit()){ peToast('View only — ask Sophie, Ouafaa or Francesco to make changes', true); return; }
   var on = (active==='true'||active===true);
   var r = await sb.from('event_packages').update({active:on}).eq('id', id);
   if(r.error){ peToast('NOT changed — '+String(r.error.message||'').slice(0,80), true); return; }
@@ -10144,7 +10144,7 @@ function peRenderPackLib(){
   return h;
 }
 async function peSavePack(id){
-  if(!peCanEdit()){ peToast('View only — ask Katarina, Andrea or Francesco to make changes', true); return; }
+  if(!peCanEdit()){ peToast('View only — ask Sophie, Ouafaa or Francesco to make changes', true); return; }
   var g = function(f){ var el=document.getElementById('pe-p-'+f); return el?el.value.trim():''; };
   if(!g('name')||!g('price_pp')){ peToast('Name and price are required', true); return; }
   var ids = [];
@@ -10396,11 +10396,11 @@ function peWizOutHTML(){
   h += '<div style="margin-top:12px">'+(peCanEdit()
     ? '<button class="pe-btn" onclick="peWizCreate()" '+(peWiz.busy?'disabled':'')+'>'+(peWiz.busy?'Creating…':'Create the draft event')+'</button>'+
       '<span style="font-size:11px;color:#4F4535;margin-left:10px">Opens the event ready to print or email the proposal.</span>'
-    : '<span style="font-size:12px;color:#6B5E4E">View only — creating the draft is done by Katarina, Andrea or Francesco.</span>')+'</div></div>';
+    : '<span style="font-size:12px;color:#6B5E4E">View only — creating the draft is done by Sophie, Ouafaa or Francesco.</span>')+'</div></div>';
   return h;
 }
 async function peWizCreate(){
-  if(!peCanEdit()){ peToast('View only — ask Katarina, Andrea or Francesco to make changes', true); return; }
+  if(!peCanEdit()){ peToast('View only — ask Sophie, Ouafaa or Francesco to make changes', true); return; }
   var w = peWizCalc();
   if(!w.ready){ peToast('Fill guests, budget and beverage first', true); return; }
   if(peWiz.busy) return;
@@ -10508,7 +10508,7 @@ function peGuideWipHasData(o){
 }
 function peGuideFresh(){ return { step:0, name:'', company:'', email:'', phone:'', date:'', time:'', area:'Scala and Bar', guests:'', foodMode:'', packId:'', setKey:'', bevId:'', busy:false }; }
 async function peStartGuide(){
-  if(!peCanEdit()){ peToast('View only — ask Katarina, Andrea or Francesco to make changes', true); return; }
+  if(!peCanEdit()){ peToast('View only — ask Sophie, Ouafaa or Francesco to make changes', true); return; }
   // If she has an unfinished event stashed, offer to resume it rather than silently
   // overwriting her work with a blank form.
   var wip = peGuideLoadWip();
@@ -10543,7 +10543,7 @@ async function peGuideBack(){
   peGuideClearWip(); peGuide=null; peGo('list');
 }
 function peGuideNext(){
-  if(!peCanEdit()){ peToast('View only — ask Katarina, Andrea or Francesco to make changes', true); return; }
+  if(!peCanEdit()){ peToast('View only — ask Sophie, Ouafaa or Francesco to make changes', true); return; }
   var g = peGuide;
   if(g.step===0 && !(g.name && g.name.trim())){ peToast('Add a name to continue', true); return; }
   if(g.step===0 && g.email && g.email.trim() && !peEmailsValid(g.email)){ g.emailErr=true; peToast('An email looks off — separate several with a comma', true); renderMain(); return; }
@@ -10661,7 +10661,7 @@ function peRenderGuided(){
   return h+'</div></div>';   // pe-sheet, pe-wrap
 }
 async function peGuideFinish(action){
-  if(!peCanEdit()){ peToast('View only — ask Katarina, Andrea or Francesco to make changes', true); return; }
+  if(!peCanEdit()){ peToast('View only — ask Sophie, Ouafaa or Francesco to make changes', true); return; }
   var g = peGuide; if(!g || g.busy) return;
   var buildMode = !((g.foodMode==='package' && g.packId) || (g.foodMode==='setmenu' && g.setKey));
   if(action==='send' && !g.email){ peToast('Add the client email in step 1 to send', true); g.step=0; renderMain(); return; }
@@ -11350,7 +11350,7 @@ function peQuickPrint(){
   pePrintHTML(peDocShell(peQuick.title, body));
 }
 async function peQuickSave(){
-  if(!peCanEdit()){ peToast('View only — ask Katarina, Andrea or Francesco to make changes', true); return; }
+  if(!peCanEdit()){ peToast('View only — ask Sophie, Ouafaa or Francesco to make changes', true); return; }
   peQuickRead();
   var dishes = peQuickDishes();
   var alcLines = peQuickAlcLines();
@@ -11412,7 +11412,7 @@ function peQuickReset(){
 // client-setmenu.html, the page that prints a menu's courses in full for any
 // key. The guest sees their menu; she sends one link.
 async function peQuickWhatsApp(){
-  if(!peCanEdit()){ peToast('View only \u2014 ask Katarina, Andrea or Francesco to make changes', true); return; }
+  if(!peCanEdit()){ peToast('View only \u2014 ask Sophie, Ouafaa or Francesco to make changes', true); return; }
   peQuickRead();
   var tt = peQuickTotals();
   if(!tt.anything){ peToast('Add a dish first', true); return; }
