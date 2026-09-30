@@ -15,7 +15,7 @@
    controllerchange reload), a fresh deploy reaches every screen with no manual
    tap. To force a clean cache rebuild, bump the CACHE version string below. */
 
-const CACHE = 'robertos-foh-v20260929kv';
+const CACHE = 'robertos-foh-v20260930a';
 
 // Best-effort warm cache. The bare paths are precached on install; the real
 // runtime requests (some carry a ?v= cache-buster) are cached on the fly by the
@@ -28,6 +28,7 @@ const ASSETS = [
   // It is now a ~47KB shell: without these two the offline app is a blank page.
   // Any future extraction out of index.html MUST be added here as well.
   './foh-core.js',
+  './foh-bible.js',    // Food Bible door (Employee ID); the page itself is online-only
   './foh-sched-xlsx.js',   // roster Print + Excel hotfix — overrides fohSchedPrint + fohSchedSendToHR
   './foh-styles.css',
   './common.js',
