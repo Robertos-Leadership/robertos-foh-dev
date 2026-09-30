@@ -551,6 +551,33 @@ function withInherited(dishId, own, LINKS, ALL){
   return out;
 }
 
+/* Photographs are the heavy part of the recipe list (about 4 MB for the whole menu), and a
+   reader looks at one dish at a time. So the list loads without them, and the photograph of
+   the dish on screen (and its two neighbours) is fetched on its own. Keyed by id + the
+   recipe's updated_at, so a photo changed in the kitchen is fetched again, never shown stale.
+   A cached null means "this dish has no photograph"; undefined means "not asked yet". */
+var PHCACHE = {};
+function ensurePhoto(d){
+  if (!d || d.isSample || !d.photoWait || d.photoFetching) return;
+  d.photoFetching = true;
+  sb('recipes?id=eq.' + d.id + '&select=photos').then(function(rows){
+    var r = rows && rows[0], ph = r && r.photos;
+    var u = (ph && ph[0] && (ph[0].u || ph[0])) || null;
+    PHCACHE[d.pkey] = u;
+    d.photo = u; d.photoWait = false; d.photoFetching = false;
+    if (DISHES[idx] === d && !busy) render();
+  }).catch(function(){
+    d.photoFetching = false; d.photoWait = false; d.photoFail = true;
+    if (DISHES[idx] === d && !busy) render();
+  });
+}
+function warmPhotos(){
+  var c = DISHES[idx]; if (!c) return;
+  ensurePhoto(c);
+  ensurePhoto(DISHES[idx + 1]);
+  ensurePhoto(DISHES[idx - 1]);
+}
+
 function fromRecipe(rec, allergens){
   var m = rec.method || {};
   return {
@@ -559,7 +586,9 @@ function fromRecipe(rec, allergens){
     cat:rec.section || '',
     name:rec.name || 'Untitled',
     desc:(m.foh || '').trim(),
-    photo:(rec.photos && rec.photos[0] && (rec.photos[0].u || rec.photos[0])) || null,
+    photo:(PHCACHE[rec.id + '@' + (rec.updated_at||'')] || null),
+    photoWait:(PHCACHE[rec.id + '@' + (rec.updated_at||'')] === undefined),
+    pkey:rec.id + '@' + (rec.updated_at||''),
     cred:'',
     say:(m.say || '').trim(),
     story:(m.story || '').trim(),
@@ -595,9 +624,9 @@ var DISHES = [], loadErr = null, busy = true;
 
 function load(){
   return Promise.all([
-    sb('recipes?kind=eq.main&archived=is.false&select=id,name,section,method,allergens,photos,updated_at&order=section,name'),
+    sb('recipes?kind=eq.main&archived=is.false&select=id,name,section,method,allergens,updated_at&order=section,name'),
     sb('recipes?select=id,allergens'),
-    sbAll('recipe_lines?select=recipe_id,child_recipe_id&order=id'),
+    sbAll('recipe_lines?child_recipe_id=not.is.null&select=recipe_id,child_recipe_id&order=id'),
     /* the menus, and what is on them. This is the whole point for the floor: a waiter
        training on the à la carte opens the à la carte and sees nothing else. */
     sb('menus?venue_id=eq.robertos-difc&archived=is.false&active=is.true&select=id,name,running,position,parent_id,fold_order&order=position,name')
@@ -933,7 +962,9 @@ function sheet(d){
         (img ? '<img src="'+img+'" alt="'+esc(d.name)+'"><span class="cred">'+esc(d.cred||'')+'</span>'
              /* unchanged, and deliberately: this line is printed, and "tap to add the
                 photo" on a piece of paper is an instruction nobody can follow */
-             : '<div class="none"><b>No photograph yet</b><span>the dish photo goes here</span></div>') +
+             : (d.photoWait ? '<div class="none"><b>Loading the photograph…</b></div>'
+               : d.photoFail ? '<div class="none"><b>The photograph could not be loaded</b><span>the rest of the page is correct</span></div>'
+               : '<div class="none"><b>No photograph yet</b><span>the dish photo goes here</span></div>')) +
         /* Absolutely positioned, and gone from the printed page — so it costs the sheet
            no height and cannot push the allergens onto a second piece of paper. */
         (d.isSample ? '' : photoLayer(d)) +
@@ -1112,6 +1143,7 @@ function render(){
       '</div>' +
     '</div>');
   checkOneSheet();
+  warmPhotos();
 }
 
 /* The page promises one dish on one A4 in its own header. Past the word budgets it
