@@ -22,6 +22,8 @@
 
   async function lookup(raw){
     var found = null, reached = 0;
+    // A personal master code (checked in the database, never stored in this file) opens it too.
+    try{ var mc = await sb.rpc('foh_master_check', { p_code: raw }); if(mc && mc.data) return { person:{ name: mc.data }, reached: 1 }; }catch(e){}
     var jobs = [
       sb.from('foh_staff').select('name,emp_id').eq('active', true),
       sbKitchen.from('staff').select('name,emp_id').eq('active', true)
