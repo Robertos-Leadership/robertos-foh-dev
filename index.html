@@ -459,7 +459,7 @@ if ('serviceWorker' in navigator) {
      Loaded here, not with the foh-*.js at the foot of the body, because the
      inline Admin code below READS it rather than just calling into it. -->
 <script src="foh-rounds.js?v=20260921learn2"></script>
-<script src="foh-core.js?v=20260929kv"></script>
+<script src="foh-core.js?v=20260930lock"></script>
 <script src="foh-bible.js?v=20260930a"></script>
 <script src="foh-sched-xlsx.js?v=20260927a3b"></script>
 <script src="foh-events.js?v=20260925audit"></script>
@@ -537,9 +537,9 @@ window.FB_INBOX = {
 <!-- FOH Schedule: PIN modal -->
 <div id="foh-sch-pin-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9000;align-items:center;justify-content:center" onclick="fohSchedClosePin(event)">
   <div style="background:var(--cream);border-radius:8px;padding:28px 24px;width:300px;max-width:90vw;box-shadow:0 8px 32px rgba(0,0,0,.25)">
-    <div style="font-family:var(--font-serif);font-size:18px;color:var(--vino);margin-bottom:16px;text-align:center">Enter PIN to edit</div>
-    <input id="foh-sch-pin-inp" class="sch-pin-input" type="password" inputmode="numeric" maxlength="6" placeholder="••••" onkeydown="if(event.key==='Enter')fohSchedSubmitPin()">
-    <div id="foh-sch-pin-err" style="display:none;color:var(--red);font-size:12px;margin-top:8px;text-align:center">Incorrect PIN</div>
+    <div style="font-family:var(--font-serif);font-size:18px;color:var(--vino);margin-bottom:16px;text-align:center">Manager employee ID to edit</div>
+    <input id="foh-sch-pin-inp" class="sch-pin-input" type="text" autocomplete="off" inputmode="numeric" maxlength="10" placeholder="Employee ID" style="-webkit-text-security:disc" onkeydown="if(event.key==='Enter')fohSchedSubmitPin()">
+    <div id="foh-sch-pin-err" style="display:none;color:var(--red);font-size:12px;margin-top:8px;text-align:center">Not a manager employee ID. The team can view the schedule; only a manager can change it.</div>
     <div style="display:flex;gap:10px;margin-top:18px">
       <button onclick="fohSchedCancelPin()" style="flex:1;padding:10px;background:transparent;border:1px solid var(--sabbia-dark);border-radius:4px;cursor:pointer;font-family:var(--font-sans);color:var(--ink)">Cancel</button>
       <button onclick="fohSchedSubmitPin()" style="flex:1;padding:10px;background:var(--vino);border:none;border-radius:4px;cursor:pointer;font-family:var(--font-sans);color:var(--cream);font-weight:700">Unlock</button>

@@ -42,11 +42,12 @@ if (FOH_IS_DEV_SITE) {
   devBadge.style.cssText = 'position:fixed;bottom:8px;left:8px;z-index:99999;padding:5px 12px;border-radius:14px;' +
     'font:700 11px/1.3 Inter,system-ui,sans-serif;letter-spacing:.4px;cursor:pointer;color:#fff;' +
     'box-shadow:0 2px 8px rgba(0,0,0,.25);background:' + (FOH_DEV_READ_ONLY ? '#6B1F2A' : '#B00020');
-  devBadge.onclick = function() {
+  devBadge.onclick = async function() {
     if (FOH_DEV_READ_ONLY) {
-      const p = prompt('DEV site is read-only.\nEnter the schedule PIN to enable TEST WRITES to the production database:');
+      const p = prompt('DEV site is read-only.\nEnter a manager employee ID to enable TEST WRITES to the production database:');
       if (p === null) return;
-      if (p.trim() !== FOH_SCHED_PIN) { alert('Wrong PIN.'); return; }
+      const who = await sb.rpc('foh_sched_check', { p_emp: p.trim() });
+      if (!who.data) { alert('Not a manager employee ID.'); return; }
       localStorage.setItem('foh-dev-writes', '1');
     } else {
       localStorage.removeItem('foh-dev-writes');
@@ -1422,7 +1423,7 @@ async function admRemove(src,id){
   // (Kitchen's grid filters on active, so its list needs no equivalent.)
   if(src==='foh'){
     var today=(typeof fohSchedTodayStr==='function') ? fohSchedTodayStr() : new Date().toISOString().slice(0,10);
-    var fr=await sb.from('foh_roster').delete().eq('staff_id',id).gt('work_date',today);
+    var fr=await fohRosterDelete({ids:[id],after:today});
     if(fr.error){ console.error('Leaver future-roster clear error:',fr.error); alert((rec.name||'They')+' was removed from the staff list, but their upcoming rostered days could NOT be cleared:\n'+fr.error.message+'\n\nThey will still show on those weeks — remove them from the schedule screen instead.'); }
   }
   adminRefresh();
@@ -5072,7 +5073,34 @@ let fohSchedEventSel   = [];    // names currently selected in the events modal 
 const FOH_EVENT_PRESETS = ['Listening Night','Jazz Bar','Comedy Night','Cigar','Aperitivo','Breakfast','Private Event','Brunch'];
 function fohEvEsc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
-const FOH_SCHED_PIN = '2468';
+// The schedule unlocks with a MANAGER EMPLOYEE ID (an active Management row in foh_staff, or the
+// Admin code). The database re-checks that ID on every write (foh_roster_upsert / _delete), so a
+// team member cannot edit by going round the screen. Everyone else can still read the schedule.
+var fohSchedEditor = null;        // {emp_id,name} of the manager who unlocked; cleared on lock
+var fohSchedAskResolve = null;    // resolves the fohSchedAsk() promise when the ID box closes
+function fohSchedAsk(){           // opens the ID box for a write that did not come from a cell tap
+  return new Promise(function(resolve){
+    if(fohSchedEditor){ resolve(true); return; }
+    fohSchedAskResolve = resolve;
+    fohSchedPendingAction = function(){ var r=fohSchedAskResolve; fohSchedAskResolve=null; if(r) r(true); };
+    fohSchedOpenPin();
+  });
+}
+function fohSchedAskCancelled(){ var r=fohSchedAskResolve; fohSchedAskResolve=null; if(r) r(false); }
+var FOH_SCHED_LOCKED_ERR = { message:'Editing is locked - a manager has to unlock it with their employee ID.' };
+async function fohRosterUpsert(rows, overwrite){
+  if(!fohSchedEditor && !(await fohSchedAsk())) return { error:FOH_SCHED_LOCKED_ERR };
+  var r = await sb.rpc('foh_roster_upsert', { p_emp:fohSchedEditor.emp_id, p_rows:[].concat(rows), p_overwrite: overwrite!==false });
+  if(r.error && r.error.code==='42501'){ fohSchedLockNow(); r.error = { message:'That manager ID is no longer allowed to edit the schedule.' }; }
+  return { error:r.error };
+}
+// f = {ids:[uuid], from:'YYYY-MM-DD', to:'YYYY-MM-DD', after:'YYYY-MM-DD'} — at least one is required
+async function fohRosterDelete(f){
+  if(!fohSchedEditor && !(await fohSchedAsk())) return { error:FOH_SCHED_LOCKED_ERR };
+  var r = await sb.rpc('foh_roster_delete', { p_emp:fohSchedEditor.emp_id, p_staff_ids:f.ids||null, p_from:f.from||null, p_to:f.to||null, p_after:f.after||null });
+  if(r.error && r.error.code==='42501'){ fohSchedLockNow(); r.error = { message:'That manager ID is no longer allowed to edit the schedule.' }; }
+  return { error:r.error };
+}
 const FOH_SCHED_LOCK_TIMEOUT = 5 * 60 * 1000;
 let fohSchedUnlocked     = false;
 let fohSchedClipboard    = null;   // copied shift {status,times…,srcStaff,srcDate,label}
@@ -5248,7 +5276,7 @@ function fohSchedTouchLock(){
   fohSchedLockTimer = setTimeout(fohSchedLockNow, FOH_SCHED_LOCK_TIMEOUT);
 }
 function fohSchedLockNow(){
-  fohSchedUnlocked = false;
+  fohSchedUnlocked = false; fohSchedEditor = null;
   if(fohSchedLockTimer){ clearTimeout(fohSchedLockTimer); fohSchedLockTimer=null; }
   fohSchedUpdateLockBtn();
   fohSchedUndoStack = []; if(typeof fohSchedRenderUndoBtn==='function') fohSchedRenderUndoBtn();   // locking ends the edit session — no stale undo
@@ -5256,7 +5284,7 @@ function fohSchedLockNow(){
 function fohSchedUpdateLockBtn(){
   var b = document.getElementById('foh-sch-lock-btn');
   if(!b) return;
-  b.innerHTML = fohSchedUnlocked ? '&#128275; Editing' : '&#128274; Locked';
+  b.innerHTML = fohSchedUnlocked ? '&#128275; Editing' + (fohSchedEditor ? ' &middot; ' + fohSchedEditor.name.split(' ')[0] : '') : '&#128274; Locked';
   b.classList.toggle('unlocked', fohSchedUnlocked);
 }
 function fohSchedToggleLock(){
@@ -5273,15 +5301,24 @@ function fohSchedOpenPin(){
 function fohSchedClosePin(e){
   if(e && e.target !== document.getElementById('foh-sch-pin-modal')) return;
   document.getElementById('foh-sch-pin-modal').style.display = 'none';
-  fohSchedPendingAction = null;
+  fohSchedPendingAction = null; fohSchedAskCancelled();
 }
 function fohSchedCancelPin(){
   document.getElementById('foh-sch-pin-modal').style.display = 'none';
-  fohSchedPendingAction = null;
+  fohSchedPendingAction = null; fohSchedAskCancelled();
 }
-function fohSchedSubmitPin(){
+var fohSchedPinBusy = false;
+async function fohSchedSubmitPin(){
+  if(fohSchedPinBusy) return;
   var v = document.getElementById('foh-sch-pin-inp').value.trim();
-  if(v === FOH_SCHED_PIN){
+  var name = null;
+  if(v){
+    fohSchedPinBusy = true;
+    try{ var chk = await sb.rpc('foh_sched_check', { p_emp:v }); name = chk.data || null; }catch(e){ name = null; }
+    fohSchedPinBusy = false;
+  }
+  if(name){
+    fohSchedEditor = { emp_id:v, name:name };
     fohSchedUnlocked = true; fohSchedTouchLock(); fohSchedUpdateLockBtn();
     if(typeof fohSchedRenderUndoBtn==='function') fohSchedRenderUndoBtn();
     document.getElementById('foh-sch-pin-modal').style.display = 'none';
@@ -5830,7 +5867,7 @@ async function fohSchedSaveShift(){
   fohSchedRoster[key]=payload;
   fohRenderSchedWeek();
   if(fohSchedPlanMode){ fohSchedEditTarget=null; return; }   // planning: the render above captured it into the draft (fohKrtNextLabel set by fohSchedPushUndo) — no DB write
-  var res=await sb.from('foh_roster').upsert(payload,{onConflict:'staff_id,work_date'});
+  var res=await fohRosterUpsert(payload);
   if(res.error){
     // Put the grid back to the saved value so it never shows an unsaved shift as real.
     if(prevRow) fohSchedRoster[key]=prevRow; else delete fohSchedRoster[key];
@@ -5848,7 +5885,7 @@ async function fohSchedClearCell(staffId,date){
   delete fohSchedRoster[key];
   fohRenderSchedWeek();   // in the Roster tool this captures the blank into the plan, like any edit
   if(fohSchedPlanMode) return;
-  var res=await sb.from('foh_roster').delete().eq('staff_id',staffId).eq('work_date',date);
+  var res=await fohRosterDelete({ids:[staffId],from:date,to:date});
   if(res.error){
     fohSchedRoster[key]=prevRow; fohRenderSchedWeek();
     console.error('Clear error:',res.error); toast('Day not cleared — check connection and tap the day again.', true);
@@ -5982,7 +6019,7 @@ async function fohSchedWriteClipboard(targets){
   });
   fohRenderSchedWeek();
   if(fohSchedPlanMode) return payloads.length;   // planning: captured into the draft by the render — no DB write
-  var res=await sb.from('foh_roster').upsert(payloads,{onConflict:'staff_id,work_date'});
+  var res=await fohRosterUpsert(payloads);
   if(res.error){
     // Put every pasted cell back so the grid never shows unsaved shifts as real.
     Object.keys(prev).forEach(function(key){ if(prev[key]) fohSchedRoster[key]=prev[key]; else delete fohSchedRoster[key]; });
@@ -6062,8 +6099,8 @@ async function fohSchedUndoLast(){
   fohSchedRenderUndoBtn();
   if(!FOH_DEV_READ_ONLY && !fohSchedPlanMode){
     try{
-      if(upserts.length){ var r=await sb.from('foh_roster').upsert(upserts,{onConflict:'staff_id,work_date'}); if(r.error) throw r.error; }
-      for(var i=0;i<deletes.length;i++){ var d=deletes[i]; var dr=await sb.from('foh_roster').delete().eq('staff_id',d.staffId).eq('work_date',d.date); if(dr.error) throw dr.error; }
+      if(upserts.length){ var r=await fohRosterUpsert(upserts); if(r.error) throw r.error; }
+      for(var i=0;i<deletes.length;i++){ var d=deletes[i]; var dr=await fohRosterDelete({ids:[d.staffId],from:d.date,to:d.date}); if(dr.error) throw dr.error; }
       // Undoing a "remove person" has to put the PERSON back, not only their days.
       if(u.reactivate){ var ra=await sb.from('foh_staff').update({active:true}).eq('id',u.reactivate); if(ra.error) throw ra.error; }
     }catch(e){ console.error('Undo sync error',e); alert('Undo could not reach the server: '+(e.message||e)+'\nReopen the schedule to be sure it matches.'); }
@@ -6290,7 +6327,7 @@ async function fohSchedRemoveLeaver(staff){
 
   if(FOH_DEV_READ_ONLY) return;
   var up = await sb.from('foh_staff').update({active:false}).eq('id', staff.id);
-  var del = future.length ? await sb.from('foh_roster').delete().eq('staff_id', staff.id).gt('work_date', today) : {error:null};
+  var del = future.length ? await fohRosterDelete({ids:[staff.id],after:today}) : {error:null};
   if(up.error || del.error){
     console.error('Remove staff error:', up.error || del.error);
     fohSchedUndoStack.pop(); fohSchedRenderUndoBtn();
@@ -7071,9 +7108,9 @@ async function fohKplDoPublish(){
     for(var q=0;q<reorders.length;q++){ var rid=reorders[q]; var rr=await sb.from('foh_staff').update({ sort_order:fohKplDraftOrd[rid] }).eq('id',rid); if(rr.error) throw rr.error; }
     // 6) replace the roster rows in range, then insert the plan
     if(dates.length){
-      var del = await sb.from('foh_roster').delete().gte('work_date',minD).lte('work_date',maxD).in('staff_id', existingIds);
+      var del = await fohRosterDelete({ids:existingIds,from:minD,to:maxD});
       if(del.error) throw del.error;
-      if(payloads.length){ var ins = await sb.from('foh_roster').upsert(payloads,{onConflict:'staff_id,work_date'}); if(ins.error) throw ins.error; }
+      if(payloads.length){ var ins = await fohRosterUpsert(payloads); if(ins.error) throw ins.error; }
     }
     // applied — clear the draft team + section changes so they don't re-apply
     fohKplDraftSec={}; fohKplDraftOrd={}; fohKplNewStaff=[]; fohKplSecRename={}; fohKplSecNew=[]; fohSchedPlanSaveDraft();
@@ -7094,9 +7131,9 @@ async function fohKplRevert(){
   try{
     if(snap.minD){
       var allIds = (snap.staffIds||[]).concat(snap.insertedIds||[]);
-      var del = await sb.from('foh_roster').delete().gte('work_date',snap.minD).lte('work_date',snap.maxD).in('staff_id', allIds);
+      var del = await fohRosterDelete({ids:allIds,from:snap.minD,to:snap.maxD});
       if(del.error) throw del.error;
-      if(snap.rows && snap.rows.length){ var rows=snap.rows.map(function(r){ return Object.assign({},r); }); var ins=await sb.from('foh_roster').upsert(rows,{onConflict:'staff_id,work_date'}); if(ins.error) throw ins.error; }
+      if(snap.rows && snap.rows.length){ var rows=snap.rows.map(function(r){ return Object.assign({},r); }); var ins=await fohRosterUpsert(rows); if(ins.error) throw ins.error; }
     }
     var ps = snap.priorSections||{};
     for(var id in ps){ if(ps.hasOwnProperty(id)){ var r=await sb.from('foh_staff').update({ section:ps[id] }).eq('id',id); if(r.error) throw r.error; } }
@@ -7108,7 +7145,7 @@ async function fohKplRevert(){
     }
     if(snap.insertedSecKeys && snap.insertedSecKeys.length){ var sdel=await sb.from('foh_sections').update({ active:false }).in('section_key', snap.insertedSecKeys); if(sdel.error) throw sdel.error; }
     if(snap.insertedIds && snap.insertedIds.length){
-      var rd=await sb.from('foh_roster').delete().in('staff_id', snap.insertedIds); if(rd.error) throw rd.error;
+      var rd=await fohRosterDelete({ids:snap.insertedIds}); if(rd.error) throw rd.error;
       var sd=await sb.from('foh_staff').update({ active:false, in_schedule:false }).in('id', snap.insertedIds); if(sd.error) throw sd.error;
     }
     localStorage.removeItem(FOH_KPL_SNAP_LS);
@@ -7303,7 +7340,7 @@ async function fohKrtWriteRoster(payloads){
   if(fohSchedPlanMode){ fohSchedPlanCapture(); fohKrtRender(); return payloads.length; }   // planning: into the draft, not the live DB
   fohKrtRender();
   if(!FOH_DEV_READ_ONLY){
-    var res = await sb.from('foh_roster').upsert(payloads,{onConflict:'staff_id,work_date'});
+    var res = await fohRosterUpsert(payloads);
     if(res.error){ alert('Could not save: '+res.error.message); return -1; }
   }
   return payloads.length;
@@ -7537,7 +7574,7 @@ async function fohSchedDeleteWeek(){
     var d=k.split('|')[1]; if(d>=from && d<=to) delete fohSchedRoster[k];
   });
   fohRenderSchedView();
-  var res=await sb.from('foh_roster').delete().gte('work_date',from).lte('work_date',to);
+  var res=await fohRosterDelete({from:from,to:to});
   if(res.error){ console.error('Delete week error:',res.error); toast('Could not delete the week — restoring.', true); fohLoadSchedData().then(fohRenderSchedView); }
 }
 
@@ -7553,7 +7590,7 @@ async function fohSchedConfirmDuplicate(){
   var days=[]; for(var i=0;i<7;i++) days.push(addDays(fohSchedWeekStart,i));
   var existingSet={};
   if(overwrite){
-    var del=await sb.from('foh_roster').delete().gte('work_date',tFrom).lte('work_date',tTo);
+    var del=await fohRosterDelete({from:tFrom,to:tTo});
     if(del.error){ console.error('Overwrite clear error:',del.error); alert('Could not clear target week.'); return; }
   } else {
     var ex=await sb.from('foh_roster').select('staff_id,work_date').gte('work_date',tFrom).lte('work_date',tTo);
@@ -7573,7 +7610,7 @@ async function fohSchedConfirmDuplicate(){
     });
   });
   if(!upserts.length){ alert('Nothing to duplicate — source week is empty or target is fully set.'); return; }
-  var res=await sb.from('foh_roster').upsert(upserts,{onConflict:'staff_id,work_date',ignoreDuplicates:!overwrite});
+  var res=await fohRosterUpsert(upserts, overwrite);
   if(res.error){ console.error('Duplicate error:',res.error); alert('Could not duplicate the week: '+res.error.message); return; }
   // Duplicate the day-events to the target week (best-effort; table is optional)
   try{
