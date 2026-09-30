@@ -54,16 +54,17 @@ var STOCK_EMAIL_CC = ['amohamed@robertos.ae'];
 // by Francesco + shared with the cost controller as an admin code. Beta: security
 // deferred, so this lives client-side. Counts are attributed to this label.
 var STOCK_SUPER = { '1212': 'Stock Take Admin', '0000': 'Cost Controller', '2468': 'Stock Take Supervisor' };
+var stMasterIds = {};   // codes added to STOCK_SUPER by the database's master-code check
 // Destructive actions (Clear all counts, Upload/replace the month's list) are
 // limited to these admin codes so a regular counter can't wipe a live count.
 function stIsSuper(){ return !!(stUser && STOCK_SUPER[stUser.emp_id]); }
 // Locking/unlocking a finalized month is Aung's call alone (his code, 0000) —
 // not shared with the other admin codes, so it can't be triggered by mistake.
-function stCanLock(){ return !!(stUser && stUser.emp_id==='0000'); }
+function stCanLock(){ return !!(stUser && (stUser.emp_id==='0000' || stUser.master)); }
 // The month-vs-month comparison is a cost-controller tool, not a counting tool:
 // only Aung's code (0000) sees it, so a counter is never shown last month's
 // number while counting (which would anchor them into "confirming" it).
-function stCanCompare(){ return !!(stUser && stUser.emp_id==='0000'); }
+function stCanCompare(){ return !!(stUser && (stUser.emp_id==='0000' || stUser.master)); }
 
 // ── history fallback for the July 2026 section split ──────────────────────
 // Until June 2026 the whole bar was counted on ONE list, stored under the old
@@ -403,8 +404,9 @@ async function stSignIn(){
   var id = inp ? (inp.value||'').trim() : '';
   if(!id){ if(inp) inp.focus(); return; }
   // super-user passcode (e.g. 1212) — access without any staff/roster record
+  if(!STOCK_SUPER[id]){ var mn = await fohMasterName(id); if(mn){ STOCK_SUPER[id] = mn; stMasterIds[id] = true; } }
   if(STOCK_SUPER[id]){
-    stUser = { emp_id:id, name:STOCK_SUPER[id] };
+    stUser = { emp_id:id, name:STOCK_SUPER[id], master:!!stMasterIds[id] };
     // Aung's compare panel needs last month's sheet for THIS section, which
     // wasn't loaded before he identified himself. Fetch it once, here, then draw.
     if(stCanCompare() && !stPrevMonth) await stLoadPrevMonth();

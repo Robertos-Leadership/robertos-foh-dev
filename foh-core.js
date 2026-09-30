@@ -5135,6 +5135,17 @@ window.__schedEditing = function(){
 // FOH staff list (super-user passcodes allowed, same as stock-take), return
 // {emp_id,name} or null. Mirrors the kitchen resetIdentity() gate.
 const FOH_SEND_SUPER = { '1212': 'Admin', '0000': 'Cost Controller' };
+// MASTER CODE — a personal code that opens everything. Checked by the database (foh_master_check),
+// never stored in a file. fohMasterInject adds a verified master code to one of the lookup maps so
+// the existing checks accept it for the session.
+async function fohMasterName(code){
+  code = String(code==null?'':code).trim(); if(!code) return '';
+  try{ var r = await sb.rpc('foh_master_check', { p_code: code }); return (r && r.data) || ''; }catch(e){ return ''; }
+}
+async function fohMasterInject(map, code){
+  code = String(code==null?'':code).trim(); if(!code || map[code]) return false;
+  var n = await fohMasterName(code); if(n){ map[code] = n; return true; } return false;
+}
 // TAP-YOUR-NAME picker. Shows ONLY the authorized signers for this action (set in
 // Admin → Who can sign); if none are configured it falls back to all active staff.
 // "I'm someone else" opens an on-brand keypad to enter an Employee ID / super-user
@@ -5202,8 +5213,9 @@ function fohPickPerson(actionLabel, actionKey, opts){
       var bk2=document.getElementById('fpk-back'); if(bk2) bk2.onclick=function(){ showNames(''); };
       document.getElementById('fpk-cancel2').onclick=function(){ finish(null); };
     }
-    function submitCode(){
+    async function submitCode(){
       var id=(code||'').trim(); if(!id) return;
+      await fohMasterInject(FOH_SEND_SUPER, id);
       if(FOH_SEND_SUPER[id]){ finish({emp_id:id,name:FOH_SEND_SUPER[id]}); return; }
       if(opts.superOnly){ alert('That isn’t a manager / super-user code.'); code=''; showKeypad(); return; }
       sb.from('foh_staff').select('name,emp_id').eq('emp_id',id).eq('active',true).limit(1).then(function(r){
@@ -5245,6 +5257,7 @@ async function fohRequireStaffId(actionLabel, actionKey, opts){
   // Fallback: typed Employee ID (kept in case the picker fails to load).
   var id = (prompt('Enter your Employee ID to '+actionLabel+'.\n\nThis is recorded.')||'').trim();
   if(!id) return null;
+  await fohMasterInject(FOH_SEND_SUPER, id);
   if(FOH_SEND_SUPER[id]) return { emp_id:id, name:FOH_SEND_SUPER[id] };
   var res = await sb.from('foh_staff').select('name,emp_id').eq('emp_id', id).eq('active', true).limit(1);
   var s = res.data && res.data[0];
@@ -8322,6 +8335,7 @@ async function chkSign(){
   await chkLoadVerifiers();
   var ri=parseInt(raw,10);
   var match=(C.verifiers||[]).filter(function(s){ return s.emp_id===raw || (!isNaN(ri) && parseInt(s.emp_id,10)===ri); })[0];
+  if(!match){ var mn=await fohMasterName(raw); if(mn) match={ emp_id:raw, name:mn, role:'Master' }; }
   if(!match){ if(errEl) errEl.textContent='ID not recognised or not authorised to sign off.'; return; }
   var payload={ check_date:C.date, shift_type:C.type, area:'Restaurant', checked:(C.row&&C.row.checked)||{}, verified_emp_id:match.emp_id, verified_name:match.name, verified_role:match.role, verified_at:new Date().toISOString(), updated_at:new Date().toISOString() };
   var res=await sb.from('foh_checklists').upsert(payload,{onConflict:'check_date,shift_type,area'});
