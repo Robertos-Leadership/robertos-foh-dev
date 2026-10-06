@@ -123,6 +123,8 @@ async function rrFetchNight(d){
   if(!j || !j.ok) throw new Error((j && j.error) || 'no data');
   if(!Array.isArray(j.reservations)) throw new Error('daysheet mode not deployed');
   RRN.ok = (RRN.ok === false) ? false : (j.includes_cancelled === true);
+  // Lunch 12:00-17:00 / dinner 17:01-close by booking time, same as the book.
+  if(typeof resShiftOf === 'function') j.reservations.forEach(function(r){ r.shift = resShiftOf(r); });
   RRN.nights[d] = j.reservations;
   return j.reservations;
 }

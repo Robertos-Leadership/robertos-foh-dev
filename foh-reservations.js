@@ -194,17 +194,25 @@ async function resFetchDaysheet(d){
   // reservations. Without this check that reads as "empty night", which is a
   // lie. Treat a payload with no reservations array as not-deployed-yet.
   if(!Array.isArray(j.reservations)) throw new Error('daysheet mode not deployed');
-  j.reservations.forEach(function(r){ r.shift = resShiftLabel(r.shift); });
+  j.reservations.forEach(function(r){ r.shift = resShiftOf(r); });
   return j;
 }
 
-// SevenRooms sends its shift CATEGORY, not the name the team uses: at Roberto's
-// lunch arrives as DAY and dinner as LEGACY (checked 6 Oct 2026 on five nights:
-// DAY 12:00-14:15, LEGACY 16:00-23:45). Translated once, here, so the chips, the
-// Excel Shift column and the range export all say Lunch / Dinner. Same split as
-// the covers sync in foh-core.js (DAY = lunch, the rest = dinner).
+// SevenRooms sends its shift CATEGORY, not the name the team uses: lunch arrives
+// as DAY and dinner as LEGACY. Only used now for a booking with no time.
 var RES_SHIFT_NAMES = { DAY:'Lunch', LUNCH:'Lunch', BREAKFAST:'Breakfast', BRUNCH:'Brunch',
   LEGACY:'Dinner', DINNER:'Dinner', NIGHT:'Dinner' };
+// Francesco's rule, 6 Oct 2026: LUNCH is 12:00-17:00 and DINNER is 17:01 to
+// closing, by the booking time -- not by SevenRooms' shift, which files a 16:00
+// table under dinner. After midnight is still dinner (closing runs late), and a
+// booking before noon counts as lunch. Only a booking with no time falls back to
+// SevenRooms' own shift. foh-resreports.js calls this too, so both agree.
+function resShiftOf(r){
+  var m = /^(\d{1,2}):(\d{2})/.exec(String((r && r.time) || ''));
+  if(!m) return resShiftLabel(r && r.shift);
+  var mins = Number(m[1])*60 + Number(m[2]);
+  return (mins >= 6*60 && mins <= 17*60) ? 'Lunch' : 'Dinner';
+}
 function resShiftLabel(s){
   if(!s) return s;
   var k = String(s).toUpperCase();
@@ -2152,10 +2160,26 @@ function renderReservations(){
   }
 
   // ── The night in numbers ──
+  // They follow the Lunch / Dinner chip (6 Oct 2026): with Lunch picked, every
+  // tile -- bookings, covers, money -- is lunch only. Counted from the rows the
+  // same way the server counts them (pax by state); all day keeps the server's.
   var t = RES.data.totals || {};
+  var shRows = null;
+  if(RES.shift !== 'all'){
+    shRows = (RES.data.reservations || []).filter(function(r){ return (r.shift||'') === RES.shift; });
+    t = { reservations: shRows.length, covers:0, seated:0, upcoming:0, completed:0 };
+    shRows.forEach(function(r){
+      var p = Number(r.pax) || 0;
+      t.covers += p;
+      if(r.state === 'seated') t.seated += p;
+      else if(r.state === 'upcoming') t.upcoming += p;
+      else if(r.state === 'completed') t.completed += p;
+    });
+  }
+  var shPre = RES.shift !== 'all' ? resEsc(RES.shift)+' ' : '';
   h.push('<div class="res-tot">'
-    + '<div class="res-tot-i"><b>'+resNum(t.reservations)+'</b><span>Reservations</span></div>'
-    + '<div class="res-tot-i"><b>'+resNum(t.covers)+'</b><span>Covers</span></div>'
+    + '<div class="res-tot-i"><b>'+resNum(t.reservations)+'</b><span>'+shPre+'Reservations</span></div>'
+    + '<div class="res-tot-i"><b>'+resNum(t.covers)+'</b><span>'+shPre+'Covers</span></div>'
     + '<div class="res-tot-i"><b>'+resNum(t.seated)+'</b><span>In now</span></div>'
     + '<div class="res-tot-i"><b>'+resNum(t.upcoming)+'</b><span>Still to come</span></div>'
     + '<div class="res-tot-i"><b>'+resNum(t.completed)+'</b><span>Finished</span></div>'
@@ -2166,7 +2190,7 @@ function renderReservations(){
     // revenue, which it is not (see resNet's note).
     + (function(){
         if(!money) return '';
-        var nm = resNightMoney();
+        var nm = resNightMoney(shRows);
         if(!nm.gross) return '';
         return '<div class="res-tot-i"><b><small>AED </small>'+resMoney0(nm.gross)+'</b><span>Gross &middot; linked checks</span></div>'
           + '<div class="res-tot-i"><b><small>AED </small>'+resMoney0(nm.net)+'</b><span>Net &middot; linked checks</span></div>'
