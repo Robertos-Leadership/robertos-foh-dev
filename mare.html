@@ -148,6 +148,7 @@ details summary{cursor:pointer;font-size:12px;letter-spacing:1.5px;font-weight:7
 .rota td{white-space:nowrap;text-align:center;font-size:14px;padding:8px}
 .rota td:first-child{text-align:left}
 .shift{display:inline-block;border-radius:6px;padding:6px 8px;font-weight:700;background:var(--tint);color:var(--teal);min-width:100px;border:1px solid rgba(14,74,80,.15);font-size:13.5px;box-shadow:0 3px 6px -4px rgba(14,59,63,.35)}
+.rota-act{font-size:12px;font-weight:700;margin-top:4px;white-space:nowrap}.rota-act.done{color:var(--green)}.rota-act.live{color:var(--teal)}.rota-act.warn{color:var(--red)}
 .shift.off{background:var(--soft);color:var(--muted)} .shift.leave{background:var(--blue-bg);color:var(--blue)} .shift.sick{background:var(--amber-bg);color:var(--amber)}
 .shift.empty{background:transparent;color:#9A8F83;font-weight:400;border:1px dashed #D6CABA;box-shadow:none}
 .recipe-photo{width:100%;max-height:340px;object-fit:cover;border-radius:10px}
@@ -259,13 +260,13 @@ table.sheet tfoot th, table.sheet tfoot td{border-top:2px solid var(--gold, #A88
 <div id="app"><div class="wrap muted" style="padding-top:40px">Loading…</div></div>
 <div class="status" id="status" role="status"></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="mare-i18n.js?v=20261006v"></script>
-<script src="mare-common.js?v=20261006v"></script>
-<script src="mare-media.js?v=20261006v"></script>
-<script src="mare-mgr.js?v=20261006v"></script>
-<script src="mare-mgr-ops.js?v=20261006v"></script>
-<script src="mare-mgr-back.js?v=20261006v"></script>
-<script src="mare-mgr-viewas.js?v=20261006v"></script>
+<script src="mare-i18n.js?v=20261006w"></script>
+<script src="mare-common.js?v=20261006w"></script>
+<script src="mare-media.js?v=20261006w"></script>
+<script src="mare-mgr.js?v=20261006w"></script>
+<script src="mare-mgr-ops.js?v=20261006w"></script>
+<script src="mare-mgr-back.js?v=20261006w"></script>
+<script src="mare-mgr-viewas.js?v=20261006w"></script>
 <script>MareApp.start();</script>
 <!-- "Tell us" — the same button as the Kitchen and FOH apps, into the same inbox
      (Admin → Feedback → Inbox). It says by itself which Mare module it was on. -->
@@ -279,6 +280,6 @@ window.FB_INBOX = {
   who: function () { var A = window.MareApp; return (A && A.S.me) || ''; }
 };
 </script>
-<script src="feedback-button.js?v=20261006v"></script>
+<script src="feedback-button.js?v=20261006w"></script>
 </body>
 </html>

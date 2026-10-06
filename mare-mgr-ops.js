@@ -80,8 +80,12 @@
     render: function (main) {
       if (!R.ws) R.ws = M.weekStart(M.today());
       var ws = R.ws;
-      return Promise.all([App.fetch(['shifts', 'leave', 'settings'], ws, M.addDays(ws, 6)), App.refreshStaff()]).then(function (r) {
+      return Promise.all([App.fetch(['shifts', 'leave', 'settings'], ws, M.addDays(ws, 6)), App.refreshStaff(),
+                          M.rpc('mare_mgr_overview', { p_from: ws, p_to: M.addDays(ws, 6) }, App.S.token)]).then(function (r) {
         var f = r[0]; if (!f) { main.innerHTML = App.empty(T('Could not load.')); return; }
+        // Clock-ins under each planned shift, as the Dubai schedule does. A failed read says so
+        // rather than leaving every day blank, which would look like nobody came in.
+        var ov = r[2] && r[2].data && r[2].data.ok ? r[2].data : null, act = ov ? M.actualByDay(ov.punches, ov.now) : {}, now = ov ? ov.now : new Date();
         var rota = {}; f.shifts.forEach(function (x) { rota[x.staff_id + '|' + x.date] = x; });
         var minK = +((f.settings.filter(function (s) { return s.key === 'kitchen_min'; })[0] || {}).value || 3);
         var people = active(), days = [0, 1, 2, 3, 4, 5, 6].map(function (i) { return M.addDays(ws, i); });
@@ -100,6 +104,7 @@
             var x = rota[s.id + '|' + k]; tot += shiftMin(x);
             var pend = pending.some(function (l) { return l.staff_id === s.id && l.date_from <= k && l.date_to >= k; });
             return '<td><button class="shift ' + (x ? x.kind : 'empty') + '" data-s="' + s.id + '" data-k="' + k + '">' + E(x ? shiftLabel(x) : '+') + '</button>' +
+              (ov ? M.actualHtml(act[s.id + '|' + k], x, k, now) : '') +
               (pend ? '<div class="tiny" style="color:var(--blue);font-weight:700">' + E(T('leave asked')) + '</div>' : '') + '</td>';
           }).join('') + '<td class="nw"><b>' + M.durShort(tot) + '</b></td></tr>';
         });
@@ -107,6 +112,7 @@
           var n = people.filter(function (s) { var x = rota[s.id + '|' + k]; return s.team === 'Kitchen' && x && x.kind === 'work'; }).length;
           return '<td><span class="tag ' + (n < minK ? 'red' : 'green') + '">' + n + '</span></td>';
         }).join('') + '<td></td></tr></tbody></table></div>' +
+          (ov ? '' : '<p class="small" style="margin:0;color:var(--red)">' + E(T('Could not load the clock-ins, so the rota shows the plan only.')) + '</p>') +
           '<p class="small muted" style="margin:0">' + E(T('Tap a day to set the shift. Kitchen on duty turns red under {n} people (Milica\'s winter rule). Approved leave fills in by itself.', { n: minK })) + '</p></section>';
         main.innerHTML = h;
         App.bindWeekNav(main, 'rw', function () { return R.ws; }, function (v) { R.ws = v; });

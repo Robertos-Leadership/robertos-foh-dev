@@ -4,6 +4,11 @@
    Words kept the same everywhere: DOLAZAK/ODLAZAK (clock in/out), šifra (code),
    smjena (shift), raspored (rota), brifing, kontrolna lista (checklist). */
 window.MARE_ME = {
+"working": "radi",
+"no clock-out": "nema odlaska",
+"no clock-in": "nema dolaska",
+"No clock-in": "Nema dolaska",
+"Could not load the clock-ins, so the rota shows the plan only.": "Dolasci se nisu učitali, pa raspored prikazuje samo plan.",
 "Managers’ note: what was done about it. The team never sees this.": "Bilješka menadžera: šta je urađeno. Tim ovo nikad ne vidi.",
 "e.g. Spoke to the kitchen about the staff meal": "npr. Razgovarao sa kuhinjom o obroku osoblja",
 "Saving and writing down what was said…": "Čuvam i zapisujem šta je rečeno…",

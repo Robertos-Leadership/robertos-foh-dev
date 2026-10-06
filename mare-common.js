@@ -95,6 +95,38 @@
     return { due: start, late: diff > GRACE_MIN ? diff : 0, inAt: firstIn.inP.at };
   }
 
+  // Clock-ins on the rota, the way the Dubai schedule shows them: per person per day,
+  // what the clock actually says next to what was planned. punches = everyone's, each
+  // with staff_id. Returns { 'staffId|date': { segs:[{in,out}], live, missing } }.
+  function actualByDay(punches, now) {
+    var by = {}, grp = {};
+    (punches || []).forEach(function (p) { (grp[p.staff_id] = grp[p.staff_id] || []).push(p); });
+    Object.keys(grp).forEach(function (sid) {
+      shifts(grp[sid], now).forEach(function (x) {
+        var k = sid + '|' + x.date, a = by[k] || (by[k] = { segs: [], live: false, missing: false });
+        a.segs.push({ in: x.inP ? hhmm(x.inP.at) : null, out: x.outP ? hhmm(x.outP.at) : null });
+        if (x.live) a.live = true; if (x.missing || x.orphan) a.missing = true;
+      });
+    });
+    return by;
+  }
+  // The line under a rota cell: "IN 09:51 · working", "09:51–18:06", "No clock-in".
+  // Absent only for planned work on a past day, or today once 15 min past the start.
+  function actualHtml(a, rota, key, now) {
+    if (a) {
+      var t = a.segs.map(function (g) { return (g.in || '?') + (g.out ? '–' + g.out : ''); }).join(' · ');
+      var last = a.segs[a.segs.length - 1];
+      var tail = a.live ? ' · ' + T('working') : !last.out ? ' · ' + T('no clock-out') : !last.in ? ' · ' + T('no clock-in') : '';
+      var cls = a.live ? 'live' : a.missing ? 'warn' : 'done';
+      return '<div class="rota-act ' + cls + '">' + (a.live ? T('IN') + ' ' : '') + esc(t + tail) + '</div>';
+    }
+    if (!rota || rota.kind !== 'work' || !rota.start_t) return '';
+    var td = dateKey(now || new Date());
+    if (key > td) return '';
+    if (key === td) { var p = parts(now || new Date()); if (p.hh * 60 + p.mm < timeToMin(rota.start_t) + 15) return ''; }
+    return '<div class="rota-act warn">' + esc(T('No clock-in')) + '</div>';
+  }
+
   // ── network ──
   function post(base, key, name, args, token) {
     return fetch(base + '/rest/v1/rpc/' + name, {
@@ -246,7 +278,7 @@
     TZ: TZ, SB_URL: SB_URL, SB_KEY: SB_KEY, T: T, setLang: setLang, lang: lang, langSwitch: langSwitch,
     parts: parts, pad: pad, hhmm: hhmm, dateKey: dateKey, today: today, dow: dow, addDays: addDays, daysBetween: daysBetween,
     weekStart: weekStart, monthStart: monthStart, addMonths: addMonths, day: day, niceDate: niceDate, shortDate: shortDate, monthName: monthName,
-    toInstant: toInstant, mins: mins, dur: dur, durShort: durShort, timeToMin: timeToMin, shifts: shifts, lateness: lateness, GRACE_MIN: GRACE_MIN,
+    toInstant: toInstant, mins: mins, dur: dur, durShort: durShort, timeToMin: timeToMin, shifts: shifts, lateness: lateness, actualByDay: actualByDay, actualHtml: actualHtml, GRACE_MIN: GRACE_MIN,
     rpc: rpc, kitchen: kitchen, dubaiBook: dubaiBook, dubaiLines: dubaiLines, dubaiBookHtml: dubaiBookHtml, esc: esc, safeJpeg: safeJpeg, safeImg: safeImg, money: money, money0: money0, num: num, numSafe: numSafe, parseNum: parseNum, toast: toast, pct: pct,
     photoFromFile: photoFromFile, icon: icon,
     // kept for old callers

@@ -454,11 +454,12 @@
     var f = feed(); if (!S.sub) S.sub = 'this';
     var w0 = f.week_start || M.weekStart(M.today()), ws = S.sub === 'next' ? M.addDays(w0, 7) : w0;
     var days = [0, 1, 2, 3, 4, 5, 6].map(function (i) { return M.addDays(ws, i); });
+    var act = M.actualByDay(f.punches, f.now);   // what the clock says, under the plan (as in Dubai)
     var h = f.staff.length ? '<div class="boxx"><table class="rota"><thead><tr><th>' + E(T('Name')) + '</th>' + days.map(function (k, i) { return '<th' + (k === f.today ? ' style="color:var(--teal)"' : '') + '>' + E(M.day(i)) + ' ' + (+k.slice(8)) + '</th>'; }).join('') + '</tr></thead><tbody>' +
       f.staff.map(function (s) {
         return '<tr class="' + (s.id === S.meId ? 'me' : '') + '"><td>' + E(s.name) + '</td>' + days.map(function (k) {
           var r = f.shifts.filter(function (x) { return x.staff_id === s.id && x.date === k; })[0];
-          return '<td>' + (r ? '<span class="sh ' + r.kind + '">' + E(shiftLbl(r)) + '</span>' : '') + '</td>';
+          return '<td>' + (r ? '<span class="sh ' + r.kind + '">' + E(shiftLbl(r)) + '</span>' : '') + M.actualHtml(act[s.id + '|' + k], r, k, f.now) + '</td>';
         }).join('') + '</tr>';
       }).join('') + '</tbody></table></div>' : '<div class="card big muted">' + E(T('No rota yet.')) + '</div>';
     main.innerHTML = frame('Rota', h, [['this', 'This week'], ['next', 'Next week']]);

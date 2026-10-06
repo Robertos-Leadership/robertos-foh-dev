@@ -40,6 +40,12 @@ begin
                         from public.mare_recipes x where x.active), '[]'::jsonb),
     'actions', coalesce((select jsonb_agg(jsonb_build_object('text', c.text, 'owner', c.owner, 'due', c.due) order by c.due nulls last)
                         from public.mare_actions c where not c.done), '[]'::jsonb));
+  -- Everyone's clock-ins this week (from the day before, so a shift that crosses
+  -- midnight into Monday pairs up), so the Rota shows them under the plan as the
+  -- Dubai schedule does. Asked for through Tell us, 6 Oct 2026. Times only.
+  r := r || jsonb_build_object('punches', coalesce((select jsonb_agg(jsonb_build_object('staff_id', p.staff_id, 'dir', p.dir, 'at', p.at) order by p.at)
+                        from public.mare_punches p join public.mare_staff s on s.id = p.staff_id and s.active
+                        where not p.voided and p.at <= now() and p.at >= ((ws - 1)::timestamp at time zone 'Europe/Podgorica')), '[]'::jsonb));
   if p_me is not null then
     r := r || jsonb_build_object('me', jsonb_build_object(
       'id', p_me, 'name', (select name from public.mare_staff where id = p_me), 'team', (select team from public.mare_staff where id = p_me),
