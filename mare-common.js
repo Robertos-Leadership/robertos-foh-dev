@@ -10,7 +10,7 @@
   // Kitchen app (Dubai) — read-only, for the recipe cards.
   var K_URL = 'https://zrpglswalgjbtghudmhu.supabase.co';
   var K_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpycGdsc3dhbGdqYnRnaHVkbWh1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA5MTIyMjQsImV4cCI6MjA5NjQ4ODIyNH0.pfABN-so4xINK7nHxXUlVeTO4g0h0l6ILHVwpoKrbds';
-  var MAX_SHIFT_MS = 20 * 3600 * 1000;     // an IN with no OUT inside 20 h is a missing clock-out
+  var MAX_SHIFT_MS = 16 * 3600 * 1000;     // an IN with no OUT inside 16 h is a missing clock-out (same rule as the database)
 
   // ── language ──
   var LANG = 'en';

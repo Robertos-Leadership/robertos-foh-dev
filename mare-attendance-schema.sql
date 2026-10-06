@@ -117,7 +117,7 @@ begin
   return v;
 end $$;
 
--- Is this person clocked in right now? (last valid punch is an IN from the last 20 h)
+-- Is this person clocked in right now? (last valid punch is an IN from the last 16 h)
 create or replace function public.mare_open_in(p_staff uuid, p_at timestamptz) returns public.mare_punches
 language sql stable security definer set search_path = public as $$
   select p.* from public.mare_punches p
@@ -154,8 +154,8 @@ begin
   return jsonb_build_object('ok', true, 'now', now(), 'staff', coalesce((
     select jsonb_agg(jsonb_build_object(
              'id', s.id, 'name', s.name, 'team', s.team, 'has_pin', s.pin_hash is not null,
-             'in', coalesce(l.dir = 'in' and now() - l.at < interval '20 hours', false),
-             'since', case when l.dir = 'in' and now() - l.at < interval '20 hours' then l.at end)
+             'in', coalesce(l.dir = 'in' and now() - l.at < interval '16 hours', false),
+             'since', case when l.dir = 'in' and now() - l.at < interval '16 hours' then l.at end)
            order by s.team, s.sort, s.name)
       from public.mare_staff s
       left join lateral (select dir, at from public.mare_punches p
@@ -212,7 +212,7 @@ begin
   if prev.at is not null and v_at - prev.at < interval '2 minutes' and not v_off then
     return jsonb_build_object('ok', false, 'error', 'just_punched', 'dir', prev.dir, 'at', prev.at, 'name', st.name);
   end if;
-  v_dir := case when prev.dir = 'in' and v_at - prev.at < interval '20 hours' then 'out' else 'in' end;
+  v_dir := case when prev.dir = 'in' and v_at - prev.at < interval '16 hours' then 'out' else 'in' end;
 
   insert into public.mare_punches(staff_id, dir, at, source, device_id, offline, client_id)
   values (p_staff, v_dir, v_at, 'tablet', dev, v_off, p_client_id) returning id into v_id;

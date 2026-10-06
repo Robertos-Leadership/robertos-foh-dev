@@ -73,7 +73,13 @@ var FB_A = {
   // A design round: we propose how each part works and he either takes it or
   // tells us his way. "Not yet" and "leave it" do not fit a proposal.
   LIKE: 'Yes, like this',
-  OTHER:'My way — see my note'
+  OTHER:'My way — see my note',
+  // ── Added for the Roberto's Mare review round (mare-review) ──────────────
+  // A test round: he has just USED the screen, so the question is not "is this
+  // a problem for you?" but "after trying it — keep, change, or add?".
+  WORKS:'Works well',
+  CHANGE:'Change something',
+  ADDS: 'Add something'
 };
 
 // The three answers a round offers. A round picks one set via `ask:`.
@@ -93,7 +99,9 @@ var FB_ASK = {
   BUILD:    [FB_A.BUILD, FB_A.SKIP],
   CANT:     [FB_A.OKNP,  FB_A.SOLVE],
   // DESIGN — "here is how we would build it — like this, or your way?"
-  DESIGN:   [FB_A.LIKE,  FB_A.OTHER]
+  DESIGN:   [FB_A.LIKE,  FB_A.OTHER],
+  // TRY — "you tried it: keep it, change it, or add to it?"
+  TRY:      [FB_A.WORKS, FB_A.CHANGE, FB_A.ADDS]
 };
 
 // How the phone page words each answer on its button.
@@ -110,11 +118,14 @@ FB_ASK_LABEL[FB_A.OKNP]  = 'OK, no problem';
 FB_ASK_LABEL[FB_A.SOLVE] = 'This is important — try to find a solution';
 FB_ASK_LABEL[FB_A.LIKE]  = 'Yes, like this';
 FB_ASK_LABEL[FB_A.OTHER] = 'I want it differently — see my note';
+FB_ASK_LABEL[FB_A.WORKS] = 'Works well — keep it';
+FB_ASK_LABEL[FB_A.CHANGE] = 'Change something — see my note';
+FB_ASK_LABEL[FB_A.ADDS]  = 'Add something — see my note';
 
 // Display order in Admin: loudest first. Every answer any round can produce must
 // be here or it renders no pill at all (the pills filter THIS list).
-var FB_ANSWER_ORDER = [FB_A.FIX, FB_A.PROB, FB_A.SOLVE, FB_A.OTHER, FB_A.GO, FB_A.BUILD, FB_A.LIKE,
-                       FB_A.NICE, FB_A.WAIT, FB_A.FINE, FB_A.OKNP, FB_A.NEVER, FB_A.LEAVE, FB_A.SKIP];
+var FB_ANSWER_ORDER = [FB_A.FIX, FB_A.PROB, FB_A.SOLVE, FB_A.CHANGE, FB_A.ADDS, FB_A.OTHER, FB_A.GO, FB_A.BUILD, FB_A.LIKE,
+                       FB_A.NICE, FB_A.WAIT, FB_A.FINE, FB_A.WORKS, FB_A.OKNP, FB_A.NEVER, FB_A.LEAVE, FB_A.SKIP];
 
 // Which answers mean "he is asking us to DO something". An EXPLICIT set: this was
 // once inferred from position (indexOf(v) > 1), which quietly made any answer
@@ -131,9 +142,105 @@ FB_WORK_ANSWERS[FB_A.BUILD] = 1;
 FB_WORK_ANSWERS[FB_A.SOLVE] = 1;
 FB_WORK_ANSWERS[FB_A.LIKE] = 1;
 FB_WORK_ANSWERS[FB_A.OTHER] = 1;
+FB_WORK_ANSWERS[FB_A.CHANGE] = 1;
+FB_WORK_ANSWERS[FB_A.ADDS] = 1;
 
 // ── The rounds. Newest first. ───────────────────────────────────────────────
 var FB_ROUNDS = {
+  // ── Roberto's Mare team app, for Andrea Sacchi (6 Oct 2026) ─────────────
+  // The whole Mare app is in FOH dev with a DEMO team (code 1234 each). He uses
+  // each screen and answers keep / change / add. SEND IT FROM THE DEV SITE'S
+  // Admin, so the link opens the dev questionnaire and the dev Mare app.
+  'mare-review': {
+    name: 'Roberto\'s Mare app — try it and tell us (Andrea)',
+    email: {
+      subject: 'Roberto\'s Mare app — please try it',
+      body: ['The Roberto\'s Mare app is ready to try: clock-in, rota, briefing, closing report, checklists, costing, recipes, leave and more, in English and Montenegrin.',
+             'It is filled with a <b>demo team</b> (every code is <b>1234</b>), so you can press every button without touching anything real. <b>17 short steps</b>: for each one tap <b>Works well</b>, <b>Change something</b> or <b>Add something</b>, and tell us how in the note.',
+             'Nothing goes to the Mare team until you are happy with it.'],
+      cta: 'Try the Mare app',
+      wa: 'The Roberto\'s Mare app is ready to try, filled with a demo team (every code is 1234). 17 short steps: for each one tap Works well, Change something or Add something, and tell us how in the note.'
+    },
+    title: 'Roberto\'s Mare app — try it and tell us',
+    ask: FB_ASK.TRY,
+    intro: [
+      'Hi Andrea — this is the app for Roberto\'s Mare. <b>Milica\'s app</b>: <a href="https://robertos-foh-dev.pages.dev/mare.html">https://robertos-foh-dev.pages.dev/mare.html</a> (your usual login). <b>The staff tablet</b>: <a href="https://robertos-foh-dev.pages.dev/mare-clock.html">https://robertos-foh-dev.pages.dev/mare-clock.html</a> (step 2 shows how to set it up).',
+      'Everything is filled with a <b>demo team</b>: Rahul, Arjun, Petar, Ana, Jelena, Nikola, Luka and Ivana, all marked (demo), all with code <b>1234</b>. Press anything: it is all removed before the real team starts.',
+      'Each step below says <b>what to try</b>. Try it, then tell us: keep it, change it, or add to it.'
+    ],
+    howto: 'Tap <b>Works well</b> if it is right as it is, or <b>Change something</b> / <b>Add something</b> and write what in the note. The note is the most useful part.<br><br>Your answers are kept on this phone as you go, so you can stop and come back. Tap <b>Send my answers</b> when you are done.',
+    lastQ: 'What is missing for Roberto\'s Mare that is not in the app at all? And anything Milica or the team will struggle with?',
+    items: [
+      { id:'m-home',
+        said: 'The home screen',
+        today: 'Open <a href="https://robertos-foh-dev.pages.dev/mare.html">https://robertos-foh-dev.pages.dev/mare.html</a> and sign in with your usual Roberto’s login. The marina photo, today’s numbers and a tile for every module. Tap a number or a tile to go in; <b>Home</b> brings you back.',
+        label: 'Home screen' },
+      { id:'m-tablet',
+        said: 'Set up a tablet',
+        today: 'Tile <b>Tablet</b> → type a name → <b>Make a tablet code</b>. Then open <a href="https://robertos-foh-dev.pages.dev/mare-clock.html">https://robertos-foh-dev.pages.dev/mare-clock.html</a> on a phone, laptop or tablet and type the code. That screen is now the staff tablet.',
+        label: 'Tablet set-up' },
+      { id:'m-clock',
+        said: 'Clock in and out',
+        today: 'On the tablet, tap <b>Ana (demo)</b> and type <b>1234</b>: she is clocked in, with a photo if the camera is allowed. Tap her again to clock out. Every demo person’s code is <b>1234</b>.',
+        label: 'Clock in / out' },
+      { id:'m-att',
+        said: 'Attendance',
+        today: 'Tile <b>Attendance</b>. <b>Needs you</b> shows Jelena’s missing clock-outs and Ana late on Monday: fix one with a time and a reason, accept or write down the late one. Then <b>Week</b> (tap a day, Excel for payroll) and <b>Check faces</b>.',
+        label: 'Attendance' },
+      { id:'m-sched',
+        said: 'Schedule (rota)',
+        today: 'Tile <b>Schedule</b>. Tap any day to change a shift or set a day off. <b>Kitchen on duty</b> turns red under 3 people. Try <b>Copy last week into this week</b> and <b>Excel</b>.',
+        label: 'Rota' },
+      { id:'m-brief',
+        said: 'Daily briefing',
+        today: 'Tile <b>Daily briefing</b>: change today’s and save. On the tablet, <b>Today’s briefing</b> → <b>I have read it</b> → a name and 1234. Back on the briefing page you see who has read it.',
+        label: 'Briefing' },
+      { id:'m-check',
+        said: 'Opening and closing checklists',
+        today: 'On the tablet, <b>Checklists</b>: tick a line with a name and 1234. Lines marked PHOTO open the camera. In the app, <b>Checklists → Edit the lists</b>: add or change lines (English and Montenegrin), drag to reorder, set the "done by" time.',
+        label: 'Checklists' },
+      { id:'m-closing',
+        said: 'Closing report',
+        today: 'Tile <b>Closing report</b>: fill in a day. Sales, covers, card and cash. The app shows the total, the average per cover and whether card + cash match. <b>The month</b> shows every day and an Excel.',
+        label: 'Closing report' },
+      { id:'m-cost',
+        said: 'Costing',
+        today: 'Tile <b>Costing</b>: add a purchase, for example <b>120,50</b> (comma or dot both work; 1.800 is refused because it could be 1800). Food and beverage cost %, day by day, and <b>Targets</b> you can set.',
+        label: 'Costing' },
+      { id:'m-stock',
+        said: 'Breakage, waste and the monthly count',
+        today: 'On the tablet, <b>Breakage & waste</b>: report one with a photo. In the app, <b>Stock & breakage</b>: write in the cost, tick Checked. <b>Monthly count</b>: the stock list and its value.',
+        label: 'Stock & breakage' },
+      { id:'m-recipes',
+        said: 'Recipes',
+        today: 'Tile <b>Recipes</b>: the Mare book (add or edit a recipe with a photo) and <b>From Dubai</b>: Roberto’s Dubai recipe cards, read only, to learn the standard.',
+        label: 'Recipes' },
+      { id:'m-leave',
+        said: 'Leave',
+        today: 'Tile <b>Leave</b>: Arjun asked for 2–6 November. It shows whether the kitchen stays at 3. Approve or decline it: approved days go into the rota by themselves. Days left per person are below.',
+        label: 'Leave' },
+      { id:'m-speak',
+        said: 'Speak up',
+        today: 'On the tablet, <b>Speak up</b>: send a message with no name. In the app, <b>Speak up</b>: read it, mark it Seen or Dealt with, and note what was done.',
+        label: 'Speak up' },
+      { id:'m-meet',
+        said: 'Weekly meetings',
+        today: 'Tile <b>Weekly meetings</b>: open last Monday’s notes, add an action with who and by when, tick one done. Open actions also show on the staff tablet under the briefing.',
+        label: 'Meetings' },
+      { id:'m-people',
+        said: 'People and phone links',
+        today: 'Tile <b>People</b>: add a person, set start times, contract hours and leave days, reset a code. Open <b>Phone link</b> under a demo person: that is the link a staff member gets by WhatsApp.',
+        label: 'People' },
+      { id:'m-phone',
+        said: 'The staff phone',
+        today: 'Open a demo person’s phone link (from People) on your phone and type 1234: their hours, next shift, briefing, rota, recipes, leave and Speak up. Phones cannot clock in.',
+        label: 'Staff phone' },
+      { id:'m-lang',
+        said: 'English / Montenegrin',
+        today: 'Every screen has <b>EN | ME</b> at the top. The Montenegrin was written by us, so Milica should check the words before the team sees them. Tell us anything that reads wrong.',
+        label: 'Language' },
+    ]
+  },
   // ── Learning section, for Andrea Falcone (Executive Development Chef) ─────
   // Born from his "Tell us" idea of 21 Sep 2026 (inbox 7047ca62): a page to read
   // and a short scored test, inside the Kitchen app. Nothing is built yet. Each
