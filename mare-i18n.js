@@ -7,6 +7,7 @@ window.MARE_ME = {
 "Use only one decimal sign, e.g. 1800 or 1800,50.": "Koristite samo jedan decimalni znak, npr. 1800 ili 1800,50.",
 "“{s}” is not a number.": "„{s}” nije broj.",
 "Is it {a} or {b}? Type it without a thousands sign.": "Da li je {a} ili {b}? Upišite bez znaka za hiljade.",
+"Roberto's FOH": "Roberto's FOH",
 "A photo is taken at every clock-in": "Pri svakoj prijavi pravi se fotografija",
 "A problem": "Problem",
 "A time entered by hand": "Vrijeme upisano ručno",

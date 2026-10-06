@@ -158,7 +158,7 @@
     var greet = hr < 12 ? T('Good morning') : hr < 18 ? T('Good afternoon') : T('Good evening');
     var first = (App.S.me || '').split(' ')[0];
     a.innerHTML = '<div class="hero"><div class="hero-top"><span class="who">' + E(App.S.me || '') + '</span><div class="row">' + M.langSwitch() +
-      '<button class="lk" id="so">' + E(T('Sign out')) + '</button></div></div>' +
+      '<a class="lk" href="./">' + E(T('Roberto\'s FOH')) + ' &rarr;</a><button class="lk" id="so">' + E(T('Sign out')) + '</button></div></div>' +
       '<div class="hero-main"><img src="mare-logo-white.svg" alt="Roberto\'s Mare"><div><h1 class="serif">' + E(greet + (first ? ', ' + first : '')) + '</h1>' +
       '<div class="sub">' + E(M.niceDate(t)) + ' · Porto Montenegro</div></div></div></div>' +
       '<div class="strip"><div class="strip-in" id="strip">' + [1, 2, 3, 4, 5].map(function () { return '<div class="stat"><b>·</b><span>&nbsp;</span></div>'; }).join('') + '</div></div>' +
