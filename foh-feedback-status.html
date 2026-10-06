@@ -64,14 +64,33 @@ var KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6
 // shipped; it does not prove it works. Only 'verified' claims that, and only
 // because a human drove the real flow.
 //
-// ⚠ BUMP THIS WITH THE BUILD STAMP IN index.html, IN THE SAME COMMIT.
-// This page is standalone — it has no app shell to read the stamp off, so the
-// build lives here twice by necessity. Leave it behind and a shipped: item
-// silently reads as "Not started yet" on the asker's own status page: newer
-// than this constant means "not live yet", which falls through to open. That is
-// the exact failure this page exists to prevent — them and Francesco looking at
-// two different truths — and it fails SILENTLY, in their favour to complain.
+// The app's build is read off the app itself — see readAppBuild(). This
+// constant is only the floor, used when that read fails (offline, slow).
+//
+// It used to be the whole answer: "bump this with index.html, in the same
+// commit". That was forgotten FIVE times between 31 Jul and 6 Oct 2026, and
+// every time a fix recorded at the current build read "reaching the app
+// shortly" with its how-to-check line hidden — the exact failure this page
+// exists to prevent, and it fails SILENTLY, in their favour to complain.
+// Bumping it still does no harm; forgetting it no longer costs anything.
 var BUILD = '2026-09-29.1';
+
+// The stamp Francesco sees bottom-right of the app (#foh-build in index.html),
+// read from the same folder this page is served from, so live reads live and
+// dev reads dev. It can only RAISE the build, never lower it: a stale or
+// half-loaded index.html must not make a shipped fix look unshipped. Capped at
+// 2.5s — the person came to read their items, not to wait for our bookkeeping.
+function readAppBuild(){
+  var got = fetch('./', { cache:'no-store' })
+    .then(function(r){ return r.ok ? r.text() : ''; })
+    .then(function(html){
+      var m = /id="foh-build"[^>]*>\s*build (\d{4}-\d{2}-\d{2}\.\d+)/.exec(html || '');
+      if(m && buildRank(m[1]) > buildRank(BUILD)) BUILD = m[1];
+    })
+    .catch(function(){});
+  var gaveUp = new Promise(function(res){ setTimeout(res, 2500); });
+  return Promise.race([got, gaveUp]);
+}
 
 var q = new URLSearchParams(location.search);
 var token = q.get('t') || '';
@@ -278,6 +297,7 @@ async function boot(){
     fail('This link is incomplete — please use the link Roberto’s sent you.');
     return;
   }
+  var appBuild = readAppBuild();   // in parallel with the RPC, awaited before render
   try{
     // A security-definer function is the ONLY way anon reaches any of this: it
     // takes the token, resolves it to one person, and returns their rows alone.
@@ -293,6 +313,7 @@ async function boot(){
       fail('This link isn’t working any more — ask Francesco for a fresh one.');
       return;
     }
+    await appBuild;
     render(d);
   }catch(e){
     fail('Couldn’t load this just now — check your connection and open the link again.');
