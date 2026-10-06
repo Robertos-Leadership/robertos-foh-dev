@@ -407,6 +407,18 @@ if ('serviceWorker' in navigator) {
       </div>
       </div>
       </div>
+      <!-- Roberto's Mare attendance: its own page (mare.html), shown by applyFohAccess() only to a 'mare' grant or Admin. -->
+      <div class="module-card" id="mod-card-mare" onclick="location.href='mare.html'" style="--acc:#016A74; display:none; margin-top:14px;">
+        <div class="module-band">
+          <span class="module-ico"><span class="module-mono">M</span></span>
+          <div class="module-name">Mare Attendance</div>
+          <span class="module-new">NEW</span>
+        </div>
+        <div class="module-accent"></div>
+        <div class="module-body">
+          <div class="module-desc">Roberto's Mare clock-in: who is in, hours, late, faces &amp; payroll.</div>
+        </div>
+      </div>
       <div class="module-card module-admin" id="mod-card-admin" onclick="enterApp('admin')" style="display:none;">
         <span class="module-ico"><span class="module-mono">A</span></span>
         <span class="module-name">Admin &mdash; users &amp; access</span>
@@ -461,7 +473,7 @@ if ('serviceWorker' in navigator) {
      Loaded here, not with the foh-*.js at the foot of the body, because the
      inline Admin code below READS it rather than just calling into it. -->
 <script src="foh-rounds.js?v=20260921learn2"></script>
-<script src="foh-core.js?v=20261006covers"></script>
+<script src="foh-core.js?v=20261006mare"></script>
 <script src="foh-bible.js?v=20260930master"></script>
 <script src="foh-sched-xlsx.js?v=20260927a3b"></script>
 <script src="foh-events.js?v=20260925audit"></script>

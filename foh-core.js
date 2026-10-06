@@ -390,6 +390,12 @@ function applyFohAccess(){
   if(rrn) rrn.style.display = fohNewSeen('reservations') ? 'none' : '';
   var ad=document.getElementById('mod-card-admin');
   if(ad) ad.style.display = fohCanAdmin() ? '' : 'none';
+  // Roberto's Mare attendance (Porto Montenegro) lives on its own page,
+  // mare.html. Only an EXPLICIT 'mare' grant (or Admin) shows the card — it is
+  // never one of the default modules, and mare.html checks the grant again in
+  // the database (mare_is_mgr), so this is the doorway, not the lock.
+  var mc=document.getElementById('mod-card-mare');
+  if(mc) mc.style.display = (state.access && (state.access.isAdmin || (state.access.modules||[]).indexOf('mare')!==-1)) ? '' : 'none';
   // Section labels hide when every module inside them is hidden for this user.
   var s1=document.getElementById('sec-daily');
   if(s1) s1.style.display = (!fohBlocked('operations') || !fohBlocked('events')) ? '' : 'none';
@@ -701,7 +707,7 @@ async function loadFohAccess(){
 //  ADMIN MODULE — manage logins + module access (notifications: phase 2). Admin-only.
 // ══════════════════════════════════════════════
 var SUPA_USERS_URL='https://supabase.com/dashboard/project/paoaivwtkzujmrgrfjuq/auth/users';
-var ADMIN_MODULES=[{k:'events',n:'Activations'},{k:'privateevents',n:'Events'},{k:'operations',n:'Closing Report'},{k:'revenue',n:'Revenue'},{k:'stocktake',n:'Stock Take'},{k:'reviews',n:'Guest Reviews'},{k:'reservations',n:'Reservations'}];
+var ADMIN_MODULES=[{k:'events',n:'Activations'},{k:'privateevents',n:'Events'},{k:'operations',n:'Closing Report'},{k:'revenue',n:'Revenue'},{k:'stocktake',n:'Stock Take'},{k:'reviews',n:'Guest Reviews'},{k:'reservations',n:'Reservations'},{k:'mare',n:'Mare Attendance'}];
 // Every automatic email the app sends, and the notify key that decides who gets it.
 // A person is on a list when that key is in their app_users.notify array — ticked
 // here or on the Emails tab, never in code. The edge functions read the same keys,

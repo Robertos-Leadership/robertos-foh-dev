@@ -1,0 +1,441 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#00575F">
+<title>Roberto's Mare · Staff clock-in</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=Karla:wght@400;500;600;700&display=swap" rel="stylesheet">
+<!-- Roberto's Mare staff clock-in. Two uses of the same page:
+     1. The TABLET at the staff entrance (paired once with a tablet code from
+        Milica's page): tap your name, type your 4 digits, a photo is taken.
+     2. A staff PHONE opening its private link (?me=…): their own hours, view
+        only. Phones never clock in.
+     Talks to the database only through the mare_kiosk_* / mare_me functions
+     (see mare-attendance-schema.sql). -->
+<style>
+:root{
+  --teal:#00575F; --teal-2:#016A74; --cream:#FAF5F0; --card:#FFFFFF; --line:#E2D8CC;
+  --ink:#1E2A2C; --muted:#4A5658; --soft:#EFE8DF; --red:#9B1C1C; --red-bg:#FDECEC; --amber:#7A4100; --amber-bg:#FFF3E0;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:var(--cream);color:var(--ink);font-family:Karla,system-ui,sans-serif;-webkit-tap-highlight-color:transparent;
+  -webkit-user-select:none;user-select:none;overscroll-behavior:none}
+button{font-family:inherit;cursor:pointer;color:inherit}
+.serif{font-family:'Cormorant Garamond',Georgia,serif;font-weight:600}
+.app{min-height:100%;display:flex;flex-direction:column}
+header{background:var(--teal);color:#fff;display:flex;align-items:center;justify-content:space-between;gap:16px;
+  padding:14px clamp(16px,3vw,36px);padding-top:max(14px,env(safe-area-inset-top))}
+.brand{display:flex;align-items:center;gap:14px;min-width:0}
+.brand img{width:56px;height:56px;flex-shrink:0}
+.brand .t1{font-size:clamp(20px,2.4vw,28px);letter-spacing:5px}
+.brand .t2{font-size:14px;letter-spacing:1px;opacity:.92}
+.clock{text-align:right}
+.clock .c1{font-size:clamp(30px,4vw,46px);font-weight:700;font-variant-numeric:tabular-nums;line-height:1}
+.clock .c2{font-size:15px;opacity:.92;margin-top:4px}
+main{flex:1;padding:22px clamp(16px,3vw,36px) 16px;display:flex;flex-direction:column;gap:18px;min-height:0}
+h1{margin:0;font-size:clamp(28px,3.4vw,40px);letter-spacing:3px;color:var(--teal)}
+.groups{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:24px;align-items:start}
+.group h2{margin:0 0 10px;font-size:14px;font-weight:700;letter-spacing:3px;color:var(--muted);border-bottom:1px solid #D8CFC4;padding-bottom:8px}
+.names{display:flex;flex-direction:column;gap:10px}
+.name{min-height:72px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 16px;display:flex;align-items:center;
+  justify-content:space-between;gap:12px;text-align:left;font-size:23px;font-weight:600}
+.name:active{background:#F4EEE6}
+.pill{font-size:14px;font-weight:700;border-radius:999px;padding:6px 12px;white-space:nowrap}
+.pill.in{background:var(--teal);color:#fff}
+.pill.out{background:var(--soft);color:var(--muted)}
+.pill.new{background:var(--amber-bg);color:var(--amber)}
+.foot{display:flex;flex-wrap:wrap;align-items:center;gap:10px 18px;font-size:14px;color:var(--muted);padding-bottom:max(4px,env(safe-area-inset-bottom))}
+.dot{width:10px;height:10px;border-radius:50%;display:inline-block;background:#2E7D32;margin-right:6px;vertical-align:middle}
+.dot.off{background:var(--red)}
+.pinwrap{display:flex;flex-wrap:wrap;gap:36px;align-items:flex-start;justify-content:center}
+.who{flex:1 1 300px;max-width:460px;display:flex;flex-direction:column;gap:18px}
+.back{align-self:flex-start;display:flex;align-items:center;gap:8px;background:transparent;border:1px solid #C9BEB1;border-radius:999px;padding:12px 22px;font-size:18px;min-height:52px}
+.who .act{font-size:17px;letter-spacing:2px;color:var(--muted);font-weight:700}
+.who .nm{font-size:clamp(48px,6vw,72px);line-height:1;color:var(--teal)}
+.cam{width:100%;max-width:340px;aspect-ratio:4/3;border-radius:16px;background:#1E2A2C;overflow:hidden;position:relative;display:flex;align-items:center;justify-content:center;color:#C9D6D7;font-size:15px;text-align:center;padding:12px}
+.cam video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
+.pad{flex:0 1 420px;display:flex;flex-direction:column;align-items:center;gap:18px}
+.pad .lbl{font-size:22px;font-weight:700;text-align:center}
+.dots{display:flex;gap:22px;height:28px;align-items:center}
+.dots span{width:24px;height:24px;border-radius:50%;border:2px solid var(--teal)}
+.dots span.on{background:var(--teal)}
+.keys{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;width:100%}
+.keys button{height:clamp(68px,10vh,92px);border-radius:16px;border:1px solid var(--line);background:var(--card);font-size:34px;font-weight:700}
+.keys button.small{font-size:19px}
+.keys button:active{background:#E8F0F0}
+.msg{min-height:28px;font-size:19px;font-weight:700;text-align:center}
+.msg.err{color:var(--red)}
+.done{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;text-align:center}
+.tick{width:150px;height:150px;border-radius:50%;background:var(--teal);display:flex;align-items:center;justify-content:center}
+.tick.warn{background:var(--amber)}
+.done .nm{font-size:clamp(48px,6vw,64px);color:var(--teal);line-height:1}
+.done .l1{font-size:clamp(30px,4vw,40px);font-weight:700}
+.done .l2{font-size:20px;color:var(--muted);max-width:640px}
+.btn{background:var(--teal);color:#fff;border:0;border-radius:999px;padding:14px 32px;font-size:19px;font-weight:700;min-height:54px}
+.btn.ghost{background:#fff;color:var(--ink);border:1px solid #C9BEB1}
+.setup{max-width:560px;margin:6vh auto 0;display:flex;flex-direction:column;gap:18px}
+.setup input{font:inherit;font-size:30px;letter-spacing:6px;text-transform:uppercase;padding:16px;border:2px solid #C9BEB1;border-radius:14px;width:100%;background:#fff;-webkit-user-select:text;user-select:text}
+.setup p{margin:0;font-size:18px;line-height:1.45;color:var(--muted)}
+/* phone: my hours */
+.me{max-width:520px;width:100%;margin:0 auto;display:flex;flex-direction:column;gap:12px}
+.tot{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.tot div{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 14px;display:flex;flex-direction:column;gap:2px}
+.tot span{font-size:12px;letter-spacing:1px;color:var(--muted);font-weight:700}
+.tot b{font-size:26px}
+.day{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 16px;display:flex;justify-content:space-between;gap:12px;align-items:center}
+.day.today{border:2px solid var(--teal)}
+.day .d1{font-weight:700;font-size:17px}
+.day .d2{font-size:14px;color:var(--muted);margin-top:2px}
+.day .h{font-weight:700;font-size:17px;white-space:nowrap}
+.note{font-size:13px;color:var(--amber);background:var(--amber-bg);border-radius:8px;padding:5px 9px;margin-top:6px;display:inline-block}
+.wk{margin:10px 4px 0;font-size:13px;letter-spacing:3px;color:var(--muted);font-weight:700}
+.info{margin-top:6px;padding:14px 16px;border-radius:14px;background:var(--soft);font-size:15px;line-height:1.4}
+@media (orientation:portrait){ .pinwrap{gap:16px} .who{gap:10px;align-items:center;text-align:center} .back{align-self:center} .cam{max-width:220px} .keys button{height:76px} main{padding-top:14px} }
+@media (max-width:600px){ .brand img{width:44px;height:44px} .brand .t2{display:none} .who{align-items:center;text-align:center} .back{align-self:center} }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="brand">
+      <img src="mare-logo-white.svg" alt="Roberto's Mare">
+      <div><div class="t1 serif" id="hdr-title">STAFF CLOCK-IN</div><div class="t2">Roberto's Mare · Porto Montenegro</div></div>
+    </div>
+    <div class="clock"><div class="c1" id="clk">--:--</div><div class="c2" id="clkd"></div></div>
+  </header>
+  <main id="main"></main>
+</div>
+<canvas id="snap" width="240" height="180" style="display:none"></canvas>
+<script src="mare-common.js?v=20261006a"></script>
+<script>
+(function(){
+  var M = window.Mare, E = M.esc;
+  var LS_DEV = 'mare_device', LS_Q = 'mare_queue', LS_BOARD = 'mare_board';
+  var params = new URLSearchParams(location.search);
+  var meToken = params.get('me');
+  var main = document.getElementById('main');
+  var S = { screen:'', board:[], who:null, pin:'', pin1:null, msg:'', msgErr:false, last:null, online:navigator.onLine, cam:null, camOk:false, resetT:null };
+
+  function ls(k, v){ try{ if(v===undefined) return localStorage.getItem(k); if(v===null) localStorage.removeItem(k); else localStorage.setItem(k, v); }catch(e){ return null; } }
+  function queue(){ try{ return JSON.parse(ls(LS_Q) || '[]'); }catch(e){ return []; } }
+  function setQueue(q){ ls(LS_Q, JSON.stringify(q)); }
+
+  // ── clock ──
+  function tick(){
+    var now = new Date();
+    document.getElementById('clk').textContent = M.hhmm(now);
+    document.getElementById('clkd').textContent = M.niceDate(M.dateKey(now));
+  }
+  tick(); setInterval(tick, 1000);
+
+  // Keep a wall tablet's screen awake.
+  var lock = null;
+  function wake(){ try{ if(navigator.wakeLock && !meToken) navigator.wakeLock.request('screen').then(function(l){ lock = l; }, function(){}); }catch(e){} }
+  document.addEventListener('visibilitychange', function(){ if(document.visibilityState === 'visible') wake(); });
+
+  // ════════════════ PHONE: my hours (view only) ════════════════
+  if (meToken) { document.getElementById('hdr-title').textContent = 'MY HOURS'; phoneStart(); return; }
+
+  function phoneStart(){
+    var saved = null; try{ saved = sessionStorage.getItem('mare_me_pin'); }catch(e){}
+    M.rpc('mare_me', { p_token: meToken, p_pin: null }).then(function(r){
+      if (r.error) { main.innerHTML = '<div class="me"><div class="info">'+(r.error.network?'No internet. Try again in a moment.':'Something went wrong. Try again.')+'</div></div>'; return; }
+      var d = r.data;
+      if (!d.ok) { main.innerHTML = '<div class="me"><h1 class="serif">Link not valid</h1><div class="info">This link is no longer active. Ask Milica for a new one.</div></div>'; return; }
+      S.who = { name: d.name };
+      if (!d.has_pin) { main.innerHTML = '<div class="me"><h1 class="serif">Hi '+E(d.name)+'</h1><div class="info">Choose your 4-digit code on the tablet at the staff entrance first. Then come back to this link.</div></div>'; return; }
+      if (saved) { S.pin = saved; phoneLoad(); } else { S.pin=''; phonePin(); }
+    });
+  }
+  function phonePin(){
+    S.screen = 'mepin';
+    main.innerHTML =
+      '<div class="pinwrap"><div class="pad">'+
+        '<div class="who" style="align-items:center;text-align:center"><div class="act">MY HOURS</div><div class="nm serif">'+E(S.who.name)+'</div></div>'+
+        '<div class="lbl">Your 4-digit code</div><div class="dots" id="dots"></div>'+
+        '<div class="msg '+(S.msgErr?'err':'')+'" id="msg">'+E(S.msg)+'</div>'+
+        '<div class="keys" id="keys"></div></div></div>';
+    drawKeys(function(){ phoneLoad(); });
+  }
+  function phoneLoad(){
+    M.rpc('mare_me', { p_token: meToken, p_pin: S.pin }).then(function(r){
+      if (r.error) { S.msg = r.error.network ? 'No internet. Try again.' : 'Something went wrong.'; S.msgErr = true; S.pin=''; phonePin(); return; }
+      var d = r.data;
+      if (!d.ok) {
+        try{ sessionStorage.removeItem('mare_me_pin'); }catch(e){}
+        S.msg = d.error === 'locked' ? 'Too many wrong codes. Wait 15 minutes or ask Milica.' : 'Wrong code. Try again.';
+        S.msgErr = true; S.pin=''; phonePin(); return;
+      }
+      try{ sessionStorage.setItem('mare_me_pin', S.pin); }catch(e){}
+      phoneHours(d);
+    });
+  }
+  function phoneHours(d){
+    var now = new Date(d.now), today = M.dateKey(now);
+    var sh = M.shifts(d.punches, now);
+    var thisW = M.weekStart(today), lastW = M.addDays(thisW, -7);
+    function weekTotal(ws){ var t=0; sh.forEach(function(s){ if(s.min!=null && s.date>=ws && s.date<M.addDays(ws,7)) t+=s.min; }); return t; }
+    function dayRows(ws, upto){
+      var rows = '';
+      for (var i=6;i>=0;i--){
+        var k = M.addDays(ws, i); if (k > upto) continue;
+        var ds = sh.filter(function(s){ return s.date === k; });
+        var tot = 0, lines = [], notes = [];
+        ds.forEach(function(s){
+          if (s.min != null) tot += s.min;
+          var a = s.inP ? M.hhmm(s.inP.at) : '?', b = s.outP ? M.hhmm(s.outP.at) : (s.live ? 'still in' : '?');
+          lines.push(a+' → '+b);
+          if (s.missing) notes.push('No clock-out yet. Milica will check it.');
+          if ((s.inP && s.inP.source==='manager') || (s.outP && s.outP.source==='manager')) notes.push('A time here was entered by Milica.');
+        });
+        rows += '<div class="day'+(k===today?' today':'')+'"><div><div class="d1">'+M.shortDate(k)+(k===today?' · today':'')+'</div>'+
+          '<div class="d2">'+(lines.length?E(lines.join(' · ')):'Day off')+'</div>'+
+          notes.map(function(n){return '<div class="note">'+E(n)+'</div>';}).join('')+'</div>'+
+          '<div class="h">'+(lines.length?M.dur(tot):'—')+'</div></div>';
+      }
+      return rows;
+    }
+    var open = sh.filter(function(s){ return s.live; })[0];
+    main.innerHTML = '<div class="me">'+
+      '<h1 class="serif" style="letter-spacing:0">Hi '+E(d.name)+'</h1>'+
+      '<div style="font-size:16px;color:var(--muted)">'+(open?'In since '+M.hhmm(open.inP.at)+' today':'Not clocked in')+'</div>'+
+      '<div class="tot"><div><span>THIS WEEK</span><b>'+M.dur(weekTotal(thisW))+'</b></div><div><span>LAST WEEK</span><b>'+M.dur(weekTotal(lastW))+'</b></div></div>'+
+      '<div class="wk">THIS WEEK</div>'+dayRows(thisW, today)+
+      '<div class="wk">LAST WEEK</div>'+dayRows(lastW, today)+
+      '<div class="info">View only. To clock in or out, use the tablet at the staff entrance.</div>'+
+      '<button class="btn ghost" id="refresh" style="align-self:center;margin:8px 0 20px">Refresh</button></div>';
+    document.getElementById('refresh').onclick = phoneLoad;
+  }
+
+  // ════════════════ TABLET ════════════════
+  wake();
+  window.addEventListener('online', function(){ S.online = true; flush(); foot(); });
+  window.addEventListener('offline', function(){ S.online = false; foot(); });
+
+  if (!ls(LS_DEV)) setup(); else { loadBoardCache(); names(); refresh(); startCamera(); }
+  setInterval(function(){ if (S.screen === 'names') refresh(); }, 60000);
+  setInterval(flush, 20000);
+
+  function setup(err){
+    S.screen = 'setup';
+    main.innerHTML = '<div class="setup"><h1 class="serif">SET UP THIS TABLET</h1>'+
+      '<p>Type the tablet code from Milica\'s page (Attendance → Tablet). You only do this once.</p>'+
+      '<label for="code" style="font-weight:700;font-size:18px">Tablet code</label>'+
+      '<input id="code" type="text" inputmode="text" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="12">'+
+      '<div class="msg err" id="msg">'+E(err||'')+'</div>'+
+      '<button class="btn" id="go">Connect this tablet</button></div>';
+    var inp = document.getElementById('code');
+    document.getElementById('go').onclick = function(){
+      var c = inp.value.trim().toUpperCase().replace(/\s+/g,'');
+      if (c.length < 6) { document.getElementById('msg').textContent = 'Type the whole code.'; return; }
+      document.getElementById('go').disabled = true;
+      M.rpc('mare_kiosk_board', { p_device: c }).then(function(r){
+        if (r.error) { setup(r.error.network ? 'No internet. Connect the tablet to Wi-Fi and try again.' : 'Something went wrong. Try again.'); return; }
+        if (!r.data.ok) { setup('That code is not right, or it was switched off. Check it on Milica\'s page.'); return; }
+        ls(LS_DEV, c); S.board = r.data.staff; ls(LS_BOARD, JSON.stringify(S.board)); names(); startCamera();
+      });
+    };
+  }
+
+  function loadBoardCache(){ try{ S.board = JSON.parse(ls(LS_BOARD) || '[]'); }catch(e){ S.board = []; } }
+
+  function refresh(){
+    var dev = ls(LS_DEV); if (!dev) return;
+    M.rpc('mare_kiosk_board', { p_device: dev }).then(function(r){
+      if (r.error) { if (r.error.network) { S.online = false; foot(); } return; }
+      S.online = true;
+      if (!r.data.ok) { ls(LS_DEV, null); setup('This tablet was switched off on Milica\'s page. Type a new tablet code.'); return; }
+      S.board = r.data.staff;
+      // punches still waiting to send keep their local in/out
+      queue().forEach(function(q){ var p = S.board.filter(function(b){ return b.id === q.staff; })[0]; if (p && q.guessDir) { p.in = q.guessDir === 'in'; p.since = p.in ? q.at : null; } });
+      ls(LS_BOARD, JSON.stringify(S.board));
+      if (S.screen === 'names') names();
+    });
+  }
+
+  function names(){
+    S.screen = 'names'; S.who = null; S.pin = ''; S.pin1 = null; S.msg = ''; clearTimeout(S.resetT);
+    var teams = ['Kitchen','Service','Bar','Other'], inN = S.board.filter(function(p){ return p.in; }).length;
+    var html = '<div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;gap:8px">'+
+      '<h1 class="serif">TAP YOUR NAME</h1><div style="font-size:16px;color:var(--muted)">'+inN+' in now</div></div><div class="groups">';
+    teams.forEach(function(t){
+      var ppl = S.board.filter(function(p){ return p.team === t; }); if (!ppl.length) return;
+      html += '<section class="group"><h2>'+t.toUpperCase()+'</h2><div class="names">';
+      ppl.forEach(function(p){
+        var pill = !p.has_pin ? '<span class="pill new">NEW · SET CODE</span>' :
+          p.in ? '<span class="pill in">IN · '+M.hhmm(p.since)+'</span>' : '<span class="pill out">OUT</span>';
+        html += '<button class="name" data-id="'+E(p.id)+'"><span>'+E(p.name)+'</span>'+pill+'</button>';
+      });
+      html += '</div></section>';
+    });
+    if (!S.board.length) html += '<div class="info" style="grid-column:1/-1">No names yet. Milica adds the team on her page (Attendance → People).</div>';
+    html += '</div><div class="foot" id="foot"></div>';
+    main.innerHTML = html;
+    Array.prototype.forEach.call(main.querySelectorAll('.name'), function(b){
+      b.onclick = function(){ var id = b.getAttribute('data-id'); S.who = S.board.filter(function(p){ return p.id === id; })[0]; pinScreen(); };
+    });
+    foot();
+  }
+
+  function foot(){
+    var f = document.getElementById('foot'); if (!f) return;
+    var q = queue().length;
+    f.innerHTML = '<span><span class="dot'+(S.online?'':' off')+'"></span>'+(S.online?'Online':'Offline. Clock-ins are saved on this tablet')+'</span>'+
+      (q ? '<span style="color:var(--amber);font-weight:700">'+q+' waiting to send</span>' : '')+
+      '<span>'+(S.camOk ? 'A photo is taken each time' : 'Camera is off: tap here to allow it')+'</span>';
+    if (!S.camOk) f.lastChild.onclick = startCamera;
+  }
+
+  // ── camera: started once and left running, so there is no wait at the keypad ──
+  function startCamera(){
+    if (S.cam || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { foot(); return; }
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }, audio: false })
+      .then(function(st){ S.cam = st; S.camOk = true; foot(); attachVideo(); }, function(){ S.camOk = false; foot(); });
+  }
+  function attachVideo(){
+    var v = document.getElementById('vid'); if (!v || !S.cam) return;
+    v.srcObject = S.cam; v.play().catch(function(){});
+  }
+  function snap(){
+    try{
+      var v = document.getElementById('vid'); if (!v || !S.camOk || !v.videoWidth) return null;
+      var c = document.getElementById('snap'), x = c.getContext('2d');
+      var vw = v.videoWidth, vh = v.videoHeight, r = 240/180, sw = vw, sh = vw / r;
+      if (sh > vh) { sh = vh; sw = vh * r; }
+      x.drawImage(v, (vw-sw)/2, (vh-sh)/2, sw, sh, 0, 0, 240, 180);
+      return c.toDataURL('image/jpeg', 0.6);
+    }catch(e){ return null; }
+  }
+
+  function pinScreen(){
+    S.screen = 'pin';
+    var p = S.who, setting = !p.has_pin;
+    var act = setting ? (S.pin1 ? 'TYPE IT AGAIN' : 'CHOOSE YOUR CODE') : (p.in ? 'CLOCKING OUT' : 'CLOCKING IN');
+    var lbl = setting ? (S.pin1 ? 'Type the same 4 digits again' : 'Choose a 4-digit code. Keep it to yourself.') : 'Your 4-digit code';
+    main.innerHTML = '<div class="pinwrap">'+
+      '<div class="who"><button class="back" id="back"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>Not me</button>'+
+        '<div><div class="act">'+act+'</div><div class="nm serif">'+E(p.name)+'</div></div>'+
+        '<div class="cam">'+(S.camOk ? '<video id="vid" autoplay playsinline muted></video>' : 'Camera off. Your clock-in still counts.')+'</div></div>'+
+      '<div class="pad"><div class="lbl">'+E(lbl)+'</div><div class="dots" id="dots"></div>'+
+        '<div class="msg '+(S.msgErr?'err':'')+'" id="msg">'+E(S.msg)+'</div><div class="keys" id="keys"></div></div></div>';
+    document.getElementById('back').onclick = names;
+    attachVideo();
+    drawKeys(pinDone);
+    clearTimeout(S.resetT); S.resetT = setTimeout(names, 45000);   // walked away
+  }
+
+  function drawKeys(onFour){
+    var dots = document.getElementById('dots');
+    function paint(){ dots.innerHTML = [0,1,2,3].map(function(i){ return '<span class="'+(i<S.pin.length?'on':'')+'"></span>'; }).join(''); }
+    paint();
+    var k = document.getElementById('keys'), keys = ['1','2','3','4','5','6','7','8','9','C','0','<'];
+    k.innerHTML = keys.map(function(c){
+      if (c==='C') return '<button class="small" data-k="C" aria-label="Clear">Clear</button>';
+      if (c==='<') return '<button class="small" data-k="<" aria-label="Delete last digit">Delete</button>';
+      return '<button data-k="'+c+'">'+c+'</button>';
+    }).join('');
+    k.onclick = function(ev){
+      var b = ev.target.closest('button'); if (!b) return;
+      var c = b.getAttribute('data-k');
+      if (c==='C') S.pin=''; else if (c==='<') S.pin = S.pin.slice(0,-1); else if (S.pin.length < 4) S.pin += c;
+      paint();
+      if (S.pin.length === 4) { k.onclick = null; setTimeout(onFour, 120); }
+    };
+  }
+
+  function pinDone(){
+    var p = S.who;
+    if (!p.has_pin) {
+      if (!S.pin1) { S.pin1 = S.pin; S.pin = ''; S.msg = ''; S.msgErr = false; pinScreen(); return; }
+      if (S.pin1 !== S.pin) { S.pin1 = null; S.pin = ''; S.msg = 'The two codes were different. Start again.'; S.msgErr = true; pinScreen(); return; }
+      var dev = ls(LS_DEV), photo = snap(), chosen = S.pin;
+      M.rpc('mare_kiosk_set_pin', { p_device: dev, p_staff: p.id, p_pin: chosen }).then(function(r){
+        if (r.error) { S.pin1 = null; S.pin=''; S.msg = r.error.network ? 'No internet. Setting a code needs the internet. Try again in a moment.' : 'Something went wrong. Try again.'; S.msgErr = true; pinScreen(); return; }
+        if (!r.data.ok && r.data.error !== 'already_set') { S.pin1=null; S.pin=''; S.msg='Something went wrong. Try again.'; S.msgErr=true; pinScreen(); return; }
+        p.has_pin = true; S.pin = chosen; S.pin1 = null; sendPunch(photo);
+      });
+      return;
+    }
+    sendPunch(snap());
+  }
+
+  function uid(){ return 'k' + Date.now().toString(36) + Math.random().toString(36).slice(2,10); }
+
+  // The database refuses a second punch within 2 minutes (a double tap, not a
+  // clock-out). Check it here too, so an offline tablet never shows a clock-out
+  // that will be thrown away when it sends.
+  function lastAt(p){ return p.lastAt || (p.since ? new Date(p.since).getTime() : 0); }
+  function sendPunch(photo){
+    var p = S.who, dev = ls(LS_DEV);
+    if (lastAt(p) && Date.now() - lastAt(p) < 120000) { S.pin = ''; doneScreen({ dir: p.in ? 'in' : 'out', at: new Date(lastAt(p)).toISOString(), name: p.name, already: true }); return; }
+    var item = { client_id: uid(), staff: p.id, name: p.name, pin: S.pin, photo: photo, at: new Date().toISOString(), guessDir: p.in ? 'out' : 'in' };
+    M.rpc('mare_kiosk_punch', { p_device: dev, p_staff: p.id, p_pin: S.pin, p_photo: photo, p_client_id: item.client_id, p_client_at: item.at }).then(function(r){
+      if (r.error && r.error.network) {
+        // Offline: keep it on the tablet, show it as done, send it later.
+        var q = queue(); q.push(item); setQueue(q);
+        p.in = item.guessDir === 'in'; p.since = p.in ? item.at : null; p.lastAt = Date.now(); ls(LS_BOARD, JSON.stringify(S.board));
+        S.online = false;
+        doneScreen({ dir: item.guessDir, at: item.at, name: p.name, queued: true }); return;
+      }
+      if (r.error) { S.pin=''; S.msg='Something went wrong. Try again.'; S.msgErr=true; pinScreen(); return; }
+      var d = r.data;
+      if (!d.ok) {
+        S.pin = '';
+        if (d.error === 'wrong_pin') { S.msg = 'Wrong code. Try again.'; S.msgErr = true; pinScreen(); return; }
+        if (d.error === 'locked') { S.msg = 'Too many wrong codes. Ask Milica to reset your code.'; S.msgErr = true; pinScreen(); return; }
+        if (d.error === 'just_punched') { doneScreen({ dir: d.dir, at: d.at, name: d.name, already: true }); return; }
+        if (d.error === 'device') { ls(LS_DEV, null); setup('This tablet was switched off on Milica\'s page. Type a new tablet code.'); return; }
+        S.msg = 'Something went wrong. Try again.'; S.msgErr = true; pinScreen(); return;
+      }
+      p.in = d.dir === 'in'; p.since = p.in ? d.at : null; p.lastAt = new Date(d.at).getTime(); ls(LS_BOARD, JSON.stringify(S.board));
+      S.online = true;
+      doneScreen(d);
+      refresh();
+    });
+  }
+
+  function doneScreen(d){
+    S.screen = 'done'; S.msg = ''; S.msgErr = false;
+    var line, sub;
+    if (d.already) { line = 'Already clocked '+d.dir.toUpperCase()+' at '+M.hhmm(d.at); sub = 'Nothing changed. If this is wrong, tell Milica.'; }
+    else {
+      line = 'Clocked '+d.dir.toUpperCase()+' at '+M.hhmm(d.at);
+      sub = d.queued ? 'No internet right now. This is saved on the tablet and will send by itself.'
+          : d.dir === 'out' ? (d.worked_min != null ? M.dur(d.worked_min)+' this shift. Thank you.' : 'Thank you.')
+          : (S.camOk ? 'Photo saved. Have a good shift.' : 'Have a good shift.');
+    }
+    main.innerHTML = '<div class="done" id="done">'+
+      '<div class="tick'+(d.already?' warn':'')+'"><svg width="80" height="80" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+
+      (d.already ? '<path d="M12 7v6"/><path d="M12 17h.01"/>' : '<path d="M20 6L9 17l-5-5"/>')+'</svg></div>'+
+      '<div class="nm serif">'+E(d.name)+'</div><div class="l1">'+E(line)+'</div><div class="l2">'+E(sub)+'</div>'+
+      '<button class="btn ghost" id="ok" style="margin-top:12px">Done</button></div>';
+    document.getElementById('ok').onclick = names;
+    clearTimeout(S.resetT); S.resetT = setTimeout(names, 5000);
+  }
+
+  // ── send whatever is waiting ──
+  var flushing = false;
+  function flush(){
+    var q = queue(), dev = ls(LS_DEV);
+    if (!q.length || flushing || !dev) return;
+    flushing = true;
+    var item = q[0];
+    M.rpc('mare_kiosk_punch', { p_device: dev, p_staff: item.staff, p_pin: item.pin, p_photo: item.photo, p_client_id: item.client_id, p_client_at: item.at }).then(function(r){
+      flushing = false;
+      if (r.error && r.error.network) { S.online = false; foot(); return; }
+      // Sent (or definitively refused, e.g. a wrong code typed while offline —
+      // the database records that for Milica). Either way it leaves the queue.
+      var rest = queue().filter(function(x){ return x.client_id !== item.client_id; }); setQueue(rest);
+      S.online = true; foot();
+      if (rest.length) flush(); else refresh();
+    });
+  }
+  flush();
+})();
+</script>
+</body>
+</html>

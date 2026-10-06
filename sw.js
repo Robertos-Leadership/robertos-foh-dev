@@ -15,7 +15,7 @@
    controllerchange reload), a fresh deploy reaches every screen with no manual
    tap. To force a clean cache rebuild, bump the CACHE version string below. */
 
-const CACHE = 'robertos-foh-v20260930lockmc-20261006week';
+const CACHE = 'robertos-foh-v20260930lockmc-20261006mare';
 
 // Best-effort warm cache. The bare paths are precached on install; the real
 // runtime requests (some carry a ?v= cache-buster) are cached on the fly by the
@@ -115,7 +115,9 @@ self.addEventListener('fetch', e => {
   // It would have been swallowed by the app exactly like the round was, and just
   // as silently. Any NEW foh-feedback-* page is covered automatically now; any
   // other link-only page must still be added here by hand.
-  if (/\/(client-[a-z0-9-]+|foh-feedback(-[a-z0-9-]+)?|print-brief)(\.html)?$/i.test(url.pathname)) return;
+  // Roberto's Mare pages (mare.html, mare-clock.html) are their own app for
+  // another restaurant: never let the FOH worker answer them with index.html.
+  if (/\/(client-[a-z0-9-]+|foh-feedback(-[a-z0-9-]+)?|print-brief|mare(-[a-z0-9-]+)?)(\.html)?$/i.test(url.pathname)) return;
 
   e.respondWith(
     fetch(e.request, { cache: 'no-store' })
