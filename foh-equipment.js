@@ -525,30 +525,210 @@ async function eqShowPhoto(id){
 }
 
 // ── Excel, in the layout the workbooks already use ──
+// The Excel is the app on paper: the same words (Store · In use · Total · Was ·
+// Diff), the same groups, the same photographs, and the house look the
+// Reservations and roster exports already use (RES_XL in foh-reservations.js) —
+// so the three files look like they came from one company. Numbers go in as
+// numbers so it can be summed; a column nobody has filled (Supplier, Par) is
+// left out rather than printed empty.
+var EQ_XL = { VINO:'6B1F2A', SABBIA:'F5F0E8', GOLD:'C9A84C', DARK:'3D0F15', LIGHT:'F0EBE2' };
+function eqLoadExcelJS(){
+  if (typeof resLoadExcelJS === 'function') return resLoadExcelJS();
+  if (window.ExcelJS) return Promise.resolve();
+  return new Promise(function(res, rej){
+    var s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js';
+    s.onload = res;
+    s.onerror = function(){ rej(new Error('the spreadsheet library could not be reached')); };
+    document.body.appendChild(s);
+  });
+}
 async function eqExcel(){
   if (!eqSuper()){ eqToast('The Excel carries last month’s figures, so it is on an admin code.', true); return; }
   try {
-    if (typeof stLoadXLSX === 'function') await stLoadXLSX();
-    var aoa = [["Roberto's DIFC — "+eqSecLabel()+" equipment — "+eqMonthName(eqMonth)],
-      ['Heading','Type','Name','Supplier','Par level','Opening ('+(eqPrevM?eqMonthName(eqPrevM):'none')+')','Stock in',
-       'Total opening','Store','In use','Total only (workbook)','Closing','Variance (− = short)','Price AED','Variance value']];
-    var vt = 0;
-    eqShelf.forEach(function(p){
-      var c = eqCounts[p.id], pv = eqPrev[p.id], has = eqHas(c), hp = eqHas(pv);
-      var rec = c && c.received != null ? c.received : null;
-      var open = hp ? eqTot(pv) : null, topen = hp ? eqTot(pv) + (rec||0) : null, close = has ? eqTot(c) : null;
-      var vr = (topen != null && close != null) ? close - topen : null;
-      var vv = (vr != null && p.price != null) ? Math.round(vr*Number(p.price)*100)/100 : null;
-      if (vv != null) vt += vv;
-      aoa.push([p.grp, p.kind, p.name, p.supplier, p.par_level, open, rec, topen,
-        c ? c.store : null, c ? c.in_use : null, c ? c.unsplit : null, close, vr, p.price, vv]);
+    await eqLoadExcelJS();
+    var C = (typeof RES_XL === 'object' && RES_XL) ? RES_XL : EQ_XL;
+    var line = function(colour){ var c = {style:'thin', color:{argb:'FF'+colour}}; return {top:c, bottom:c, left:c, right:c}; };
+    var font = function(o){ var f = {name:'Calibri', size:10, color:{argb:'FF'+C.DARK}}; for (var k in o) f[k] = o[k]; return f; };
+    var fill = function(c){ return {type:'pattern', pattern:'solid', fgColor:{argb:'FF'+c}}; };
+    // a counted 0 prints as 0 — empty (not counted) is a blank cell, never the same thing
+    var NUM = '#,##0;[Red]-#,##0;0', AED = '#,##0.00;[Red]-#,##0.00;"–"', DIFF = '+#,##0;[Red]-#,##0;0';
+
+    var any = function(f){ return eqShelf.some(f); };
+    var hasType = any(function(p){ return p.kind && p.kind.toLowerCase() !== String(p.grp||'').toLowerCase(); });
+    var hasSup  = any(function(p){ return !!p.supplier; });
+    var hasPar  = any(function(p){ return p.par_level != null; });
+    var hasNote = any(function(p){ var c = eqCounts[p.id]; return c && c.unsplit != null; });
+    var prev = !!eqPrevM, prevName = prev ? eqMonthName(eqPrevM) : '';
+
+    // one list of columns; every row is built from it, so a header can never
+    // drift away from the number under it
+    var cols = [{ k:'pic', h:'', w:8 }, { k:'name', h:'Piece', w:34 }];
+    if (hasType) cols.push({ k:'type', h:'Type', w:16 });
+    if (hasSup)  cols.push({ k:'sup',  h:'Supplier', w:16 });
+    if (hasPar)  cols.push({ k:'par',  h:'Par', w:7, f:NUM, sum:false });
+    cols.push({ k:'store', h:'Store', w:9, f:NUM, sum:true },
+              { k:'in_use', h:'In use', w:9, f:NUM, sum:true },
+              { k:'total', h:'Total', w:9, f:NUM, sum:true, bold:true });
+    if (prev) cols.push({ k:'was', h:'Was\n'+prevName, w:12, f:NUM, sum:true },
+                        { k:'rec', h:'Received', w:10, f:NUM, sum:true },
+                        { k:'diff', h:'Diff\n(− = short)', w:11, f:DIFF, sum:true, bold:true });
+    cols.push({ k:'price', h:'Price\n(AED)', w:11, f:AED, sum:false },
+              { k:'value', h:'Value\n(AED)', w:13, f:AED, sum:true });
+    if (prev) cols.push({ k:'cost', h:'Cost of short\n(AED)', w:14, f:AED, sum:true });
+    if (hasNote) cols.push({ k:'note', h:'Note', w:30 });
+    var N = cols.length, ix = {};
+    cols.forEach(function(c, i){ ix[c.k] = i + 1; });
+
+    var wb = new ExcelJS.Workbook();
+    wb.creator = "Roberto's DIFC"; wb.created = new Date();
+    var ws = wb.addWorksheet(eqSecLabel().replace(/&/g,'and').slice(0,31), {
+      views: [{ state:'frozen', ySplit:4, topLeftCell:'A5', activeCell:'A5' }],
+      pageSetup: { orientation:'landscape', paperSize:9, fitToPage:true, fitToWidth:1, fitToHeight:0,
+                   margins:{ left:0.4, right:0.4, top:0.5, bottom:0.5, header:0.3, footer:0.3 } },
+      headerFooter: { oddFooter: "&L&8Roberto's DIFC · "+eqSecLabel().replace(/&/g,'&&')+' equipment · '+eqMonthName(eqMonth)+'&R&8Page &P of &N' }
     });
-    aoa.push(['','','','','','','','','','','','','TOTAL','', Math.round(vt*100)/100]);
-    var ws = XLSX.utils.aoa_to_sheet(aoa);
-    ws['!cols'] = [{wch:14},{wch:14},{wch:36},{wch:14},{wch:8},{wch:12},{wch:8},{wch:10},{wch:8},{wch:8},{wch:10},{wch:9},{wch:12},{wch:10},{wch:12}];
-    var wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, eqSecLabel().slice(0,31).replace(/[&]/g,'and'));
-    XLSX.writeFile(wb, "Roberto's "+eqSecLabel()+" equipment "+eqMonth+".xlsx");
-  } catch(e){ eqToast('Could not build the Excel: '+e.message, true); }
+    ws.columns = cols.map(function(c){ return { width:c.w }; });
+    ws.pageSetup.printTitlesRow = '4:4';
+
+    var t = eqTotals();
+    var title = ws.addRow(["ROBERTO'S DIFC  —  "+eqSecLabel().toUpperCase()+' EQUIPMENT']);
+    title.height = 34; ws.mergeCells(title.number, 1, title.number, N);
+    title.getCell(1).style = { font:font({bold:true, size:16, color:{argb:'FF'+C.SABBIA}}), fill:fill(C.VINO),
+      alignment:{horizontal:'center', vertical:'middle'} };
+    var sub = ws.addRow([eqMonthName(eqMonth)+' count'+(eqTake ? (eqTake.status==='closed' ? ' (closed)' : ' (still counting)') : '')+
+      '   |   '+t.counted+' of '+eqShelf.length+' lines counted'+
+      (prev ? '   |   compared with '+prevName : '   |   no earlier month to compare with')+
+      '   |   built '+new Date().toLocaleString('en-GB', {day:'numeric', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit'})]);
+    sub.height = 18; ws.mergeCells(sub.number, 1, sub.number, N);
+    sub.getCell(1).style = { font:font({size:9, italic:true, color:{argb:'FF'+C.VINO}}), fill:fill(C.SABBIA),
+      alignment:{horizontal:'center', vertical:'middle'} };
+    ws.addRow([]).height = 6;
+    var hdr = ws.addRow(cols.map(function(c){ return c.h; }));
+    hdr.height = 32;
+    hdr.eachCell({includeEmpty:true}, function(cell, ci){
+      cell.style = { font:font({bold:true, size:9, color:{argb:'FF'+C.SABBIA}}), fill:fill(C.VINO),
+        alignment:{horizontal: ci <= 2 ? 'left' : 'center', vertical:'middle', wrapText:true}, border:line(C.GOLD) };
+    });
+
+    // what each piece says, in the app's own arithmetic (eqTot / eqLine)
+    function vals(p){
+      var c = eqCounts[p.id], has = eqHas(c), L = prev ? eqLine(p) : null, pv = eqPrev[p.id];
+      var price = p.price != null ? Number(p.price) : null;
+      return {
+        name: p.name,
+        type: (p.kind && p.kind.toLowerCase() !== String(p.grp||'').toLowerCase()) ? p.kind.charAt(0)+p.kind.slice(1).toLowerCase() : null,
+        sup: p.supplier || null, par: p.par_level,
+        store: c && c.store != null ? c.store : null,
+        in_use: c && c.in_use != null ? c.in_use : null,
+        total: has ? eqTot(c) : null,
+        was: eqHas(pv) ? eqTot(pv) : null,
+        rec: c && c.received ? c.received : null,
+        diff: L ? -L.d : null,
+        price: price,
+        value: has && price != null ? Math.round(eqTot(c)*price*100)/100 : null,
+        cost: L && L.d > 0 && price != null ? Math.round(L.d*price*100)/100 : null,
+        note: c && c.unsplit != null ? 'Workbook total, not split by place' : null,
+        short: !!(L && L.d > 0)
+      };
+    }
+    var groupRows = [], first = null, last = null, band = 0;
+    function closeGroup(){
+      if (first == null) return;
+      var r = ws.addRow([]); r.height = 18;
+      r.getCell(ix.name).value = 'Total '+last;
+      cols.forEach(function(c){
+        var cell = r.getCell(ix[c.k]);
+        // a column nobody filled in this group stays blank — a 0 would say
+        // "counted, none", and Sommelier's store/in-use were never split at all
+        if (c.sum){
+          var L = cell.address.replace(/\d+$/, '');
+          var res = 0, seen = 0;
+          for (var i = first; i < r.number; i++){ var v = ws.getRow(i).getCell(ix[c.k]).value; if (typeof v === 'number'){ res += v; seen++; } }
+          if (seen) cell.value = { formula:'SUM('+L+first+':'+L+(r.number-1)+')', result:Math.round(res*100)/100 };
+          cell.numFmt = c.f;
+        }
+        cell.style = Object.assign({}, cell.style, { font:font({bold:true, color:{argb:'FF'+C.VINO}}), fill:fill(C.LIGHT),
+          border:{ top:{style:'thin', color:{argb:'FF'+C.GOLD}} }, alignment:{vertical:'middle', horizontal: ix[c.k] <= 2 ? 'left' : 'right'} });
+        if (c.sum) cell.numFmt = c.f;
+      });
+      groupRows.push(r.number);
+      ws.addRow([]).height = 8;
+      first = null;
+    }
+    var picIds = {};
+    eqShelf.forEach(function(p){
+      var g = p.grp || 'Other';
+      if (g !== last){
+        closeGroup();
+        last = g; band = 0;
+        var gr = ws.addRow([]); gr.height = 22;
+        ws.mergeCells(gr.number, 1, gr.number, N);
+        gr.getCell(1).value = g;
+        gr.getCell(1).style = { font:font({bold:true, size:11, color:{argb:'FF'+C.VINO}}), alignment:{vertical:'bottom'},
+          border:{ bottom:{style:'medium', color:{argb:'FF'+C.VINO}} } };
+      }
+      var v = vals(p);
+      var r = ws.addRow(cols.map(function(c){ return c.k === 'pic' ? null : (v[c.k] == null ? null : v[c.k]); }));
+      if (first == null) first = r.number;
+      r.height = 40;
+      var zebra = (band++ % 2 === 1);
+      cols.forEach(function(c){
+        var cell = r.getCell(ix[c.k]);
+        cell.style = { font:font({ bold:!!c.bold || (c.k==='diff' && v.short), italic: c.k==='note',
+                         size: c.k==='note' || c.k==='type' || c.k==='sup' ? 9 : 10,
+                         color:{argb:'FF'+((c.k==='diff'||c.k==='cost') && v.short ? '9C1C1C' : C.DARK)} }),
+          fill: v.short ? fill('FBE9E7') : (zebra ? fill(C.LIGHT) : undefined),
+          alignment:{ vertical:'middle', horizontal: c.f ? 'right' : 'left', wrapText: c.k==='name' || c.k==='note' },
+          border:{ bottom:{style:'hair', color:{argb:'FFD9CFC0'}} } };
+        if (c.f) cell.numFmt = c.f;
+      });
+      if (p.thumb && /^data:image\/(jpeg|jpg|png);base64,/.test(p.thumb)){
+        var ext = /png/.test(p.thumb.slice(0,20)) ? 'png' : 'jpeg';
+        var id = picIds[p.id] || (picIds[p.id] = wb.addImage({ base64:p.thumb, extension:ext }));
+        ws.addImage(id, { tl:{ col:0.12, row:r.number-1+0.06 }, ext:{ width:46, height:46 }, editAs:'oneCell' });
+      }
+    });
+    closeGroup();
+
+    // the whole section, off the group totals (not the pieces again, so a
+    // total can never disagree with the subtotals printed above it)
+    var tot = ws.addRow([]); tot.height = 24;
+    tot.getCell(ix.name).value = 'TOTAL '+eqSecLabel().toUpperCase();
+    cols.forEach(function(c){
+      var cell = tot.getCell(ix[c.k]);
+      if (c.sum){
+        var L = cell.address.replace(/\d+$/, ''), res = 0, used = [];
+        groupRows.forEach(function(n){ var x = ws.getRow(n).getCell(ix[c.k]).value; if (x && x.formula){ res += x.result || 0; used.push(L+n); } });
+        if (used.length) cell.value = { formula: used.join('+'), result:Math.round(res*100)/100 };
+      }
+      cell.style = { font:font({bold:true, size:11, color:{argb:'FF'+C.SABBIA}}), fill:fill(C.VINO),
+        alignment:{vertical:'middle', horizontal: ix[c.k] <= 2 ? 'left' : 'right'}, border:line(C.GOLD) };
+      if (c.sum) cell.numFmt = c.f;
+    });
+
+    // what the money cannot see, said where the money is — as on the Summary
+    var notes = [];
+    if (eqShelf.length - t.priced) notes.push((eqShelf.length - t.priced)+' of the '+eqShelf.length+' lines have no price yet, so Value'+(prev?' and Cost of short':'')+' leave them out.');
+    if (prev) notes.push('Diff = counted now − (was + received). A minus is pieces short; the red rows are the short ones.');
+    if (prev && t.noPrev) notes.push(t.noPrev+' counted line'+(t.noPrev===1?' has':'s have')+' no count for '+prevName+', so Diff is left empty rather than guessed.');
+    if (t.unsplit) notes.push(t.unsplit+' pieces came from the workbook as a total only — it never said how many were in the store and how many in use.');
+    if (notes.length) ws.addRow([]).height = 8;
+    notes.forEach(function(n){
+      var r = ws.addRow([]); ws.mergeCells(r.number, 2, r.number, N);
+      r.getCell(2).value = n;
+      r.getCell(2).style = { font:font({size:9, italic:true}), alignment:{wrapText:true, vertical:'top'} };
+      r.height = 16;
+    });
+
+    var buf = await wb.xlsx.writeBuffer();
+    var blob = new Blob([buf], { type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url; a.download = "Roberto's "+eqSecLabel()+' equipment '+eqMonthName(eqMonth)+'.xlsx';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 1500);
+  } catch(e){ eqToast('Could not build the Excel: '+((e && e.message) ? e.message : e), true); }
 }
 
 function eqRender(){
