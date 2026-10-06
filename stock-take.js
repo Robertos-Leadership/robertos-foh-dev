@@ -1675,7 +1675,9 @@ function stVoiceAdd(){
 // renderMain() writes this STABLE shell once; this module owns everything inside
 // it, so realtime ticks from other screens (which re-call renderMain) hit the
 // identical-HTML cache and never rewrite #st-root mid-count.
-var ST_SHELL = '<div id="st-root"></div>';
+// #stk-mode + #eq-root carry the Equipment count (foh-equipment.js); the switch
+// only hides #st-root, it never rewrites it, so a count in progress is untouched.
+var ST_SHELL = '<div id="stk-mode"></div><div id="st-root"></div><div id="eq-root" style="display:none"></div>';
 function renderStockTake(){
   Promise.resolve().then(stEnsureMounted);   // runs after renderMain writes the shell
   return ST_SHELL;
@@ -1686,4 +1688,5 @@ function stEnsureMounted(){
   root.setAttribute('data-st','1');
   stInjectCss();
   stOpen();
+  if (typeof eqMountSwitch === 'function') eqMountSwitch();
 }
