@@ -16,34 +16,71 @@
     for (var i = 0; i < c.length; i++) if (MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(c[i])) return c[i];
     return '';
   }
-  function recorder(box, onSave) {
+  // opts.transcript: also write down what the microphone hears (meetings).
+  var HEAR = [['en-GB', 'English'], ['hr-HR', 'Crnogorski'], ['it-IT', 'Italiano']];
+  function recorder(box, onSave, opts) {
+    opts = opts || {};
     var rec = null, chunks = [], t0 = 0, tick = null, stream = null, mime = pickMime();
+    var sr = null, heard = [], hearOn = false, hearLang = M.lang() === 'me' ? 'hr-HR' : 'en-GB';
     function idle() {
       box.innerHTML = mime === null ? '<span class="small muted">' + E(T('This browser cannot record. Upload an audio file instead.')) + '</span>'
-        : '<button type="button" class="btn rec-go">● ' + E(T('Record a voice note')) + '</button>';
+        : '<button type="button" class="btn rec-go">● ' + E(T(opts.transcript ? 'Record the meeting' : 'Record a voice note')) + '</button>' +
+          (opts.transcript && SR ? '<label class="small muted rec-lang">' + E(T('Spoken in')) + ' <select>' + HEAR.map(function (l) {
+            return '<option value="' + l[0] + '"' + (l[0] === hearLang ? ' selected' : '') + '>' + l[1] + '</option>'; }).join('') + '</select></label>' : '');
       var b = box.querySelector('.rec-go'); if (b) b.onclick = start;
+      var sel = box.querySelector('.rec-lang select'); if (sel) sel.onchange = function () { hearLang = sel.value; };
     }
+    // Speech recognition stops on its own after a pause; while the recording runs, start it again.
+    function hear() {
+      if (!opts.transcript || !SR) return;
+      heard = []; hearOn = true;
+      function go() {
+        if (!hearOn) return;
+        sr = new SR(); sr.lang = hearLang; sr.continuous = true; sr.interimResults = true;
+        sr.onresult = function (e) {
+          var live = '';
+          for (var i = e.resultIndex; i < e.results.length; i++) {
+            var t = e.results[i][0].transcript.trim(); if (!t) continue;
+            if (e.results[i].isFinal) heard.push(t); else live += ' ' + t;
+          }
+          var el = box.querySelector('.rec-heard'); if (el) { var all = (heard.join(' ') + live).trim(); el.textContent = all.length > 140 ? '…' + all.slice(-140) : all; }
+        };
+        sr.onerror = function (e) {
+          if (e.error === 'not-allowed' || e.error === 'service-not-allowed' || e.error === 'audio-capture') {
+            hearOn = false; var el = box.querySelector('.rec-heard'); if (el) el.textContent = T('This device records the sound only. Write or dictate the notes instead.');
+          }
+        };
+        sr.onend = function () { if (hearOn) setTimeout(go, 250); };
+        try { sr.start(); } catch (x) { hearOn = false; }
+      }
+      go();
+    }
+    function unhear() { hearOn = false; try { if (sr) sr.stop(); } catch (x) {} }
     function start() {
       navigator.mediaDevices.getUserMedia({ audio: true }).then(function (s) {
         stream = s; chunks = []; rec = mime ? new MediaRecorder(s, { mimeType: mime }) : new MediaRecorder(s);
         rec.ondataavailable = function (e) { if (e.data && e.data.size) chunks.push(e.data); };
         rec.onstop = stopped; rec.start(1000); t0 = Date.now();
-        box.innerHTML = '<span class="rec-dot"></span><b class="rec-t">0:00</b><button type="button" class="btn rec-stop">■ ' + E(T('Stop')) + '</button>';
+        box.innerHTML = '<span class="rec-dot"></span><b class="rec-t">0:00</b><button type="button" class="btn rec-stop">■ ' + E(T('Stop')) + '</button>' +
+          (opts.transcript && SR ? '<span class="rec-heard small muted">' + E(T('Listening…')) + '</span>' : '');
         box.querySelector('.rec-stop').onclick = function () { rec.stop(); };
+        hear();
         tick = setInterval(function () { var el = box.querySelector('.rec-t'); if (el) el.textContent = fmt((Date.now() - t0) / 1000); if (Date.now() - t0 > 20 * 60000) rec.stop(); }, 500);
       }, function () { M.toast(T('The microphone is blocked. Allow it in the browser and try again.')); });
     }
     function stopped() {
-      clearInterval(tick); if (stream) stream.getTracks().forEach(function (t) { t.stop(); });
+      clearInterval(tick); unhear(); if (stream) stream.getTracks().forEach(function (t) { t.stop(); });
       var secs = Math.round((Date.now() - t0) / 1000), blob = new Blob(chunks, { type: (rec.mimeType || mime || 'audio/webm') });
       var url = URL.createObjectURL(blob);
-      box.innerHTML = '<audio controls src="' + url + '" style="max-width:100%"></audio><span class="small muted">' + fmt(secs) + ' · ' + size(blob.size) + '</span>' +
+      var said = heard.join(' ').trim();
+      box.innerHTML = '<audio controls src="' + url + '" style="max-width:100%"></audio><span class="small muted">' + fmt(secs) + ' · ' + size(blob.size) +
+        (opts.transcript && said ? ' · ' + E(T('{n} words written down', { n: said.split(/\s+/).length })) : '') + '</span>' +
         '<button type="button" class="btn rec-save">' + E(T('Save the voice note')) + '</button><button type="button" class="btn ghost rec-del">' + E(T('Discard')) + '</button>';
       box.querySelector('.rec-del').onclick = idle;
       box.querySelector('.rec-save').onclick = function () {
         if (blob.size > MAX) { M.toast(T('Too long: keep a voice note under 20 minutes.')); return; }
         this.disabled = true;
-        readData(blob).then(function (d) { return onSave({ kind: 'voice', name: T('Voice note'), mime: blob.type.split(';')[0] || 'audio/webm', data: d, seconds: secs }); })
+        readData(blob).then(function (d) { return onSave({ kind: 'voice', name: T('Voice note'), mime: blob.type.split(';')[0] || 'audio/webm', data: d, seconds: secs, transcript: said || null }); })
           .then(function (ok) { if (ok) idle(); });
       };
     }
@@ -93,14 +130,16 @@
   }
 
   // ── list + player ──
-  function list(box, items, getData, onRemove) {
+  function list(box, items, getData, onRemove, onTranscript) {
     if (!items.length) { box.innerHTML = ''; return; }
     box.innerHTML = items.map(function (m) {
       var icon = m.kind === 'voice' || /^audio\//.test(m.mime) ? '▶' : /^image\//.test(m.mime) ? '▣' : /^video\//.test(m.mime) ? '▶' : '▤';
       var lbl = m.kind === 'voice' ? T('Voice note') + (m.seconds ? ' · ' + fmt(m.seconds) : '') : m.name;
       return '<div class="media" data-m="' + m.id + '"><button type="button" class="media-open"><span class="media-ic">' + icon + '</span><span><b>' + E(lbl) + '</b>' +
         '<span class="small muted">' + E((m.created_by ? m.created_by.split('@')[0] + ' · ' : '') + size(m.size)) + '</span></span></button>' +
-        (onRemove ? '<button type="button" class="media-x" aria-label="' + E(T('Remove')) + '">✕</button>' : '') + '<div class="media-body"></div></div>';
+        (onRemove ? '<button type="button" class="media-x" aria-label="' + E(T('Remove')) + '">✕</button>' : '') + '<div class="media-body"></div>' +
+        (onTranscript && (m.kind === 'voice' || /^(audio|video)\//.test(m.mime)) ? '<details class="media-tr"><summary>' + E(m.transcript ? T('What the recording heard') : T('No transcript: type what was said')) + '</summary>' +
+          '<textarea>' + E(m.transcript || '') + '</textarea><button type="button" class="btn ghost sm tr-save">' + E(T('Save the transcript')) + '</button></details>' : '') + '</div>';
     }).join('');
     Array.prototype.forEach.call(box.querySelectorAll('.media'), function (el) {
       var m = items.filter(function (x) { return x.id === el.getAttribute('data-m'); })[0], body = el.querySelector('.media-body'), loaded = false;
@@ -121,6 +160,7 @@
         });
       };
       var x = el.querySelector('.media-x'); if (x) x.onclick = function () { onRemove(m.id); };
+      var ts = el.querySelector('.tr-save'); if (ts) ts.onclick = function () { onTranscript(m.id, el.querySelector('.media-tr textarea').value); };
     });
   }
 

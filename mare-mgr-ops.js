@@ -26,26 +26,27 @@
 
   // ── voice notes and files (briefing, weekly meeting) ──
   App.mediaBlock = function (owner, key, hint) {
-    return '<div class="card stack mbox" data-owner="' + owner + '" data-key="' + E(key) + '"><div class="sec"><span>' + E(T('Voice note & files')) + '</span><i></i></div>' +
+    return '<div class="card stack mbox" data-owner="' + owner + '" data-key="' + E(key) + '" data-tr="' + (owner === 'meeting' ? 1 : '') + '"><div class="sec"><span>' + E(T('Voice note & files')) + '</span><i></i></div>' +
       '<div class="mlist"></div><div class="row"><div class="rec row"></div><label class="btn ghost upl">' + E(T('Upload a photo, PDF or file')) +
       '<input type="file" accept="image/*,application/pdf,audio/*,video/*" hidden></label></div>' + (hint ? '<p class="small muted" style="margin:0">' + E(hint) + '</p>' : '') + '</div>';
   };
   App.bindMedia = function (root) {
     Array.prototype.forEach.call(root.querySelectorAll('.mbox'), function (box) {
-      var owner = box.getAttribute('data-owner'), key = box.getAttribute('data-key'), lst = box.querySelector('.mlist');
+      var owner = box.getAttribute('data-owner'), key = box.getAttribute('data-key'), lst = box.querySelector('.mlist'), tr = !!box.getAttribute('data-tr');
       function load() {
         return App.call('mare_m_media_list', { p_owner_kind: owner, p_owner_key: key }).then(function (r) {
           if (!r) return;
           MareMedia.list(lst, r.media, function (id) { return App.call('mare_m_media_get', { p_id: id }).then(function (x) { return x && x.data; }); },
-            function (id) { App.call('mare_m_media_remove', { p_id: id }).then(function (x) { if (x) { App.say(T('Removed.')); load(); } }); });
+            function (id) { App.call('mare_m_media_remove', { p_id: id }).then(function (x) { if (x) { App.say(T('Removed.')); load(); } }); },
+            tr ? function (id, text) { App.call('mare_m_media_transcript', { p_id: id, p_text: text }).then(function (x) { if (x) { App.say(T('Saved.')); load(); } }); } : null);
         });
       }
       function save(x) {
         App.say(T('Saving…'));
-        return App.call('mare_m_media_add', { p_owner_kind: owner, p_owner_key: key, p_kind: x.kind, p_name: x.name, p_mime: x.mime, p_data: x.data, p_seconds: x.seconds })
+        return App.call('mare_m_media_add', { p_owner_kind: owner, p_owner_key: key, p_kind: x.kind, p_name: x.name, p_mime: x.mime, p_data: x.data, p_seconds: x.seconds, p_transcript: x.transcript || null })
           .then(function (r) { if (r) { App.say(T('Saved.')); load(); return true; } return false; });
       }
-      MareMedia.recorder(box.querySelector('.rec'), save);
+      MareMedia.recorder(box.querySelector('.rec'), save, { transcript: tr });
       MareMedia.picker(box.querySelector('input[type=file]'), save);
       load();
     });
@@ -336,7 +337,7 @@
   }
 
   // ════════════════ WEEKLY MEETINGS ════════════════
-  var W = { open: null };
+  var W = { open: null, ml: {} };
   App.register('meetings', {
     title: 'Weekly meetings', icon: 'meeting', group: 'team', desc: 'Notes from each meeting and who does what by when.',
     stat: function (H) { var open = H.f.actions.filter(function (a) { return !a.done; }), late = open.filter(function (a) { return a.due && a.due < H.t; }).length; return [T('{n} open actions', { n: open.length }) + (late ? ' · ' + T('{n} overdue', { n: late }) : ''), late > 0]; },
@@ -369,6 +370,30 @@
           b.disabled = true;
           App.save('mare_actions', { meeting_id: b.getAttribute('data-aadd'), text: txt, owner: c.querySelector('.a-owner').value.trim() || null, due: c.querySelector('.a-due').value || null }).then(function (r) { if (r) App.reload(); else b.disabled = false; });
         });
+        App.on(main, '[data-mins]', function (b) {
+          var id = b.getAttribute('data-mins'); b.disabled = true; b.textContent = T('Writing the minutes… about a minute');
+          App.fn('mare-minutes', { meeting_id: id }).then(function (r) {
+            if (r && r.ok) { App.say(T('Minutes written.')); W.ml[id] = M.lang(); App.reload(); return; }
+            b.disabled = false; b.textContent = T('Write the minutes');
+            if (!r) return;
+            App.say(r.error === 'empty' ? T('Nothing to write from yet: record the meeting or write some notes first.')
+              : r.error === 'access' ? T('Your account has no Mare access.') : T('Could not write the minutes. Try again in a minute.'));
+          });
+        });
+        App.on(main, '[data-mlang]', function (b) { W.ml[b.getAttribute('data-mid')] = b.getAttribute('data-mlang'); App.reload(); });
+        App.on(main, '[data-mprint]', function (b) {
+          var card = b.closest('.mins'); card.classList.add('printme'); document.body.classList.add('pmins');
+          setTimeout(function () { w.print(); document.body.classList.remove('pmins'); card.classList.remove('printme'); }, 50);
+        });
+        App.on(main, '[data-madd]', function (b) {
+          var m = f.meetings.filter(function (x) { return x.id === b.getAttribute('data-madd'); })[0], lg = W.ml[m.id] || M.lang();
+          var have = f.actions.filter(function (a) { return a.meeting_id === m.id; }).map(function (a) { return a.text.toLowerCase(); });
+          var todo = ((m.minutes[lg] || m.minutes.en).actions || []).filter(function (a) { return have.indexOf(a.what.toLowerCase()) < 0; });
+          if (!todo.length) { App.say(T('These actions are already on the list.')); return; }
+          b.disabled = true;
+          todo.reduce(function (p, a) { return p.then(function () { return App.save('mare_actions', { meeting_id: m.id, text: a.what + (a.when ? ' (' + a.when + ')' : ''), owner: a.who || null }); }); }, Promise.resolve())
+            .then(function () { App.say(T('{n} actions added.', { n: todo.length })); App.reload(); });
+        });
         App.on(main, '[data-done]', function (b) {
           var done = b.getAttribute('data-v') !== '1'; b.disabled = true;
           App.save('mare_actions', { id: b.getAttribute('data-done'), done: done, done_at: done ? new Date().toISOString() : null }).then(function (r) { if (r) App.reload(); });
@@ -382,13 +407,35 @@
       '<td style="' + (a.done ? 'text-decoration:line-through;color:var(--muted)' : '') + '">' + E(a.text) + (m ? '<div class="tiny muted">' + E(m.title) + ' · ' + E(M.shortDate(m.date)) + '</div>' : '') + '</td>' +
       '<td class="nw">' + E(a.owner || '—') + '</td><td class="nw">' + (a.due ? '<span class="tag ' + (!a.done && a.due < t ? 'red' : 'grey') + '">' + E(M.shortDate(a.due)) + '</span>' : '') + '</td></tr>';
   }
+  function minutesBlock(m) {
+    var h = '<div class="card stack mins"><div class="sec"><span>' + E(T('Minutes of the meeting')) + '</span><i></i></div>';
+    if (!m.minutes) return h + '<p class="small muted" style="margin:0">' + E(T('Written for you from the notes and what the recording heard, in English and Montenegrin. Check them before you share them.')) + '</p>' +
+      '<button class="btn" data-mins="' + m.id + '" style="align-self:flex-start">' + E(T('Write the minutes')) + '</button></div>';
+    var lg = W.ml[m.id] || M.lang(), x = m.minutes[lg] || m.minutes.en;
+    var L = lg === 'me' ? { s: 'Sažetak', p: 'O čemu se razgovaralo', d: 'Odluke', a: 'Zaduženja', u: 'Nije jasno — provjerite', who: 'Ko', when: 'Do kada' }
+                        : { s: 'Summary', p: 'What was discussed', d: 'Decisions', a: 'Actions', u: 'Not clear — please check', who: 'Who', when: 'By when' };
+    h += '<div class="row between mins-top"><div class="seg">' + [['en', 'English'], ['me', 'Crnogorski']].map(function (l) {
+      return '<button type="button" class="' + (l[0] === lg ? 'on' : '') + '" data-mlang="' + l[0] + '" data-mid="' + m.id + '">' + l[1] + '</button>'; }).join('') + '</div>' +
+      '<span class="small muted">' + E(T('Written {d} by {w}', { d: M.shortDate(String(m.minutes_at).slice(0, 10)) + ' ' + M.hhmm(m.minutes_at), w: (m.minutes_by || '').split('@')[0] })) + '</span></div>';
+    h += '<div class="mins-doc"><h3 class="serif">' + E(m.title) + ' · ' + E(M.niceDate(m.date)) + '</h3>' + (m.attendees ? '<p class="small muted">' + E(m.attendees) + '</p>' : '') +
+      '<h4>' + L.s + '</h4><p>' + E(x.summary) + '</p>';
+    if (x.points.length) h += '<h4>' + L.p + '</h4>' + x.points.map(function (p) { return '<p><b>' + E(p.topic) + '.</b> ' + E(p.text) + '</p>'; }).join('');
+    if (x.decisions.length) h += '<h4>' + L.d + '</h4><ul>' + x.decisions.map(function (d) { return '<li>' + E(d) + '</li>'; }).join('') + '</ul>';
+    if (x.actions.length) h += '<h4>' + L.a + '</h4><div class="box"><table><thead><tr><th></th><th>' + L.who + '</th><th>' + L.when + '</th></tr></thead><tbody>' +
+      x.actions.map(function (a) { return '<tr><td>' + E(a.what) + '</td><td class="nw">' + E(a.who || '—') + '</td><td class="nw">' + E(a.when || '—') + '</td></tr>'; }).join('') + '</tbody></table></div>';
+    if (x.unclear.length) h += '<div class="mins-unclear"><h4>' + L.u + '</h4><ul>' + x.unclear.map(function (d) { return '<li>' + E(d) + '</li>'; }).join('') + '</ul></div>';
+    h += '</div><div class="row noprint">' + (x.actions.length ? '<button class="btn sm" data-madd="' + m.id + '">' + E(T('Add these actions to the list')) + '</button>' : '') +
+      '<button class="btn ghost sm" data-mprint>' + E(T('Print or save as PDF')) + '</button><button class="btn ghost sm" data-mins="' + m.id + '">' + E(T('Write them again')) + '</button></div>';
+    return h + '</div>';
+  }
   function meetingForm(m, acts, t, f) {
     var names = App.S.staff.filter(function (s) { return s.active; }).map(function (s) { return s.name; });
     return '<div class="grid2"><label class="f">' + E(T('Date')) + '<input type="date" class="m-date" value="' + m.date + '"></label><label class="f">' + E(T('Title')) + '<input type="text" class="m-title" value="' + E(m.title) + '"></label></div>' +
       '<label class="f">' + E(T('Who was there')) + '<input type="text" class="m-att" value="' + E(m.attendees || '') + '"></label>' +
       '<label class="f">' + E(T('Notes')) + '<textarea class="m-notes" style="min-height:160px">' + E(m.notes || '') + '</textarea></label>' +
       '<button class="btn" data-msave="' + m.id + '" style="align-self:flex-start">' + E(T('Save the notes')) + '</button>' +
-      App.mediaBlock('meeting', m.id, T('Record the meeting or attach the minutes. Managers only.')) +
+      App.mediaBlock('meeting', m.id, T('Record the meeting: it writes down what it hears, then make the minutes below. Managers only.')) +
+      minutesBlock(m) +
       '<h3>' + E(T('Actions')) + '</h3>' + (acts.length ? '<div class="box"><table><tbody>' + acts.map(function (a) { return actionRow(a, t, f); }).join('') + '</tbody></table></div>' : '') +
       '<div class="row"><input type="text" class="a-text" placeholder="' + E(T('What needs doing')) + '" aria-label="' + E(T('Action')) + '" style="flex:2 1 220px">' +
       '<input type="text" class="a-owner" list="ppl" placeholder="' + E(T('Who')) + '" aria-label="' + E(T('Who')) + '" style="flex:1 1 140px"><datalist id="ppl">' + names.map(function (n) { return '<option value="' + E(n) + '">'; }).join('') + '</datalist>' +

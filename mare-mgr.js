@@ -22,6 +22,13 @@
       return r.data;
     });
   };
+  // An edge function, as the signed-in manager.
+  App.fn = function (name, body) {
+    if (App.S.viewAs) { App.say(T('Read only: you are viewing as {n}. Nothing is saved.', { n: App.S.viewAs.name })); return Promise.resolve(null); }
+    return fetch(M.SB_URL + '/functions/v1/' + name, { method: 'POST', headers: { 'Content-Type': 'application/json', apikey: M.SB_KEY, Authorization: 'Bearer ' + App.S.token }, body: JSON.stringify(body || {}) })
+      .then(function (r) { if (r.status === 401) { App.signIn(T('Please sign in again.')); return null; } return r.json(); })
+      .catch(function () { App.say(T('No internet. Nothing was saved.')); return null; });
+  };
   App.fetch = function (tables, from, to) { return App.call('mare_m_fetch', { p_tables: tables, p_from: from || M.today(), p_to: to || M.today() }); };
   App.save = function (table, row) { return App.call('mare_m_save', { p_table: table, p_row: row }).then(function (r) { return r && r.row; }); };
   App.register = function (key, def) { def.key = key; App.mods[key] = def; App.order.push(key); };
