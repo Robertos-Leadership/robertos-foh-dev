@@ -3617,7 +3617,7 @@ function admFbLaneHTML(){
     + mk('inbox','Inbox &mdash; what they sent', waiting||'')
     +'</div>';
 }
-var FB_APP_NAME={ kitchen:'Kitchen', foh:'FOH' };
+var FB_APP_NAME={ kitchen:'Kitchen', foh:'FOH', mare:'Mare' };
 function admInboxRowHTML(r){
   var sel=admFbSel(), isSel = sel && sel.topic==='inbox' && String(sel.qkey)===String(r.id);
   var st=admFbStateOf('inbox', r.id);

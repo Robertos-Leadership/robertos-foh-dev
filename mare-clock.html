@@ -205,5 +205,14 @@ body.pvphone .bnav{max-width:430px}
 <script src="mare-common.js?v=20261006q"></script>
 <script src="mare-media.js?v=20261006q"></script>
 <script src="mare-team.js?v=20261006q"></script>
+<!-- "Tell us" — same button and inbox as the Kitchen and FOH apps. -->
+<script>
+window.FB_INBOX = {
+  app: 'mare',
+  above: '.bnav',
+  screen: function () { return window.__mareScreen ? window.__mareScreen() : 'Mare tablet'; }
+};
+</script>
+<script src="feedback-button.js?v=20261006mare"></script>
 </body>
 </html>

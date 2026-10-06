@@ -116,6 +116,11 @@
   }
 
   // ════════════════ HOME ════════════════
+  // "Tell us" asks this which screen the message is about.
+  window.__mareScreen = function () {
+    var m = S.mod && MODS.filter(function (x) { return x[0] === S.mod; })[0];
+    return (meToken ? 'Mare phone' : 'Mare tablet') + ' · ' + (m ? m[2] : S.screen === 'home' || !S.screen ? 'Home' : S.screen);
+  };
   var MODS = [
     ['brief', 'brief', 'Today\'s briefing'], ['check', 'check', 'Checklists'], ['rota', 'rota', 'Rota'], ['recipes', 'recipe', 'Recipes'],
     ['breakage', 'breakage', 'Breakage & waste'], ['leave', 'leave', 'Ask for leave'], ['speak', 'speak', 'Speak up']

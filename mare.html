@@ -259,5 +259,18 @@ details summary{cursor:pointer;font-size:12px;letter-spacing:1.5px;font-weight:7
 <script src="mare-mgr-back.js?v=20261006q"></script>
 <script src="mare-mgr-viewas.js?v=20261006q"></script>
 <script>MareApp.start();</script>
+<!-- "Tell us" — the same button as the Kitchen and FOH apps, into the same inbox
+     (Admin → Feedback → Inbox). It says by itself which Mare module it was on. -->
+<script>
+window.FB_INBOX = {
+  app: 'mare',
+  screen: function () {
+    var A = window.MareApp, d = A && A.S.mod && A.mods[A.S.mod];
+    return 'Mare app · ' + (d ? d.title + (A.S.sub ? ' · ' + A.S.sub : '') : 'Today');
+  },
+  who: function () { var A = window.MareApp; return (A && A.S.me) || ''; }
+};
+</script>
+<script src="feedback-button.js?v=20261006mare"></script>
 </body>
 </html>
