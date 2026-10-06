@@ -390,6 +390,21 @@
       h += '</div>';
     }
     h += '</section>';
+    // Written down for a warning: stays in view after the card leaves "Needs you", so the manager can see where it went.
+    var wsince = M.addDays(t, -30), warns = (d.notes || []).filter(function (n) { return n.kind === 'warning' && (n.ref_date || M.dateKey(n.at)) >= wsince; });
+    if (warns.length) {
+      h += '<section class="stack"><h2 class="serif">' + E(T('Written down for a warning · last 30 days')) + ' · ' + warns.length + '</h2>' +
+        '<div class="muted small">' + E(T('Each one is kept on the person\'s file (People → Notes). The app does not send it to anyone: the next step is yours — speak to them and give the written warning.')) + '</div><div class="cards">';
+      warns.forEach(function (n) {
+        var s = d.byId[n.staff_id], nm = s ? s.name : '?', c = warns.filter(function (w) { return w.staff_id === n.staff_id; }).length;
+        h += '<div class="card stack"><span class="tag red" style="align-self:flex-start">' + E(T('FOR A WARNING')) + '</span>' +
+          '<h3>' + E(nm) + ' · ' + E(n.ref_date ? M.shortDate(n.ref_date) : M.shortDate(M.dateKey(n.at))) + '</h3>' +
+          '<div>' + E(n.text) + '</div>' +
+          '<div class="small muted">' + E(T('Written down by {w}, {d} {t}', { w: n.by || '', d: M.shortDate(M.dateKey(n.at)), t: M.hhmm(n.at) })) +
+          (c > 1 ? ' · ' + E(T('{n} warnings in 30 days', { n: c })) : '') + '</div></div>';
+      });
+      h += '</div></section>';
+    }
     var rows = act.map(function (s) {
       var di = dayInfo(d, s, t), first = di.shifts.filter(function (x) { return x.inP; })[0], last = di.shifts[di.shifts.length - 1], st;
       if (di.live) st = di.late ? '<span class="tag red">' + E(T('IN · LATE {n} MIN', { n: di.late })) + '</span>' : '<span class="tag teal">' + E(T('IN')) + '</span>';
@@ -429,7 +444,7 @@
       if (k === 'warning' && why.length < 2) { App.say(T('Write what happened first.')); return; }
       b.disabled = true;
       App.call('mare_mgr_note_add', { p_staff: it.s.id, p_kind: k, p_date: it.key, p_text: why || T('Late {n} min', { n: it.late }), p_punch: null }).then(function (r) {
-        if (r) { App.say(k === 'warning' ? T('Written down.') : T('Accepted.')); App.reload(); } else b.disabled = false;
+        if (r) { App.say(k === 'warning' ? T('Written down on {n}\'s file. It is listed below, under Written down for a warning.', { n: it.s.name }) : T('Accepted.')); App.reload(); } else b.disabled = false;
       });
     });
     var ids = rows.filter(function (r) { return r.photo; }).map(function (r) { return r.photo.id; });
