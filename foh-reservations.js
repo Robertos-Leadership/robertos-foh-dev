@@ -194,7 +194,22 @@ async function resFetchDaysheet(d){
   // reservations. Without this check that reads as "empty night", which is a
   // lie. Treat a payload with no reservations array as not-deployed-yet.
   if(!Array.isArray(j.reservations)) throw new Error('daysheet mode not deployed');
+  j.reservations.forEach(function(r){ r.shift = resShiftLabel(r.shift); });
   return j;
+}
+
+// SevenRooms sends its shift CATEGORY, not the name the team uses: at Roberto's
+// lunch arrives as DAY and dinner as LEGACY (checked 6 Oct 2026 on five nights:
+// DAY 12:00-14:15, LEGACY 16:00-23:45). Translated once, here, so the chips, the
+// Excel Shift column and the range export all say Lunch / Dinner. Same split as
+// the covers sync in foh-core.js (DAY = lunch, the rest = dinner).
+var RES_SHIFT_NAMES = { DAY:'Lunch', LUNCH:'Lunch', BREAKFAST:'Breakfast', BRUNCH:'Brunch',
+  LEGACY:'Dinner', DINNER:'Dinner', NIGHT:'Dinner' };
+function resShiftLabel(s){
+  if(!s) return s;
+  var k = String(s).toUpperCase();
+  if(RES_SHIFT_NAMES[k]) return RES_SHIFT_NAMES[k];
+  return k.charAt(0) + k.slice(1).toLowerCase();
 }
 
 async function resLoad(force){
@@ -1346,8 +1361,10 @@ function resRows(){
   }
   return rows;
 }
+// Like SevenRooms: All day / Lunch / Dinner are always there, even on a night
+// with no lunch book, so the chip you picked stays put as you change the date.
 function resShifts(){
-  var seen = {}, out = [];
+  var seen = { Lunch:1, Dinner:1 }, out = ['Lunch','Dinner'];
   ((RES.data && RES.data.reservations) || []).forEach(function(r){
     if(r.shift && !seen[r.shift]){ seen[r.shift] = 1; out.push(r.shift); }
   });
@@ -2159,11 +2176,11 @@ function renderReservations(){
       })()
     + '</div>');
 
-  // ── Filters: shift chips (only when the night actually has more than one)
+  // ── Filters: shift chips (All day / Lunch / Dinner, always shown)
   //    and a search that covers name, table, note and who booked it. ──
   var shifts = resShifts();
   h.push('<div class="res-tools">');
-  if(shifts.length > 1){
+  if(shifts.length){
     h.push('<div class="res-chips">');
     h.push('<button class="res-chip'+(RES.shift==='all'?' on':'')+'" onclick="resSetShift(\'all\')">All day</button>');
     shifts.forEach(function(s){
@@ -2177,8 +2194,10 @@ function renderReservations(){
   var rows = resRows();
   if(!rows.length){
     h.push('<div class="res-empty">'
-      + (RES.q || RES.shift!=='all'
+      + (RES.q
           ? 'No booking matches that.'
+          : RES.shift!=='all'
+          ? 'No '+resEsc(RES.shift.toLowerCase())+' bookings for '+resEsc(resDateLabel(RES.date))+'.'
           : 'No reservations in the book for '+resEsc(resDateLabel(RES.date))+'.')
       + '</div>');
   } else {
