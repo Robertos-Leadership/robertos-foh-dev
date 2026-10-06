@@ -187,7 +187,8 @@
     breakage: '<path d="M8 3h8l-1 7a3 3 0 0 1-6 0z"/><path d="M12 13v8M9 21h6M10 6l2 2-1 2"/>',
     back: '<path d="M15 18l-6-6 6-6"/>',
     hours: '<path d="M5 3h14M5 21h14M7 3c0 5 10 5 10 9s-10 4-10 9M17 3c0 5-10 5-10 9"/>',
-    home: '<path d="M3 11l9-8 9 8M5 9v12h14V9"/>'
+    home: '<path d="M3 11l9-8 9 8M5 9v12h14V9"/>',
+    eye: '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>'
   };
   function icon(name, size) {
     return '<svg width="' + (size || 22) + '" height="' + (size || 22) + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (ICONS[name] || '') + '</svg>';

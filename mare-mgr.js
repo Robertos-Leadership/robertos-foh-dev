@@ -9,7 +9,10 @@
 
   // ── helpers every module uses ──
   App.say = function (t) { var s = document.getElementById('status'); s.textContent = t; s.style.display = 'block'; clearTimeout(App.say.t); App.say.t = setTimeout(function () { s.style.display = 'none'; }, 2800); };
+  // While "viewing as" a colleague, only reads go through: the screens are theirs, the account is still yours.
+  var READS = ['mare_mgr_overview', 'mare_m_fetch', 'mare_mgr_photos', 'mare_m_photo', 'mare_m_managers', 'mare_m_view_as', 'mare_m_recipe'];
   App.call = function (name, args) {
+    if (App.S.viewAs && READS.indexOf(name) < 0) { App.say(T('Read only: you are viewing as {n}. Nothing is saved.', { n: App.S.viewAs.name })); return Promise.resolve(null); }
     return M.rpc(name, args, App.S.token).then(function (r) {
       if (r.error) {
         if (r.error.status === 401) { App.signIn(T('Please sign in again.')); return null; }
@@ -84,7 +87,7 @@
     sb.auth.getSession().then(function (x) {
       var s = x.data && x.data.session;
       if (!s) { App.signIn(); return; }
-      App.S.token = s.access_token; App.boot();
+      App.S.token = s.access_token; App.S.email = (s.user && s.user.email || '').toLowerCase(); App.boot();
     });
     w.addEventListener('hashchange', function () { App.fromHash(); App.render(); });
   };
@@ -101,7 +104,7 @@
       ev.preventDefault();
       sb.auth.signInWithPassword({ email: document.getElementById('em').value.trim(), password: document.getElementById('pw').value }).then(function (r) {
         if (r.error) { App.signIn(T('Email or password not right.')); return; }
-        App.S.token = r.data.session.access_token; App.boot();
+        App.S.token = r.data.session.access_token; App.S.email = (r.data.session.user.email || '').toLowerCase(); App.boot();
       });
     };
   };
@@ -116,7 +119,8 @@
         document.getElementById('so').onclick = App.signOut; return;
       }
       App.S.me = r.data.me; App.S.staff = r.data.staff;
-      App.fromHash(); App.render();
+      return App.loadMyMods().then(function () { App.fromHash(); App.render(); });
+    }).then(function () {
       setInterval(function () {
         var a = document.activeElement;
         if (document.visibilityState !== 'visible' || document.querySelector('.overlay') || (a && /INPUT|SELECT|TEXTAREA/.test(a.tagName))) return;
@@ -124,6 +128,19 @@
       }, 90000);
     });
   };
+  // Which Mare modules this login may open (Mare app → View as → Modules). No entry = all.
+  App.loadMyMods = function () {
+    return M.rpc('mare_m_fetch', { p_tables: ['settings'], p_from: M.today(), p_to: M.today() }, App.S.token).then(function (r) {
+      var mm = r.data && r.data.ok && (r.data.settings.filter(function (s) { return s.key === 'mgr_modules'; })[0] || {}).value;
+      App.S.myMods = (mm && App.S.email && Array.isArray(mm[App.S.email])) ? mm[App.S.email] : null;
+    });
+  };
+  App.allowed = function (k) { var mods = App.S.viewAs ? App.S.viewAs.mods : App.S.myMods; return !mods || mods.indexOf(k) >= 0 || (k === 'viewas' && !App.S.viewAs && !App.S.myMods); };
+  App.banner = function () {
+    if (!App.S.viewAs) return '';
+    return '<div class="vabar">' + M.icon('eye', 18) + '<span>' + E(T('Viewing as {n} — read only', { n: App.S.viewAs.name })) + '</span><button data-vaback>' + E(T('Switch back')) + '</button></div>';
+  };
+  document.addEventListener('click', function (e) { if (e.target.closest('[data-vaback]')) { App.S.viewAs = null; App.go('viewas'); } });
   App.refreshStaff = function () {
     return M.rpc('mare_mgr_overview', { p_from: M.today(), p_to: M.today() }, App.S.token).then(function (r) { if (r.data && r.data.ok) App.S.staff = r.data.staff; });
   };
@@ -137,10 +154,11 @@
 
   App.render = function () {
     var a = document.getElementById('app');
+    if (App.S.mod && !App.allowed(App.S.mod)) App.S.mod = null;
     if (!App.S.mod) return App.home(a);
     var def = App.mods[App.S.mod];
     var sub = App.S.sub || (def.tabs ? def.tabs[0][0] : null);
-    a.innerHTML = '<div class="bar"><div class="bar-in"><button class="home" data-go="">' + M.icon('back', 20) + E(T('Home')) + '</button>' +
+    a.innerHTML = App.banner() + '<div class="bar"><div class="bar-in"><button class="home" data-go="">' + M.icon('back', 20) + E(T('Home')) + '</button>' +
       '<img src="mare-logo-white.svg" alt=""><h1 class="serif">' + E(T(def.title)) + '</h1>' + M.langSwitch() + '</div></div>' +
       (def.tabs ? '<div class="tabs" role="tablist">' + def.tabs.map(function (t) { return '<button role="tab" data-tab="' + t[0] + '" class="' + (t[0] === sub ? 'on' : '') + '">' + E(T(t[1])) + '</button>'; }).join('') + '</div>' : '') +
       '<main id="main"><div class="muted">' + E(T('Loading…')) + '</div></main>';
@@ -156,14 +174,15 @@
   App.home = function (a) {
     var t = M.today(), hr = M.parts(new Date()).hh;
     var greet = hr < 12 ? T('Good morning') : hr < 18 ? T('Good afternoon') : T('Good evening');
-    var first = (App.S.me || '').split(' ')[0];
-    a.innerHTML = '<div class="hero"><div class="hero-top"><span class="who">' + E(App.S.me || '') + '</span><div class="row">' + M.langSwitch() +
+    var first = ((App.S.viewAs ? App.S.viewAs.name : App.S.me) || '').split(' ')[0];
+    a.innerHTML = App.banner() + '<div class="hero"><div class="hero-top"><span class="who">' + E(App.S.me || '') + '</span><div class="row">' + M.langSwitch() +
       '<a class="lk" href="./">' + E(T('Roberto\'s FOH')) + ' &rarr;</a><button class="lk" id="so">' + E(T('Sign out')) + '</button></div></div>' +
       '<div class="hero-main"><img src="mare-logo-white.svg" alt="Roberto\'s Mare"><div><h1 class="serif">' + E(greet + (first ? ', ' + first : '')) + '</h1>' +
       '<div class="sub">' + E(M.niceDate(t)) + ' · Porto Montenegro</div></div></div></div>' +
       '<div class="strip"><div class="strip-in" id="strip">' + [1, 2, 3, 4, 5].map(function () { return '<div class="stat"><b>·</b><span>&nbsp;</span></div>'; }).join('') + '</div></div>' +
       '<div class="groups">' + GROUPS.map(function (g) {
-        var ms = App.order.filter(function (k) { return App.mods[k].group === g[0]; });
+        var ms = App.order.filter(function (k) { return App.mods[k].group === g[0] && App.allowed(k); });
+        if (!ms.length) return '';
         return '<section class="grp"><h2>' + E(T(g[1])) + '</h2><div class="tiles">' + ms.map(function (k) {
           var d = App.mods[k];
           return '<button class="tile" data-mod="' + k + '"><span class="ic">' + M.icon(d.icon, 24) + '</span><span class="nm">' + E(T(d.title)) + '</span>' +
@@ -192,6 +211,7 @@
         [pend, T('Leave to decide'), pend > 0, 'leave'],
         [newSpeak, T('New in Speak up'), newSpeak > 0, 'speakup']
       ];
+      stats = stats.filter(function (s) { return App.allowed(s[3]); });
       document.getElementById('strip').innerHTML = stats.map(function (s) {
         return '<button class="stat' + (s[2] ? ' alert' : '') + '" data-mod="' + s[3] + '"><b>' + E(s[0]) + '</b><span>' + E(s[1]) + '</span></button>';
       }).join('');

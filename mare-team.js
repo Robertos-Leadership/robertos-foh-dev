@@ -3,6 +3,14 @@
   var M = window.Mare, T = M.T, E = M.esc;
   var LS_DEV = 'mare_device', LS_Q = 'mare_queue', LS_BOARD = 'mare_board', LS_FEED = 'mare_feed';
   var params = new URLSearchParams(location.search), meToken = params.get('me');
+  // ── View as (opened from the Mare app → View as): a manager sees this screen
+  // exactly as one person (?viewas=<staff id>) or as the tablet (?viewas=tablet).
+  // Read-only: every action is stopped before it reaches the database.
+  var VIEWAS = params.get('viewas'), PREVIEW = !!VIEWAS, PV_TOKEN = null, PV_BACK = 'mare.html#viewas';
+  if (PREVIEW) {
+    try { PV_TOKEN = sessionStorage.getItem('mare_viewas_token'); PV_BACK = sessionStorage.getItem('mare_viewas_back') || PV_BACK; } catch (e) {}
+    if (VIEWAS !== 'tablet') meToken = '__preview__';   // the phone layout, for that person
+  }
   var main = document.getElementById('main');
   var S = { screen: '', board: [], feed: null, who: null, pin: '', pin1: null, msg: '', msgErr: false, online: navigator.onLine,
             cam: null, camOk: false, resetT: null, id: null, mod: null, sub: null, dubai: null };
@@ -34,7 +42,27 @@
   document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') wake(); });
 
   // ════════════════ START (called at the very end, once every list below exists) ════════════════
+  function previewFail() {
+    main.innerHTML = '<div class="card stack"><h1 class="serif">' + E(T('View as')) + '</h1><p class="big">' + E(T('Open View as from the Mare app (signed in) to see this screen as someone else.')) + '</p>' +
+      '<a class="btn" style="align-self:flex-start;text-decoration:none" href="mare.html#viewas">' + E(T('Open the Mare app')) + '</a></div>';
+  }
+  function previewStart() {
+    var who = VIEWAS === 'tablet' ? T('the staff tablet') : '…';
+    var bar = document.createElement('div'); bar.id = 'pvbar';
+    bar.style.cssText = 'position:sticky;top:0;z-index:80;background:#1E2A2C;color:#fff;display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:10px 16px;padding:10px 16px;font-weight:700;font-size:15px';
+    document.body.insertBefore(bar, document.body.firstChild);
+    function paintBar() {
+      var n = VIEWAS === 'tablet' ? T('the staff tablet') : (S.meName ? S.meName + (S.meData && S.meData.team ? ' · ' + T(S.meData.team) : '') : who);
+      bar.innerHTML = '<span>' + M.icon('people', 18) + ' ' + E(T('Viewing as {n} — read only', { n: n })) + '</span>' +
+        '<a href="' + E(PV_BACK) + '" style="color:#1E2A2C;background:#fff;border-radius:999px;padding:6px 14px;text-decoration:none">' + E(T('Switch back')) + '</a>';
+    }
+    paintBar(); document.addEventListener('click', function (e) { if (e.target.closest('[data-lang]')) setTimeout(paintBar, 0); });
+    if (!PV_TOKEN) { previewFail(); return; }
+    if (VIEWAS === 'tablet') { document.body.classList.add('kiosk'); S.screen = 'home'; refresh().then(function () { if (!S.feed) previewFail(); else home(); }); }
+    else { document.body.classList.add('phone', 'pvphone'); phoneLoad().then(paintBar); }
+  }
   function start() {
+  if (PREVIEW) { previewStart(); return; }
   if (meToken) { document.body.classList.add('phone'); phoneStart(); }
   else {
     document.body.classList.add('kiosk'); wake();
@@ -67,6 +95,8 @@
   function loadCache() { try { S.board = JSON.parse(ls(LS_BOARD) || '[]'); S.feed = JSON.parse(ls(LS_FEED) || 'null'); } catch (e) { S.board = []; } }
 
   function refresh() {
+    if (PREVIEW) return M.rpc('mare_m_view_as', { p_staff: null }, PV_TOKEN).then(function (r) {
+      if (r.data && r.data.ok) { S.feed = r.data; S.board = r.data.board; if (S.screen === 'home') home(); } });
     var d = ls(LS_DEV); if (!d) return Promise.resolve();
     return Promise.all([M.rpc('mare_kiosk_board', { p_device: d }), M.rpc('mare_s_feed', { p_device: d, p_token: null, p_pin: null })]).then(function (r) {
       if (r[0].error) { if (r[0].error.network) { S.online = false; foot(); } return; }
@@ -86,6 +116,13 @@
     ['brief', 'brief', 'Today\'s briefing'], ['check', 'check', 'Checklists'], ['rota', 'rota', 'Rota'], ['recipes', 'recipe', 'Recipes'],
     ['breakage', 'breakage', 'Breakage & waste'], ['leave', 'leave', 'Ask for leave'], ['speak', 'speak', 'Speak up']
   ];
+  function teamMods() {
+    var tm = S.feed && S.feed.team_modules; if (!tm) return MODS;
+    var allow = {};
+    if (S.meData && S.meData.team) (tm[S.meData.team] || []).forEach(function (k) { allow[k] = 1; });
+    else Object.keys(tm).forEach(function (t) { (tm[t] || []).forEach(function (k) { allow[k] = 1; }); });   // the tablet: every team's
+    return MODS.filter(function (m) { return allow[m[0]]; });
+  }
   function modStat(k) {
     var f = S.feed; if (!f) return ['', false];
     if (k === 'brief') return f.briefing ? [T('{n} read', { n: f.reads.length }), false] : [T('Not written yet'), false];
@@ -100,7 +137,7 @@
     if (meToken) return phoneHome();
     S.screen = 'home';
     var inN = S.board.filter(function (p) { return p.in; }).length;
-    var h = '<div class="mods">' + MODS.map(function (m) { var s = modStat(m[0]);
+    var h = '<div class="mods">' + teamMods().map(function (m) { var s = modStat(m[0]);
       return '<button class="mod" data-mod="' + m[0] + '"><span class="ic">' + M.icon(m[1], 24) + '</span><b>' + E(T(m[2])) + '</b><span class="s' + (s[1] ? ' alert' : '') + '">' + E(s[0]) + '</span></button>'; }).join('') + '</div>';
     h += '<div class="row" style="justify-content:space-between;align-items:baseline"><h1 class="serif">' + E(T('CLOCK IN · TAP YOUR NAME')) + '</h1><div class="muted big">' + E(T('{n} in now', { n: inN })) + '</div></div><div class="groups">';
     ['Kitchen', 'Service', 'Bar', 'Other'].forEach(function (t) {
@@ -112,12 +149,13 @@
     });
     if (!S.board.length) h += '<div class="card muted big" style="grid-column:1/-1">' + E(T('No names yet. The manager adds the team in the management app (People).')) + '</div>';
     main.innerHTML = h + '</div><div class="foot" id="foot"></div>';
-    on('.name', function (b) { var id = b.getAttribute('data-id'); S.who = S.board.filter(function (p) { return p.id === id; })[0]; pinScreen(); });
+    on('.name', function (b) { if (PREVIEW) { M.toast(T('Read only: you are viewing as someone else. Nothing is saved.')); return; } var id = b.getAttribute('data-id'); S.who = S.board.filter(function (p) { return p.id === id; })[0]; pinScreen(); });
     on('[data-mod]', function (b) { openMod(b.getAttribute('data-mod')); });
     foot();
   }
   function foot() {
     var f = document.getElementById('foot'); if (!f) return;
+    if (PREVIEW) { f.innerHTML = '<span>' + E(T('Read only: you are viewing as someone else. Nothing is saved.')) + '</span>'; return; }
     var q = queue().length;
     f.innerHTML = '<span><span class="dot' + (S.online ? '' : ' off') + '"></span>' + E(S.online ? T('Online') : T('Offline. Clock-ins are saved on this tablet')) + '</span>' +
       (q ? '<span style="color:var(--amber);font-weight:700">' + E(T('{n} waiting to send', { n: q })) + '</span>' : '') +
@@ -253,8 +291,15 @@
   // ════════════════ WHO ARE YOU? (module actions on the tablet) ════════════════
   // Name + code, then act(staff, pin) → {ok}. A wrong code asks again. A good code is
   // remembered for 2 minutes, so ticking several checklist lines needs it once.
-  function rpcS(name, args) { return M.rpc(name, args).then(function (r) { if (r.error) return { ok: false, network: !!r.error.network, error: r.error.network ? 'network' : 'error' }; return r.data; }); }
+  function rpcS(name, args) {
+    if (PREVIEW) {
+      if (name === 'mare_s_recipe') return M.rpc('mare_m_recipe', { p_id: args.p_id }, PV_TOKEN).then(function (r) { return r.data || { ok: false }; });
+      M.toast(T('Read only: you are viewing as someone else. Nothing is saved.')); return Promise.resolve({ ok: false, error: 'preview' });
+    }
+    return M.rpc(name, args).then(function (r) { if (r.error) return { ok: false, network: !!r.error.network, error: r.error.network ? 'network' : 'error' }; return r.data; });
+  }
   function askWho(title, act) {
+    if (PREVIEW) { M.toast(T('Read only: you are viewing as someone else. Nothing is saved.')); return Promise.resolve(null); }
     var me = ident();
     if (me) return act(me.staff, me.pin).then(function (x) {
       if (x && x.ok) { if (S.id) S.id.until = Date.now() + 120000; return x; }
@@ -548,6 +593,10 @@
     drawKeys(function () { S.mePin = S.pin; phoneLoad(); });
   }
   function phoneLoad(quiet) {
+    if (PREVIEW) return M.rpc('mare_m_view_as', { p_staff: VIEWAS }, PV_TOKEN).then(function (r) {
+      if (!r.data || !r.data.ok) { previewFail(); return; }
+      S.feed = r.data; S.meData = r.data.me; S.meId = r.data.me.id; S.meName = r.data.me.name; if (!quiet) home();
+    });
     return M.rpc('mare_s_feed', { p_device: null, p_token: meToken, p_pin: S.mePin }).then(function (x) {
       if (x.error) { if (!quiet) phonePin(x.error.network ? T('No internet. Try again.') : T('Something went wrong.')); return; }
       if (!x.data.ok) { try { sessionStorage.removeItem('mare_me_pin'); } catch (e) {} phonePin(x.data.error === 'locked' ? T('Too many wrong codes. Wait 15 minutes or ask the manager.') : T('Wrong code. Try again.')); return; }
@@ -565,7 +614,7 @@
     var next = f.shifts.filter(function (x) { return x.staff_id === me.id && x.date >= f.today && x.kind === 'work'; }).sort(function (a, b) { return a.date < b.date ? -1 : 1; })[0];
     var h = '<h1 class="serif" style="letter-spacing:0">' + E(T('Hi {n}', { n: me.name })) + '</h1>' +
       '<div class="muted big">' + E(open ? T('In since {t}', { t: M.hhmm(open.inP.at) }) : next ? T('Next shift: {d} {t}', { d: next.date === f.today ? T('today') : M.shortDate(next.date), t: (next.start_t || '') + '–' + (next.end_t || '') }) : T('No shift on the rota yet')) + '</div>';
-    var tiles = [['hours', 'hours', 'My hours']].concat(MODS);
+    var tiles = [['hours', 'hours', 'My hours']].concat(teamMods());
     h += '<div class="mods">' + tiles.map(function (m) { var s = m[0] === 'hours' ? [T('This week {d}', { d: M.durShort(weekMin(sh, M.weekStart(f.today))) }), false] : modStat(m[0]);
       return '<button class="mod" data-mod="' + m[0] + '"><span class="ic">' + M.icon(m[1], 24) + '</span><b>' + E(T(m[2])) + '</b><span class="s' + (s[1] ? ' alert' : '') + '">' + E(s[0]) + '</span></button>'; }).join('') + '</div>' +
       '<div class="card small muted">' + E(T('To clock in or out, use the tablet at the staff entrance.')) + '</div>';
