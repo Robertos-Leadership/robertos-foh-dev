@@ -111,6 +111,34 @@
       .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); });
   }
 
+  // The Dubai recipe book as Mare sees it: only the dishes the Dubai chef ticked "Mare"
+  // on (recipes.show_mare), under Dubai's own sections, in the order of the running
+  // A la carte menu (menus.fold_order, keys "s:<section>"). Unknown sections go last.
+  function dubaiBook() {
+    return Promise.all([
+      kitchen('recipes?select=id,name,section&archived=is.false&kind=eq.main&show_mare=is.true&order=name'),
+      kitchen('menus?select=name,fold_order&running=is.true&archived=is.false&parent_id=is.null').catch(function () { return []; })
+    ]).then(function (r) {
+      var order = [];
+      r[1].sort(function (a, b) { return (/a la carte/i.test(b.name) ? 1 : 0) - (/a la carte/i.test(a.name) ? 1 : 0); })
+        .forEach(function (m) { (m.fold_order || []).forEach(function (k) { var s = /^s:/.test(k) ? k.slice(2).toLowerCase() : null; if (s && order.indexOf(s) < 0) order.push(s); }); });
+      var groups = {}, names = [];
+      r[0].forEach(function (d) { var s = (d.section || '').trim() || 'Other'; if (!groups[s]) { groups[s] = []; names.push(s); } groups[s].push(d); });
+      names.sort(function (a, b) { var i = order.indexOf(a.toLowerCase()), j = order.indexOf(b.toLowerCase()); if (i < 0) i = 999; if (j < 0) j = 999; return i - j || a.localeCompare(b); });
+      return names.map(function (s) { return { section: s, dishes: groups[s] }; });
+    });
+  }
+  function dubaiBookHtml(book, q) {
+    q = (q || '').toLowerCase().trim(); var n = 0;
+    var h = book.map(function (g) {
+      var ds = g.dishes.filter(function (d) { return !q || d.name.toLowerCase().indexOf(q) >= 0 || g.section.toLowerCase().indexOf(q) >= 0; });
+      n += ds.length; if (!ds.length) return '';
+      return '<div class="dsec"><div class="sec"><span>' + esc(g.section) + '</span><i></i><em>' + ds.length + '</em></div><div class="rlist">' +
+        ds.map(function (d) { return '<button class="rcard" data-k="' + d.id + '"><div class="tx"><b>' + esc(d.name) + '</b></div></button>'; }).join('') + '</div></div>';
+    }).join('');
+    return { html: h, n: n };
+  }
+
   // ── bits ──
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
   function safeJpeg(u) { return (typeof u === 'string' && /^data:image\/jpeg;base64,[A-Za-z0-9+\/=]+$/.test(u)) ? u : null; }
@@ -202,7 +230,7 @@
     parts: parts, pad: pad, hhmm: hhmm, dateKey: dateKey, today: today, dow: dow, addDays: addDays, daysBetween: daysBetween,
     weekStart: weekStart, monthStart: monthStart, addMonths: addMonths, day: day, niceDate: niceDate, shortDate: shortDate, monthName: monthName,
     toInstant: toInstant, mins: mins, dur: dur, durShort: durShort, timeToMin: timeToMin, shifts: shifts, lateness: lateness, GRACE_MIN: GRACE_MIN,
-    rpc: rpc, kitchen: kitchen, esc: esc, safeJpeg: safeJpeg, safeImg: safeImg, money: money, money0: money0, num: num, numSafe: numSafe, parseNum: parseNum, toast: toast, pct: pct,
+    rpc: rpc, kitchen: kitchen, dubaiBook: dubaiBook, dubaiBookHtml: dubaiBookHtml, esc: esc, safeJpeg: safeJpeg, safeImg: safeImg, money: money, money0: money0, num: num, numSafe: numSafe, parseNum: parseNum, toast: toast, pct: pct,
     photoFromFile: photoFromFile, icon: icon,
     // kept for old callers
     DAYS: DAYS.en

@@ -60,14 +60,10 @@
     };
     var tg = o.querySelector('#rt'); if (tg) tg.onclick = function () { App.save('mare_recipes', { id: r.id, active: !r.active }).then(function (x) { if (x) { o.close(); App.reload(); } }); };
   }
-  App.dubaiRecipes = function () {
-    if (RC.dubai) return Promise.resolve(RC.dubai);
-    return M.kitchen('recipes?select=id,name,kind,section,makes_qty,makes_unit,allergens&archived=is.false&order=name').then(function (rows) { RC.dubai = rows; return rows; });
-  };
   App.dubaiCard = function (id) {
-    return Promise.all([M.kitchen('recipes?select=id,name,kind,section,makes_qty,makes_unit,allergens,method,photos,notes&id=eq.' + encodeURIComponent(id)),
+    return Promise.all([M.kitchen('recipes?select=id,name,kind,section,makes_qty,makes_unit,allergens,method,photos,notes&show_mare=is.true&id=eq.' + encodeURIComponent(id)),
                         M.kitchen('recipe_lines?select=position,typed_text,stock_name,qty,unit,child_recipe_id,note&recipe_id=eq.' + encodeURIComponent(id) + '&order=position')])
-      .then(function (r) { return { r: r[0][0], lines: r[1] }; });
+      .then(function (r) { if (!r[0][0]) throw new Error('hidden'); return { r: r[0][0], lines: r[1] }; });
   };
   App.dubaiHtml = function (c) {
     var r = c.r, m = (r.method && typeof r.method === 'object') ? r.method : {}, ph = (Array.isArray(r.photos) ? r.photos : []).map(function (p) { return M.safeImg(p && p.u); }).filter(Boolean)[0];
@@ -87,21 +83,17 @@
   };
   function dubai(main) {
     main.innerHTML = '<div class="muted">' + E(T('Loading the Dubai recipe cards…')) + '</div>';
-    return App.dubaiRecipes().then(function (all) {
+    return M.dubaiBook().then(function (book) {
       function paint() {
-        var q = RC.q.toLowerCase(), list = all.filter(function (r) { return (RC.kind === 'all' || r.kind === RC.kind) && (!q || (r.name || '').toLowerCase().indexOf(q) >= 0 || (r.section || '').toLowerCase().indexOf(q) >= 0); });
-        main.querySelector('#dl').innerHTML = list.length ? list.slice(0, 300).map(function (r) {
-          return '<button class="rcard" data-k="' + r.id + '"><div class="tx"><b>' + E(r.name) + '</b><span class="small muted">' + E([r.section, r.kind === 'batch' ? T('Prep / batch') : T('Dish')].filter(Boolean).join(' · ')) + '</span></div></button>';
-        }).join('') : App.empty(T('Nothing matches.'));
-        main.querySelector('#dc').textContent = T('{n} cards', { n: list.length });
+        var x = M.dubaiBookHtml(book, RC.q), total = book.reduce(function (a, g) { return a + g.dishes.length; }, 0);
+        main.querySelector('#dl').innerHTML = !total ? App.empty(T('No Dubai cards are shared with Mare yet. The Dubai chef chooses them in the Kitchen recipe book: the Mare switch on each dish.')) : (x.n ? x.html : App.empty(T('Nothing matches.')));
+        main.querySelector('#dc').textContent = T('{n} cards', { n: x.n });
       }
       main.innerHTML = '<section class="stack"><div class="row between"><h2 class="serif">' + E(T('Roberto\'s Dubai recipe cards')) + '</h2><span class="muted" id="dc"></span></div>' +
-        '<p class="muted" style="margin:0">' + E(T('Read only, straight from the Dubai kitchen app. Use them to learn the standard; Mare\'s own versions go in the Mare book.')) + '</p>' +
-        '<div class="row"><input type="text" id="dq" value="' + E(RC.q) + '" placeholder="' + E(T('Search a dish')) + '" aria-label="' + E(T('Search')) + '" style="flex:1 1 260px">' +
-        '<select id="dk" aria-label="' + E(T('Kind')) + '"><option value="main"' + (RC.kind === 'main' ? ' selected' : '') + '>' + E(T('Dishes')) + '</option><option value="batch"' + (RC.kind === 'batch' ? ' selected' : '') + '>' + E(T('Prep / batch')) + '</option><option value="all"' + (RC.kind === 'all' ? ' selected' : '') + '>' + E(T('All')) + '</option></select></div>' +
-        '<div class="rlist" id="dl"></div></section>';
+        '<p class="muted" style="margin:0">' + E(T('The dishes the Dubai chef has finished and shared with Mare, as on the Dubai menu. Read only; Mare\'s own versions go in the Mare book.')) + '</p>' +
+        '<input type="text" id="dq" value="' + E(RC.q) + '" placeholder="' + E(T('Search a dish')) + '" aria-label="' + E(T('Search')) + '">' +
+        '<div class="stack" id="dl"></div></section>';
       main.querySelector('#dq').oninput = function () { RC.q = this.value; paint(); };
-      main.querySelector('#dk').onchange = function () { RC.kind = this.value; paint(); };
       paint();
       App.on(main, '[data-k]', function (b) {
         var o = App.overlay('<div class="muted">' + E(T('Loading…')) + '</div>');

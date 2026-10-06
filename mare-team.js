@@ -480,18 +480,23 @@
     }
     main.innerHTML = frame('Recipes', '<div class="muted big">' + E(T('Loading the Dubai recipe cards…')) + '</div>', TABS);
     bindFrame();
-    var load = S.dubai ? Promise.resolve(S.dubai) : M.kitchen('recipes?select=id,name,kind,section&archived=is.false&kind=eq.main&order=name').then(function (r) { S.dubai = r; return r; });
-    load.then(function (all) {
+    var load = S.dubai ? Promise.resolve(S.dubai) : M.dubaiBook().then(function (r) { S.dubai = r; return r; });
+    load.then(function (book) {
       if (S.mod !== 'recipes' || S.sub !== 'dubai') return;
       main.innerHTML = frame('Recipes', '<div class="stack"><p class="muted" style="margin:0">' + E(T('Roberto\'s Dubai recipe cards, read only. Learn the standard here.')) + '</p>' +
-        '<input type="text" id="q" placeholder="' + E(T('Search a dish')) + '" aria-label="' + E(T('Search')) + '"><div class="rlist" id="rl"></div></div>', TABS);
+        '<input type="text" id="q" placeholder="' + E(T('Search a dish')) + '" aria-label="' + E(T('Search')) + '"><div class="stack" id="rl"></div></div>', TABS);
       bindFrame();
-      function paint(q) { q = (q || '').toLowerCase(); document.getElementById('rl').innerHTML = all.filter(function (r) { return !q || r.name.toLowerCase().indexOf(q) >= 0; }).slice(0, 200).map(function (r) { return '<button class="rcard" data-k="' + r.id + '"><b>' + E(r.name) + '</b><span class="muted">' + E(r.section || '') + '</span></button>'; }).join(''); }
+      function paint(q) {
+        var x = M.dubaiBookHtml(book, q);
+        document.getElementById('rl').innerHTML = !book.length ? '<div class="card muted">' + E(T('No Dubai cards are shared with Mare yet. The Dubai chef chooses them in the Kitchen recipe book: the Mare switch on each dish.')) + '</div>'
+          : (x.n ? x.html : '<div class="muted">' + E(T('Nothing matches.')) + '</div>');
+      }
       paint(''); document.getElementById('q').oninput = function () { paint(this.value); };
       document.getElementById('rl').onclick = function (e) {
         var b = e.target.closest('[data-k]'); if (!b) return;
         var id = b.getAttribute('data-k');
-        Promise.all([M.kitchen('recipes?select=name,section,makes_qty,makes_unit,allergens,method,photos&id=eq.' + encodeURIComponent(id)), M.kitchen('recipe_lines?select=typed_text,stock_name,qty,unit,note&recipe_id=eq.' + encodeURIComponent(id) + '&order=position')]).then(function (x) {
+        Promise.all([M.kitchen('recipes?select=name,section,makes_qty,makes_unit,allergens,method,photos&show_mare=is.true&id=eq.' + encodeURIComponent(id)), M.kitchen('recipe_lines?select=typed_text,stock_name,qty,unit,note&recipe_id=eq.' + encodeURIComponent(id) + '&order=position')]).then(function (x) {
+          if (!x[0][0]) return;
           var r = x[0][0], m = (r.method && typeof r.method === 'object') ? r.method : {}, ph = (Array.isArray(r.photos) ? r.photos : []).map(function (p) { return M.safeImg(p && p.u); }).filter(Boolean)[0];
           var lines = x[1].map(function (l) { return (l.stock_name && l.qty != null ? l.qty + ' ' + (l.unit || '') + ' ' + l.stock_name : (l.typed_text || '')) + (l.note ? ' (' + l.note + ')' : ''); }).join('\n');
           main.innerHTML = frame(r.name, '<div class="stack"><span class="tag blue" style="align-self:flex-start">' + E(T('ROBERTO\'S DUBAI · READ ONLY')) + '</span>' + (ph ? '<img class="photo" src="' + ph + '" alt="">' : '') +
