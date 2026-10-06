@@ -4,6 +4,7 @@
    Words kept the same everywhere: DOLAZAK/ODLAZAK (clock in/out), šifra (code),
    smjena (shift), raspored (rota), brifing, kontrolna lista (checklist). */
 window.MARE_ME = {
+"This test link has expired. Sign in with your Roberto’s login, or ask Francesco for a new link.": "Ovaj testni link je istekao. Prijavite se svojim Roberto’s nalogom ili zatražite novi link od Francesca.",
 "No Dubai cards are shared with Mare yet. The Dubai chef chooses them in the Kitchen recipe book: the Mare switch on each dish.": "Još nijedna recepturna kartica iz Dubaija nije podijeljena sa Mare. Šef u Dubaiju ih bira u knjizi recepata Kitchen aplikacije: prekidač Mare na svakom jelu.",
 "The dishes the Dubai chef has finished and shared with Mare, as on the Dubai menu. Read only; Mare's own versions go in the Mare book.": "Jela koja je šef u Dubaiju završio i podijelio sa Mare, kao na meniju u Dubaiju. Samo za čitanje; Mare-ine verzije idu u Mare knjigu.",
 "Not saved yet.": "Još nije sačuvano.",

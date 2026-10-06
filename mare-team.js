@@ -68,7 +68,11 @@
     document.body.classList.add('kiosk'); wake();
     window.addEventListener('online', function () { S.online = true; flush(); foot(); });
     window.addEventListener('offline', function () { S.online = false; foot(); });
-    if (!ls(LS_DEV)) setup(); else { loadCache(); home(); refresh(); startCamera(); }
+    // mare-clock.html?tablet=CODE connects the tablet in one tap (a test link); the code then leaves the address bar.
+    var tabletCode = params.get('tablet');
+    if (tabletCode) history.replaceState(null, '', location.pathname);
+    if (!ls(LS_DEV) && tabletCode) { setup(); document.getElementById('code').value = tabletCode; document.getElementById('go').click(); }
+    else if (!ls(LS_DEV)) setup(); else { loadCache(); home(); refresh(); startCamera(); }
     setInterval(function () { if (S.screen === 'home') refresh(); }, 60000);
     setInterval(flush, 20000);
     flush();

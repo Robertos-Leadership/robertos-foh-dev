@@ -91,6 +91,16 @@
   App.start = function () {
     sb = supabase.createClient(M.SB_URL, M.SB_KEY);
     sb.auth.onAuthStateChange(function (ev, s) { if (s) App.S.token = s.access_token; });
+    // A personal test link (mare.html?try=…) signs the reviewer in as himself: no password.
+    var tryTok = new URLSearchParams(location.search).get('try');
+    if (tryTok) {
+      history.replaceState(null, '', location.pathname + location.hash);
+      fetch(M.SB_URL + '/functions/v1/mare-try', { method: 'POST', headers: { 'Content-Type': 'application/json', apikey: M.SB_KEY, Authorization: 'Bearer ' + M.SB_KEY }, body: JSON.stringify({ token: tryTok }) })
+        .then(function (r) { return r.json(); })
+        .then(function (x) { if (!x || !x.ok) throw new Error('link'); return sb.auth.verifyOtp({ token_hash: x.token_hash, type: 'magiclink' }); })
+        .then(function (v) { if (v.error || !v.data.session) throw new Error('otp'); App.S.token = v.data.session.access_token; App.S.email = (v.data.session.user.email || '').toLowerCase(); App.boot(); },
+              function () { App.signIn(T('This test link has expired. Sign in with your Roberto’s login, or ask Francesco for a new link.')); });
+    } else
     sb.auth.getSession().then(function (x) {
       var s = x.data && x.data.session;
       if (!s) { App.signIn(); return; }

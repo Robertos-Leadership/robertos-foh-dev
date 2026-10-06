@@ -166,9 +166,9 @@ var FB_ROUNDS = {
     ask: FB_ASK.TRY,
     intro: [
       '<b>Why this app.</b> The Mare team in Porto Montenegro has no email, no employee ID and no clock-in. Two screens solve it: <b>the staff tablet</b> by the staff entrance, where everyone clocks in with their name and a 4-digit code (a photo is taken, so codes cannot be shared), reads the briefing and ticks the checklists; and <b>the management app</b> for Milica and the managers, where the restaurant is run day to day. Every staff member also gets a <b>phone link</b> to see their own hours and shifts.',
-      '<b>Where to open it.</b> The management app: <a href="https://robertos-foh-dev.pages.dev/mare.html">robertos-foh-dev.pages.dev/mare.html</a>, sign in with your usual Roberto’s login. The staff tablet: <a href="https://robertos-foh-dev.pages.dev/mare-clock.html">robertos-foh-dev.pages.dev/mare-clock.html</a> (step 3 shows how to switch it on). Both work on a laptop, a tablet or a phone.',
+      '<b>Where to open it.</b> Use the two buttons in your email: <b>Open the Mare app</b> signs you in by itself, no password, and <b>Open the staff tablet</b> opens a demo tablet that is already switched on. Both work on a laptop, a tablet or a phone.',
       '<b>How to move around.</b> Every module is in the <b>menu on the left</b>; on a phone tap <b>☰</b> at the top left. <b>Today</b> is the home page: what needs you, tonight, who is in and the month so far. Inside a module the tabs are under the title. <b>EN | ME</b> at the bottom of the menu switches English / Montenegrin.',
-      '<b>It is all demo.</b> Rahul, Arjun, Petar, Ana, Jelena, Nikola, Luka and Ivana, all marked (demo), all with code <b>1234</b>. Press anything: the demo is removed before the real team starts.',
+      '<b>It is all demo.</b> On the tablet, tap any name (Rahul, Arjun, Petar, Ana, Jelena, Nikola, Luka, Ivana, all marked demo) and type <b>1234</b>: that is the code of every demo person. Press anything: the demo is removed before the real team starts.',
       '<b>Your feedback.</b> Each step says what to try. Then tap <b>Works well</b>, <b>Change something</b> or <b>Add something</b> and write how in the note: the note is what we use to adjust it. At the end there is a box for anything missing. Tap <b>Send my answers</b> and it comes straight to Francesco.'
     ],
     howto: 'Tap <b>Works well</b> if it is right as it is, or <b>Change something</b> / <b>Add something</b> and write what in the note. The note is the most useful part.<br><br>Your answers are kept on this phone as you go, so you can stop and come back. Tap <b>Send my answers</b> when you are done.',
@@ -183,8 +183,8 @@ var FB_ROUNDS = {
         today: 'Menu → <b>Set-up → View as</b>. Open the app as Milica, as a chef, as the floor, or as the staff tablet: read only, a banner takes you back. The ticks below choose which modules each manager and each team can open.',
         label: 'View as' },
       { id:'m-tablet',
-        said: 'Switch on the staff tablet',
-        today: 'Menu → <b>Set-up → Tablet</b> → type a name → <b>Make a tablet code</b>. Open <a href="https://robertos-foh-dev.pages.dev/mare-clock.html">mare-clock.html</a> on a phone or tablet and type that code. That screen is now the staff tablet.',
+        said: 'Setting up a new tablet',
+        today: 'Your demo tablet is already on (the button in your email). For a real one, Milica goes to Menu → <b>Set-up → Tablet</b>, makes a tablet code and types it once on the new tablet. Is that simple enough?',
         label: 'Tablet set-up' },
       { id:'m-clock',
         said: 'Clock in and out on the tablet',
