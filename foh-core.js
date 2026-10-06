@@ -5011,29 +5011,40 @@ async function renderFohHome(){
   // Fetch covers
   try{
     const t=RC.dubaiBusinessDate(new Date()), td=new Date(t+'T12:00:00'); td.setDate(td.getDate()+1); const tm=localISO(td);
-    const {data,error}=await sbKitchen.from('covers').select('service_date,night_covers,updated_at').in('service_date',[t,tm]);
+    const {data,error}=await sbKitchen.from('covers').select('service_date,night_covers,day_covers,updated_at').in('service_date',[t,tm]);
     if(error) throw error;
     const tr=(data||[]).find(r=>String(r.service_date).slice(0,10)===t);
     const tmr=(data||[]).find(r=>String(r.service_date).slice(0,10)===tm);
     const tnEl=document.getElementById('foh-tn-count');
     const tmEl=document.getElementById('foh-tm-count');
     const syncEl=document.getElementById('foh-tn-sync');
-    if(tnEl) tnEl.textContent=tr?(tr.night_covers??'—'):'—';
-    if(tmEl) tmEl.textContent=tmr?(tmr.night_covers??'—'):'—';
+    // Lunch AND dinner (6 Oct 2026). The sync used to write the whole day as night_covers
+    // with day_covers a hard 0, and this strip said "Tonight" over a number that counted
+    // the lunch guests too. It now splits SevenRooms' DAY shift from dinner, so the day's
+    // total is day + night and the strip says "Today" with the split underneath.
+    const dayTot=r=>r?(Number(r.night_covers)||0)+(Number(r.day_covers)||0):null;
+    const splitTxt=(d,n)=>(d==null||n==null)?'':(d+' lunch · '+n+' dinner');
+    const tnSplit=document.getElementById('foh-tn-split');
+    const tmSplit=document.getElementById('foh-tm-split');
+    if(tnEl) tnEl.textContent=tr?dayTot(tr):'—';
+    if(tmEl) tmEl.textContent=tmr?dayTot(tmr):'—';
+    if(tnSplit) tnSplit.textContent=tr?splitTxt(Number(tr.day_covers)||0,Number(tr.night_covers)||0):'';
+    if(tmSplit) tmSplit.textContent=tmr?splitTxt(Number(tmr.day_covers)||0,Number(tmr.night_covers)||0):'';
     // The `covers` table is a CACHE, written by the last laptop sync — it is not live, and
     // captioning it "Live · SevenRooms" is what let this screen read 52 on 20 Aug while the
     // Management landing and the Reservations book both read 58. Ask SevenRooms directly for
     // tonight (counts only, the same ?upcoming= read the landing strip already makes), and if
     // that cannot be reached, show the cached number with the DAY it was taken — never "Live".
     if(syncEl) syncEl.textContent = 'Checking SevenRooms…';
-    let liveBooked = null;
+    let liveBooked = null, liveDay = null, liveNight = null;
     try{
       const r = await fetch(KITCHEN_URL+'/functions/v1/sevenrooms-sync?upcoming='+t, { method:'POST',
         headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+KITCHEN_KEY, 'x-proxy-secret':KITCHEN_PROXY_SECRET } });
-      if(r.ok){ const j = await r.json(); if(j && j.ok && j.booked!=null) liveBooked = j.booked; }
+      if(r.ok){ const j = await r.json(); if(j && j.ok && j.booked!=null){ liveBooked = j.booked; liveDay = j.booked_day ?? null; liveNight = j.booked_night ?? null; } }
     }catch(_){ /* offline or the function is down — the cached figure below still stands */ }
     if(liveBooked !== null){
       if(tnEl) tnEl.textContent = liveBooked;
+      if(tnSplit) tnSplit.textContent = splitTxt(liveDay, liveNight);
       if(syncEl) syncEl.textContent = 'Live · SevenRooms';
     } else if(tr && tr.updated_at){
       const d = new Date(tr.updated_at);

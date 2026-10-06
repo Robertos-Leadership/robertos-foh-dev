@@ -207,15 +207,17 @@ if ('serviceWorker' in navigator) {
     <!-- TONIGHT STRIP -->
     <div style="background:#6B1F2A;padding:12px 20px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;border-top:2px solid #C9A84C;">
       <div>
-        <div style="font-size:8px;letter-spacing:.3em;text-transform:uppercase;color:rgba(255,255,255,.45);margin-bottom:4px;">Tonight</div>
+        <div style="font-size:8px;letter-spacing:.3em;text-transform:uppercase;color:rgba(255,255,255,.45);margin-bottom:4px;">Today</div>
         <div id="foh-tn-count" style="font-family:'Playfair Display',serif;font-size:40px;line-height:1;color:#fff;">—</div>
         <div style="font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:rgba(255,255,255,.45);margin-top:2px;">covers booked</div>
+        <div id="foh-tn-split" style="font-size:11px;color:rgba(255,255,255,.75);margin-top:3px;"></div>
         <div id="foh-tn-day" style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:rgba(255,255,255,.35);margin-top:6px;"></div>
       </div>
       <div style="text-align:right;">
         <div style="font-size:8px;letter-spacing:.3em;text-transform:uppercase;color:rgba(255,255,255,.45);margin-bottom:4px;">Tomorrow</div>
         <div id="foh-tm-count" style="font-family:'Playfair Display',serif;font-size:26px;color:rgba(255,255,255,.7);">—</div>
         <div style="font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:rgba(255,255,255,.35);margin-top:2px;">covers booked</div>
+        <div id="foh-tm-split" style="font-size:10px;color:rgba(255,255,255,.6);margin-top:3px;"></div>
         <div id="foh-tn-sync" style="font-size:8px;color:rgba(255,255,255,.22);font-style:italic;margin-top:4px;">Loading…</div>
       </div>
     </div>
@@ -459,7 +461,7 @@ if ('serviceWorker' in navigator) {
      Loaded here, not with the foh-*.js at the foot of the body, because the
      inline Admin code below READS it rather than just calling into it. -->
 <script src="foh-rounds.js?v=20260921learn2"></script>
-<script src="foh-core.js?v=20260930lockmc"></script>
+<script src="foh-core.js?v=20261006covers"></script>
 <script src="foh-bible.js?v=20260930master"></script>
 <script src="foh-sched-xlsx.js?v=20260927a3b"></script>
 <script src="foh-events.js?v=20260925audit"></script>
