@@ -107,6 +107,54 @@ Deno.serve(async (req) => {
     if (!/^Bearer\s+\S+/i.test(auth)) return json({ ok: false, error: "Not signed in" }, 401);
     const body = await req.json().catch(() => ({}));
 
+    // Third job (kind: "transcribe"): write down what a saved recording says, on the
+    // server, so it works the same in every browser (Edge, Firefox and iPhone Safari
+    // gave no transcript when the browser did it). Speech to text runs on the
+    // Cloudflare Worker mare-transcribe (Whisper, free daily allowance).
+    if (body.kind === "transcribe") {
+      const sbt = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, {
+        global: { headers: { Authorization: auth } }, auth: { persistSession: false },
+      });
+      const mid = String(body.media_id || "");
+      if (!/^[0-9a-f-]{36}$/i.test(mid)) return json({ ok: false, error: "media" }, 400);
+      const got = await sbt.rpc("mare_m_media_get", { p_id: mid });   // refuses anyone without Mare access
+      if (got.error || !got.data?.ok) return json({ ok: false, error: "access" }, 403);
+      const data = String(got.data.data || "");
+      const m = /^data:(audio|video)\/[^;,]+[^,]*;base64,(.+)$/.exec(data);
+      if (!m) return json({ ok: false, error: "not_audio" }, 200);
+      const url = Deno.env.get("MARE_TRANSCRIBE_URL"), tkey = Deno.env.get("MARE_TRANSCRIBE_KEY");
+      if (!url || !tkey) return json({ ok: false, error: "setup" }, 500);
+      // Names Whisper should spell right: Mare's own dishes, the Dubai cards shared with
+      // Mare, and the team's first names. Best effort; a failed read just means no hints.
+      const names: string[] = [];
+      try {
+        const f = await sbt.rpc("mare_m_fetch", { p_tables: ["recipes", "staff"], p_from: "2026-01-01", p_to: "2026-01-01" });
+        (f.data?.recipes || []).forEach((r: any) => r.active !== false && names.push(r.name));
+        (f.data?.staff || []).forEach((p: any) => p.active && names.push(String(p.name).replace(/\s*\(demo\)/i, "").split(" ")[0]));
+      } catch (_) { /* no hints */ }
+      try {
+        const ku = Deno.env.get("KITCHEN_URL"), kk = Deno.env.get("KITCHEN_ANON_KEY");
+        if (ku && kk) {
+          const kr = await fetch(ku + "/rest/v1/recipes?select=name&kind=eq.main&archived=is.false&show_mare=is.true&limit=60", { headers: { apikey: kk, Authorization: "Bearer " + kk } });
+          if (kr.ok) (await kr.json()).forEach((r: any) => names.push(r.name));
+        }
+      } catch (_) { /* no hints */ }
+      const lang = ({ en: "en", it: "it", me: "bs", bs: "bs", hr: "bs", sr: "bs" } as Record<string, string>)[String(body.language || "")] || "";
+      const prompt = ("Roberto's Mare, Porto Montenegro, Italian restaurant. Covers, 86, allergies, VIP, sea bass, branzino, Dover sole, meunière, burrata, carpaccio, tartare, linguine, risotto, tiramisù. " + [...new Set(names)].join(", ")).slice(0, 900);
+      const tr = await fetch(url, {
+        method: "POST", headers: { "content-type": "application/json", "x-mare-key": tkey },
+        body: JSON.stringify({ audio: m[2], language: lang || undefined, prompt }),
+      });
+      const tj = await tr.json().catch(() => ({}));
+      if (!tr.ok || !tj.ok) return json({ ok: false, error: "transcribe", detail: String(tj.error || tr.status) }, 502);
+      const text = String(tj.text || "").trim();
+      if (text) {
+        const sv = await sbt.rpc("mare_m_media_transcript", { p_id: mid, p_text: text });
+        if (sv.error || !sv.data?.ok) return json({ ok: false, error: "save" }, 400);
+      }
+      return json({ ok: true, text });
+    }
+
     if (body.kind === "briefing") {
       const sbb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, {
         global: { headers: { Authorization: auth } }, auth: { persistSession: false },

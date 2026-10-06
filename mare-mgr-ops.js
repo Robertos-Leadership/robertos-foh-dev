@@ -39,15 +39,31 @@
           MareMedia.list(lst, r.media, function (id) { return App.call('mare_m_media_get', { p_id: id }).then(function (x) { return x && x.data; }); },
             function (id) { App.call('mare_m_media_remove', { p_id: id }).then(function (x) { if (x) { App.say(T('Removed.')); load(); } }); },
             tr ? function (id, text) { App.call('mare_m_media_transcript', { p_id: id, p_text: text }).then(function (x) { if (x) { App.say(T('Saved.')); load(); } }); } : null,
-            owner === 'briefing' && App.fillBriefing ? { label: 'Fill the briefing from this', run: App.fillBriefing } : null);
+            owner === 'briefing' && App.fillBriefing ? { label: 'Fill the briefing from this', run: App.fillBriefing } : null,
+            function (id, btn) { btn.disabled = true; btn.textContent = T('Writing it down…'); transcribe(id); });
+        });
+      }
+      // The server writes a recording down (mare-minutes, kind "transcribe"). Saving never
+      // waits on it to count as saved: a recording that could not be written down is kept.
+      function transcribe(id, lang) {
+        return App.fn('mare-minutes', { kind: 'transcribe', media_id: id, language: lang || M.lang() }).then(function (t) {
+          load();
+          if (t && t.ok) { App.say(t.text ? T('Written down.') : T('Saved, but no words could be heard in it.')); return t.text || ''; }
+          App.say(T('Saved. It could not be written down now: open it and tap Write it down.')); return '';
         });
       }
       function save(x) {
         App.say(T('Saving…'));
-        return App.call('mare_m_media_add', { p_owner_kind: owner, p_owner_key: key, p_kind: x.kind, p_name: x.name, p_mime: x.mime, p_data: x.data, p_seconds: x.seconds, p_transcript: x.transcript || null })
-          .then(function (r) { if (r) { App.say(T('Saved.')); load(); return true; } return false; });
+        return App.call('mare_m_media_add', { p_owner_kind: owner, p_owner_key: key, p_kind: x.kind, p_name: x.name, p_mime: x.mime, p_data: x.data, p_seconds: x.seconds, p_transcript: null })
+          .then(function (r) {
+            if (!r) return false;
+            load();
+            if (!(x.kind === 'voice' || /^(audio|video)\//.test(x.mime))) { App.say(T('Saved.')); return { ok: true }; }
+            App.say(T('Saved. Writing down what was said…'));
+            return transcribe(r.id, x.language).then(function (text) { return { ok: true, text: text }; });
+          });
       }
-      MareMedia.recorder(box.querySelector('.rec'), save, { transcript: tr, fill: owner === 'briefing' ? App.fillBriefing : null, fillLabel: 'Fill the briefing from this' });
+      MareMedia.recorder(box.querySelector('.rec'), save, { transcript: tr, meeting: owner === 'meeting', fill: owner === 'briefing' ? App.fillBriefing : null, fillLabel: 'Fill the briefing from this' });
       MareMedia.picker(box.querySelector('input[type=file]'), save);
       load();
     });

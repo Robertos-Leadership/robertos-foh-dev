@@ -383,7 +383,8 @@
             (s.status === 'new' ? '<span class="tag teal">' + E(T('NEW')) + '</span>' : '') + '<span class="small muted">' + E(M.shortDate(M.dateKey(s.at))) + ' ' + M.hhmm(s.at) + ' · ' + E(s.name || T('No name')) + '</span></div>' +
             '<select data-ss="' + s.id + '" aria-label="' + E(T('Status')) + '">' + ['new', 'seen', 'done'].map(function (x) { return '<option value="' + x + '"' + (s.status === x ? ' selected' : '') + '>' + E(T({ new: 'New', seen: 'Seen', done: 'Dealt with' }[x])) + '</option>'; }).join('') + '</select></div>' +
             '<div class="pre" style="font-size:17px">' + E(s.text) + '</div>' +
-            '<div class="row"><input type="text" data-sn="' + s.id + '" value="' + E(s.note || '') + '" placeholder="' + E(T('What was done about it (for managers)')) + '" aria-label="' + E(T('Note')) + '" style="flex:1 1 260px"><button class="btn ghost sm" data-ssave="' + s.id + '">' + E(T('Save')) + '</button></div></div>';
+            // The note is for managers only: an unsigned message has nobody to answer, so it is never a reply.
+            '<label class="f" style="margin:0">' + E(T('Managers’ note: what was done about it. The team never sees this.')) + '<div class="row"><input type="text" data-sn="' + s.id + '" value="' + E(s.note || '') + '" placeholder="' + E(T('e.g. Spoke to the kitchen about the staff meal')) + '" aria-label="' + E(T('Note')) + '" style="flex:1 1 260px"><button class="btn ghost sm" data-ssave="' + s.id + '">' + E(T('Save')) + '</button></div></label></div>';
         }).join('') + '</div>' : App.empty(T('No messages yet.'));
         main.innerHTML = h + '</section>';
         App.on(main, '[data-ss]', function (sel) { App.save('mare_speakup', { id: sel.getAttribute('data-ss'), status: sel.value }).then(function (x) { if (x) { App.say(T('Saved.')); } }); }, 'change');

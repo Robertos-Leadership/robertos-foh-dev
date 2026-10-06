@@ -16,7 +16,10 @@
     for (var i = 0; i < c.length; i++) if (MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(c[i])) return c[i];
     return '';
   }
-  // opts.transcript: also write down what the microphone hears (meetings).
+  // opts.transcript: the saved recording is written down ON THE SERVER (Whisper on Cloudflare),
+  // so it works in every browser. The browser's own speech recognition was dropped for this:
+  // Edge, Firefox and iPhone Safari gave no words (Andrea Falcone, Edge, 6 Oct 2026).
+  // opts.meeting: label the button for a meeting rather than a voice note.
   var HEAR = [['en-GB', 'English'], ['hr-HR', 'Crnogorski'], ['it-IT', 'Italiano']];
   function recorder(box, onSave, opts) {
     opts = opts || {};
@@ -24,8 +27,8 @@
     var sr = null, heard = [], hearOn = false, hearLang = M.lang() === 'me' ? 'hr-HR' : 'en-GB';
     function idle() {
       box.innerHTML = mime === null ? '<span class="small muted">' + E(T('This browser cannot record. Upload an audio file instead.')) + '</span>'
-        : '<button type="button" class="btn rec-go">● ' + E(T(opts.transcript ? 'Record the meeting' : 'Record a voice note')) + '</button>' +
-          (opts.transcript && SR ? '<label class="small muted rec-lang">' + E(T('Spoken in')) + ' <select>' + HEAR.map(function (l) {
+        : '<button type="button" class="btn rec-go">● ' + E(T(opts.meeting ? 'Record the meeting' : 'Record a voice note')) + '</button>' +
+          (opts.transcript ? '<label class="small muted rec-lang">' + E(T('Spoken in')) + ' <select>' + HEAR.map(function (l) {
             return '<option value="' + l[0] + '"' + (l[0] === hearLang ? ' selected' : '') + '>' + l[1] + '</option>'; }).join('') + '</select></label>' : '');
       var b = box.querySelector('.rec-go'); if (b) b.onclick = start;
       var sel = box.querySelector('.rec-lang select'); if (sel) sel.onchange = function () { hearLang = sel.value; };
@@ -62,9 +65,8 @@
         rec.ondataavailable = function (e) { if (e.data && e.data.size) chunks.push(e.data); };
         rec.onstop = stopped; rec.start(1000); t0 = Date.now();
         box.innerHTML = '<span class="rec-dot"></span><b class="rec-t">0:00</b><button type="button" class="btn rec-stop">■ ' + E(T('Stop')) + '</button>' +
-          (opts.transcript && SR ? '<span class="rec-heard small muted">' + E(T('Listening…')) + '</span>' : '');
+          '';
         box.querySelector('.rec-stop').onclick = function () { rec.stop(); };
-        hear();
         tick = setInterval(function () { var el = box.querySelector('.rec-t'); if (el) el.textContent = fmt((Date.now() - t0) / 1000); if (Date.now() - t0 > 20 * 60000) rec.stop(); }, 500);
       }, function () { M.toast(T('The microphone is blocked. Allow it in the browser and try again.')); });
     }
@@ -72,13 +74,15 @@
     function stopped() {
       clearInterval(tick); unhear(); if (stream) stream.getTracks().forEach(function (t) { t.stop(); });
       var secs = Math.round((Date.now() - t0) / 1000), blob = new Blob(chunks, { type: (rec.mimeType || mime || 'audio/webm') });
-      var said = heard.join(' ').trim(), words = said ? said.split(/\s+/).length : 0;
-      var info = fmt(secs) + ' · ' + size(blob.size) + (opts.transcript && words ? ' · ' + T('{n} words written down', { n: words }) : '');
+      var said = '', info = fmt(secs) + ' · ' + size(blob.size);
+      var langCode = { 'en-GB': 'en', 'hr-HR': 'me', 'it-IT': 'it' }[hearLang] || 'en';
       if (blob.size > MAX) { box.innerHTML = '<span class="small muted">' + E(T('Too long: keep a voice note under 20 minutes.')) + '</span>'; setTimeout(idle, 4000); return; }
       function trySave() {
-        box.innerHTML = '<span class="small muted">' + E(T('Saving…')) + ' ' + E(info) + '</span>';
-        readData(blob).then(function (d) { return onSave({ kind: 'voice', name: T('Voice note'), mime: blob.type.split(';')[0] || 'audio/webm', data: d, seconds: secs, transcript: said || null }); })
-          .then(function (ok) {
+        box.innerHTML = '<span class="small muted">' + E(T(opts.transcript ? 'Saving and writing down what was said…' : 'Saving…')) + ' ' + E(info) + '</span>';
+        readData(blob).then(function (d) { return onSave({ kind: 'voice', name: T('Voice note'), mime: blob.type.split(';')[0] || 'audio/webm', data: d, seconds: secs, language: langCode }); })
+          .then(function (res) {
+            var ok = res === true || (res && res.ok);
+            if (res && res.text) { said = res.text; info += ' · ' + T('{n} words written down', { n: said.split(/\s+/).length }); }
             if (!ok) {
               box.innerHTML = '<span class="small muted">' + E(T('Not saved yet.')) + ' ' + E(info) + '</span><button type="button" class="btn rec-retry">' + E(T('Try saving again')) + '</button>' +
                 '<button type="button" class="btn ghost rec-del">' + E(T('Discard')) + '</button>';
@@ -139,7 +143,7 @@
   }
 
   // ── list + player ──
-  function list(box, items, getData, onRemove, onTranscript, fill) {
+  function list(box, items, getData, onRemove, onTranscript, fill, onWrite) {
     if (!items.length) { box.innerHTML = ''; return; }
     box.innerHTML = items.map(function (m) {
       var icon = m.kind === 'voice' || /^audio\//.test(m.mime) ? '▶' : /^image\//.test(m.mime) ? '▣' : /^video\//.test(m.mime) ? '▶' : '▤';
@@ -149,7 +153,8 @@
         (onRemove ? '<button type="button" class="media-x" aria-label="' + E(T('Remove')) + '">✕</button>' : '') + '<div class="media-body"></div>' +
         (onTranscript && (m.kind === 'voice' || /^(audio|video)\//.test(m.mime)) ? '<details class="media-tr"><summary>' + E(m.transcript ? T('What the recording heard') : T('No transcript: type what was said')) + '</summary>' +
           '<textarea>' + E(m.transcript || '') + '</textarea><div class="row"><button type="button" class="btn ghost sm tr-save">' + E(T('Save the transcript')) + '</button>' +
-          (fill ? '<button type="button" class="btn sm tr-fill">' + E(T(fill.label)) + '</button>' : '') + '</div></details>' : '') + '</div>';
+          (fill ? '<button type="button" class="btn sm tr-fill">' + E(T(fill.label)) + '</button>' : '') +
+          (onWrite ? '<button type="button" class="btn ghost sm tr-write">' + E(T(m.transcript ? 'Write it down again' : 'Write it down')) + '</button>' : '') + '</div></details>' : '') + '</div>';
     }).join('');
     Array.prototype.forEach.call(box.querySelectorAll('.media'), function (el) {
       var m = items.filter(function (x) { return x.id === el.getAttribute('data-m'); })[0], body = el.querySelector('.media-body'), loaded = false;
@@ -172,6 +177,7 @@
       var x = el.querySelector('.media-x'); if (x) x.onclick = function () { onRemove(m.id); };
       var ts = el.querySelector('.tr-save'); if (ts) ts.onclick = function () { onTranscript(m.id, el.querySelector('.media-tr textarea').value); };
       var tf = el.querySelector('.tr-fill'); if (tf) tf.onclick = function () { fill.run(el.querySelector('.media-tr textarea').value, tf); };
+      var tw = el.querySelector('.tr-write'); if (tw) tw.onclick = function () { onWrite(m.id, tw); };
     });
   }
 
