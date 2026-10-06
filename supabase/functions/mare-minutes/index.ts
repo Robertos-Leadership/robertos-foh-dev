@@ -5,6 +5,9 @@
 // the meeting. Runs as the signed-in manager: both database calls go through
 // mare_m_minutes_source / mare_m_minutes_save, which check mare_is_mgr().
 // The model only summarises and translates what was said — it adds nothing.
+// Second job (kind: "briefing"): reads what the manager said in a voice note and
+// sorts it into the lines of the daily briefing. Nothing is saved: the lines are
+// filled on screen and the manager checks them and presses Save.
 // Secret: ANTHROPIC_API_KEY.
 // ════════════════════════════════════════════════════════════
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -59,6 +62,40 @@ Rules:
 - actions: things someone must do. "who" only if a person was named (use the spelling from the staff list when it clearly matches), otherwise "". "when" only as said ("by Friday", "15 Oct"), otherwise "". Include the actions already written down, without duplicating them.
 - Write like a restaurant manager, not a lawyer: short, concrete, no filler.`;
 
+const BRIEF_FIELDS = ["covers_lunch", "covers_dinner", "message", "specials", "eighty_six", "allergies", "vip", "kitchen_note", "foh_note"];
+const BRIEF_SCHEMA = {
+  type: "object", additionalProperties: false, required: BRIEF_FIELDS,
+  properties: Object.fromEntries(BRIEF_FIELDS.map((f) => [f, { type: "string" }])),
+};
+const BRIEF_SYSTEM = `A manager at Roberto's Mare, an Italian restaurant in Porto Montenegro, recorded the daily staff briefing as a voice note. You get the words the phone heard (they can be wrong, missing or run together) and the lines already written.
+
+Sort what was said into the lines of the briefing:
+- covers_lunch, covers_dinner: the number of covers booked, digits only, ONLY if a number was said for that service. Do no arithmetic: if only a total was said, leave both "" and put the total in "message".
+- message: the message of the day, anything general for everyone.
+- specials: dishes or drinks of the day.
+- eighty_six: what is not available today (86).
+- allergies: allergies and dietary notes for guests.
+- vip: VIPs, groups, birthdays, special bookings, with times and table numbers as said.
+- kitchen_note: things only for the kitchen.
+- foh_note: things only for the floor and bar.
+
+Rules: only what was said; never invent a dish, a name, a number or a time. Keep numbers and times exactly as said. Short lines, one item per line (use a new line between items). Return ONLY what is new: never repeat something already written in that line. "" for a line nothing new was said about. Leave out greetings and small talk. Write in LANG, Latin letters only (never Cyrillic); in Montenegrin a table is "sto" (sto 12), not "stol".`;
+
+async function claude(key: string, system: string, user: string, schema: unknown, effort: string) {
+  const r = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+    body: JSON.stringify({
+      model: "claude-sonnet-5-5", max_tokens: 16000, system,
+      output_config: { effort, format: { type: "json_schema", schema } },
+      messages: [{ role: "user", content: user }],
+    }),
+  });
+  if (!r.ok) throw new Error("ai " + r.status + " " + (await r.text()).slice(0, 200));
+  const j = await r.json();
+  return JSON.parse((j.content || []).filter((b: any) => b.type === "text").map((b: any) => b.text).join(""));
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   const json = (b: unknown, s = 200) =>
@@ -69,6 +106,27 @@ Deno.serve(async (req) => {
     const auth = req.headers.get("Authorization") ?? "";
     if (!/^Bearer\s+\S+/i.test(auth)) return json({ ok: false, error: "Not signed in" }, 401);
     const body = await req.json().catch(() => ({}));
+
+    if (body.kind === "briefing") {
+      const sbb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, {
+        global: { headers: { Authorization: auth } }, auth: { persistSession: false },
+      });
+      const who = await sbb.rpc("mare_m_managers");   // refuses anyone without Mare access
+      if (who.error || !who.data?.ok) return json({ ok: false, error: "access" }, 403);
+      const text = String(body.text || "").trim().slice(0, 60000);
+      if (!text) return json({ ok: false, error: "empty" }, 200);
+      const have = body.have && typeof body.have === "object" ? body.have : {};
+      const lang = body.lang === "me" ? "Montenegrin (Latin script, ijekavian)" : "plain British English";
+      let fields: any;
+      try {
+        fields = await claude(key, BRIEF_SYSTEM.replace("LANG", lang),
+          "LINES ALREADY WRITTEN:\n" + BRIEF_FIELDS.map((f) => f + ": " + String(have[f] ?? "").slice(0, 2000)).join("\n") +
+          "\n\nWHAT THE VOICE NOTE SAID:\n" + text, BRIEF_SCHEMA, "low");
+      } catch (e) { return json({ ok: false, error: "ai", detail: String(e).slice(0, 200) }, 502); }
+      for (const f of ["covers_lunch", "covers_dinner"]) if (fields[f] && !/^\d{1,4}$/.test(String(fields[f]).trim())) fields[f] = "";
+      return json({ ok: true, fields });
+    }
+
     const id = String(body.meeting_id || "");
     if (!/^[0-9a-f-]{36}$/i.test(id)) return json({ ok: false, error: "No meeting" }, 400);
 

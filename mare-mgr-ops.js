@@ -26,7 +26,7 @@
 
   // ── voice notes and files (briefing, weekly meeting) ──
   App.mediaBlock = function (owner, key, hint) {
-    return '<div class="card stack mbox" data-owner="' + owner + '" data-key="' + E(key) + '" data-tr="' + (owner === 'meeting' ? 1 : '') + '"><div class="sec"><span>' + E(T('Voice note & files')) + '</span><i></i></div>' +
+    return '<div class="card stack mbox" data-owner="' + owner + '" data-key="' + E(key) + '" data-tr="1"><div class="sec"><span>' + E(T('Voice note & files')) + '</span><i></i></div>' +
       '<div class="mlist"></div><div class="row"><div class="rec row"></div><label class="btn ghost upl">' + E(T('Upload a photo, PDF or file')) +
       '<input type="file" accept="image/*,application/pdf,audio/*,video/*" hidden></label></div>' + (hint ? '<p class="small muted" style="margin:0">' + E(hint) + '</p>' : '') + '</div>';
   };
@@ -38,7 +38,8 @@
           if (!r) return;
           MareMedia.list(lst, r.media, function (id) { return App.call('mare_m_media_get', { p_id: id }).then(function (x) { return x && x.data; }); },
             function (id) { App.call('mare_m_media_remove', { p_id: id }).then(function (x) { if (x) { App.say(T('Removed.')); load(); } }); },
-            tr ? function (id, text) { App.call('mare_m_media_transcript', { p_id: id, p_text: text }).then(function (x) { if (x) { App.say(T('Saved.')); load(); } }); } : null);
+            tr ? function (id, text) { App.call('mare_m_media_transcript', { p_id: id, p_text: text }).then(function (x) { if (x) { App.say(T('Saved.')); load(); } }); } : null,
+            owner === 'briefing' && App.fillBriefing ? { label: 'Fill the briefing from this', run: App.fillBriefing } : null);
         });
       }
       function save(x) {
@@ -46,7 +47,7 @@
         return App.call('mare_m_media_add', { p_owner_kind: owner, p_owner_key: key, p_kind: x.kind, p_name: x.name, p_mime: x.mime, p_data: x.data, p_seconds: x.seconds, p_transcript: x.transcript || null })
           .then(function (r) { if (r) { App.say(T('Saved.')); load(); return true; } return false; });
       }
-      MareMedia.recorder(box.querySelector('.rec'), save, { transcript: tr });
+      MareMedia.recorder(box.querySelector('.rec'), save, { transcript: tr, fill: owner === 'briefing' ? App.fillBriefing : null, fillLabel: 'Fill the briefing from this' });
       MareMedia.picker(box.querySelector('input[type=file]'), save);
       load();
     });
@@ -165,6 +166,27 @@
         h += '</div><p class="small muted" style="margin:0">' + E(T('Staff read it on the tablet or their phone and tap "I have read it".')) + '</p></section>';
         void readIds;
         main.innerHTML = h;
+        // A voice note fills the lines; nothing is saved until Save the briefing.
+        App.fillBriefing = function (text, btn) {
+          if (!text || !text.trim()) { App.say(T('Nothing was written down from this voice note.')); return; }
+          var have = {}; BF.forEach(function (q) { have[q[0]] = main.querySelector('[data-f=' + q[0] + ']').value; });
+          var was = btn.textContent; btn.disabled = true; btn.textContent = T('Filling the lines…');
+          App.fn('mare-minutes', { kind: 'briefing', text: text, have: have, lang: M.lang() }).then(function (r) {
+            btn.disabled = false; btn.textContent = was;
+            if (!r) return;
+            if (!r.ok) { App.say(r.error === 'access' ? T('Your account has no Mare access.') : T('Could not fill the lines. Try again in a minute.')); return; }
+            var n = 0;
+            BF.forEach(function (q) {
+              var v = String(r.fields[q[0]] || '').trim(), el = main.querySelector('[data-f=' + q[0] + ']'); if (!v || !el) return;
+              var cur = el.value.trim();
+              if (q[2] === 'n' || !cur || v.indexOf(cur) === 0) el.value = v; else if (cur.indexOf(v) < 0) el.value = cur + '\n' + v; else return;
+              el.classList.add('filled'); n++;
+            });
+            if (!n) { App.say(T('Nothing in the voice note matched a line of the briefing.')); return; }
+            main.querySelector('.card').scrollIntoView({ behavior: 'smooth', block: 'start' });
+            App.say(T('{n} lines filled. Check them, then Save the briefing.', { n: n }));
+          });
+        };
         App.bindMedia(main); MareMedia.dictateAll(main);
         bindDate(main, 'bd', function (v) { B.d = v; });
         var bc = main.querySelector('#bc'); if (bc) bc.onclick = function () { BF.forEach(function (q) { var el = main.querySelector('[data-f=' + q[0] + ']'); if (q[2] !== 'n' && prev[q[0]]) el.value = prev[q[0]]; }); };

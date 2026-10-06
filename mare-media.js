@@ -68,21 +68,30 @@
         tick = setInterval(function () { var el = box.querySelector('.rec-t'); if (el) el.textContent = fmt((Date.now() - t0) / 1000); if (Date.now() - t0 > 20 * 60000) rec.stop(); }, 500);
       }, function () { M.toast(T('The microphone is blocked. Allow it in the browser and try again.')); });
     }
+    // The recording saves itself on Stop: nobody has to remember a second button.
     function stopped() {
       clearInterval(tick); unhear(); if (stream) stream.getTracks().forEach(function (t) { t.stop(); });
       var secs = Math.round((Date.now() - t0) / 1000), blob = new Blob(chunks, { type: (rec.mimeType || mime || 'audio/webm') });
-      var url = URL.createObjectURL(blob);
-      var said = heard.join(' ').trim();
-      box.innerHTML = '<audio controls src="' + url + '" style="max-width:100%"></audio><span class="small muted">' + fmt(secs) + ' · ' + size(blob.size) +
-        (opts.transcript && said ? ' · ' + E(T('{n} words written down', { n: said.split(/\s+/).length })) : '') + '</span>' +
-        '<button type="button" class="btn rec-save">' + E(T('Save the voice note')) + '</button><button type="button" class="btn ghost rec-del">' + E(T('Discard')) + '</button>';
-      box.querySelector('.rec-del').onclick = idle;
-      box.querySelector('.rec-save').onclick = function () {
-        if (blob.size > MAX) { M.toast(T('Too long: keep a voice note under 20 minutes.')); return; }
-        this.disabled = true;
+      var said = heard.join(' ').trim(), words = said ? said.split(/\s+/).length : 0;
+      var info = fmt(secs) + ' · ' + size(blob.size) + (opts.transcript && words ? ' · ' + T('{n} words written down', { n: words }) : '');
+      if (blob.size > MAX) { box.innerHTML = '<span class="small muted">' + E(T('Too long: keep a voice note under 20 minutes.')) + '</span>'; setTimeout(idle, 4000); return; }
+      function trySave() {
+        box.innerHTML = '<span class="small muted">' + E(T('Saving…')) + ' ' + E(info) + '</span>';
         readData(blob).then(function (d) { return onSave({ kind: 'voice', name: T('Voice note'), mime: blob.type.split(';')[0] || 'audio/webm', data: d, seconds: secs, transcript: said || null }); })
-          .then(function (ok) { if (ok) idle(); });
-      };
+          .then(function (ok) {
+            if (!ok) {
+              box.innerHTML = '<span class="small muted">' + E(T('Not saved yet.')) + ' ' + E(info) + '</span><button type="button" class="btn rec-retry">' + E(T('Try saving again')) + '</button>' +
+                '<button type="button" class="btn ghost rec-del">' + E(T('Discard')) + '</button>';
+              box.querySelector('.rec-retry').onclick = trySave; box.querySelector('.rec-del').onclick = idle; return;
+            }
+            box.innerHTML = '<span class="tag green">✓ ' + E(T('Saved')) + '</span><span class="small muted">' + E(info) + '</span>' +
+              (opts.fill && said ? '<button type="button" class="btn rec-fill">' + E(T(opts.fillLabel)) + '</button>' : '') +
+              '<button type="button" class="btn ghost rec-again">● ' + E(T('Record another')) + '</button>';
+            var fb = box.querySelector('.rec-fill'); if (fb) fb.onclick = function () { opts.fill(said, fb); };
+            box.querySelector('.rec-again').onclick = idle;
+          }, function () { box.innerHTML = '<span class="small muted">' + E(T('Not saved yet.')) + '</span>'; setTimeout(trySave, 3000); });
+      }
+      trySave();
     }
     idle();
   }
@@ -130,7 +139,7 @@
   }
 
   // ── list + player ──
-  function list(box, items, getData, onRemove, onTranscript) {
+  function list(box, items, getData, onRemove, onTranscript, fill) {
     if (!items.length) { box.innerHTML = ''; return; }
     box.innerHTML = items.map(function (m) {
       var icon = m.kind === 'voice' || /^audio\//.test(m.mime) ? '▶' : /^image\//.test(m.mime) ? '▣' : /^video\//.test(m.mime) ? '▶' : '▤';
@@ -139,7 +148,8 @@
         '<span class="small muted">' + E((m.created_by ? m.created_by.split('@')[0] + ' · ' : '') + size(m.size)) + '</span></span></button>' +
         (onRemove ? '<button type="button" class="media-x" aria-label="' + E(T('Remove')) + '">✕</button>' : '') + '<div class="media-body"></div>' +
         (onTranscript && (m.kind === 'voice' || /^(audio|video)\//.test(m.mime)) ? '<details class="media-tr"><summary>' + E(m.transcript ? T('What the recording heard') : T('No transcript: type what was said')) + '</summary>' +
-          '<textarea>' + E(m.transcript || '') + '</textarea><button type="button" class="btn ghost sm tr-save">' + E(T('Save the transcript')) + '</button></details>' : '') + '</div>';
+          '<textarea>' + E(m.transcript || '') + '</textarea><div class="row"><button type="button" class="btn ghost sm tr-save">' + E(T('Save the transcript')) + '</button>' +
+          (fill ? '<button type="button" class="btn sm tr-fill">' + E(T(fill.label)) + '</button>' : '') + '</div></details>' : '') + '</div>';
     }).join('');
     Array.prototype.forEach.call(box.querySelectorAll('.media'), function (el) {
       var m = items.filter(function (x) { return x.id === el.getAttribute('data-m'); })[0], body = el.querySelector('.media-body'), loaded = false;
@@ -161,6 +171,7 @@
       };
       var x = el.querySelector('.media-x'); if (x) x.onclick = function () { onRemove(m.id); };
       var ts = el.querySelector('.tr-save'); if (ts) ts.onclick = function () { onTranscript(m.id, el.querySelector('.media-tr textarea').value); };
+      var tf = el.querySelector('.tr-fill'); if (tf) tf.onclick = function () { fill.run(el.querySelector('.media-tr textarea').value, tf); };
     });
   }
 

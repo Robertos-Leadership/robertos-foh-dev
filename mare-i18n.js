@@ -4,6 +4,16 @@
    Words kept the same everywhere: DOLAZAK/ODLAZAK (clock in/out), šifra (code),
    smjena (shift), raspored (rota), brifing, kontrolna lista (checklist). */
 window.MARE_ME = {
+"Not saved yet.": "Još nije sačuvano.",
+"Try saving again": "Pokušaj ponovo da sačuvaš",
+"Saved": "Sačuvano",
+"Record another": "Snimi još jednu",
+"Fill the briefing from this": "Popuni brifing iz ovoga",
+"Nothing was written down from this voice note.": "Iz ove glasovne poruke ništa nije zapisano.",
+"Filling the lines…": "Popunjavam redove…",
+"Could not fill the lines. Try again in a minute.": "Redovi nisu popunjeni. Pokušajte ponovo za minut.",
+"Nothing in the voice note matched a line of the briefing.": "Ništa iz glasovne poruke ne odgovara redovima brifinga.",
+"{n} lines filled. Check them, then Save the briefing.": "Popunjeno redova: {n}. Provjerite ih, pa sačuvajte brifing.",
 "Record the meeting": "Snimi sastanak",
 "Spoken in": "Jezik",
 "Listening…": "Slušam…",
