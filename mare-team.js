@@ -504,10 +504,10 @@
       document.getElementById('rl').onclick = function (e) {
         var b = e.target.closest('[data-k]'); if (!b) return;
         var id = b.getAttribute('data-k');
-        Promise.all([M.kitchen('recipes?select=name,section,makes_qty,makes_unit,allergens,method,photos&show_mare=is.true&id=eq.' + encodeURIComponent(id)), M.kitchen('recipe_lines?select=typed_text,stock_name,qty,unit,note&recipe_id=eq.' + encodeURIComponent(id) + '&order=position')]).then(function (x) {
+        Promise.all([M.kitchen('recipes?select=name,section,makes_qty,makes_unit,allergens,method,photos&show_mare=is.true&id=eq.' + encodeURIComponent(id)), M.dubaiLines(id)]).then(function (x) {
           if (!x[0][0]) return;
           var r = x[0][0], m = (r.method && typeof r.method === 'object') ? r.method : {}, ph = (Array.isArray(r.photos) ? r.photos : []).map(function (p) { return M.safeImg(p && p.u); }).filter(Boolean)[0];
-          var lines = x[1].map(function (l) { return (l.stock_name && l.qty != null ? l.qty + ' ' + (l.unit || '') + ' ' + l.stock_name : (l.typed_text || '')) + (l.note ? ' (' + l.note + ')' : ''); }).join('\n');
+          var lines = x[1].map(function (l) { return (l.qty ? l.qty + ' ' : '') + l.name + (l.note ? ' (' + l.note + ')' : ''); }).join('\n');
           main.innerHTML = frame(r.name, '<div class="stack"><span class="tag blue" style="align-self:flex-start">' + E(T('ROBERTO\'S DUBAI · READ ONLY')) + '</span>' + (ph ? '<img class="photo" src="' + ph + '" alt="">' : '') +
             dubaiBlk(T('What the guest is told'), m.foh) + dubaiBlk(T('Ingredients'), lines || m.ing) + dubaiBlk(T('Mise en place'), m.mise) + dubaiBlk(T('Method'), m.method) + dubaiBlk(T('Plating'), m.plating) + dubaiBlk(T('Garnish'), m.garnish) + dubaiBlk(T('Good to know'), m.more) +
             ((r.allergens && r.allergens.length) ? '<div class="row">' + r.allergens.map(function (a) { return '<span class="tag amber">' + E(a) + '</span>'; }).join('') + '</div>' : '') + '</div>');

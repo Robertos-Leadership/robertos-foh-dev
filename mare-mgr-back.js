@@ -62,15 +62,14 @@
   }
   App.dubaiCard = function (id) {
     return Promise.all([M.kitchen('recipes?select=id,name,kind,section,makes_qty,makes_unit,allergens,method,photos,notes&show_mare=is.true&id=eq.' + encodeURIComponent(id)),
-                        M.kitchen('recipe_lines?select=position,typed_text,stock_name,qty,unit,child_recipe_id,note&recipe_id=eq.' + encodeURIComponent(id) + '&order=position')])
+                        M.dubaiLines(id)])
       .then(function (r) { if (!r[0][0]) throw new Error('hidden'); return { r: r[0][0], lines: r[1] }; });
   };
   App.dubaiHtml = function (c) {
     var r = c.r, m = (r.method && typeof r.method === 'object') ? r.method : {}, ph = (Array.isArray(r.photos) ? r.photos : []).map(function (p) { return M.safeImg(p && p.u); }).filter(Boolean)[0];
     function blk(title, txt) { return txt ? '<div><h3 style="margin:6px 0">' + E(title) + '</h3><div class="pre">' + E(txt) + '</div></div>' : ''; }
     var lines = c.lines.length ? '<ul style="margin:0;padding-left:20px;line-height:1.6">' + c.lines.map(function (l) {
-      var name = l.stock_name || l.typed_text || ''; var q = l.qty != null ? (l.qty + ' ' + (l.unit || '')).trim() : '';
-      return '<li>' + (q && l.stock_name ? '<b>' + E(q) + '</b> ' : '') + E(l.stock_name ? name : (l.typed_text || '')) + (l.note ? ' <span class="muted">(' + E(l.note) + ')</span>' : '') + '</li>';
+      return '<li>' + (l.qty ? '<b>' + E(l.qty) + '</b> ' : '') + E(l.name) + (l.note ? ' <span class="muted">(' + E(l.note) + ')</span>' : '') + '</li>';
     }).join('') + '</ul>' : '';
     return (ph ? '<img class="recipe-photo" src="' + ph + '" alt="">' : '') +
       '<div class="row"><span class="tag teal">' + E(T('ROBERTO\'S DUBAI · READ ONLY')) + '</span>' + (r.section ? '<span class="tag grey">' + E(r.section) + '</span>' : '') +

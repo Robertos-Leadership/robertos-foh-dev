@@ -128,6 +128,23 @@
       return names.map(function (s) { return { section: s, dishes: groups[s] }; });
     });
   }
+  // The ingredient lines of one Dubai card, in order. A line that links a sub-recipe
+  // (child_recipe_id) is named after THAT recipe: typed_text is only what the chef typed
+  // to find it, so "capo" showed where Caponata was meant (Mare feedback, 6 Oct 2026).
+  // Stock lines use the stock name. Both carry their quantity; a free-typed line already
+  // has it in its text.
+  function dubaiLines(id) {
+    return kitchen('recipe_lines?select=position,typed_text,stock_name,qty,unit,child_recipe_id,note&recipe_id=eq.' + encodeURIComponent(id) + '&order=position').then(function (ls) {
+      var ids = ls.map(function (l) { return l.child_recipe_id; }).filter(Boolean);
+      return (ids.length ? kitchen('recipes?select=id,name&id=in.(' + ids.map(encodeURIComponent).join(',') + ')').catch(function () { return []; }) : Promise.resolve([])).then(function (rs) {
+        var by = {}; rs.forEach(function (r) { by[r.id] = r.name; });
+        return ls.map(function (l) {
+          var sub = l.child_recipe_id ? by[l.child_recipe_id] : null, named = sub || l.stock_name;
+          return { qty: named && l.qty != null ? (l.qty + ' ' + (l.unit || '')).trim() : '', name: named || l.typed_text || '', note: l.note || '', sub: !!sub };
+        });
+      });
+    });
+  }
   function dubaiBookHtml(book, q) {
     q = (q || '').toLowerCase().trim(); var n = 0;
     var h = book.map(function (g) {
@@ -230,7 +247,7 @@
     parts: parts, pad: pad, hhmm: hhmm, dateKey: dateKey, today: today, dow: dow, addDays: addDays, daysBetween: daysBetween,
     weekStart: weekStart, monthStart: monthStart, addMonths: addMonths, day: day, niceDate: niceDate, shortDate: shortDate, monthName: monthName,
     toInstant: toInstant, mins: mins, dur: dur, durShort: durShort, timeToMin: timeToMin, shifts: shifts, lateness: lateness, GRACE_MIN: GRACE_MIN,
-    rpc: rpc, kitchen: kitchen, dubaiBook: dubaiBook, dubaiBookHtml: dubaiBookHtml, esc: esc, safeJpeg: safeJpeg, safeImg: safeImg, money: money, money0: money0, num: num, numSafe: numSafe, parseNum: parseNum, toast: toast, pct: pct,
+    rpc: rpc, kitchen: kitchen, dubaiBook: dubaiBook, dubaiLines: dubaiLines, dubaiBookHtml: dubaiBookHtml, esc: esc, safeJpeg: safeJpeg, safeImg: safeImg, money: money, money0: money0, num: num, numSafe: numSafe, parseNum: parseNum, toast: toast, pct: pct,
     photoFromFile: photoFromFile, icon: icon,
     // kept for old callers
     DAYS: DAYS.en
