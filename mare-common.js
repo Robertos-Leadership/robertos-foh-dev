@@ -190,6 +190,7 @@
     back: '<path d="M15 18l-6-6 6-6"/>',
     hours: '<path d="M5 3h14M5 21h14M7 3c0 5 10 5 10 9s-10 4-10 9M17 3c0 5-10 5-10 9"/>',
     home: '<path d="M3 11l9-8 9 8M5 9v12h14V9"/>',
+    mic: '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3M9 21h6"/>',
     eye: '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>'
   };
   function icon(name, size) {

@@ -10,7 +10,7 @@
   // ── helpers every module uses ──
   App.say = function (t) { var s = document.getElementById('status'); s.textContent = t; s.style.display = 'block'; clearTimeout(App.say.t); App.say.t = setTimeout(function () { s.style.display = 'none'; }, 2800); };
   // While "viewing as" a colleague, only reads go through: the screens are theirs, the account is still yours.
-  var READS = ['mare_mgr_overview', 'mare_m_fetch', 'mare_mgr_photos', 'mare_m_photo', 'mare_m_managers', 'mare_m_view_as', 'mare_m_recipe'];
+  var READS = ['mare_mgr_overview', 'mare_m_fetch', 'mare_mgr_photos', 'mare_m_photo', 'mare_m_managers', 'mare_m_view_as', 'mare_m_recipe', 'mare_m_media_list', 'mare_m_media_get'];
   App.call = function (name, args) {
     if (App.S.viewAs && READS.indexOf(name) < 0) { App.say(T('Read only: you are viewing as {n}. Nothing is saved.', { n: App.S.viewAs.name })); return Promise.resolve(null); }
     return M.rpc(name, args, App.S.token).then(function (r) {

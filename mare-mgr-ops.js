@@ -24,6 +24,33 @@
   }
   function shiftMin(r) { if (!r || r.kind !== 'work' || !r.start_t || !r.end_t) return 0; var a = M.timeToMin(r.start_t), b = M.timeToMin(r.end_t); if (b <= a) b += 1440; return b - a; }
 
+  // ── voice notes and files (briefing, weekly meeting) ──
+  App.mediaBlock = function (owner, key, hint) {
+    return '<div class="card stack mbox" data-owner="' + owner + '" data-key="' + E(key) + '"><div class="sec"><span>' + E(T('Voice note & files')) + '</span><i></i></div>' +
+      '<div class="mlist"></div><div class="row"><div class="rec row"></div><label class="btn ghost upl">' + E(T('Upload a photo, PDF or file')) +
+      '<input type="file" accept="image/*,application/pdf,audio/*,video/*" hidden></label></div>' + (hint ? '<p class="small muted" style="margin:0">' + E(hint) + '</p>' : '') + '</div>';
+  };
+  App.bindMedia = function (root) {
+    Array.prototype.forEach.call(root.querySelectorAll('.mbox'), function (box) {
+      var owner = box.getAttribute('data-owner'), key = box.getAttribute('data-key'), lst = box.querySelector('.mlist');
+      function load() {
+        return App.call('mare_m_media_list', { p_owner_kind: owner, p_owner_key: key }).then(function (r) {
+          if (!r) return;
+          MareMedia.list(lst, r.media, function (id) { return App.call('mare_m_media_get', { p_id: id }).then(function (x) { return x && x.data; }); },
+            function (id) { App.call('mare_m_media_remove', { p_id: id }).then(function (x) { if (x) { App.say(T('Removed.')); load(); } }); });
+        });
+      }
+      function save(x) {
+        App.say(T('Saving…'));
+        return App.call('mare_m_media_add', { p_owner_kind: owner, p_owner_key: key, p_kind: x.kind, p_name: x.name, p_mime: x.mime, p_data: x.data, p_seconds: x.seconds })
+          .then(function (r) { if (r) { App.say(T('Saved.')); load(); return true; } return false; });
+      }
+      MareMedia.recorder(box.querySelector('.rec'), save);
+      MareMedia.picker(box.querySelector('input[type=file]'), save);
+      load();
+    });
+  };
+
   // ════════════════ SCHEDULE ════════════════
   var R = { ws: null };
   App.register('schedule', {
@@ -127,7 +154,8 @@
               : '<label class="f" style="grid-column:1/-1">' + E(T(q[1])) + '<textarea data-f="' + q[0] + '">' + E(b[q[0]] || '') + '</textarea></label>';
           }).join('') + '</div><div class="row"><button class="btn" id="bs">' + E(T('Save the briefing')) + '</button>' +
           (prev && !b.date ? '<button class="btn ghost" id="bc">' + E(T('Start from yesterday\'s')) + '</button>' : '') +
-          (b.updated_by ? '<span class="small muted">' + E(T('Last saved by {w} at {t}', { w: b.updated_by, t: M.hhmm(b.updated_at) })) + '</span>' : '') + '</div></div></section>';
+          (b.updated_by ? '<span class="small muted">' + E(T('Last saved by {w} at {t}', { w: b.updated_by, t: M.hhmm(b.updated_at) })) + '</span>' : '') + '</div></div>' +
+          App.mediaBlock('briefing', d, T('The team plays and opens these from the briefing on the tablet and on their phones.')) + '</section>';
         h += '<section class="stack"><h2 class="serif">' + E(T('Who has read it')) + '</h2><div class="card row">';
         var readIds = reads.map(function (x) { return x.staff_id; });
         h += on.length ? on.map(function (s) { var rd = reads.filter(function (x) { return x.staff_id === s.id; })[0];
@@ -136,6 +164,7 @@
         h += '</div><p class="small muted" style="margin:0">' + E(T('Staff read it on the tablet or their phone and tap "I have read it".')) + '</p></section>';
         void readIds;
         main.innerHTML = h;
+        App.bindMedia(main); MareMedia.dictateAll(main);
         bindDate(main, 'bd', function (v) { B.d = v; });
         var bc = main.querySelector('#bc'); if (bc) bc.onclick = function () { BF.forEach(function (q) { var el = main.querySelector('[data-f=' + q[0] + ']'); if (q[2] !== 'n' && prev[q[0]]) el.value = prev[q[0]]; }); };
         main.querySelector('#bs').onclick = function () {
@@ -329,6 +358,7 @@
           App.save('mare_meetings', { date: t, title: T('Weekly meeting') }).then(function (r) { if (r) { W.open = r.id; App.reload(); } });
         };
         App.on(main, '[data-edit]', function (b) { var id = b.getAttribute('data-edit'); W.open = W.open === id ? null : id; App.reload(); });
+        App.bindMedia(main); MareMedia.dictateAll(main);
         App.on(main, '[data-msave]', function (b) {
           var c = b.closest('.card'); b.disabled = true;
           App.save('mare_meetings', { id: b.getAttribute('data-msave'), date: c.querySelector('.m-date').value, title: c.querySelector('.m-title').value.trim() || T('Weekly meeting'), attendees: c.querySelector('.m-att').value.trim() || null, notes: c.querySelector('.m-notes').value.trim() || null })
@@ -358,6 +388,7 @@
       '<label class="f">' + E(T('Who was there')) + '<input type="text" class="m-att" value="' + E(m.attendees || '') + '"></label>' +
       '<label class="f">' + E(T('Notes')) + '<textarea class="m-notes" style="min-height:160px">' + E(m.notes || '') + '</textarea></label>' +
       '<button class="btn" data-msave="' + m.id + '" style="align-self:flex-start">' + E(T('Save the notes')) + '</button>' +
+      App.mediaBlock('meeting', m.id, T('Record the meeting or attach the minutes. Managers only.')) +
       '<h3>' + E(T('Actions')) + '</h3>' + (acts.length ? '<div class="box"><table><tbody>' + acts.map(function (a) { return actionRow(a, t, f); }).join('') + '</tbody></table></div>' : '') +
       '<div class="row"><input type="text" class="a-text" placeholder="' + E(T('What needs doing')) + '" aria-label="' + E(T('Action')) + '" style="flex:2 1 220px">' +
       '<input type="text" class="a-owner" list="ppl" placeholder="' + E(T('Who')) + '" aria-label="' + E(T('Who')) + '" style="flex:1 1 140px"><datalist id="ppl">' + names.map(function (n) { return '<option value="' + E(n) + '">'; }).join('') + '</datalist>' +

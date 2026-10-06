@@ -169,6 +169,23 @@ body.pvphone .bnav{max-width:430px}
   .brand .t2{display:none} .clock .c2{display:none} .clock .c1{font-size:28px} .hin{gap:8px} .hr{gap:8px;flex-shrink:0}
   .mods{grid-template-columns:repeat(2,minmax(0,1fr))} .mod b{font-size:20px} .lang button{padding:6px 9px;min-height:40px;font-size:12px}
   .name{font-size:22px} .rlist{grid-template-columns:1fr} }
+
+/* voice notes, files, dictation */
+.mbox .rec{gap:12px}
+.rec-dot{width:12px;height:12px;border-radius:50%;background:#B3261E;animation:recp 1s infinite}
+@keyframes recp{50%{opacity:.25}}
+.rec-t{font-variant-numeric:tabular-nums;font-size:18px}
+.upl{display:inline-flex;align-items:center;cursor:pointer}
+.mlist{display:flex;flex-direction:column;gap:10px}
+.media{border:1px solid rgba(168,131,75,.24);border-radius:10px;background:#fff;box-shadow:0 6px 14px -10px rgba(14,59,63,.35);position:relative}
+.media-open{display:flex;align-items:center;gap:14px;width:100%;background:none;border:0;padding:12px 44px 12px 14px;text-align:left}
+.media-open b{display:block;font-family:'Cormorant Garamond',Georgia,serif;font-size:20px;font-weight:500}
+.media-ic{width:38px;height:38px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px;background:radial-gradient(circle at 35% 30%,#16606A,#0E3B3F)}
+.media-x{position:absolute;right:8px;top:12px;width:32px;height:32px;border:0;border-radius:6px;background:none;color:#8A2E2E;font-size:15px}
+.media-body{padding:0 14px}
+.media-body:not(:empty){padding:0 14px 14px}
+.dict{align-self:flex-start;margin-top:6px;display:inline-flex;align-items:center;gap:6px;background:none;border:1px solid #D6CABA;border-radius:6px;padding:5px 10px;font-size:11px;letter-spacing:1.5px;font-weight:700;color:#0E4A50;text-transform:uppercase}
+.dict.on{background:#FBEDEC;color:#8A2E2E;border-color:rgba(138,46,46,.4)}
 </style>
 </head>
 <body>
@@ -180,8 +197,9 @@ body.pvphone .bnav{max-width:430px}
   <main id="main"></main>
 </div>
 <canvas id="snap" width="240" height="180" style="display:none"></canvas>
-<script src="mare-i18n.js?v=20261006k"></script>
-<script src="mare-common.js?v=20261006k"></script>
-<script src="mare-team.js?v=20261006k"></script>
+<script src="mare-i18n.js?v=20261006l"></script>
+<script src="mare-common.js?v=20261006l"></script>
+<script src="mare-media.js?v=20261006l"></script>
+<script src="mare-team.js?v=20261006l"></script>
 </body>
 </html>

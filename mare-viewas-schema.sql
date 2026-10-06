@@ -15,6 +15,8 @@ begin
   ws := d - (extract(isodow from d)::int - 1);
   r := jsonb_build_object('ok', true, 'today', d, 'now', now(), 'week_start', ws,
     'briefing', (select to_jsonb(b) from public.mare_briefings b where b.date = d),
+    'briefing_media', coalesce((select jsonb_agg(jsonb_build_object('id', m.id, 'kind', m.kind, 'name', m.name, 'mime', m.mime, 'size', m.size, 'seconds', m.seconds) order by m.created_at)
+                        from public.mare_media m where m.owner_kind = 'briefing' and m.owner_key = d::text and not m.removed), '[]'::jsonb),
     'reads', coalesce((select jsonb_agg(staff_id) from public.mare_briefing_reads where date = d), '[]'::jsonb),
     'staff', coalesce((select jsonb_agg(jsonb_build_object('id', s.id, 'name', s.name, 'team', s.team) order by s.team, s.sort, s.name)
                         from public.mare_staff s where s.active), '[]'::jsonb),

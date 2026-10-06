@@ -294,6 +294,7 @@
   function rpcS(name, args) {
     if (PREVIEW) {
       if (name === 'mare_s_recipe') return M.rpc('mare_m_recipe', { p_id: args.p_id }, PV_TOKEN).then(function (r) { return r.data || { ok: false }; });
+      if (name === 'mare_s_media_get') return M.rpc('mare_m_media_get', { p_id: args.p_id }, PV_TOKEN).then(function (r) { return r.data || { ok: false }; });
       M.toast(T('Read only: you are viewing as someone else. Nothing is saved.')); return Promise.resolve({ ok: false, error: 'preview' });
     }
     return M.rpc(name, args).then(function (r) { if (r.error) return { ok: false, network: !!r.error.network, error: r.error.network ? 'network' : 'error' }; return r.data; });
@@ -388,6 +389,7 @@
       h = '<div class="row">' + (b.covers_lunch != null ? '<span class="tag green" style="font-size:17px">' + E(T('Lunch {n} covers', { n: b.covers_lunch })) + '</span>' : '') +
         (b.covers_dinner != null ? '<span class="tag green" style="font-size:17px">' + E(T('Dinner {n} covers', { n: b.covers_dinner })) + '</span>' : '') + '</div><div class="bf">' +
         BF.filter(function (q) { return b[q[0]]; }).map(function (q) { return '<div class="card"><h3>' + E(T(q[1])) + '</h3><div>' + E(b[q[0]]) + '</div></div>'; }).join('') + '</div>';
+      if ((f.briefing_media || []).length) h += '<div class="card stack"><div class="sec"><span>' + E(T('Voice note & files')) + '</span><i></i></div><div id="bmedia"></div></div>';
       var readers = f.reads.map(function (id) { var p = f.staff.filter(function (s) { return s.id === id; })[0]; return p ? p.name : ''; }).filter(Boolean);
       var mine = meToken && S.meId && f.reads.indexOf(S.meId) >= 0;
       h += '<div class="card stack">' + (mine ? '<span class="tag green" style="align-self:flex-start;font-size:17px">' + E(T('You have read it ✓')) + '</span>' : '<button class="btn" id="read" style="align-self:flex-start">' + E(T('I have read it')) + '</button>') +
@@ -397,6 +399,8 @@
       return '<div class="row" style="justify-content:space-between"><span class="big">' + E(a.text) + '</span><span class="muted">' + E([a.owner, a.due ? M.shortDate(a.due) : ''].filter(Boolean).join(' · ')) + '</span></div>'; }).join('') + '</div>';
     main.innerHTML = frame('Today\'s briefing', '<div class="stack">' + h + '</div>');
     bindFrame();
+    var bm = document.getElementById('bmedia');
+    if (bm) MareMedia.list(bm, f.briefing_media, function (id) { return rpcS('mare_s_media_get', { p_device: dev(), p_token: meToken, p_pin: pinArg(), p_id: id }).then(function (x) { return x && x.ok && x.data; }); }, null);
     var rd = document.getElementById('read');
     if (rd) rd.onclick = function () {
       askWho(T('Mark today\'s briefing as read'), function (staff, pin) { return rpcS('mare_s_brief_read', { p_device: dev(), p_token: meToken, p_staff: staff, p_pin: pin || pinArg() }); })
