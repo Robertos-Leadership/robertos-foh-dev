@@ -5,610 +5,153 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex">
 <meta name="theme-color" content="#00575F">
-<title>Roberto's Mare · Attendance</title>
+<title>Roberto's Mare</title>
+<link rel="icon" href="mare-logo-teal.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=Karla:wght@400;500;600;700&display=swap" rel="stylesheet">
-<!-- Roberto's Mare attendance — the GM's page. Signed-in FOH accounts whose
-     app_users.modules include 'mare' (or admins). Everything goes through the
-     mare_mgr_* functions, which check that again in the database. -->
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Karla:wght@400;500;600;700&display=swap" rel="stylesheet">
+<!-- Roberto's Mare — the management app (Milica, Andrea, Francesco).
+     Signed-in FOH accounts with the 'mare' module (or Admin). Every read and
+     write goes through mare_mgr_* / mare_m_* functions, which check that again
+     in the database. Modules live in mare-mgr*.js; shared helpers and the
+     English/Montenegrin switch in mare-common.js + mare-i18n.js. -->
 <style>
 :root{
-  --teal:#00575F; --teal-2:#016A74; --tint:#D5E6E7; --cream:#FAF5F0; --card:#FFFFFF; --line:#E2D8CC; --line-2:#EFE8DF;
-  --ink:#1E2A2C; --muted:#4A5658; --soft:#EFE8DF; --red:#9B1C1C; --red-bg:#FDECEC; --amber:#7A4100; --amber-bg:#FFF3E0; --blue:#1E3A8A; --blue-bg:#E8EEFC;
+  --teal:#00575F; --teal-2:#016A74; --teal-3:#0B7C86; --tint:#DCEBEC; --tint-2:#EEF5F5;
+  --cream:#FAF5F0; --sand:#F1E8DC; --card:#FFFFFF; --line:#E6DCCF; --line-2:#F0E9DF;
+  --ink:#1E2A2C; --muted:#4A5658; --soft:#EFE8DF;
+  --red:#9B1C1C; --red-bg:#FDECEC; --amber:#7A4100; --amber-bg:#FFF3E0; --blue:#1E3A8A; --blue-bg:#E8EEFC; --green:#1F5E2E; --green-bg:#E5F2E7;
+  --shadow:0 1px 2px rgba(30,42,44,.06),0 6px 22px rgba(30,42,44,.07);
 }
 *{box-sizing:border-box}
 html,body{margin:0}
-body{background:var(--cream);color:var(--ink);font-family:Karla,system-ui,sans-serif;font-size:16px;min-height:100vh}
-button,input,select{font-family:inherit;font-size:inherit;color:inherit}
+body{background:var(--cream);color:var(--ink);font-family:Karla,system-ui,sans-serif;font-size:16px;line-height:1.4;min-height:100vh;-webkit-font-smoothing:antialiased}
+button,input,select,textarea{font-family:inherit;font-size:inherit;color:inherit}
 button{cursor:pointer}
 a{color:var(--teal)}
-.serif{font-family:'Cormorant Garamond',Georgia,serif;font-weight:600}
-header{background:var(--teal);color:#fff}
-.hin{max-width:1280px;margin:0 auto;padding:16px 20px;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:14px}
-.brand{display:flex;align-items:center;gap:14px}
-.brand img{width:52px;height:52px}
-.brand .t1{font-size:26px;letter-spacing:5px}
-.brand .t2{font-size:14px;opacity:.92}
-nav{display:flex;flex-wrap:wrap;gap:8px}
-nav button{background:transparent;color:#fff;border:1px solid rgba(255,255,255,.65);border-radius:999px;padding:9px 16px;font-weight:700;min-height:44px}
-nav button.on{background:#fff;color:var(--teal);border-color:#fff}
-main{max-width:1280px;margin:0 auto;padding:24px 20px 60px;display:flex;flex-direction:column;gap:30px}
+.serif,.tile .nm,.rcard .tx b{font-family:'Cormorant Garamond',Georgia,serif;font-weight:600;font-variant-numeric:lining-nums;font-feature-settings:'lnum' 1}
+.wrap{max-width:1240px;margin:0 auto;padding:0 20px}
+/* ── home ── */
+.hero{position:relative;min-height:340px;color:#fff;display:flex;flex-direction:column;justify-content:space-between;
+  background:#0f3a3f url('mare-hero.jpg') center 60%/cover no-repeat}
+.hero::before{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,40,45,.55) 0%,rgba(0,40,45,.25) 40%,rgba(0,40,45,.78) 100%)}
+.hero > *{position:relative}
+.hero-top{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:16px 20px;max-width:1240px;margin:0 auto;width:100%;flex-wrap:wrap}
+.hero-top .who{font-size:14px;opacity:.95}
+.hero-top .lk{color:#fff;font-size:14px;opacity:.95;background:none;border:0;text-decoration:underline;padding:6px}
+.hero-main{max-width:1240px;margin:0 auto;width:100%;padding:0 20px 52px;display:flex;align-items:flex-end;gap:22px;flex-wrap:wrap}
+.hero-main img{width:96px;height:96px;filter:drop-shadow(0 2px 8px rgba(0,0,0,.25))}
+.hero-main h1{margin:0;font-size:clamp(34px,5vw,54px);line-height:1;letter-spacing:1px}
+.hero-main .sub{font-size:17px;opacity:.95;margin-top:6px}
+@media (max-width:700px){ .hero{background-image:url('mare-hero-sm.jpg');min-height:280px} .hero-main img{width:70px;height:70px} }
+.strip{max-width:1240px;margin:-34px auto 0;padding:0 20px;position:relative;z-index:2}
+.strip-in{background:var(--card);border-radius:18px;box-shadow:var(--shadow);display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));overflow:hidden}
+.stat{padding:16px 18px;border:0;border-right:1px solid var(--line-2);background:none;text-align:left}
+.stat:last-child{border-right:0}
+.stat b{display:block;font-size:28px;line-height:1.1;color:var(--teal);font-weight:700;font-variant-numeric:tabular-nums}
+.stat span{font-size:13px;color:var(--muted);font-weight:600;letter-spacing:.3px}
+.stat.alert b{color:var(--red)}
+.groups{max-width:1240px;margin:0 auto;padding:30px 20px 60px;display:flex;flex-direction:column;gap:30px}
+.grp h2{margin:0 0 12px;font-size:13px;letter-spacing:3px;color:var(--muted);font-weight:700;text-transform:uppercase;font-family:Karla,sans-serif}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px}
+.tile{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:18px;text-align:left;display:flex;flex-direction:column;gap:10px;
+  min-height:150px;box-shadow:0 1px 2px rgba(30,42,44,.04);transition:transform .12s ease,box-shadow .12s ease}
+.tile:hover{transform:translateY(-2px);box-shadow:var(--shadow)}
+.tile .ic{width:46px;height:46px;border-radius:14px;background:var(--tint);color:var(--teal);display:flex;align-items:center;justify-content:center}
+.tile .nm{font-family:'Cormorant Garamond',Georgia,serif;font-weight:600;font-size:25px;line-height:1.05;color:var(--ink)}
+.tile .ds{font-size:14px;color:var(--muted)}
+.tile .st{margin-top:auto;font-size:14px;font-weight:700;color:var(--teal)}
+.tile .st.alert{color:var(--red)}
+/* ── module screens ── */
+.bar{background:var(--teal);color:#fff;position:sticky;top:0;z-index:20;box-shadow:0 2px 10px rgba(0,0,0,.12)}
+.bar-in{max-width:1240px;margin:0 auto;padding:10px 20px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.bar .home{display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.14);border:0;color:#fff;border-radius:999px;padding:8px 14px 8px 10px;font-weight:700;min-height:44px}
+.bar img{width:38px;height:38px}
+.bar h1{margin:0;font-size:28px;flex:1;min-width:140px}
+.lang{display:inline-flex;border:1px solid rgba(255,255,255,.6);border-radius:999px;overflow:hidden}
+.lang button{background:transparent;border:0;color:#fff;padding:7px 12px;font-weight:700;font-size:13px;min-height:36px}
+.lang button.on{background:#fff;color:var(--teal)}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;max-width:1240px;margin:0 auto;padding:16px 20px 0}
+.tabs button{background:var(--card);border:1px solid var(--line);border-radius:999px;padding:9px 16px;font-weight:700;min-height:42px;color:var(--muted)}
+.tabs button.on{background:var(--teal);border-color:var(--teal);color:#fff}
+main{max-width:1240px;margin:0 auto;padding:22px 20px 70px;display:flex;flex-direction:column;gap:26px}
 h2{margin:0;font-size:30px;color:var(--teal)}
 h3{margin:0;font-size:18px}
 .row{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
 .between{justify-content:space-between}
-.muted{color:var(--muted)}
-.small{font-size:14px}
-.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px}
+.muted{color:var(--muted)} .small{font-size:14px} .tiny{font-size:12px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px;box-shadow:0 1px 2px rgba(30,42,44,.04)}
 .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
-.tag{display:inline-block;font-size:12px;font-weight:700;letter-spacing:1px;border-radius:999px;padding:4px 10px}
-.tag.amber{background:var(--amber-bg);color:var(--amber)} .tag.red{background:var(--red-bg);color:var(--red)}
+.stack{display:flex;flex-direction:column;gap:12px}
+.tag{display:inline-block;font-size:12px;font-weight:700;letter-spacing:.8px;border-radius:999px;padding:4px 10px;white-space:nowrap}
+.tag.amber{background:var(--amber-bg);color:var(--amber)} .tag.red{background:var(--red-bg);color:var(--red)} .tag.green{background:var(--green-bg);color:var(--green)}
 .tag.blue{background:var(--blue-bg);color:var(--blue)} .tag.teal{background:var(--teal);color:#fff} .tag.grey{background:var(--soft);color:var(--muted)}
 .btn{background:var(--teal);color:#fff;border:0;border-radius:999px;padding:10px 18px;font-weight:700;min-height:44px}
 .btn.ghost{background:#fff;color:var(--ink);border:1px solid #C9BEB1}
 .btn.warn{background:#fff;color:var(--red);border:1px solid #E8B4B4}
+.btn.sm{padding:6px 12px;min-height:36px;font-size:14px}
 .btn:disabled{opacity:.55;cursor:default}
-input[type=text],input[type=email],input[type=password],input[type=time],input[type=number],select{padding:9px 10px;border:1px solid #C9BEB1;border-radius:9px;background:#fff;min-height:44px}
-.box{overflow-x:auto;background:var(--card);border:1px solid var(--line);border-radius:14px}
+input[type=text],input[type=email],input[type=password],input[type=time],input[type=date],input[type=number],input[type=month],select,textarea{
+  padding:9px 11px;border:1px solid #C9BEB1;border-radius:10px;background:#fff;min-height:44px;max-width:100%}
+textarea{min-height:84px;width:100%;resize:vertical;line-height:1.4}
+label.f{display:flex;flex-direction:column;gap:5px;font-size:13px;font-weight:700;color:var(--muted)}
+label.f input,label.f select,label.f textarea{font-weight:400;color:var(--ink);font-size:16px;width:100%}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+.grid4{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.box{overflow-x:auto;background:var(--card);border:1px solid var(--line);border-radius:16px}
 table{width:100%;border-collapse:collapse}
-th{font-size:12px;font-weight:700;letter-spacing:2px;color:var(--muted);text-align:left;padding:10px 12px;border-bottom:1px solid #D8CFC4;white-space:nowrap}
-td{padding:10px 12px;border-bottom:1px solid var(--line-2);white-space:nowrap;vertical-align:middle}
+th{font-size:12px;font-weight:700;letter-spacing:1.5px;color:var(--muted);text-align:left;padding:11px 12px;border-bottom:1px solid #D8CFC4;white-space:nowrap;text-transform:uppercase;background:#FCFAF7}
+td{padding:10px 12px;border-bottom:1px solid var(--line-2);vertical-align:middle}
 tr:last-child td{border-bottom:0}
-td.cell{cursor:pointer}
-td.cell:hover{background:#F6F1EA}
-td.sel{outline:2px solid var(--teal);outline-offset:-2px}
-.thumb{width:44px;height:44px;border-radius:8px;background:var(--tint);color:var(--teal);display:flex;align-items:center;justify-content:center;font-weight:700;overflow:hidden}
+td.nw,th.nw{white-space:nowrap}
+td.cell{cursor:pointer;white-space:nowrap} td.cell:hover{background:#F6F1EA} td.sel{outline:2px solid var(--teal);outline-offset:-2px}
+.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.thumb{width:44px;height:44px;border-radius:9px;background:var(--tint);color:var(--teal);display:flex;align-items:center;justify-content:center;font-weight:700;overflow:hidden;flex-shrink:0}
 .thumb img{width:100%;height:100%;object-fit:cover}
-.faces{display:flex;flex-direction:column;gap:10px}
-.facerow{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start}
-.facerow .who{width:110px;font-weight:700;padding-top:22px}
-.shot{width:84px;display:flex;flex-direction:column;align-items:center;gap:4px;background:transparent;border:0;padding:0}
-.shot .im{width:80px;height:60px;border-radius:8px;background:var(--tint);overflow:hidden;display:flex;align-items:center;justify-content:center;color:var(--teal);font-weight:700;font-size:13px}
-.shot .im img{width:100%;height:100%;object-fit:cover}
-.shot.flag .im{outline:3px solid var(--red)}
-.shot span{font-size:11px;color:var(--muted)}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px 16px}
+.kpi span{font-size:12px;letter-spacing:1px;color:var(--muted);font-weight:700;text-transform:uppercase}
+.kpi b{display:block;font-size:26px;font-weight:700;color:var(--teal);line-height:1.2;font-variant-numeric:tabular-nums}
+.kpi i{font-style:normal;font-size:13px;color:var(--muted)}
+.kpi.red b{color:var(--red)} .kpi.green b{color:var(--green)}
+.empty{padding:28px;text-align:center;color:var(--muted);background:var(--card);border:1px dashed #D8CFC4;border-radius:16px}
 .overlay{position:fixed;inset:0;background:rgba(20,28,30,.7);display:flex;align-items:center;justify-content:center;padding:16px;z-index:50}
-.overlay .card{max-width:520px;width:100%;display:flex;flex-direction:column;gap:12px}
+.overlay > .card{max-width:680px;width:100%;max-height:92vh;overflow:auto;display:flex;flex-direction:column;gap:12px}
 .overlay img{width:100%;border-radius:10px}
-.status{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:var(--ink);color:#fff;border-radius:999px;padding:10px 18px;font-weight:700;z-index:60;display:none}
-.times{display:grid;grid-template-columns:repeat(7,minmax(92px,1fr));gap:8px}
-.times label{display:flex;flex-direction:column;gap:4px;font-size:13px;font-weight:700;color:var(--muted)}
-.times input{width:100%}
-.signin{max-width:420px;margin:8vh auto;display:flex;flex-direction:column;gap:12px}
+.status{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:var(--ink);color:#fff;border-radius:999px;padding:11px 20px;font-weight:700;z-index:60;display:none;max-width:90vw}
+.signin{max-width:420px;margin:0 auto;display:flex;flex-direction:column;gap:12px}
 .signin input{width:100%}
 .err{color:var(--red);font-weight:700}
 .code{font-size:44px;letter-spacing:8px;font-weight:700;color:var(--teal);font-variant-numeric:tabular-nums}
 details summary{cursor:pointer;font-weight:700;color:var(--teal)}
-@media (max-width:640px){ .brand .t1{font-size:21px;letter-spacing:3px} h2{font-size:26px} main{padding:18px 16px 50px} .hin{padding:14px 16px} }
+.rota td{white-space:nowrap;text-align:center;font-size:14px;padding:7px}
+.rota td:first-child{text-align:left}
+.shift{display:inline-block;border-radius:8px;padding:5px 8px;font-weight:700;background:var(--tint);color:var(--teal);min-width:96px;border:0;font-size:14px}
+.shift.off{background:var(--soft);color:var(--muted)} .shift.leave{background:var(--blue-bg);color:var(--blue)} .shift.sick{background:var(--amber-bg);color:var(--amber)}
+.shift.empty{background:transparent;color:#9A8F83;font-weight:400;border:1px dashed #D8CFC4}
+.recipe-photo{width:100%;max-height:340px;object-fit:cover;border-radius:12px}
+.pre{white-space:pre-wrap}
+.chk{display:flex;align-items:flex-start;gap:12px;padding:12px 0;border-bottom:1px solid var(--line-2)}
+.chk:last-child{border-bottom:0}
+.dot{width:26px;height:26px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;border:2px solid #C9BEB1}
+.dot.on{background:var(--teal);border-color:var(--teal);color:#fff}
+.rlist{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
+.rcard{background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden;text-align:left;padding:0;display:flex;flex-direction:column}
+.rcard .ph{height:130px;background:var(--tint) center/cover no-repeat;display:flex;align-items:center;justify-content:center;color:var(--teal)}
+.rcard .tx{padding:12px 14px;display:flex;flex-direction:column;gap:4px}
+.rcard .tx b{font-family:'Cormorant Garamond',Georgia,serif;font-size:21px;line-height:1.1}
+@media (max-width:640px){ .bar h1{font-size:23px} h2{font-size:26px} main{padding:18px 16px 60px}
+  .wrap,.tabs,.bar-in,.groups,.strip,.hero-top,.hero-main{padding-left:16px;padding-right:16px} }
 </style>
 </head>
 <body>
-<header><div class="hin">
-  <div class="brand"><img src="mare-logo-white.svg" alt="Roberto's Mare">
-    <div><div class="t1 serif">ATTENDANCE</div><div class="t2" id="sub">Roberto's Mare · Porto Montenegro</div></div></div>
-  <nav id="nav" aria-label="Sections" style="display:none">
-    <button data-v="today">Today</button><button data-v="week">Week</button><button data-v="faces">Check faces</button>
-    <button data-v="people">People</button><button data-v="tablet">Tablet</button>
-  </nav>
-</div></header>
-<main id="main"><div class="muted">Loading…</div></main>
+<div id="app"><div class="wrap muted" style="padding-top:40px">Loading…</div></div>
 <div class="status" id="status" role="status"></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="mare-common.js?v=20261006a"></script>
-<script>
-(function(){
-  var M = window.Mare, E = M.esc;
-  var sb = supabase.createClient(M.SB_URL, M.SB_KEY);
-  var main = document.getElementById('main');
-  var S = { view: 'today', token: null, data: null, ws: null, sel: null, photos: {}, newCode: null, confirm: null };
-  try{ S.view = localStorage.getItem('mare_view') || 'today'; }catch(e){}
-
-  function say(t){ var s = document.getElementById('status'); s.textContent = t; s.style.display = 'block'; clearTimeout(say.t); say.t = setTimeout(function(){ s.style.display = 'none'; }, 2600); }
-  function call(name, args){ return M.rpc(name, args, S.token).then(function(r){
-    if (r.error) { say(r.error.network ? 'No internet. Nothing was saved.' : 'Something went wrong: ' + r.error.message); return null; }
-    if (r.data && r.data.ok === false) { say(r.data.error === 'access' ? 'Your account has no Mare access.' : 'Not saved: ' + r.data.error); return null; }
-    return r.data; }); }
-
-  // ── sign-in ──
-  sb.auth.getSession().then(function(x){
-    var s = x.data && x.data.session;
-    if (!s) { signIn(); return; }
-    S.token = s.access_token; start();
-  });
-  sb.auth.onAuthStateChange(function(ev, s){ if (s) S.token = s.access_token; });
-  function signIn(err){
-    document.getElementById('nav').style.display = 'none';
-    main.innerHTML = '<form class="signin card" id="f"><h2 class="serif">Sign in</h2>'+
-      '<p class="muted" style="margin:0">Use your Roberto\'s app account.</p>'+
-      '<label class="small" for="em"><b>Email</b></label><input id="em" type="email" autocomplete="username" required>'+
-      '<label class="small" for="pw"><b>Password</b></label><input id="pw" type="password" autocomplete="current-password" required>'+
-      '<div class="err">'+E(err||'')+'</div><button class="btn" type="submit">Sign in</button></form>';
-    document.getElementById('f').onsubmit = function(ev){
-      ev.preventDefault();
-      sb.auth.signInWithPassword({ email: document.getElementById('em').value.trim(), password: document.getElementById('pw').value }).then(function(r){
-        if (r.error) { signIn('Email or password not right.'); return; }
-        S.token = r.data.session.access_token; start();
-      });
-    };
-  }
-
-  function start(){
-    var today = M.dateKey(new Date());
-    S.ws = M.weekStart(today);
-    load().then(function(ok){ if (ok) { document.getElementById('nav').style.display = ''; render(); } });
-    setInterval(function(){
-      var a = document.activeElement;
-      if (document.visibilityState !== 'visible' || S.confirm || (a && /INPUT|SELECT|TEXTAREA/.test(a.tagName))) return;
-      if (S.view === 'today' || S.view === 'week') load().then(function(ok){ if (ok) render(); });
-    }, 60000);
-  }
-
-  function load(){
-    var today = M.dateKey(new Date());
-    var from = M.addDays(S.ws < today ? S.ws : today, -7);
-    var to = M.addDays(S.ws, 6) > today ? M.addDays(S.ws, 6) : today;
-    return M.rpc('mare_mgr_overview', { p_from: from, p_to: to }, S.token).then(function(r){
-      if (r.error) {
-        if (r.error.status === 401) { signIn('Please sign in again.'); return false; }
-        main.innerHTML = '<div class="card">'+(r.error.network ? 'No internet. Try again in a moment.' : 'Something went wrong: '+E(r.error.message))+'</div>'; return false;
-      }
-      if (!r.data.ok) {
-        main.innerHTML = '<div class="card" style="max-width:560px"><h2 class="serif">No access</h2><p>This page is for the Roberto\'s Mare team. Ask Francesco to give your account Mare access.</p>'+
-          '<button class="btn ghost" id="so">Sign out</button></div>';
-        document.getElementById('so').onclick = function(){ sb.auth.signOut().then(function(){ signIn(); }); };
-        return false;
-      }
-      S.data = r.data; index();
-      document.getElementById('sub').textContent = 'Roberto\'s Mare · ' + M.niceDate(today) + (r.data.me ? ' · ' + r.data.me : '');
-      return true;
-    });
-  }
-
-  // ── derived data ──
-  function index(){
-    var d = S.data, now = new Date(d.now);
-    d.byId = {}; d.staff.forEach(function(s){ d.byId[s.id] = s; s.punches = []; });
-    d.punches.forEach(function(p){ var s = d.byId[p.staff_id]; if (s) s.punches.push(p); });
-    d.staff.forEach(function(s){ s.shifts = M.shifts(s.punches, now); });
-    d.noteKey = {};
-    d.notes.forEach(function(n){ d.noteKey[n.staff_id + '|' + n.ref_date + '|' + n.kind] = n; if (n.punch_id) d.noteKey['p|' + n.punch_id] = n; });
-  }
-  function dayInfo(s, key){
-    var ds = s.shifts.filter(function(x){ return x.date === key; });
-    var tot = 0, missing = false;
-    ds.forEach(function(x){ if (x.min != null) tot += x.min; if (x.missing || x.orphan) missing = true; });
-    var lt = M.lateness(ds, s.start_times, key);
-    return { shifts: ds, min: ds.length ? tot : null, missing: missing, late: lt.late, due: lt.due, live: ds.some(function(x){ return x.live; }) };
-  }
-  function weekInfo(s, ws){
-    var days = [], tot = 0, lates = 0, miss = 0;
-    for (var i = 0; i < 7; i++) { var k = M.addDays(ws, i), di = dayInfo(s, k); di.key = k; days.push(di); if (di.min) tot += di.min; if (di.late) lates++; if (di.missing) miss++; }
-    var ot = tot - Math.round(Number(s.contract_hours) * 60);
-    return { days: days, min: tot, ot: ot > 0 ? ot : 0, lates: lates, missing: miss };
-  }
-  function activeStaff(){ return S.data.staff.filter(function(s){ return s.active; }); }
-
-  // ── nav ──
-  document.getElementById('nav').onclick = function(ev){
-    var b = ev.target.closest('button'); if (!b) return;
-    S.view = b.getAttribute('data-v'); S.sel = null; S.confirm = null;
-    try{ localStorage.setItem('mare_view', S.view); }catch(e){}
-    render();
-  };
-  function render(){
-    Array.prototype.forEach.call(document.querySelectorAll('#nav button'), function(b){ b.classList.toggle('on', b.getAttribute('data-v') === S.view); });
-    ({ today: viewToday, week: viewWeek, faces: viewFaces, people: viewPeople, tablet: viewTablet })[S.view]();
-  }
-  function photosFor(ids){
-    var need = ids.filter(function(id){ return !(id in S.photos); });
-    if (!need.length) return Promise.resolve();
-    return M.rpc('mare_mgr_photos', { p_ids: need.slice(0, 400) }, S.token).then(function(r){
-      if (r.data && r.data.ok) { need.forEach(function(id){ S.photos[id] = r.data.photos[id] || null; }); }
-    });
-  }
-  // Photos come from the tablet: only a plain base64 JPEG is ever put on the page.
-  function safeJpeg(u){ return (typeof u === 'string' && /^data:image\/jpeg;base64,[A-Za-z0-9+\/=]+$/.test(u)) ? u : null; }
-  function img(pid, fallback){ var u = pid && safeJpeg(S.photos[pid]); return u ? '<img src="'+u+'" alt="Photo">' : E(fallback || ''); }
-
-  // ════════════ TODAY ════════════
-  function needsYou(){
-    var d = S.data, today = M.dateKey(new Date(d.now)), since = M.addDays(today, -13), items = [];
-    activeStaff().forEach(function(s){
-      s.shifts.forEach(function(x){
-        if (x.date < since) return;
-        if (x.missing) items.push({ kind: 'out', s: s, x: x });
-        if (x.orphan) items.push({ kind: 'in', s: s, x: x });
-      });
-      for (var i = 0; i < 7; i++) {
-        var k = M.addDays(today, -i), di = dayInfo(s, k);
-        if (di.late && !d.noteKey[s.id + '|' + k + '|late_accepted'] && !d.noteKey[s.id + '|' + k + '|warning'])
-          items.push({ kind: 'late', s: s, key: k, late: di.late, due: di.due, inAt: di.shifts.filter(function(x){ return x.inP; })[0].inP.at });
-      }
-    });
-    return items;
-  }
-  function viewToday(){
-    var d = S.data, now = new Date(d.now), today = M.dateKey(now), items = needsYou();
-    var h = '<section><div class="row between"><h2 class="serif">Needs you · '+items.length+'</h2></div><div style="height:12px"></div>';
-    if (!items.length) h += '<div class="card muted">Nothing waiting. Every shift has a clock-in and a clock-out, and nobody was late without a note.</div>';
-    else {
-      h += '<div class="cards">';
-      items.forEach(function(it, n){
-        if (it.kind === 'out') h += '<div class="card" style="display:flex;flex-direction:column;gap:10px"><span class="tag amber" style="align-self:flex-start">NO CLOCK-OUT</span>'+
-          '<h3>'+E(it.s.name)+' · '+M.shortDate(it.x.date)+'</h3><div class="muted">Clocked in '+M.hhmm(it.x.inP.at)+'. Never clocked out.</div>'+
-          '<div class="row"><label class="small row" style="gap:6px">Out at <input type="time" id="nt'+n+'"></label>'+
-          '<input type="text" id="nr'+n+'" placeholder="Reason" aria-label="Reason" style="flex:1 1 140px"></div>'+
-          '<button class="btn" data-fix="'+n+'" style="align-self:flex-start">Save the clock-out</button></div>';
-        if (it.kind === 'in') h += '<div class="card" style="display:flex;flex-direction:column;gap:10px"><span class="tag amber" style="align-self:flex-start">NO CLOCK-IN</span>'+
-          '<h3>'+E(it.s.name)+' · '+M.shortDate(it.x.date)+'</h3><div class="muted">Clocked out '+M.hhmm(it.x.outP.at)+' with no clock-in before it.</div>'+
-          '<div class="row"><label class="small row" style="gap:6px">In at <input type="time" id="nt'+n+'"></label>'+
-          '<input type="text" id="nr'+n+'" placeholder="Reason" aria-label="Reason" style="flex:1 1 140px"></div>'+
-          '<button class="btn" data-fix="'+n+'" style="align-self:flex-start">Save the clock-in</button></div>';
-        if (it.kind === 'late') h += '<div class="card" style="display:flex;flex-direction:column;gap:10px"><span class="tag red" style="align-self:flex-start">LATE '+it.late+' MIN</span>'+
-          '<h3>'+E(it.s.name)+' · '+(it.key === today ? 'today' : M.shortDate(it.key))+'</h3><div class="muted">Due '+it.due+' · in '+M.hhmm(it.inAt)+'.'+lateCount(it.s, today)+'</div>'+
-          '<input type="text" id="nr'+n+'" placeholder="Note (what happened)" aria-label="Note">'+
-          '<div class="row"><button class="btn ghost" data-late="'+n+'" data-k="late_accepted">Accept</button>'+
-          '<button class="btn warn" data-late="'+n+'" data-k="warning">Write it down for a warning</button></div></div>';
-      });
-      h += '</div>';
-    }
-    h += '</section>';
-
-    // today's table
-    var rows = activeStaff().map(function(s){
-      var di = dayInfo(s, today), first = di.shifts.filter(function(x){ return x.inP; })[0], last = di.shifts[di.shifts.length - 1];
-      var st;
-      if (di.live) st = di.late ? '<span class="tag red">IN · LATE '+di.late+' MIN</span>' : '<span class="tag teal">IN</span>';
-      else if (di.shifts.length) st = di.missing ? '<span class="tag amber">NO CLOCK-OUT</span>' : '<span class="tag grey">GONE HOME</span>';
-      else if (di.due) st = (M.timeToMin(M.hhmm(now)) > M.timeToMin(di.due) + M.GRACE_MIN) ? '<span class="tag amber">NOT IN YET</span>' : '<span class="tag grey">DUE '+di.due+'</span>';
-      else st = '<span class="tag grey">OFF TODAY</span>';
-      var lastP = null; s.punches.forEach(function(p){ if (!p.voided && p.has_photo && M.dateKey(p.at) === today) lastP = p; });
-      return { s: s, st: st, di: di, first: first, last: last, photo: lastP };
-    });
-    var inN = rows.filter(function(r){ return r.di.live; }).length, lateN = rows.filter(function(r){ return r.di.late; }).length;
-    h += '<section><div class="row between"><h2 class="serif">Today</h2><span class="muted">'+inN+' in · '+lateN+' late · '+rows.length+' on the team</span></div><div style="height:12px"></div>';
-    if (!rows.length) h += '<div class="card">No people yet. Add the team in <b>People</b>.</div>';
-    else h += '<div class="box"><table><thead><tr><th>PHOTO</th><th>NAME</th><th>TEAM</th><th>DUE</th><th>IN</th><th>OUT</th><th>HOURS</th><th>STATUS</th></tr></thead><tbody>'+
-      rows.map(function(r){
-        return '<tr><td><div class="thumb">'+img(r.photo && r.photo.id, r.s.name[0])+'</div></td><td><b>'+E(r.s.name)+'</b></td><td>'+E(r.s.team)+'</td><td>'+(r.di.due||'—')+'</td>'+
-          '<td>'+(r.first ? M.hhmm(r.first.inP.at) : '—')+'</td><td>'+(r.last && r.last.outP ? M.hhmm(r.last.outP.at) : '—')+'</td>'+
-          '<td>'+(r.di.min != null ? M.durShort(r.di.min) : '—')+'</td><td>'+r.st+'</td></tr>';
-      }).join('')+'</tbody></table></div>';
-    h += '</section>';
-
-    // codes
-    var pe = d.pin_events.filter(function(e){ return e.kind !== 'set' && new Date(e.at) > new Date(now - 7 * 864e5); });
-    if (pe.length) {
-      h += '<section><h2 class="serif">Codes · last 7 days</h2><div style="height:12px"></div><div class="box"><table><tbody>'+
-        pe.map(function(e){ var s = d.byId[e.staff_id];
-          var w = { reset: 'Code reset by ' + E(e.by || ''), locked: 'Locked after 5 wrong codes', offline_wrong_pin: 'Wrong code typed while the tablet was offline. That clock-in was not counted' }[e.kind] || e.kind;
-          return '<tr><td><b>'+E(s ? s.name : '?')+'</b></td><td>'+M.shortDate(M.dateKey(e.at))+' '+M.hhmm(e.at)+'</td><td style="white-space:normal">'+w+'</td></tr>'; }).join('')+
-        '</tbody></table></div></section>';
-    }
-    main.innerHTML = h;
-
-    Array.prototype.forEach.call(main.querySelectorAll('[data-fix]'), function(b){
-      b.onclick = function(){
-        var n = +b.getAttribute('data-fix'), it = items[n], t = document.getElementById('nt'+n).value, why = document.getElementById('nr'+n).value.trim();
-        if (!t) { say('Type the time.'); return; }
-        if (why.length < 2) { say('Write a short reason.'); return; }
-        var at;
-        if (it.kind === 'out') { at = M.toInstant(it.x.date, t); if (at <= new Date(it.x.inP.at)) at = M.toInstant(M.addDays(it.x.date, 1), t); }
-        else { at = M.toInstant(it.x.date, t); if (at >= new Date(it.x.outP.at)) at = M.toInstant(M.addDays(it.x.date, -1), t); }
-        b.disabled = true;
-        call('mare_mgr_punch_add', { p_staff: it.s.id, p_dir: it.kind, p_at: at.toISOString(), p_reason: why }).then(function(r){
-          if (r) { say('Saved.'); load().then(function(ok){ if (ok) render(); }); } else b.disabled = false;
-        });
-      };
-    });
-    Array.prototype.forEach.call(main.querySelectorAll('[data-late]'), function(b){
-      b.onclick = function(){
-        var n = +b.getAttribute('data-late'), it = items[n], why = document.getElementById('nr'+n).value.trim(), k = b.getAttribute('data-k');
-        if (k === 'warning' && why.length < 2) { say('Write what happened first.'); return; }
-        b.disabled = true;
-        call('mare_mgr_note_add', { p_staff: it.s.id, p_kind: k, p_date: it.key, p_text: why || ('Late ' + it.late + ' min'), p_punch: null }).then(function(r){
-          if (r) { say(k === 'warning' ? 'Written down.' : 'Accepted.'); load().then(function(ok){ if (ok) render(); }); } else b.disabled = false;
-        });
-      };
-    });
-    var ids = rows.filter(function(r){ return r.photo; }).map(function(r){ return r.photo.id; });
-    if (ids.some(function(id){ return !(id in S.photos); })) photosFor(ids).then(function(){ if (S.view === 'today') viewToday(); });
-  }
-  function lateCount(s, today){
-    var monthStart = today.slice(0, 8) + '01', n = 0;
-    for (var k = monthStart; k <= today; k = M.addDays(k, 1)) if (dayInfo(s, k).late) n++;
-    return n > 1 ? ' Late ' + n + ' times this month (that we can see).' : '';
-  }
-
-  // ════════════ WEEK ════════════
-  function viewWeek(){
-    var d = S.data, ws = S.ws, today = M.dateKey(new Date(d.now));
-    var h = '<section><div class="row between"><div class="row"><h2 class="serif">Week of '+M.shortDate(ws)+'</h2></div>'+
-      '<div class="row"><button class="btn ghost" id="wprev" aria-label="Previous week">‹ Earlier</button>'+
-      (ws !== M.weekStart(today) ? '<button class="btn ghost" id="wnow">This week</button>' : '')+
-      (ws < M.weekStart(today) ? '<button class="btn ghost" id="wnext" aria-label="Next week">Later ›</button>' : '')+
-      '<button class="btn" id="xls">Download for payroll (Excel)</button></div></div><div style="height:12px"></div>';
-    var list = activeStaff();
-    if (!list.length) { main.innerHTML = h + '<div class="card">No people yet. Add the team in <b>People</b>.</div></section>'; bindWeek(); return; }
-    h += '<div class="box"><table><thead><tr><th>NAME</th>';
-    for (var i = 0; i < 7; i++) h += '<th>'+M.DAYS[i].toUpperCase()+' '+(+M.addDays(ws, i).slice(8))+'</th>';
-    h += '<th>TOTAL</th><th>CONTRACT</th><th>OVERTIME</th><th>LATE</th></tr></thead><tbody>';
-    list.forEach(function(s){
-      var wi = weekInfo(s, ws);
-      h += '<tr><td><b>'+E(s.name)+'</b></td>';
-      wi.days.forEach(function(di){
-        var sel = S.sel && S.sel.staff === s.id && S.sel.key === di.key;
-        var v = di.missing ? '<span class="tag amber">'+(di.min ? M.durShort(di.min)+' + ?' : '?')+'</span>'
-          : di.min != null ? M.durShort(di.min) : (di.key > today ? '' : '<span class="muted">Off</span>');
-        if (di.late) v += ' <span class="tag red" title="Late">'+di.late+'′</span>';
-        if (di.shifts.some(function(x){ return (x.inP && x.inP.source === 'manager') || (x.outP && x.outP.source === 'manager'); })) v += ' <span class="tag blue" title="A time entered by hand">✎</span>';
-        h += '<td class="cell'+(sel?' sel':'')+'" data-s="'+s.id+'" data-k="'+di.key+'">'+v+'</td>';
-      });
-      h += '<td><b>'+M.durShort(wi.min)+'</b>'+(wi.missing ? ' <span class="tag amber">+ ?</span>' : '')+'</td><td>'+Number(s.contract_hours)+' h</td>'+
-        '<td>'+(wi.ot ? '<b style="color:var(--red)">+'+M.durShort(wi.ot)+'</b>' : '—')+'</td><td>'+(wi.lates || '—')+'</td></tr>';
-    });
-    h += '</tbody></table></div><p class="small muted">Tap a day to see the clock times, fix one, or add one. Orange ? = a clock-in or clock-out is missing, so that day is not counted yet. ✎ = a time entered by hand. Overtime = hours above the person\'s contract week.</p></section>';
-    if (S.sel) h += dayPanel();
-    main.innerHTML = h;
-    bindWeek();
-  }
-  function bindWeek(){
-    var el;
-    if ((el = document.getElementById('wprev'))) el.onclick = function(){ S.ws = M.addDays(S.ws, -7); S.sel = null; load().then(function(ok){ if (ok) render(); }); };
-    if ((el = document.getElementById('wnext'))) el.onclick = function(){ S.ws = M.addDays(S.ws, 7); S.sel = null; load().then(function(ok){ if (ok) render(); }); };
-    if ((el = document.getElementById('wnow'))) el.onclick = function(){ S.ws = M.weekStart(M.dateKey(new Date())); S.sel = null; load().then(function(ok){ if (ok) render(); }); };
-    if ((el = document.getElementById('xls'))) el.onclick = exportWeek;
-    Array.prototype.forEach.call(main.querySelectorAll('td.cell'), function(td){
-      td.onclick = function(){ S.sel = { staff: td.getAttribute('data-s'), key: td.getAttribute('data-k') }; S.confirm = null; viewWeek();
-        var p = document.getElementById('daypanel'); if (p) p.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); };
-    });
-    bindDayPanel();
-  }
-  function dayPanel(){
-    var s = S.data.byId[S.sel.staff], key = S.sel.key;
-    var ps = s.punches.filter(function(p){
-      var sh = s.shifts.filter(function(x){ return x.date === key && ((x.inP && x.inP.id === p.id) || (x.outP && x.outP.id === p.id)); });
-      return sh.length || (p.voided && M.dateKey(p.at) === key);
-    });
-    var di = dayInfo(s, key);
-    var h = '<section class="card" id="daypanel" style="display:flex;flex-direction:column;gap:12px"><div class="row between"><h3>'+E(s.name)+' · '+M.niceDate(key)+'</h3>'+
-      '<button class="btn ghost" id="dpx">Close</button></div>'+
-      '<div class="muted">'+(di.due ? 'Usual start '+di.due+'. ' : 'No usual start that day. ')+(di.min != null ? 'Counted: '+M.dur(di.min)+'.' : '')+'</div>';
-    if (!ps.length) h += '<div class="muted">No clock times this day.</div>';
-    else h += '<div class="box"><table><tbody>'+ps.map(function(p){
-      var src = p.source === 'manager' ? 'Entered by '+E(p.entered_by || '')+(p.reason ? ': “'+E(p.reason)+'”' : '') : (p.offline ? 'Tablet (sent late: no internet)' : 'Tablet');
-      var conf = S.confirm === p.id;
-      return '<tr style="'+(p.voided?'opacity:.55':'')+'"><td><div class="thumb">'+(p.has_photo ? img(p.id, '…') : '—')+'</div></td>'+
-        '<td><b>'+p.dir.toUpperCase()+'</b> '+M.hhmm(p.at)+(M.dateKey(p.at) !== key ? ' ('+M.shortDate(M.dateKey(p.at))+')' : '')+'</td><td style="white-space:normal" class="small">'+src+
-        (p.voided ? '<br><span class="tag grey">REMOVED</span> '+E(p.void_reason || '') : '')+'</td><td>'+
-        (p.voided ? '' : conf ? '<div class="row"><input type="text" id="vr" placeholder="Why remove it?" aria-label="Reason"><button class="btn warn" data-void="'+p.id+'">Remove</button><button class="btn ghost" data-cancel="1">Keep</button></div>'
-                              : '<button class="btn ghost" data-ask="'+p.id+'">Remove…</button>')+'</td></tr>';
-    }).join('')+'</tbody></table></div>';
-    h += '<div class="row"><b>Add a time</b><select id="ad" aria-label="In or out"><option value="in">IN</option><option value="out">OUT</option></select>'+
-      '<input type="time" id="at" aria-label="Time"><input type="text" id="ar" placeholder="Reason" aria-label="Reason" style="flex:1 1 160px"><button class="btn" id="add">Add</button></div>'+
-      '<div class="small muted">Nothing is ever deleted. A removed time stays here, crossed out, with its reason.</div></section>';
-    return h;
-  }
-  function bindDayPanel(){
-    var x = document.getElementById('dpx'); if (!x) return;
-    x.onclick = function(){ S.sel = null; viewWeek(); };
-    var s = S.data.byId[S.sel.staff], key = S.sel.key;
-    var ids = s.punches.filter(function(p){ return p.has_photo; }).map(function(p){ return p.id; });
-    if (ids.some(function(id){ return !(id in S.photos); })) photosFor(ids).then(function(){ if (S.view === 'week' && S.sel) { var y = window.scrollY; viewWeek(); window.scrollTo(0, y); } });
-    Array.prototype.forEach.call(main.querySelectorAll('[data-ask]'), function(b){ b.onclick = function(){ S.confirm = b.getAttribute('data-ask'); var y = window.scrollY; viewWeek(); window.scrollTo(0, y); }; });
-    Array.prototype.forEach.call(main.querySelectorAll('[data-cancel]'), function(b){ b.onclick = function(){ S.confirm = null; var y = window.scrollY; viewWeek(); window.scrollTo(0, y); }; });
-    Array.prototype.forEach.call(main.querySelectorAll('[data-void]'), function(b){
-      b.onclick = function(){
-        var why = document.getElementById('vr').value.trim(); if (why.length < 2) { say('Write why.'); return; }
-        b.disabled = true;
-        call('mare_mgr_punch_void', { p_id: b.getAttribute('data-void'), p_reason: why }).then(function(r){ if (r) { S.confirm = null; say('Removed.'); reloadKeepScroll(); } else b.disabled = false; });
-      };
-    });
-    document.getElementById('add').onclick = function(){
-      var dir = document.getElementById('ad').value, t = document.getElementById('at').value, why = document.getElementById('ar').value.trim();
-      if (!t) { say('Type the time.'); return; }
-      if (why.length < 2) { say('Write a short reason.'); return; }
-      var at = M.toInstant(key, t);
-      // an OUT earlier than that day's IN is after midnight
-      var firstIn = s.shifts.filter(function(x){ return x.date === key && x.inP; })[0];
-      if (dir === 'out' && firstIn && at <= new Date(firstIn.inP.at)) at = M.toInstant(M.addDays(key, 1), t);
-      if (at > new Date(Date.now() + 5 * 60000)) { say('That time is in the future.'); return; }
-      this.disabled = true; var btn = this;
-      call('mare_mgr_punch_add', { p_staff: s.id, p_dir: dir, p_at: at.toISOString(), p_reason: why }).then(function(r){ if (r) { say('Added.'); reloadKeepScroll(); } else btn.disabled = false; });
-    };
-  }
-  function reloadKeepScroll(){ var y = window.scrollY; load().then(function(ok){ if (ok) { render(); window.scrollTo(0, y); } }); }
-
-  function exportWeek(){
-    var btn = document.getElementById('xls'); btn.disabled = true; btn.textContent = 'Preparing…';
-    function go(){
-      var ws = S.ws, list = activeStaff(), hours = [], times = [];
-      var head = ['Name', 'Team']; for (var i = 0; i < 7; i++) head.push(M.DAYS[i] + ' ' + M.addDays(ws, i));
-      head = head.concat(['Total (h:mm)', 'Total (hours)', 'Contract (h)', 'Overtime (h:mm)', 'Overtime (hours)', 'Late days', 'Days missing a clock time']);
-      hours.push(head);
-      list.forEach(function(s){
-        var wi = weekInfo(s, ws), row = [s.name, s.team];
-        wi.days.forEach(function(di){ row.push(di.missing ? (di.min ? M.durShort(di.min) + ' + missing' : 'missing') : di.min != null ? M.durShort(di.min) : ''); });
-        row = row.concat([M.durShort(wi.min), Math.round(wi.min / 0.6) / 100, Number(s.contract_hours), wi.ot ? M.durShort(wi.ot) : '', Math.round(wi.ot / 0.6) / 100, wi.lates, wi.missing]);
-        hours.push(row);
-        wi.days.forEach(function(di){ di.shifts.forEach(function(x, xi){
-          times.push([s.name, di.key, x.inP ? M.hhmm(x.inP.at) : 'missing', x.outP ? M.hhmm(x.outP.at) : (x.live ? 'still in' : 'missing'),
-            x.min != null ? M.durShort(x.min) : '', xi === 0 ? (di.due || '') : '', xi === 0 && di.late ? di.late + ' min' : '',
-            [x.inP && x.inP.source === 'manager' ? 'IN entered by ' + x.inP.entered_by + ': ' + x.inP.reason : '',
-             x.outP && x.outP.source === 'manager' ? 'OUT entered by ' + x.outP.entered_by + ': ' + x.outP.reason : ''].filter(Boolean).join(' · ')]);
-        }); });
-      });
-      times.unshift(['Name', 'Date', 'In', 'Out', 'Hours', 'Usual start', 'Late', 'Entered by hand']);
-      var wb = XLSX.utils.book_new();
-      var a = XLSX.utils.aoa_to_sheet(hours); a['!cols'] = head.map(function(_, i){ return { wch: i === 0 ? 22 : 14 }; });
-      var b = XLSX.utils.aoa_to_sheet(times); b['!cols'] = [22, 12, 9, 9, 9, 11, 9, 50].map(function(w){ return { wch: w }; });
-      XLSX.utils.book_append_sheet(wb, a, 'Hours'); XLSX.utils.book_append_sheet(wb, b, 'Clock times');
-      XLSX.writeFile(wb, 'Robertos-Mare-hours-week-' + ws + '.xlsx');
-      btn.disabled = false; btn.textContent = 'Download for payroll (Excel)';
-    }
-    if (window.XLSX) return go();
-    var sc = document.createElement('script');
-    sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
-    sc.onload = go; sc.onerror = function(){ say('Could not load the Excel maker. Check the internet.'); btn.disabled = false; btn.textContent = 'Download for payroll (Excel)'; };
-    document.head.appendChild(sc);
-  }
-
-  // ════════════ FACES ════════════
-  function viewFaces(){
-    var d = S.data, ws = S.ws, we = M.addDays(ws, 7);
-    var list = activeStaff(), ids = [];
-    var h = '<section><div class="row between"><h2 class="serif">Check faces · week of '+M.shortDate(ws)+'</h2>'+
-      '<div class="row"><button class="btn ghost" id="fprev">‹ Earlier</button>'+(ws < M.weekStart(M.dateKey(new Date())) ? '<button class="btn ghost" id="fnext">Later ›</button>' : '')+'</div></div>'+
-      '<p class="muted">Every clock-in and clock-out photo, one row per person. A face that does not belong stands out. Tap a photo to look closer.</p><div class="faces">';
-    list.forEach(function(s){
-      var ps = s.punches.filter(function(p){ var k = M.dateKey(p.at); return !p.voided && p.source === 'tablet' && k >= ws && k < we; });
-      if (!ps.length) return;
-      h += '<div class="card facerow"><div class="who">'+E(s.name)+'</div>';
-      ps.forEach(function(p){
-        if (p.has_photo) ids.push(p.id);
-        var flag = d.noteKey['p|' + p.id];
-        h += '<button class="shot'+(flag?' flag':'')+'" data-p="'+p.id+'" data-s="'+s.id+'"><div class="im">'+(p.has_photo ? img(p.id, '…') : 'No photo')+'</div>'+
-          '<span>'+M.DAYS[M.dow(M.dateKey(p.at)) - 1]+' '+p.dir+' '+M.hhmm(p.at)+'</span></button>';
-      });
-      h += '</div>';
-    });
-    if (!ids.length && h.indexOf('facerow') < 0) h += '<div class="card muted">No tablet clock-ins this week.</div>';
-    h += '</div></section>';
-    main.innerHTML = h;
-    var el;
-    if ((el = document.getElementById('fprev'))) el.onclick = function(){ S.ws = M.addDays(S.ws, -7); load().then(function(ok){ if (ok) render(); }); };
-    if ((el = document.getElementById('fnext'))) el.onclick = function(){ S.ws = M.addDays(S.ws, 7); load().then(function(ok){ if (ok) render(); }); };
-    Array.prototype.forEach.call(main.querySelectorAll('.shot'), function(b){
-      b.onclick = function(){ bigPhoto(b.getAttribute('data-p'), b.getAttribute('data-s')); };
-    });
-    if (ids.length && ids.some(function(id){ return !(id in S.photos); })) photosFor(ids).then(function(){ if (S.view === 'faces') viewFaces(); });
-  }
-  function bigPhoto(pid, sid){
-    var s = S.data.byId[sid], p = s.punches.filter(function(x){ return x.id === pid; })[0], flag = S.data.noteKey['p|' + pid];
-    var o = document.createElement('div'); o.className = 'overlay';
-    o.innerHTML = '<div class="card" role="dialog" aria-label="Photo"><h3>'+E(s.name)+' · '+p.dir.toUpperCase()+' '+M.shortDate(M.dateKey(p.at))+' '+M.hhmm(p.at)+'</h3>'+
-      (safeJpeg(S.photos[pid]) ? '<img src="'+safeJpeg(S.photos[pid])+'" alt="Clock-in photo">' : '<div class="muted">No photo for this one (camera was off).</div>')+
-      (flag ? '<div class="tag red" style="align-self:flex-start">MARKED: '+E(flag.text)+'</div>' :
-        '<input type="text" id="fl" placeholder="What is wrong? (e.g. this is not Vinay)" aria-label="What is wrong">'+
-        '<button class="btn warn" id="flb" style="align-self:flex-start">Not this person: write it down</button>')+
-      '<button class="btn ghost" id="cl" style="align-self:flex-start">Close</button></div>';
-    document.body.appendChild(o);
-    function close(){ o.remove(); }
-    o.onclick = function(ev){ if (ev.target === o) close(); };
-    o.querySelector('#cl').onclick = close;
-    var fb = o.querySelector('#flb');
-    if (fb) fb.onclick = function(){
-      var t = o.querySelector('#fl').value.trim() || 'Not this person';
-      fb.disabled = true;
-      call('mare_mgr_note_add', { p_staff: sid, p_kind: 'photo_flag', p_date: M.dateKey(p.at), p_text: t, p_punch: pid }).then(function(r){
-        if (r) { say('Written down.'); close(); load().then(function(ok){ if (ok) render(); }); } else fb.disabled = false;
-      });
-    };
-  }
-
-  // ════════════ PEOPLE ════════════
-  function viewPeople(){
-    var d = S.data, base = new URL('mare-clock.html', location.href).href;
-    var h = '<section class="card" style="display:flex;flex-direction:column;gap:10px"><h3>Add a person</h3>'+
-      '<div class="row"><input type="text" id="nn" placeholder="Name as the team knows them" aria-label="Name" style="flex:1 1 220px" maxlength="60">'+
-      '<select id="nteam" aria-label="Team"><option>Kitchen</option><option selected>Service</option><option>Bar</option><option>Other</option></select>'+
-      '<button class="btn" id="nadd">Add</button></div><div class="small muted">They choose their own 4-digit code the first time they tap their name on the tablet.</div></section>';
-    h += '<section><h2 class="serif">The team</h2><div style="height:12px"></div><div style="display:flex;flex-direction:column;gap:14px">';
-    var teams = ['Kitchen', 'Service', 'Bar', 'Other'];
-    var list = d.staff.slice().sort(function(a, b){ return (b.active - a.active) || (teams.indexOf(a.team) - teams.indexOf(b.team)) || a.name.localeCompare(b.name); });
-    if (!list.length) h += '<div class="card muted">Nobody yet.</div>';
-    list.forEach(function(s){
-      var resets = d.pin_events.filter(function(e){ return e.staff_id === s.id && e.kind === 'reset' && new Date(e.at) > new Date(Date.now() - 30 * 864e5); }).length;
-      var notes = d.notes.filter(function(n){ return n.staff_id === s.id; });
-      var link = base + '?me=' + s.phone_token;
-      var conf = S.confirm === 'pin' + s.id;
-      h += '<div class="card" data-id="'+s.id+'" style="display:flex;flex-direction:column;gap:12px;'+(s.active?'':'opacity:.65')+'">'+
-        '<div class="row between"><div class="row"><input type="text" class="f-name" value="'+E(s.name)+'" aria-label="Name" maxlength="60" style="font-weight:700;font-size:18px">'+
-        '<select class="f-team" aria-label="Team">'+teams.map(function(t){ return '<option'+(t===s.team?' selected':'')+'>'+t+'</option>'; }).join('')+'</select>'+
-        '<label class="row small" style="gap:6px"><input type="checkbox" class="f-active" '+(s.active?'checked':'')+' style="width:22px;height:22px"> Works here now</label></div>'+
-        '<div class="row">'+(s.has_pin ? '<span class="tag teal">CODE SET'+(s.pin_set_at?' '+M.shortDate(M.dateKey(s.pin_set_at)).toUpperCase():'')+'</span>' : '<span class="tag amber">NO CODE YET</span>')+
-          (resets >= 2 ? ' <span class="tag blue">CODE RESET '+resets+'× IN 30 DAYS</span>' : '')+'</div></div>'+
-        '<div class="row"><label class="row small" style="gap:6px"><b>Contract hours a week</b> <input type="number" class="f-hours" value="'+Number(s.contract_hours)+'" min="0" max="84" step="0.5" style="width:90px"></label></div>'+
-        '<div><div class="small" style="font-weight:700;margin-bottom:6px">Usual start time (leave empty on days off)</div><div class="times">'+
-          M.DAYS.map(function(dn, i){ var v = (s.start_times || {})[String(i + 1)] || ''; return '<label>'+dn+'<input type="time" class="f-st" data-d="'+(i+1)+'" value="'+v+'"></label>'; }).join('')+'</div></div>'+
-        '<div class="row"><button class="btn" data-save="'+s.id+'">Save</button>'+
-          (conf ? '<span><b>Reset '+E(s.name)+'\'s code?</b> They choose a new one on the tablet.</span><button class="btn warn" data-reset="'+s.id+'">Yes, reset</button><button class="btn ghost" data-cancel="1">Cancel</button>'
-                : (s.has_pin ? '<button class="btn ghost" data-askpin="'+s.id+'">Reset code…</button>' : ''))+'</div>'+
-        '<details><summary>Phone link: their own hours</summary><div style="display:flex;flex-direction:column;gap:8px;margin-top:10px">'+
-          '<div class="small muted">Send this to '+E(s.name)+' only, by WhatsApp. It opens their own hours, view only, after their 4-digit code.</div>'+
-          '<input type="text" readonly value="'+E(link)+'" aria-label="Phone link" style="width:100%">'+
-          '<div class="row"><button class="btn ghost" data-copy="'+E(link)+'">Copy</button>'+
-          '<a class="btn ghost" style="text-decoration:none;display:inline-flex;align-items:center" target="_blank" rel="noopener" href="https://wa.me/?text='+encodeURIComponent('Your Roberto\'s Mare hours: ' + link)+'">Send by WhatsApp</a>'+
-          '<button class="btn ghost" data-newlink="'+s.id+'">Make a new link (old one stops)</button></div></div></details>'+
-        (notes.length ? '<details><summary>Notes · '+notes.length+'</summary><div style="display:flex;flex-direction:column;gap:6px;margin-top:10px">'+notes.map(function(n){
-          var k = { late_accepted: 'Late, accepted', warning: 'For a warning', photo_flag: 'Photo marked', general: 'Note' }[n.kind];
-          return '<div class="small"><b>'+(n.ref_date ? M.shortDate(n.ref_date) : M.shortDate(M.dateKey(n.at)))+' · '+k+'</b> '+E(n.text)+' <span class="muted">('+E(n.by || '')+')</span></div>'; }).join('')+'</div></details>' : '')+
-        '</div>';
-    });
-    h += '</div></section>';
-    main.innerHTML = h;
-    document.getElementById('nadd').onclick = function(){
-      var n = document.getElementById('nn').value.trim(); if (!n) { say('Type a name.'); return; }
-      var dup = d.staff.filter(function(s){ return s.active && s.name.toLowerCase() === n.toLowerCase(); })[0];
-      if (dup) { say('There is already an active ' + dup.name + '. Add a surname initial.'); return; }
-      this.disabled = true;
-      call('mare_mgr_staff_save', { p: { name: n, team: document.getElementById('nteam').value } }).then(function(r){ if (r) { say('Added ' + n + '.'); load().then(function(ok){ if (ok) render(); }); } });
-    };
-    Array.prototype.forEach.call(main.querySelectorAll('[data-save]'), function(b){
-      b.onclick = function(){
-        var c = b.closest('.card'), st = {};
-        Array.prototype.forEach.call(c.querySelectorAll('.f-st'), function(i){ st[i.getAttribute('data-d')] = i.value || null; });
-        var hrs = parseFloat(c.querySelector('.f-hours').value);
-        if (!(hrs >= 0 && hrs <= 84)) { say('Contract hours must be between 0 and 84.'); return; }
-        b.disabled = true;
-        call('mare_mgr_staff_save', { p: { id: b.getAttribute('data-save'), name: c.querySelector('.f-name').value.trim(), team: c.querySelector('.f-team').value,
-          active: c.querySelector('.f-active').checked, contract_hours: hrs, start_times: st } }).then(function(r){ if (r) { say('Saved.'); reloadKeepScroll(); } else b.disabled = false; });
-      };
-    });
-    Array.prototype.forEach.call(main.querySelectorAll('[data-askpin]'), function(b){ b.onclick = function(){ S.confirm = 'pin' + b.getAttribute('data-askpin'); var y = window.scrollY; viewPeople(); window.scrollTo(0, y); }; });
-    Array.prototype.forEach.call(main.querySelectorAll('[data-cancel]'), function(b){ b.onclick = function(){ S.confirm = null; var y = window.scrollY; viewPeople(); window.scrollTo(0, y); }; });
-    Array.prototype.forEach.call(main.querySelectorAll('[data-reset]'), function(b){
-      b.onclick = function(){ b.disabled = true; call('mare_mgr_reset_pin', { p_staff: b.getAttribute('data-reset') }).then(function(r){ S.confirm = null; if (r) { say('Code reset.'); reloadKeepScroll(); } }); };
-    });
-    Array.prototype.forEach.call(main.querySelectorAll('[data-copy]'), function(b){
-      b.onclick = function(){ var v = b.getAttribute('data-copy');
-        (navigator.clipboard ? navigator.clipboard.writeText(v) : Promise.reject()).then(function(){ say('Copied.'); }, function(){ var i = b.closest('details').querySelector('input'); i.select(); say('Selected. Copy it now.'); }); };
-    });
-    Array.prototype.forEach.call(main.querySelectorAll('[data-newlink]'), function(b){
-      b.onclick = function(){ b.disabled = true; call('mare_mgr_phone_link_new', { p_staff: b.getAttribute('data-newlink') }).then(function(r){ if (r) { say('New link made. The old one no longer works.'); reloadKeepScroll(); } }); };
-    });
-  }
-
-  // ════════════ TABLET ════════════
-  function viewTablet(){
-    var d = S.data, url = new URL('mare-clock.html', location.href).href;
-    var h = '<section class="card" style="display:flex;flex-direction:column;gap:12px"><h2 class="serif">Set up a tablet</h2>'+
-      '<ol style="margin:0;padding-left:20px;line-height:1.6"><li>On the tablet, open <a href="'+E(url)+'" target="_blank" rel="noopener">'+E(url)+'</a></li>'+
-      '<li>Make a tablet code below and type it on the tablet. You only do this once.</li>'+
-      '<li>Allow the camera when the tablet asks. Leave it on its charger by the staff entrance.</li></ol>';
-    if (S.newCode) h += '<div class="card" style="background:var(--tint);border-color:var(--tint)"><div class="small"><b>Tablet code for “'+E(S.newCode.name)+'”</b>. It is shown only now:</div><div class="code">'+E(S.newCode.code)+'</div></div>';
-    h += '<div class="row"><input type="text" id="tn" placeholder="Tablet name (e.g. Staff entrance)" aria-label="Tablet name" style="flex:1 1 240px"><button class="btn" id="tadd">Make a tablet code</button></div></section>';
-    h += '<section><h2 class="serif">Tablets</h2><div style="height:12px"></div>';
-    if (!d.devices.length) h += '<div class="card muted">No tablet yet.</div>';
-    else h += '<div class="box"><table><thead><tr><th>NAME</th><th>MADE</th><th>LAST USED</th><th>STATUS</th><th></th></tr></thead><tbody>'+d.devices.map(function(v){
-      var conf = S.confirm === 'dev' + v.id;
-      return '<tr><td><b>'+E(v.name)+'</b></td><td>'+M.shortDate(M.dateKey(v.created_at))+'</td><td>'+(v.last_seen ? M.shortDate(M.dateKey(v.last_seen))+' '+M.hhmm(v.last_seen) : 'Never')+'</td>'+
-        '<td>'+(v.active ? '<span class="tag teal">ON</span>' : '<span class="tag grey">OFF</span>')+'</td><td>'+
-        (!v.active ? '' : conf ? '<div class="row"><span>Switch it off? It stops working at once.</span><button class="btn warn" data-off="'+v.id+'">Switch off</button><button class="btn ghost" data-cancel="1">Cancel</button></div>'
-                               : '<button class="btn ghost" data-askoff="'+v.id+'">Switch off…</button>')+'</td></tr>'; }).join('')+'</tbody></table></div>';
-    h += '<p class="small muted">If a tablet is lost or stolen, switch it off here. Make a new code for the new one.</p></section>';
-    main.innerHTML = h;
-    document.getElementById('tadd').onclick = function(){
-      var n = document.getElementById('tn').value.trim() || 'Staff entrance'; this.disabled = true;
-      call('mare_mgr_device_new', { p_name: n }).then(function(r){ if (r) { S.newCode = { name: n, code: r.code }; load().then(function(ok){ if (ok) render(); }); } });
-    };
-    Array.prototype.forEach.call(main.querySelectorAll('[data-askoff]'), function(b){ b.onclick = function(){ S.confirm = 'dev' + b.getAttribute('data-askoff'); viewTablet(); }; });
-    Array.prototype.forEach.call(main.querySelectorAll('[data-cancel]'), function(b){ b.onclick = function(){ S.confirm = null; viewTablet(); }; });
-    Array.prototype.forEach.call(main.querySelectorAll('[data-off]'), function(b){
-      b.onclick = function(){ b.disabled = true; call('mare_mgr_device_off', { p_id: b.getAttribute('data-off') }).then(function(r){ S.confirm = null; if (r) { say('Switched off.'); load().then(function(ok){ if (ok) render(); }); } }); };
-    });
-  }
-})();
-</script>
+<script src="mare-i18n.js?v=20261006f"></script>
+<script src="mare-common.js?v=20261006f"></script>
+<script src="mare-mgr.js?v=20261006f"></script>
+<script src="mare-mgr-ops.js?v=20261006f"></script>
+<script src="mare-mgr-back.js?v=20261006f"></script>
+<script>MareApp.start();</script>
 </body>
 </html>
