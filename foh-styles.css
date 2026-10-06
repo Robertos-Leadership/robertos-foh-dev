@@ -2613,6 +2613,23 @@
   .res-btn:hover:not(:disabled){background:var(--vino);color:#fff}
   .res-btn:disabled{opacity:.55;cursor:default}
 
+  /* Week ahead strip (6 Oct 2026): 7 tappable days, lunch + dinner covers. */
+  .res-week{margin:0 0 14px}
+  .res-week-h{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--gold-dim);font-weight:600;margin:0 0 7px 2px}
+  .res-week-g{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px}
+  .res-wk-d{display:block;text-align:left;background:#FBF7F0;border:1px solid rgba(107,31,42,.18);border-radius:11px;
+    padding:9px 11px;cursor:pointer;font:inherit;color:var(--vino-dark);min-width:0}
+  .res-wk-d:hover{border-color:var(--vino)}
+  .res-wk-d.today{background:linear-gradient(135deg,#F1E8DB 0%,#E8D9C7 100%)}
+  .res-wk-d.on{border:2px solid var(--vino);padding:8px 10px}
+  .res-wk-dn{display:block;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;font-weight:700;color:var(--vino)}
+  .res-wk-d b{display:block;font-family:'Playfair Display',serif;font-weight:400;font-size:22px;line-height:1.1;margin-top:3px}
+  .res-wk-sp{display:block;margin-top:3px;font-size:11.5px;color:#4F4535;line-height:1.35}
+  .res-wk-sp i{display:block;font-style:normal;white-space:nowrap}
+  .res-wk-sp i.hl{font-weight:700;color:var(--vino-dark)}
+  @media(max-width:760px){
+    .res-week-g{grid-template-columns:repeat(4,minmax(0,1fr))}
+  }
   .res-tot{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;background:linear-gradient(135deg,#F1E8DB 0%,#E8D9C7 100%);
     border:1px solid rgba(107,31,42,.2);border-radius:13px;padding:14px 18px;margin-bottom:14px}
   .res-tot-i{padding:0 2px}

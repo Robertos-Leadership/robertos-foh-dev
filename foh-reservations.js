@@ -252,7 +252,67 @@ async function resLoad(force){
 function resGo(days){ RES.date = resShiftDate(RES.date || resToday(), days); RES.data = null; resLoad(true); }
 function resSetDate(v){ if(!v) return; RES.date = v; RES.data = null; resLoad(true); }
 function resToTonight(){ RES.date = resToday(); RES.data = null; resLoad(true); }
-function resRefresh(){ resLoad(true); }
+function resRefresh(){ resLoad(true); resWeekLoad(true); }
+
+// ── The week ahead (6 Oct 2026): today + the next 6 days, lunch and dinner
+// covers each, so a manager sees the week at a glance and taps into a day.
+// Reads the light ?upcoming= count (the same one the home strip uses, split
+// 12:00-17:00 / 17:01-close by sevenrooms-sync), one call per day, all at once.
+// A day that fails shows a dash with a reason -- never a 0, which reads as "empty".
+var RESW = { from:null, days:{}, loading:false, at:0 };
+function resWeekDates(){
+  var out = [], d = resToday();
+  for(var i=0;i<7;i++){ out.push(d); d = resShiftDate(d, 1); }
+  return out;
+}
+async function resWeekLoad(force){
+  var dates = resWeekDates();
+  if(RESW.loading) return;
+  if(!force && RESW.from === dates[0] && (Date.now() - RESW.at) < 5*60*1000) return;
+  RESW.loading = true;
+  var got = {};
+  await Promise.all(dates.map(async function(d){
+    try{
+      var r = await fetch(KITCHEN_URL + '/functions/v1/sevenrooms-sync?upcoming=' + d, {
+        method:'POST',
+        headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+KITCHEN_KEY, 'x-proxy-secret':KITCHEN_PROXY_SECRET }
+      });
+      if(!r.ok) throw new Error('HTTP '+r.status);
+      var j = await r.json();
+      if(!j || !j.ok || j.booked == null) throw new Error((j && j.error) || 'no data');
+      got[d] = { total: Number(j.booked)||0,
+                 lunch: j.booked_day == null ? null : Number(j.booked_day)||0,
+                 dinner: j.booked_night == null ? null : Number(j.booked_night)||0 };
+    }catch(e){ got[d] = { err: String(e && e.message || e) }; }
+  }));
+  RESW.days = got; RESW.from = dates[0]; RESW.at = Date.now(); RESW.loading = false;
+  if(typeof renderMain==='function' && state.currentTab==='reservations') renderMain();
+}
+function resWeekHtml(){
+  var dates = resWeekDates();
+  if(RESW.from !== dates[0] || (!RESW.loading && (Date.now() - RESW.at) >= 5*60*1000)){
+    setTimeout(function(){ resWeekLoad(false); }, 0);
+  }
+  var today = dates[0];
+  var h = ['<div class="res-week"><div class="res-week-h">Next 7 days &middot; covers booked</div><div class="res-week-g">'];
+  dates.forEach(function(d){
+    var x = RESW.from === today ? RESW.days[d] : null;
+    var dt = new Date(d+'T12:00:00');
+    var dn = dt.toLocaleDateString('en-GB',{weekday:'short'}) + ' ' + dt.getDate();
+    var cls = 'res-wk-d' + (d===RES.date?' on':'') + (d===today?' today':'');
+    var body;
+    if(!x) body = '<b>&hellip;</b><span class="res-wk-sp">&nbsp;</span>';
+    else if(x.err) body = '<b title="Could not read SevenRooms for this day: '+resEsc(x.err)+'">&mdash;</b><span class="res-wk-sp">not read</span>';
+    else if(!x.total) body = '<b>0</b><span class="res-wk-sp">no bookings</span>';
+    else body = '<b>'+resNum(x.total)+'</b><span class="res-wk-sp">'
+      + (x.lunch == null ? '&nbsp;' : '<i'+(RES.shift==='Lunch'?' class="hl"':'')+'>Lunch '+resNum(x.lunch)+'</i><i'+(RES.shift==='Dinner'?' class="hl"':'')+'>Dinner '+resNum(x.dinner)+'</i>')
+      + '</span>';
+    h.push('<button class="'+cls+'" onclick="resSetDate(\''+d+'\')" title="Open '+resEsc(resDateLabel(d))+'">'
+      + '<span class="res-wk-dn">'+(d===today?'Today':resEsc(dn))+'</span>' + body + '</button>');
+  });
+  h.push('</div></div>');
+  return h.join('');
+}
 function resSetShift(s){ RES.shift = s; renderMain(); }
 function resSearch(v){ RES.q = String(v||'').toLowerCase(); renderMain(); }
 
@@ -2147,6 +2207,9 @@ function renderReservations(){
   h.push('<button class="res-btn" onclick="enterApp(\'resreports\')" title="Guests, channels, walk-ins, no-shows and win-back lists across a period">Reports</button>');
   h.push('<button class="res-btn" onclick="resRefresh()"'+(RES.loading?' disabled':'')+'>'+(RES.loading?'Refreshing…':'Refresh')+'</button>');
   h.push('</div></div>');
+
+  // The week strip sits above everything, error or not: it has its own feed.
+  h.push(resWeekHtml());
 
   if(RES.err){
     h.push('<div class="res-problem"><div class="res-problem-t">'+resEsc(RES.err)+'</div>'
