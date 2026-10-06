@@ -104,179 +104,182 @@
     }, function () { main.innerHTML = App.empty(T('Could not reach the Dubai recipe cards. Check the internet.')); });
   }
 
-  // ════════════════ COSTING ════════════════
+  // ════════════════ SALES VS PURCHASE ════════════════
+  // As Dubai's "Daily Food Purchases & Sales" sheet (Francesco, 6 Oct 2026): one line a
+  // day — purchase, sales, cost % — the month total, the staff meal / internal use
+  // allowance spread over the days so far (Dubai: =-22000/31*days), and the closing
+  // stock at each month end. Sales come from the Closing report. All math here; plain.
   var CO = { m: null };
+  function coSet(f, key) { return (f.settings.filter(function (s) { return s.key === key; })[0] || {}).value || {}; }
   App.register('costing', {
-    title: 'Costing', icon: 'costing', group: 'kitchen', desc: 'Daily purchases against sales: food and beverage cost %, as in Dubai.',
+    title: 'Sales vs purchase', icon: 'costing', group: 'kitchen', desc: 'Daily purchases against sales, cost %, staff meal and closing stock, as the Dubai sheet.',
+    tabs: [['food', 'Food'], ['beverage', 'Beverage']],
     stat: function (H) { return [T('Purchases vs sales'), false]; },
-    render: function (main) {
+    render: function (main, sub) {
+      var cat = sub === 'beverage' ? 'beverage' : 'food';
       if (!CO.m) CO.m = M.monthStart(M.today());
-      var ms = CO.m, me = M.addDays(M.addMonths(ms, 1), -1);
-      return App.fetch(['purchases', 'closing', 'inv_counts', 'inv_items', 'settings'], ms, me).then(function (f) {
+      var ms = CO.m, me = M.addDays(M.addMonths(ms, 1), -1), prevM = M.addMonths(ms, -1), mKey = ms.slice(0, 7), pKey = prevM.slice(0, 7);
+      return App.fetch(['purchases', 'closing', 'settings'], ms, me).then(function (f) {
         if (!f) { main.innerHTML = App.empty(T('Could not load.')); return; }
-        var tg = (f.settings.filter(function (s) { return s.key === 'cost_targets'; })[0] || {}).value || {};
-        var pur = f.purchases.filter(function (p) { return !p.voided; });
-        var by = { food: 0, beverage: 0, other: 0 }; pur.forEach(function (p) { by[p.category] += +p.amount; });
-        var sales = { food: 0, beverage: 0 }; f.closing.forEach(function (c) { sales.food += +c.food || 0; sales.beverage += +c.beverage || 0; });
-        var fp = M.pct(by.food, sales.food), bp = M.pct(by.beverage, sales.beverage);
-        // stock-adjusted: opening (last month's count) + purchases − closing (this month's count)
-        var prevM = M.addMonths(ms, -1);
-        function stockVal(month, cat) { return f.inv_counts.filter(function (c) { return c.month === month; }).reduce(function (s, c) {
-          var it = f.inv_items.filter(function (i) { return i.id === c.item_id; })[0]; if (!it || it.category !== cat) return s;
-          return s + (+c.qty || 0) * (+(c.unit_cost != null ? c.unit_cost : it.unit_cost) || 0); }, 0); }
-        var haveOpen = f.inv_counts.some(function (c) { return c.month === prevM; }), haveClose = f.inv_counts.some(function (c) { return c.month === ms; });
-        function adj(cat) { return haveOpen && haveClose ? stockVal(prevM, cat) + by[cat] - stockVal(ms, cat) : null; }
-        function kp(label, val, target, sub) {
-          var bad = val != null && target != null && val > target;
-          return '<div class="kpi ' + (val == null ? '' : bad ? 'red' : (target != null ? 'green' : '')) + '"><span>' + E(label) + '</span><b>' + (val == null ? '—' : val + '%') + '</b><i>' + E(sub) + '</i></div>';
-        }
-        var h = '<section class="stack"><div class="row between"><h2 class="serif">' + E(M.monthName(ms)) + '</h2><div class="row"><button class="btn ghost" id="cp">‹ ' + E(T('Earlier')) + '</button>' +
-          (ms < M.monthStart(M.today()) ? '<button class="btn ghost" id="cn">' + E(T('Later')) + ' ›</button>' : '') + '</div></div>' +
-          '<div class="kpis">' + kp(T('Food cost'), fp, tg.food, T('{a} bought / {b} sold', { a: M.money(by.food), b: M.money(sales.food) }) + (tg.food != null ? ' · ' + T('target {n}%', { n: tg.food }) : '')) +
-          kp(T('Beverage cost'), bp, tg.beverage, T('{a} bought / {b} sold', { a: M.money(by.beverage), b: M.money(sales.beverage) }) + (tg.beverage != null ? ' · ' + T('target {n}%', { n: tg.beverage }) : '')) +
-          kp(T('Food cost with stock'), adj('food') != null ? M.pct(adj('food'), sales.food) : null, tg.food, haveOpen && haveClose ? T('opening + purchases − closing stock') : T('needs last month\'s and this month\'s count')) +
-          kp(T('Beverage cost with stock'), adj('beverage') != null ? M.pct(adj('beverage'), sales.beverage) : null, tg.beverage, haveOpen && haveClose ? T('opening + purchases − closing stock') : T('needs last month\'s and this month\'s count')) + '</div>' +
-          '<details><summary>' + E(T('Targets')) + '</summary><div class="row" style="margin-top:10px"><label class="f">' + E(T('Food cost target %')) + '<input type="text" inputmode="decimal" data-num="1" id="tf" value="' + (tg.food != null ? tg.food : '') + '" step="0.5"></label>' +
-          '<label class="f">' + E(T('Beverage cost target %')) + '<input type="text" inputmode="decimal" data-num="1" id="tb" value="' + (tg.beverage != null ? tg.beverage : '') + '" step="0.5"></label><button class="btn sm" id="ts" style="align-self:flex-end">' + E(T('Save')) + '</button></div></details></section>';
-        // add purchase
+        var tg = coSet(f, 'cost_targets'), meal = coSet(f, 'staff_meal'), stock = coSet(f, 'closing_stock');
+        var pur = f.purchases.filter(function (p) { return !p.voided && p.category === cat; });
+        var dim = +me.slice(8, 10), days = [];
+        for (var k = ms; k <= me; k = M.addDays(k, 1)) days.push(k);
+        var rows = days.map(function (d) {
+          var c = f.closing.filter(function (x) { return x.date === d; })[0];
+          var p = pur.filter(function (x) { return x.date === d; }).reduce(function (s, x) { return s + +x.amount; }, 0);
+          var sl = c ? (+c[cat] || 0) : null;
+          return { d: d, p: Math.round(p * 100) / 100, s: sl, inv: pur.filter(function (x) { return x.date === d; }) };
+        });
+        var P = rows.reduce(function (a, r) { return a + r.p; }, 0), SL = rows.reduce(function (a, r) { return a + (r.s || 0); }, 0);
+        P = Math.round(P * 100) / 100; SL = Math.round(SL * 100) / 100;
+        var lastSold = rows.filter(function (r) { return r.s > 0; }).map(function (r) { return +r.d.slice(8, 10); }).pop() || 0;
+        var mealM = meal[cat] != null ? +meal[cat] : null;
+        var allow = mealM ? Math.round(mealM * lastSold / dim * 100) / 100 : 0;
+        var open = stock[pKey] && stock[pKey][cat] != null ? +stock[pKey][cat] : null, close = stock[mKey] && stock[mKey][cat] != null ? +stock[mKey][cat] : null;
+        var used = open != null && close != null ? Math.round((open + P - close - allow) * 100) / 100 : null;
+        var target = tg[cat] != null ? +tg[cat] : null;
+        function pc(a, b) { var v = M.pct(a, b); return v == null ? '—' : v + '%'; }
+        function cls(a, b) { var v = M.pct(a, b); return v != null && target != null ? (v > target ? 'red' : 'green') : ''; }
+        var catName = T(cat === 'food' ? 'Food' : 'Beverage');
+
+        var h = '<section class="stack"><div class="row between"><h2 class="serif">' + E(M.monthName(ms)) + ' · ' + E(catName) + '</h2><div class="row"><button class="btn ghost" id="cp">‹ ' + E(T('Earlier')) + '</button>' +
+          (ms < M.monthStart(M.today()) ? '<button class="btn ghost" id="cn">' + E(T('Later')) + ' ›</button>' : '') + '<button class="btn ghost" id="cx">' + E(T('Excel')) + '</button></div></div>' +
+          '<div class="kpis"><div class="kpi ' + cls(P, SL) + '"><span>' + E(T('Cost %')) + '</span><b>' + pc(P, SL) + '</b><i>' + E(T('{a} bought / {b} sold', { a: M.money(P), b: M.money(SL) })) + (target != null ? ' · ' + E(T('target {n}%', { n: target })) : '') + '</i></div>' +
+          '<div class="kpi ' + (allow ? cls(P - allow, SL) : '') + '"><span>' + E(T('After staff meal')) + '</span><b>' + (allow ? pc(P - allow, SL) : '—') + '</b><i>' + E(allow ? T('{a} off for staff meal / internal use', { a: M.money(allow) }) : T('Set the monthly staff meal below')) + '</i></div>' +
+          '<div class="kpi ' + (used != null ? cls(used, SL) : '') + '"><span>' + E(T('With stock')) + '</span><b>' + (used != null ? pc(used, SL) : '—') + '</b><i>' + E(used != null ? T('opening + purchases − closing − staff meal') : T('needs last month\'s and this month\'s closing stock')) + '</i></div></div></section>';
+
+        // add a purchase
         var sup = {}; f.purchases.forEach(function (p) { sup[p.supplier] = 1; });
         h += '<section class="card stack"><h3>' + E(T('Add a purchase (invoice or delivery)')) + '</h3><div class="grid4">' +
           '<label class="f">' + E(T('Date')) + '<input type="date" id="pd" value="' + (M.today() <= me && M.today() >= ms ? M.today() : ms) + '"></label>' +
           '<label class="f">' + E(T('Supplier')) + '<input type="text" id="ps" list="sups"><datalist id="sups">' + Object.keys(sup).map(function (s) { return '<option value="' + E(s) + '">'; }).join('') + '</datalist></label>' +
-          '<label class="f">' + E(T('For')) + '<select id="pc"><option value="food">' + E(T('Food')) + '</option><option value="beverage">' + E(T('Beverage')) + '</option><option value="other">' + E(T('Other')) + '</option></select></label>' +
-          '<label class="f">' + E(T('Amount (€, without VAT)')) + '<input type="text" inputmode="decimal" data-num="1" step="0.01" id="pa"></label>' +
-          '<label class="f">' + E(T('Invoice number')) + '<input type="text" id="pi"></label><label class="f">' + E(T('Note')) + '<input type="text" id="pn"></label></div>' +
+          '<label class="f">' + E(T('For')) + '<select id="pc"><option value="food"' + (cat === 'food' ? ' selected' : '') + '>' + E(T('Food')) + '</option><option value="beverage"' + (cat === 'beverage' ? ' selected' : '') + '>' + E(T('Beverage')) + '</option></select></label>' +
+          '<label class="f">' + E(T('Amount (€, without VAT)')) + '<input type="text" inputmode="decimal" data-num="1" id="pa"></label>' +
+          '<label class="f">' + E(T('Invoice number')) + '<input type="text" id="pi"></label></div>' +
           '<button class="btn" id="padd" style="align-self:flex-start">' + E(T('Add')) + '</button></section>';
-        // daily table
-        var days = []; for (var k = ms; k <= me && k <= M.today(); k = M.addDays(k, 1)) days.push(k);
-        h += '<section class="stack"><h2 class="serif">' + E(T('Day by day')) + '</h2><div class="box"><table><thead><tr><th>' + E(T('Date')) + '</th><th class="num">' + E(T('Food sold')) + '</th><th class="num">' + E(T('Food bought')) + '</th><th class="num">%</th><th class="num">' + E(T('Beverage sold')) + '</th><th class="num">' + E(T('Beverage bought')) + '</th><th class="num">%</th></tr></thead><tbody>';
-        var cf = 0, cfp = 0, cb = 0, cbp = 0;
-        days.forEach(function (k) {
-          var c = f.closing.filter(function (x) { return x.date === k; })[0], pf = pur.filter(function (p) { return p.date === k && p.category === 'food'; }).reduce(function (s, p) { return s + +p.amount; }, 0),
-            pb = pur.filter(function (p) { return p.date === k && p.category === 'beverage'; }).reduce(function (s, p) { return s + +p.amount; }, 0);
-          var sf = c ? +c.food || 0 : null, sbv = c ? +c.beverage || 0 : null;
-          cf += sf || 0; cfp += pf; cb += sbv || 0; cbp += pb;
-          if (!c && !pf && !pb) return;
-          h += '<tr><td class="nw">' + E(M.shortDate(k)) + '</td><td class="num">' + (c ? M.money(sf) : '<span class="muted">' + E(T('no report')) + '</span>') + '</td><td class="num">' + (pf ? M.money(pf) : '—') + '</td><td class="num muted">' + E(T('to date')) + ' ' + (M.pct(cfp, cf) != null ? M.pct(cfp, cf) + '%' : '—') + '</td>' +
-            '<td class="num">' + (c ? M.money(sbv) : '—') + '</td><td class="num">' + (pb ? M.money(pb) : '—') + '</td><td class="num muted">' + (M.pct(cbp, cb) != null ? M.pct(cbp, cb) + '%' : '—') + '</td></tr>';
+
+        // the sheet: Date · Purchase · Sales · Cost %
+        h += '<section class="stack"><div class="box"><table class="sheet"><thead><tr><th>' + E(T('Date')) + '</th><th class="num">' + E(T('Purchase')) + '</th><th class="num">' + E(T('Sales')) + '</th><th class="num">' + E(T('Cost %')) + '</th></tr></thead><tbody>';
+        rows.forEach(function (r) {
+          var fut = r.d > M.today();
+          h += '<tr class="' + (fut ? 'fut' : '') + (r.inv.length ? ' has' : '') + '"' + (r.inv.length ? ' data-day="' + r.d + '"' : '') + '><td class="nw">' + E(M.shortDate(r.d)) + (r.inv.length ? ' <span class="tiny muted">▾ ' + r.inv.length + '</span>' : '') + '</td>' +
+            '<td class="num">' + (r.p ? M.money(r.p) : '') + '</td><td class="num">' + (r.s != null ? M.money(r.s) : (fut ? '' : '<span class="tiny muted">' + E(T('no report')) + '</span>')) + '</td>' +
+            '<td class="num ' + (r.p && r.s ? cls(r.p, r.s) : '') + '">' + (r.p && r.s ? pc(r.p, r.s) : '') + '</td></tr>';
+          if (r.inv.length) h += '<tr class="inv" data-inv="' + r.d + '" hidden><td colspan="4"><div class="stack" style="gap:6px">' + r.inv.map(function (p) {
+            return '<div class="row between"><span>' + E(p.supplier) + (p.invoice_no ? ' <span class="muted">· ' + E(p.invoice_no) + '</span>' : '') + '</span><span class="row"><b>' + M.money(+p.amount) + '</b><button class="btn ghost sm" data-pv="' + p.id + '">' + E(T('Remove…')) + '</button></span></div>';
+          }).join('') + '</div></td></tr>';
         });
-        h += '</tbody></table></div><p class="small muted" style="margin:0">' + E(T('Sales come from the Closing report. A single day\'s % jumps with deliveries; the running % to date is the one to watch.')) + '</p></section>';
-        // purchases list
-        h += '<section class="stack"><h2 class="serif">' + E(T('Purchases this month')) + '</h2>' + (f.purchases.length ? '<div class="box"><table><thead><tr><th>' + E(T('Date')) + '</th><th>' + E(T('Supplier')) + '</th><th>' + E(T('For')) + '</th><th class="num">' + E(T('Amount')) + '</th><th>' + E(T('Invoice')) + '</th><th></th></tr></thead><tbody>' +
-          f.purchases.map(function (p) { return '<tr style="' + (p.voided ? 'opacity:.5;text-decoration:line-through' : '') + '"><td class="nw">' + E(M.shortDate(p.date)) + '</td><td>' + E(p.supplier) + (p.note ? '<div class="tiny muted">' + E(p.note) + '</div>' : '') + '</td><td>' + E(T(p.category === 'food' ? 'Food' : p.category === 'beverage' ? 'Beverage' : 'Other')) + '</td><td class="num">' + M.money(+p.amount) + '</td><td>' + E(p.invoice_no || '') + '</td><td>' +
-            (p.voided ? '<span class="tiny">' + E(p.void_reason || '') + '</span>' : '<button class="btn ghost sm" data-pv="' + p.id + '">' + E(T('Remove…')) + '</button>') + '</td></tr>'; }).join('') + '</tbody></table></div>' : App.empty(T('No purchases this month yet.')));
-        var sums = {}; pur.forEach(function (p) { sums[p.supplier] = (sums[p.supplier] || 0) + +p.amount; });
-        if (pur.length) h += '<div class="card"><h3>' + E(T('By supplier')) + '</h3><div class="stack" style="gap:4px;margin-top:8px">' + Object.keys(sums).sort(function (a, b) { return sums[b] - sums[a]; }).map(function (s) { return '<div class="row between"><span>' + E(s) + '</span><b>' + M.money(sums[s]) + '</b></div>'; }).join('') + '</div></div>';
-        main.innerHTML = h + '</section>';
+        h += '</tbody><tfoot><tr><th>' + E(T('Total')) + '</th><th class="num">' + M.money(P) + '</th><th class="num">' + M.money(SL) + '</th><th class="num ' + cls(P, SL) + '">' + pc(P, SL) + '</th></tr>' +
+          (allow ? '<tr><td>' + E(T('Staff meal / internal use')) + '<div class="tiny muted">' + E(T('{a} a month × {n} of {d} days', { a: M.money(mealM), n: lastSold, d: dim })) + '</div></td><td class="num">−' + M.money(allow) + '</td><td class="num">' + M.money(SL) + '</td><td class="num ' + cls(P - allow, SL) + '">' + pc(P - allow, SL) + '</td></tr>' : '') +
+          '</tfoot></table></div><p class="small muted" style="margin:0">' + E(T('Sales come from the Closing report. Tap a day to see its invoices.')) + '</p></section>';
+
+        // closing stock, as the bottom of the Dubai sheet
+        var months = []; for (var i = 0; i < 6; i++) months.push(M.addMonths(ms, -i));
+        h += '<section class="stack"><h2 class="serif">' + E(T('Closing stock')) + ' · ' + E(catName) + '</h2><div class="box"><table><thead><tr><th>' + E(T('Month')) + '</th><th class="num">' + E(T('Closing stock')) + '</th></tr></thead><tbody>' +
+          months.map(function (m) { var v = stock[m.slice(0, 7)] && stock[m.slice(0, 7)][cat];
+            return '<tr><td>' + E(M.monthName(m)) + '</td><td class="num"><input type="text" inputmode="decimal" data-num="1" data-stk="' + m.slice(0, 7) + '" value="' + (v != null ? v : '') + '" style="width:130px;text-align:right" aria-label="' + E(T('Closing stock')) + ' ' + E(M.monthName(m)) + '"></td></tr>'; }).join('') +
+          '</tbody></table></div>' +
+          (used != null ? '<p class="small muted" style="margin:0">' + E(T('With stock: {o} opening + {p} purchases − {c} closing − {m} staff meal = {u} used, on {s} sales.', { o: M.money(open), p: M.money(P), c: M.money(close), m: M.money(allow), u: M.money(used), s: M.money(SL) })) + '</p>' : '') +
+          '</section>';
+
+        // settings
+        h += '<details class="card"><summary>' + E(T('Staff meal and targets')) + '</summary><div class="grid4" style="margin-top:10px">' +
+          '<label class="f">' + E(T('Staff meal / internal use, € a month')) + '<input type="text" inputmode="decimal" data-num="1" id="sm" value="' + (mealM != null ? mealM : '') + '"></label>' +
+          '<label class="f">' + E(T('Cost target %')) + '<input type="text" inputmode="decimal" data-num="1" id="tt" value="' + (target != null ? target : '') + '"></label></div>' +
+          '<p class="small muted">' + E(T('As in Dubai: the monthly amount is spread over the days up to the last closing report, and taken off the purchases.')) + '</p>' +
+          '<button class="btn sm" id="ss" style="align-self:flex-start">' + E(T('Save')) + '</button></details>';
+        main.innerHTML = h;
+
         main.querySelector('#cp').onclick = function () { CO.m = M.addMonths(ms, -1); App.reload(); };
         var cn = main.querySelector('#cn'); if (cn) cn.onclick = function () { CO.m = M.addMonths(ms, 1); App.reload(); };
-        main.querySelector('#ts').onclick = function () { App.save('mare_settings', { key: 'cost_targets', value: { food: M.num(main.querySelector('#tf').value), beverage: M.num(main.querySelector('#tb').value) } }).then(function (x) { if (x) { App.say(T('Saved.')); App.reload(); } }); };
+        App.on(main, '[data-day]', function (tr) { var x = main.querySelector('[data-inv="' + tr.getAttribute('data-day') + '"]'); if (x) x.hidden = !x.hidden; });
         main.querySelector('#padd').onclick = function () {
           var a = M.num(main.querySelector('#pa').value), s = main.querySelector('#ps').value.trim(), d = main.querySelector('#pd').value;
           if (!s) { App.say(T('Type the supplier.')); return; } if (!(a > 0)) { App.say(T('Type the amount.')); return; } if (!d) { App.say(T('Pick the date.')); return; }
           this.disabled = true; var btn = this;
-          App.save('mare_purchases', { date: d, supplier: s, category: main.querySelector('#pc').value, amount: Math.round(a * 100) / 100, invoice_no: main.querySelector('#pi').value.trim() || null, note: main.querySelector('#pn').value.trim() || null })
+          App.save('mare_purchases', { date: d, supplier: s, category: main.querySelector('#pc').value, amount: Math.round(a * 100) / 100, invoice_no: main.querySelector('#pi').value.trim() || null })
             .then(function (x) { if (x) { App.say(T('Added.')); App.reload(); } else btn.disabled = false; });
         };
-        App.on(main, '[data-pv]', function (b) {
-          var td = b.parentNode; td.innerHTML = '<div class="row"><input type="text" placeholder="' + E(T('Why remove it?')) + '" aria-label="' + E(T('Reason')) + '"><button class="btn warn sm" data-pvok="' + b.getAttribute('data-pv') + '">' + E(T('Remove')) + '</button></div>';
+        App.on(main, '[data-pv]', function (b, e) {
+          if (e) e.stopPropagation();
+          var box = b.parentNode; box.innerHTML = '<input type="text" placeholder="' + E(T('Why remove it?')) + '" aria-label="' + E(T('Reason')) + '"><button class="btn warn sm" data-pvok="' + b.getAttribute('data-pv') + '">' + E(T('Remove')) + '</button>';
         });
         App.on(main, '[data-pvok]', function (b) {
           var why = b.parentNode.querySelector('input').value.trim(); if (why.length < 2) { App.say(T('Write why.')); return; }
           App.save('mare_purchases', { id: b.getAttribute('data-pvok'), voided: true, void_reason: why }).then(function (x) { if (x) App.reload(); });
         });
+        App.on(main, '[data-stk]', function (inp) {
+          var v = inp.value.trim() === '' ? null : M.num(inp.value);
+          var all = JSON.parse(JSON.stringify(stock)), mk = inp.getAttribute('data-stk');
+          all[mk] = all[mk] || {}; all[mk][cat] = v == null ? null : Math.round(v * 100) / 100;
+          App.save('mare_settings', { key: 'closing_stock', value: all }).then(function (x) { if (x) { App.say(T('Saved.')); App.reload(); } });
+        }, 'change');
+        main.querySelector('#ss').onclick = function () {
+          var m2 = JSON.parse(JSON.stringify(meal)), t2 = JSON.parse(JSON.stringify(tg)), sv = main.querySelector('#sm').value.trim(), tv = main.querySelector('#tt').value.trim();
+          m2[cat] = sv === '' ? null : M.num(sv); t2[cat] = tv === '' ? null : M.num(tv);
+          Promise.all([App.save('mare_settings', { key: 'staff_meal', value: m2 }), App.save('mare_settings', { key: 'cost_targets', value: t2 })])
+            .then(function (x) { if (x[0] && x[1]) { App.say(T('Saved.')); App.reload(); } });
+        };
+        main.querySelector('#cx').onclick = function () {
+          var btn = this; btn.disabled = true;
+          App.xlsx(function () {
+            var aoa = [['ROBERTO\'S MARE'], [T('Daily {c} purchases & sales', { c: catName.toLowerCase() }) + ' · ' + M.monthName(ms)], [], [T('Date'), T('Purchase'), T('Sales'), T('Cost %')]];
+            rows.forEach(function (r) { aoa.push([r.d, r.p || '', r.s != null ? r.s : '', r.p && r.s ? Math.round(r.p / r.s * 1000) / 1000 : '']); });
+            aoa.push([], [T('Total'), P, SL, SL ? Math.round(P / SL * 1000) / 1000 : '']);
+            if (allow) aoa.push([T('Staff meal / internal use'), -allow, SL, SL ? Math.round((P - allow) / SL * 1000) / 1000 : '']);
+            aoa.push([], [T('Month'), T('Closing stock')]);
+            months.forEach(function (m) { var v = stock[m.slice(0, 7)] && stock[m.slice(0, 7)][cat]; aoa.push([M.monthName(m), v != null ? v : '']); });
+            var wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), catName);
+            XLSX.writeFile(wb, 'Robertos-Mare-sales-vs-purchase-' + cat + '-' + mKey + '.xlsx'); btn.disabled = false;
+          }, btn);
+        };
       });
     }
   });
 
-  // ════════════════ STOCK & BREAKAGE ════════════════
+  // ════════════════ BREAKAGE ════════════════
+  // Breakage only (Francesco, 6 Oct 2026: Montenegro does not need waste). The monthly
+  // stock count moved into Sales vs purchase as one closing-stock figure, as in Dubai.
   var ST = { m: null };
   App.register('stock', {
-    title: 'Stock & breakage', icon: 'breakage', group: 'kitchen', desc: 'Breakage and waste with the reason, and the monthly stock count.',
-    tabs: [['breakage', 'Breakage & waste'], ['count', 'Monthly count']],
-    stat: function (H) { var n = H.f.breakage.filter(function (b) { return !b.reviewed; }).length; return n ? [T('{n} to review', { n: n }), true] : [T('Nothing to review'), false]; },
-    render: function (main, sub) { if (!ST.m) ST.m = M.monthStart(M.today()); return sub === 'count' ? stockCount(main) : breakage(main); }
+    title: 'Breakage', icon: 'breakage', group: 'kitchen', desc: 'What was broken, why, and what it cost.',
+    stat: function (H) { var n = H.f.breakage.filter(function (b) { return !b.reviewed && b.kind !== 'wastage'; }).length; return n ? [T('{n} to review', { n: n }), true] : [T('Nothing to review'), false]; },
+    render: function (main) { if (!ST.m) ST.m = M.monthStart(M.today()); return breakage(main); }
   });
   function breakage(main) {
     var ms = ST.m, me = M.addDays(M.addMonths(ms, 1), -1);
     return App.fetch(['breakage'], ms, me).then(function (f) {
       if (!f) { main.innerHTML = App.empty(T('Could not load.')); return; }
-      var cost = f.breakage.reduce(function (s, b) { return s + (+b.cost || 0); }, 0), nb = f.breakage.filter(function (b) { return b.kind === 'breakage'; }).length;
+      f.breakage = f.breakage.filter(function (b) { return b.kind !== 'wastage'; });   // older waste entries stay in the database, not on this page
+      var cost = f.breakage.reduce(function (s, b) { return s + (+b.cost || 0); }, 0);
       var h = '<section class="stack"><div class="row between"><h2 class="serif">' + E(M.monthName(ms)) + '</h2><div class="row"><button class="btn ghost" id="bp">‹ ' + E(T('Earlier')) + '</button>' +
         (ms < M.monthStart(M.today()) ? '<button class="btn ghost" id="bn">' + E(T('Later')) + ' ›</button>' : '') + '</div></div>' +
-        '<div class="kpis"><div class="kpi"><span>' + E(T('Breakages')) + '</span><b>' + nb + '</b></div><div class="kpi"><span>' + E(T('Waste')) + '</span><b>' + (f.breakage.length - nb) + '</b></div>' +
+        '<div class="kpis"><div class="kpi"><span>' + E(T('Breakages')) + '</span><b>' + f.breakage.length + '</b></div>' +
         '<div class="kpi"><span>' + E(T('Cost written in')) + '</span><b>' + M.money(cost) + '</b></div></div>' +
         '<div class="card stack"><h3>' + E(T('Add one')) + '</h3><div class="grid4"><label class="f">' + E(T('What')) + '<input type="text" id="bi"></label>' +
         '<label class="f">' + E(T('How many')) + '<input type="text" inputmode="decimal" data-num="1" id="bq" value="1" min="0" step="0.5"></label>' +
-        '<label class="f">' + E(T('Kind')) + '<select id="bk"><option value="breakage">' + E(T('Breakage')) + '</option><option value="wastage">' + E(T('Waste')) + '</option></select></label>' +
         '<label class="f">' + E(T('Cost (€)')) + '<input type="text" inputmode="decimal" data-num="1" id="bc" step="0.01" min="0"></label></div>' +
         '<label class="f">' + E(T('Reason')) + '<input type="text" id="br"></label><button class="btn" id="badd" style="align-self:flex-start">' + E(T('Add')) + '</button></div>';
       h += f.breakage.length ? '<div class="box"><table><thead><tr><th>' + E(T('Date')) + '</th><th>' + E(T('What')) + '</th><th class="num">' + E(T('How many')) + '</th><th>' + E(T('Reason')) + '</th><th>' + E(T('By')) + '</th><th>' + E(T('Cost (€)')) + '</th><th>' + E(T('Checked')) + '</th></tr></thead><tbody>' +
         f.breakage.map(function (b) {
-          return '<tr><td class="nw">' + E(M.shortDate(b.date)) + '</td><td><b>' + E(b.item) + '</b> <span class="tag ' + (b.kind === 'breakage' ? 'blue' : 'amber') + '">' + E(T(b.kind === 'breakage' ? 'Breakage' : 'Waste')) + '</span>' + (b.has_photo ? ' <a href="#" data-bph="' + b.id + '">' + E(T('photo')) + '</a>' : '') + '</td>' +
+          return '<tr><td class="nw">' + E(M.shortDate(b.date)) + '</td><td><b>' + E(b.item) + '</b>' + (b.has_photo ? ' <a href="#" data-bph="' + b.id + '">' + E(T('photo')) + '</a>' : '') + '</td>' +
             '<td class="num">' + (+b.qty) + '</td><td class="small">' + E(b.reason || '—') + '</td><td class="nw">' + E(b.reported_by || '—') + '</td>' +
             '<td><input type="text" inputmode="decimal" data-num="1" step="0.01" min="0" value="' + (b.cost != null ? b.cost : '') + '" data-bcost="' + b.id + '" aria-label="' + E(T('Cost (€)')) + '" style="width:100px"></td>' +
             '<td><input type="checkbox" data-brev="' + b.id + '"' + (b.reviewed ? ' checked' : '') + ' style="width:22px;height:22px" aria-label="' + E(T('Checked')) + '"></td></tr>';
         }).join('') + '</tbody></table></div>' : App.empty(T('Nothing reported this month.'));
-      main.innerHTML = h + '<p class="small muted" style="margin:0">' + E(T('Staff report breakage and waste on the tablet with a photo. Write in the cost and tick "Checked" once you have seen it.')) + '</p></section>';
+      main.innerHTML = h + '<p class="small muted" style="margin:0">' + E(T('Staff report a breakage on the tablet with a photo. Write in the cost and tick "Checked" once you have seen it.')) + '</p></section>';
       main.querySelector('#bp').onclick = function () { ST.m = M.addMonths(ms, -1); App.reload(); };
       var bn = main.querySelector('#bn'); if (bn) bn.onclick = function () { ST.m = M.addMonths(ms, 1); App.reload(); };
       main.querySelector('#badd').onclick = function () {
         var it = main.querySelector('#bi').value.trim(); if (!it) { App.say(T('Write what.')); return; }
         this.disabled = true; var btn = this;
-        App.save('mare_breakage', { date: M.today(), item: it, qty: M.num(main.querySelector('#bq').value) || 1, kind: main.querySelector('#bk').value, cost: M.num(main.querySelector('#bc').value),
+        App.save('mare_breakage', { date: M.today(), item: it, qty: M.num(main.querySelector('#bq').value) || 1, kind: 'breakage', cost: M.num(main.querySelector('#bc').value),
           reason: main.querySelector('#br').value.trim() || null, reported_by: App.S.me, reviewed: true }).then(function (x) { if (x) App.reload(); else btn.disabled = false; });
       };
       App.on(main, '[data-bcost]', function (i) { App.save('mare_breakage', { id: i.getAttribute('data-bcost'), cost: M.num(i.value) }).then(function (x) { if (x) App.say(T('Saved.')); }); }, 'change');
       App.on(main, '[data-brev]', function (i) { App.save('mare_breakage', { id: i.getAttribute('data-brev'), reviewed: i.checked }).then(function (x) { if (x) App.say(T('Saved.')); }); }, 'change');
       App.on(main, '[data-bph]', function (a, e) { e.preventDefault(); App.photo('mare_breakage', a.getAttribute('data-bph')).then(function (u) { App.overlay((u ? '<img src="' + u + '" alt="">' : E(T('No photo.'))) + '<button class="btn ghost" data-close>' + E(T('Close')) + '</button>'); }); });
-    });
-  }
-  function stockCount(main) {
-    var ms = ST.m;
-    return App.fetch(['inv_items', 'inv_counts'], ms, ms).then(function (f) {
-      if (!f) { main.innerHTML = App.empty(T('Could not load.')); return; }
-      var cnt = {}; f.inv_counts.filter(function (c) { return c.month === ms; }).forEach(function (c) { cnt[c.item_id] = c; });
-      var items = f.inv_items.filter(function (i) { return i.active; }), tot = { food: 0, beverage: 0, other: 0 };
-      items.forEach(function (i) { var c = cnt[i.id]; if (c && c.qty != null) tot[i.category] += (+c.qty) * (+(c.unit_cost != null ? c.unit_cost : i.unit_cost) || 0); });
-      var h = '<section class="stack"><div class="row between"><h2 class="serif">' + E(T('Stock count · {m}', { m: M.monthName(ms) })) + '</h2><div class="row"><button class="btn ghost" id="sp">‹ ' + E(T('Earlier')) + '</button>' +
-        (ms < M.monthStart(M.today()) ? '<button class="btn ghost" id="sn">' + E(T('Later')) + ' ›</button>' : '') + '<button class="btn" id="sx">' + E(T('Excel')) + '</button></div></div>' +
-        '<div class="kpis"><div class="kpi"><span>' + E(T('Food stock')) + '</span><b>' + M.money(tot.food) + '</b></div><div class="kpi"><span>' + E(T('Beverage stock')) + '</span><b>' + M.money(tot.beverage) + '</b></div><div class="kpi"><span>' + E(T('Other')) + '</span><b>' + M.money(tot.other) + '</b></div></div>' +
-        '<p class="small muted" style="margin:0">' + E(T('Count at the end of the month. The value feeds "cost with stock" in Costing.')) + '</p>';
-      ['food', 'beverage', 'other'].forEach(function (cat) {
-        var list = items.filter(function (i) { return i.category === cat; }); if (!list.length) return;
-        h += '<h3>' + E(T(cat === 'food' ? 'Food' : cat === 'beverage' ? 'Beverage' : 'Other')) + '</h3><div class="box"><table><thead><tr><th>' + E(T('Item')) + '</th><th>' + E(T('Unit')) + '</th><th class="num">' + E(T('Unit cost (€)')) + '</th><th class="num">' + E(T('Counted')) + '</th><th class="num">' + E(T('Value')) + '</th><th></th></tr></thead><tbody>' +
-          list.map(function (i) { var c = cnt[i.id], uc = c && c.unit_cost != null ? +c.unit_cost : +i.unit_cost;
-            return '<tr><td><b>' + E(i.name) + '</b></td><td>' + E(i.unit || '') + '</td><td class="num"><input type="text" inputmode="decimal" data-num="1" step="0.01" min="0" value="' + (i.unit_cost != null ? i.unit_cost : '') + '" data-uc="' + i.id + '" style="width:100px" aria-label="' + E(T('Unit cost (€)')) + '"></td>' +
-              '<td class="num"><input type="text" inputmode="decimal" data-num="1" step="0.01" min="0" value="' + (c && c.qty != null ? c.qty : '') + '" data-q="' + i.id + '" style="width:100px" aria-label="' + E(T('Counted')) + '"></td>' +
-              '<td class="num">' + (c && c.qty != null && uc ? M.money(c.qty * uc) : '—') + '</td><td><button class="btn ghost sm" data-ioff="' + i.id + '">' + E(T('Remove')) + '</button></td></tr>'; }).join('') + '</tbody></table></div>';
-      });
-      if (!items.length) h += App.empty(T('No items yet. Add what you count every month below.'));
-      h += '<div class="card stack"><h3>' + E(T('Add an item to count')) + '</h3><div class="grid4"><label class="f">' + E(T('Item')) + '<input type="text" id="ni"></label>' +
-        '<label class="f">' + E(T('For')) + '<select id="nc"><option value="food">' + E(T('Food')) + '</option><option value="beverage">' + E(T('Beverage')) + '</option><option value="other">' + E(T('Other')) + '</option></select></label>' +
-        '<label class="f">' + E(T('Unit')) + '<input type="text" id="nu" placeholder="kg, bottle, piece"></label><label class="f">' + E(T('Unit cost (€)')) + '<input type="text" inputmode="decimal" data-num="1" id="nuc" step="0.01" min="0"></label></div>' +
-        '<button class="btn" id="nadd" style="align-self:flex-start">' + E(T('Add')) + '</button></div>';
-      main.innerHTML = h + '</section>';
-      main.querySelector('#sp').onclick = function () { ST.m = M.addMonths(ms, -1); App.reload(); };
-      var sn = main.querySelector('#sn'); if (sn) sn.onclick = function () { ST.m = M.addMonths(ms, 1); App.reload(); };
-      App.on(main, '[data-q]', function (i) {
-        var it = items.filter(function (x) { return x.id === i.getAttribute('data-q'); })[0];
-        App.save('mare_inv_counts', { month: ms, item_id: it.id, qty: M.num(i.value), unit_cost: it.unit_cost }).then(function (x) { if (x) { App.say(T('Saved.')); App.reload(); } });
-      }, 'change');
-      App.on(main, '[data-uc]', function (i) { App.save('mare_inv_items', { id: i.getAttribute('data-uc'), unit_cost: M.num(i.value) }).then(function (x) { if (x) { App.say(T('Saved.')); App.reload(); } }); }, 'change');
-      App.on(main, '[data-ioff]', function (b) { App.save('mare_inv_items', { id: b.getAttribute('data-ioff'), active: false }).then(function (x) { if (x) App.reload(); }); });
-      main.querySelector('#nadd').onclick = function () {
-        var n = main.querySelector('#ni').value.trim(); if (!n) { App.say(T('Type the item.')); return; }
-        App.save('mare_inv_items', { name: n, category: main.querySelector('#nc').value, unit: main.querySelector('#nu').value.trim() || null, unit_cost: M.num(main.querySelector('#nuc').value), sort: items.length + 1 }).then(function (x) { if (x) App.reload(); });
-      };
-      main.querySelector('#sx').onclick = function () {
-        var btn = this; btn.disabled = true;
-        App.xlsx(function () {
-          var aoa = [[T('Item'), T('For'), T('Unit'), T('Unit cost (€)'), T('Counted'), T('Value')]];
-          items.forEach(function (i) { var c = cnt[i.id], uc = c && c.unit_cost != null ? +c.unit_cost : +i.unit_cost; aoa.push([i.name, i.category, i.unit || '', uc || '', c && c.qty != null ? +c.qty : '', c && c.qty != null && uc ? Math.round(c.qty * uc * 100) / 100 : '']); });
-          var wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), T('Stock')); XLSX.writeFile(wb, 'Robertos-Mare-stock-' + ms.slice(0, 7) + '.xlsx'); btn.disabled = false;
-        }, btn);
-      };
     });
   }
 

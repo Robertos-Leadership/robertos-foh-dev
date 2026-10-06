@@ -123,7 +123,7 @@
   };
   var MODS = [
     ['brief', 'brief', 'Today\'s briefing'], ['check', 'check', 'Checklists'], ['rota', 'rota', 'Rota'], ['recipes', 'recipe', 'Recipes'],
-    ['breakage', 'breakage', 'Breakage & waste'], ['leave', 'leave', 'Ask for leave'], ['speak', 'speak', 'Speak up']
+    ['breakage', 'breakage', 'Breakage'], ['leave', 'leave', 'Ask for leave'], ['speak', 'speak', 'Speak up']
   ];
   function teamMods() {
     var tm = S.feed && S.feed.team_modules; if (!tm) return MODS;
@@ -517,19 +517,17 @@
     }, function () { main.innerHTML = frame('Recipes', '<div class="card big">' + E(T('Could not reach the Dubai recipe cards. Check the internet.')) + '</div>', TABS); bindFrame(); });
   }
 
-  // ── breakage & waste ──
+  // ── breakage (Montenegro: no waste, Francesco 6 Oct 2026) ──
   function modBreakage() {
-    var h = '<div class="card stack"><div class="grid2"><label class="f">' + E(T('What')) + '<input type="text" id="bi" placeholder="' + E(T('e.g. wine glass, 2 kg salmon')) + '"></label>' +
+    var h = '<div class="card stack"><div class="grid2"><label class="f">' + E(T('What')) + '<input type="text" id="bi" placeholder="' + E(T('e.g. wine glass, plate')) + '"></label>' +
       '<label class="f">' + E(T('How many')) + '<input type="text" inputmode="decimal" data-num="1" id="bq" value="1" min="0" step="0.5"></label></div>' +
-      '<div class="tabs" id="bk2"><button data-k="breakage" class="on">' + E(T('Breakage')) + '</button><button data-k="wastage">' + E(T('Waste')) + '</button></div>' +
       '<label class="f">' + E(T('Why it happened')) + '<input type="text" id="br"></label>' +
       '<div class="row"><button class="btn ghost" id="bph">' + E(T('Add a photo')) + '</button><span id="bphs" class="muted"></span></div>' +
       '<input type="file" accept="image/*" capture="environment" id="bfile" style="display:none">' +
       '<div class="msg err" id="bm"></div><button class="btn" id="bs" style="align-self:flex-start">' + E(T('Send')) + '</button></div>';
-    main.innerHTML = frame('Breakage & waste', h);
+    main.innerHTML = frame('Breakage', h);
     bindFrame();
     var kind = 'breakage', photo = null;
-    on('#bk2 [data-k]', function (b) { kind = b.getAttribute('data-k'); main.querySelectorAll('#bk2 button').forEach(function (x) { x.classList.toggle('on', x === b); }); });
     document.getElementById('bph').onclick = function () { document.getElementById('bfile').click(); };
     document.getElementById('bfile').onchange = function () { var fl = this.files[0]; if (!fl) return; M.photoFromFile(fl, 1024).then(function (u) { photo = u; document.getElementById('bphs').textContent = T('Photo added.'); }); };
     document.getElementById('bs').onclick = function () {

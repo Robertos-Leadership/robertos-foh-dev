@@ -245,8 +245,8 @@
       f.leave.filter(function (l) { return l.status === 'pending'; }).forEach(function (l) { needs.push({ mod: 'leave', t: T('{n} asks for leave', { n: App.staffName(l.staff_id) }), s: M.shortDate(l.date_from) + ' – ' + M.shortDate(l.date_to), go: T('Decide') }); });
       var sp = f.speakup.filter(function (x) { return x.status === 'new'; }).length;
       if (sp) needs.push({ mod: 'speakup', t: T('{n} new messages in Speak up', { n: sp }), s: T('Anonymous, from the team'), go: T('Read') });
-      var br = f.breakage.filter(function (b) { return !b.reviewed; }).length;
-      if (br) needs.push({ mod: 'stock', t: T('{n} breakage or waste to check', { n: br }), s: T('Write in the cost and tick Checked'), go: T('Check') });
+      var br = f.breakage.filter(function (b) { return !b.reviewed && b.kind !== 'wastage'; }).length;
+      if (br) needs.push({ mod: 'stock', t: T('{n} breakages to check', { n: br }), s: T('Write in the cost and tick Checked'), go: T('Check') });
       needs = needs.filter(function (n) { return App.allowed(n.mod); });
       // sidebar counters
       var miss = needs.filter(function (n) { return n.mod === 'attendance'; }).length;
