@@ -134,6 +134,8 @@
   }
   // num(): the value, null when empty, and it THROWS on a doubtful number so the
   // save that called it stops (the field has already been marked and explained).
+  // Whole euros, for the big figures (the exact cents are in the reports).
+  function money0(n) { if (n == null || isNaN(n)) return '—'; return new Intl.NumberFormat(LANG === 'me' ? 'de-DE' : 'en-GB', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(n); }
   function num(v) { var r = parseNum(v); if (r.err) throw new Error(r.err); return r.v; }
   function numSafe(v) { var r = parseNum(v); return r.err ? null : r.v; }
   function toast(t) {
@@ -199,7 +201,7 @@
     parts: parts, pad: pad, hhmm: hhmm, dateKey: dateKey, today: today, dow: dow, addDays: addDays, daysBetween: daysBetween,
     weekStart: weekStart, monthStart: monthStart, addMonths: addMonths, day: day, niceDate: niceDate, shortDate: shortDate, monthName: monthName,
     toInstant: toInstant, mins: mins, dur: dur, durShort: durShort, timeToMin: timeToMin, shifts: shifts, lateness: lateness, GRACE_MIN: GRACE_MIN,
-    rpc: rpc, kitchen: kitchen, esc: esc, safeJpeg: safeJpeg, safeImg: safeImg, money: money, num: num, numSafe: numSafe, parseNum: parseNum, toast: toast, pct: pct,
+    rpc: rpc, kitchen: kitchen, esc: esc, safeJpeg: safeJpeg, safeImg: safeImg, money: money, money0: money0, num: num, numSafe: numSafe, parseNum: parseNum, toast: toast, pct: pct,
     photoFromFile: photoFromFile, icon: icon,
     // kept for old callers
     DAYS: DAYS.en

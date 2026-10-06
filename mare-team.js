@@ -366,7 +366,8 @@
   }
   function openMod(k, sub) {
     S.mod = k; S.screen = 'mod'; if (sub) S.sub = sub; else if (k !== S.lastMod) S.sub = null; S.lastMod = k;
-    ({ brief: modBrief, check: modCheck, rota: modRota, recipes: modRecipes, breakage: modBreakage, leave: modLeave, speak: modSpeak, hours: modHours })[k]();
+    ({ brief: modBrief, check: modCheck, rota: modRota, recipes: modRecipes, breakage: modBreakage, leave: modLeave, speak: modSpeak, hours: modHours, more: modMore })[k]();
+    if (meToken) bnav(k === 'rota' || k === 'recipes' ? k : 'more');
   }
   function feed() { return S.feed || { briefing: null, reads: [], staff: [], shifts: [], check_items: [], ticks: [], recipes: [], actions: [], today: M.today() }; }
   function afterAction(line, sub) {
@@ -607,18 +608,51 @@
   }
   function phoneToast(t) { var d = document.createElement('div'); d.textContent = t; d.style.cssText = 'position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:#1E2A2C;color:#fff;border-radius:999px;padding:12px 20px;font-weight:700;z-index:60;max-width:90vw;text-align:center'; document.body.appendChild(d); setTimeout(function () { d.remove(); }, 3500); }
   function weekMin(sh, ws) { var t = 0; sh.forEach(function (s) { if (s.min != null && s.date >= ws && s.date < M.addDays(ws, 7)) t += s.min; }); return t; }
+  // ── the staff phone (Concierge): next shift, today's briefing, the figures, and a bottom bar ──
+  function bnav(active) {
+    var b = document.getElementById('bnav');
+    if (!b) { b = document.createElement('nav'); b.id = 'bnav'; b.className = 'bnav'; b.setAttribute('aria-label', T('Sections')); document.body.appendChild(b);
+      b.addEventListener('click', function (e) { var x = e.target.closest('[data-b]'); if (!x) return; var k = x.getAttribute('data-b'); if (k === 'today') home(); else openMod(k); }); }
+    var tm = teamMods().map(function (m) { return m[0]; });
+    var items = [['today', 'Today'], ['rota', 'Rota'], ['recipes', 'Recipes'], ['more', 'More']].filter(function (x) { return x[0] === 'today' || x[0] === 'more' || tm.indexOf(x[0]) >= 0; });
+    b.style.gridTemplateColumns = 'repeat(' + items.length + ',minmax(0,1fr))';
+    b.innerHTML = items.map(function (x) { return '<button data-b="' + x[0] + '" class="' + (x[0] === active ? 'on' : '') + '"><i></i>' + E(T(x[1])) + '</button>'; }).join('');
+  }
   function phoneHome() {
     if (!S.feed || !S.meData) { phoneLoad(); return; }
     S.screen = 'home';
     var f = S.feed, me = S.meData, sh = M.shifts(me.punches, new Date(f.now)), open = sh.filter(function (s) { return s.live; })[0];
     var next = f.shifts.filter(function (x) { return x.staff_id === me.id && x.date >= f.today && x.kind === 'work'; }).sort(function (a, b) { return a.date < b.date ? -1 : 1; })[0];
-    var h = '<h1 class="serif" style="letter-spacing:0">' + E(T('Hi {n}', { n: me.name })) + '</h1>' +
-      '<div class="muted big">' + E(open ? T('In since {t}', { t: M.hhmm(open.inP.at) }) : next ? T('Next shift: {d} {t}', { d: next.date === f.today ? T('today') : M.shortDate(next.date), t: (next.start_t || '') + '–' + (next.end_t || '') }) : T('No shift on the rota yet')) + '</div>';
-    var tiles = [['hours', 'hours', 'My hours']].concat(teamMods());
-    h += '<div class="mods">' + tiles.map(function (m) { var s = m[0] === 'hours' ? [T('This week {d}', { d: M.durShort(weekMin(sh, M.weekStart(f.today))) }), false] : modStat(m[0]);
-      return '<button class="mod" data-mod="' + m[0] + '"><span class="ic">' + M.icon(m[1], 24) + '</span><b>' + E(T(m[2])) + '</b><span class="s' + (s[1] ? ' alert' : '') + '">' + E(s[0]) + '</span></button>'; }).join('') + '</div>' +
-      '<div class="card small muted">' + E(T('To clock in or out, use the tablet at the staff entrance.')) + '</div>';
+    var hr = M.parts(new Date()).hh, greet = hr < 12 ? T('Good morning') : hr < 18 ? T('Good afternoon') : T('Good evening');
+    var mates = next ? f.shifts.filter(function (x) { return x.date === next.date && x.kind === 'work' && x.staff_id !== me.id && f.staff.some(function (s) { return s.id === x.staff_id && s.team === me.team; }); })
+      .map(function (x) { return (f.staff.filter(function (s) { return s.id === x.staff_id; })[0] || {}).name; }).filter(Boolean) : [];
+    var b = f.briefing, read = f.reads.indexOf(me.id) >= 0, tm = teamMods().map(function (m) { return m[0]; });
+    var yr = M.today().slice(0, 4), used = 0;
+    (me.leave || []).forEach(function (l) { if (l.kind === 'annual' && l.status === 'approved' && l.date_from.slice(0, 4) === yr) used += M.daysBetween(l.date_from, l.date_to) + 1; });
+    var h = '<div><div class="sec" style="margin-bottom:8px"><span>' + E(M.niceDate(f.today).toUpperCase()) + '</span><i></i></div><h1 class="serif">' + E(greet + ', ' + me.name.split(' ')[0]) + '</h1></div>';
+    h += '<div class="card nextshift">' + (open
+      ? '<div class="k">' + E(T('AT WORK')) + '</div><div class="v">' + E(T('In since {t}', { t: M.hhmm(open.inP.at) })) + '</div>'
+      : '<div class="k">' + E(T('YOUR NEXT SHIFT')) + '</div><div class="v">' + (next ? E((next.date === f.today ? T('Today') : M.shortDate(next.date)) + ' · ' + (next.start_t || '') + ' – ' + (next.end_t || '')) : E(T('No shift on the rota yet'))) + '</div>') +
+      (mates.length ? '<div class="s">' + E(T('With {n}', { n: mates.slice(0, 3).join(', ') })) + '</div>' : '') + '</div>';
+    if (tm.indexOf('brief') >= 0) {
+      h += '<div class="card" style="display:flex;flex-direction:column"><div class="row between"><span class="sec" style="flex:1"><span>' + E(T('Today\'s briefing')) + '</span></span>' +
+        (b ? (read ? '<span class="tag green">' + E(T('Read')) + '</span>' : '<span class="tag red">' + E(T('Not read')) + '</span>') : '') + '</div>' +
+        (b ? '<div class="bexc">' + [['specials', 'Specials'], ['eighty_six', 'Not today'], ['allergies', 'Allergies']].filter(function (q) { return b[q[0]]; }).slice(0, 3).map(function (q) {
+          return '<i>' + E(T(q[1])) + '</i> — ' + E(b[q[0]]); }).join('<br>') + '</div><button class="lnk" data-open="brief">' + E(read ? T('Open the briefing') : T('Read all & sign')) + '</button>'
+          : '<div class="bexc muted"><i>' + E(T('Today\'s briefing is not written yet.')) + '</i></div>') + '</div>';
+    }
+    h += '<div class="tot"><div><span>' + E(T('Hours this week')) + '</span><b>' + M.durShort(weekMin(sh, M.weekStart(f.today))) + '</b></div>' +
+      '<div><span>' + E(T('Leave days left')) + '</span><b>' + ((me.annual_days != null ? me.annual_days : 21) - used) + '</b></div></div>' +
+      '<div class="small muted" style="text-align:center;font-family:\'Cormorant Garamond\',serif;font-style:italic;font-size:17px">' + E(T('Clock in at the tablet by the staff entrance.')) + '</div>';
     main.innerHTML = h;
+    on('[data-open]', function (x) { openMod(x.getAttribute('data-open')); });
+    bnav('today');
+  }
+  function modMore() {
+    var tiles = [['hours', 'hours', 'My hours']].concat(teamMods().filter(function (m) { return m[0] !== 'rota' && m[0] !== 'recipes'; }));
+    main.innerHTML = frame('More', '<div class="mods">' + tiles.map(function (m) { var s = m[0] === 'hours' ? ['', false] : modStat(m[0]);
+      return '<button class="mod" data-mod="' + m[0] + '"><span class="ic">' + M.icon(m[1], 22) + '</span><b>' + E(T(m[2])) + '</b><span class="s' + (s[1] ? ' alert' : '') + '">' + E(s[0]) + '</span></button>'; }).join('') + '</div>');
+    bindFrame();
     on('[data-mod]', function (b) { openMod(b.getAttribute('data-mod')); });
   }
   function modHours() {

@@ -152,75 +152,131 @@
   };
   App.go = function (mod, sub) { var h = mod ? '#' + mod + (sub ? '/' + sub : '') : '#'; if (location.hash === h || (!mod && !location.hash)) { App.fromHash(); App.render(); } else location.hash = h; };
 
-  App.render = function () {
+  // ── the Concierge shell: a teal side menu + the page ──
+  var GROUPS = [['today', 'Daily service'], ['team', 'Team'], ['kitchen', 'Kitchen & cost'], ['setup', 'Set-up']];
+  App.S.counts = {};
+  App.side = function () {
+    var cur = App.S.mod || '';
+    var h = '<aside class="side" id="side"><div class="side-top"><img src="mare-logo-white.svg" alt="Roberto\'s Mare"><div class="side-k">PORTO MONTENEGRO</div></div>' +
+      '<nav class="side-nav" aria-label="' + E(T('Modules')) + '"><button class="sn' + (!cur ? ' on' : '') + '" data-nav="">' + E(T('Today')) + '</button>';
+    GROUPS.forEach(function (g) {
+      var ms = App.order.filter(function (k) { return App.mods[k].group === g[0] && App.allowed(k); });
+      if (!ms.length) return;
+      h += '<div class="sg">' + E(T(g[1]).toUpperCase()) + '</div>' + ms.map(function (k) {
+        var c = App.S.counts[k];
+        return '<button class="sn' + (cur === k ? ' on' : '') + '" data-nav="' + k + '"><span>' + E(T(App.mods[k].title)) + '</span>' + (c ? '<span class="cnt">' + c + '</span>' : '') + '</button>';
+      }).join('');
+    });
+    h += '</nav><div class="side-foot">' + M.langSwitch() + '<div class="side-me">' + E(App.S.me || '') + '</div>' +
+      '<div class="side-links"><a href="./">' + E(T('Roberto\'s FOH')) + ' &rarr;</a><button id="so">' + E(T('Sign out')) + '</button></div></div></aside>';
+    return h;
+  };
+  App.shell = function (inner) {
     var a = document.getElementById('app');
+    a.innerHTML = App.banner() + '<div class="shell">' + App.side() +
+      '<div class="page"><div class="mtop"><button class="burger" id="burger" aria-label="' + E(T('Menu')) + '"><span></span><span></span><span></span></button>' +
+      '<img src="mare-logo-white.svg" alt=""><span class="mtop-t serif">Roberto\'s Mare</span></div>' + inner + '</div><div class="scrim" id="scrim"></div></div>';
+    App.on(a, '[data-nav]', function (b) { document.body.classList.remove('menu-open'); App.go(b.getAttribute('data-nav') || null); });
+    a.querySelector('#so').onclick = App.signOut;
+    a.querySelector('#burger').onclick = function () { document.body.classList.add('menu-open'); };
+    a.querySelector('#scrim').onclick = function () { document.body.classList.remove('menu-open'); };
+    return a;
+  };
+  function strip(title, kicker, big) {
+    return '<header class="pstrip' + (big ? ' big' : '') + '"><div class="pstrip-in"><div class="pk">' + E(kicker) + '</div><h1 class="serif">' + E(title) + '</h1></div></header>';
+  }
+  App.sec = function (title) { return '<div class="sec"><span>' + E(title) + '</span><i></i></div>'; };
+
+  App.render = function () {
     if (App.S.mod && !App.allowed(App.S.mod)) App.S.mod = null;
-    if (!App.S.mod) return App.home(a);
+    if (!App.S.mod) return App.home();
     var def = App.mods[App.S.mod];
     var sub = App.S.sub || (def.tabs ? def.tabs[0][0] : null);
-    a.innerHTML = App.banner() + '<div class="bar"><div class="bar-in"><button class="home" data-go="">' + M.icon('back', 20) + E(T('Home')) + '</button>' +
-      '<img src="mare-logo-white.svg" alt=""><h1 class="serif">' + E(T(def.title)) + '</h1>' + M.langSwitch() + '</div></div>' +
+    var grp = (GROUPS.filter(function (g) { return g[0] === def.group; })[0] || ['', ''])[1];
+    var a = App.shell(strip(T(def.title), T(grp).toUpperCase() + ' · ' + M.niceDate(M.today()).toUpperCase()) +
       (def.tabs ? '<div class="tabs" role="tablist">' + def.tabs.map(function (t) { return '<button role="tab" data-tab="' + t[0] + '" class="' + (t[0] === sub ? 'on' : '') + '">' + E(T(t[1])) + '</button>'; }).join('') + '</div>' : '') +
-      '<main id="main"><div class="muted">' + E(T('Loading…')) + '</div></main>';
-    a.querySelector('[data-go]').onclick = function () { App.go(null); };
+      '<main id="main"><div class="muted">' + E(T('Loading…')) + '</div></main>');
     Array.prototype.forEach.call(a.querySelectorAll('[data-tab]'), function (b) { b.onclick = function () { App.go(def.key, b.getAttribute('data-tab')); }; });
     w.scrollTo(0, 0);
     var main = document.getElementById('main');
     return Promise.resolve(def.render(main, sub)).catch(function (e) { main.innerHTML = App.empty(T('Something went wrong: {m}', { m: e && e.message })); console.error(e); });
   };
 
-  // ── home ──
-  var GROUPS = [['today', 'Today'], ['team', 'Team'], ['kitchen', 'Kitchen & cost'], ['setup', 'Set-up']];
-  App.home = function (a) {
+  // ── Today: what needs Milica, tonight, who is in, the month so far ──
+  App.home = function () {
     var t = M.today(), hr = M.parts(new Date()).hh;
     var greet = hr < 12 ? T('Good morning') : hr < 18 ? T('Good afternoon') : T('Good evening');
     var first = ((App.S.viewAs ? App.S.viewAs.name : App.S.me) || '').split(' ')[0];
-    a.innerHTML = App.banner() + '<div class="hero"><div class="hero-top"><span class="who">' + E(App.S.me || '') + '</span><div class="row">' + M.langSwitch() +
-      '<a class="lk" href="./">' + E(T('Roberto\'s FOH')) + ' &rarr;</a><button class="lk" id="so">' + E(T('Sign out')) + '</button></div></div>' +
-      '<div class="hero-main"><img src="mare-logo-white.svg" alt="Roberto\'s Mare"><div><h1 class="serif">' + E(greet + (first ? ', ' + first : '')) + '</h1>' +
-      '<div class="sub">' + E(M.niceDate(t)) + ' · Porto Montenegro</div></div></div></div>' +
-      '<div class="strip"><div class="strip-in" id="strip">' + [1, 2, 3, 4, 5].map(function () { return '<div class="stat"><b>·</b><span>&nbsp;</span></div>'; }).join('') + '</div></div>' +
-      '<div class="groups">' + GROUPS.map(function (g) {
-        var ms = App.order.filter(function (k) { return App.mods[k].group === g[0] && App.allowed(k); });
-        if (!ms.length) return '';
-        return '<section class="grp"><h2>' + E(T(g[1])) + '</h2><div class="tiles">' + ms.map(function (k) {
-          var d = App.mods[k];
-          return '<button class="tile" data-mod="' + k + '"><span class="ic">' + M.icon(d.icon, 24) + '</span><span class="nm">' + E(T(d.title)) + '</span>' +
-            '<span class="ds">' + E(T(d.desc)) + '</span><span class="st" id="st-' + k + '"></span></button>';
-        }).join('') + '</div></section>';
-      }).join('') + '</div>';
-    a.querySelector('#so').onclick = App.signOut;
-    Array.prototype.forEach.call(a.querySelectorAll('[data-mod]'), function (b) { b.onclick = function () { App.go(b.getAttribute('data-mod')); }; });
-    // live numbers
+    App.shell(strip(greet + (first ? ', ' + first : ''), M.niceDate(t).toUpperCase(), true) +
+      '<main id="main" class="today"><div class="muted">' + E(T('Loading…')) + '</div></main>');
+    var main = document.getElementById('main'), ms = M.monthStart(t);
     return Promise.all([
-      M.rpc('mare_mgr_overview', { p_from: M.addDays(t, -7), p_to: t }, App.S.token),
-      App.fetch(['shifts', 'briefings', 'reads', 'leave', 'speakup', 'closing', 'ticks', 'check_items', 'actions', 'breakage', 'settings'], M.addDays(t, -7), t)
+      M.rpc('mare_mgr_overview', { p_from: M.addDays(t, -13), p_to: t }, App.S.token),
+      App.fetch(['shifts', 'briefings', 'reads', 'leave', 'speakup', 'ticks', 'check_items', 'actions', 'breakage', 'settings'], M.addDays(t, -13), t),
+      App.fetch(['closing', 'purchases'], ms, t)
     ]).then(function (res) {
-      var ov = res[0].data, f = res[1]; if (!ov || !ov.ok || !f) return;
+      var ov = res[0].data, f = res[1], mo = res[2]; if (!ov || !ov.ok || !f || !mo) { main.innerHTML = App.empty(T('Could not load.')); return; }
       App.S.staff = ov.staff;
-      var H = { t: t, ov: ov, f: f, att: attendanceNumbers(ov, f.shifts, t) };
-      var active = ov.staff.filter(function (s) { return s.active; });
-      var briefing = f.briefings.filter(function (b) { return b.date === t; })[0];
-      var reads = f.reads.filter(function (r) { return r.date === t; }).length;
-      var pend = f.leave.filter(function (l) { return l.status === 'pending'; }).length;
-      var newSpeak = f.speakup.filter(function (s) { return s.status === 'new'; }).length;
-      var stats = [
-        [H.att.inNow, T('In now'), false, 'attendance'],
-        [H.att.lateToday, T('Late today'), H.att.lateToday > 0, 'attendance'],
-        [briefing ? reads + '/' + H.att.onToday : '—', briefing ? T('Read the briefing') : T('No briefing yet'), !briefing, 'briefing'],
-        [pend, T('Leave to decide'), pend > 0, 'leave'],
-        [newSpeak, T('New in Speak up'), newSpeak > 0, 'speakup']
-      ];
-      stats = stats.filter(function (s) { return App.allowed(s[3]); });
-      document.getElementById('strip').innerHTML = stats.map(function (s) {
-        return '<button class="stat' + (s[2] ? ' alert' : '') + '" data-mod="' + s[3] + '"><b>' + E(s[0]) + '</b><span>' + E(s[1]) + '</span></button>';
-      }).join('');
-      Array.prototype.forEach.call(document.querySelectorAll('#strip [data-mod]'), function (b) { b.onclick = function () { App.go(b.getAttribute('data-mod')); }; });
-      App.order.forEach(function (k) {
-        var d = App.mods[k], el = document.getElementById('st-' + k); if (!el || !d.stat) return;
-        try { var s = d.stat(H); if (s) { el.textContent = s[0]; el.className = 'st' + (s[1] ? ' alert' : ''); } } catch (e) { console.error(e); }
+      var d = index(JSON.parse(JSON.stringify(ov)), f.shifts), act = d.staff.filter(function (s) { return s.active; });
+      // needs you
+      var needs = [];
+      act.forEach(function (s) {
+        s.shifts.forEach(function (x) { if ((x.missing || x.orphan) && x.date >= M.addDays(t, -13)) needs.push({ mod: 'attendance', t: T(x.missing ? '{n} forgot to clock out' : '{n} has no clock-in', { n: s.name }), s: M.niceDate(x.date), go: T('Resolve') }); });
+        for (var i = 0; i < 7; i++) { var k = M.addDays(t, -i), di = dayInfo(d, s, k);
+          if (di.late && !d.noteKey[s.id + '|' + k + '|late_accepted'] && !d.noteKey[s.id + '|' + k + '|warning']) needs.push({ mod: 'attendance', t: T('{n} arrived {m} minutes late', { n: s.name, m: di.late }), s: M.niceDate(k) + ' · ' + T('due {d}', { d: di.due }), go: T('Review') }); }
       });
-      void active;
+      f.leave.filter(function (l) { return l.status === 'pending'; }).forEach(function (l) { needs.push({ mod: 'leave', t: T('{n} asks for leave', { n: App.staffName(l.staff_id) }), s: M.shortDate(l.date_from) + ' – ' + M.shortDate(l.date_to), go: T('Decide') }); });
+      var sp = f.speakup.filter(function (x) { return x.status === 'new'; }).length;
+      if (sp) needs.push({ mod: 'speakup', t: T('{n} new messages in Speak up', { n: sp }), s: T('Anonymous, from the team'), go: T('Read') });
+      var br = f.breakage.filter(function (b) { return !b.reviewed; }).length;
+      if (br) needs.push({ mod: 'stock', t: T('{n} breakage or waste to check', { n: br }), s: T('Write in the cost and tick Checked'), go: T('Check') });
+      needs = needs.filter(function (n) { return App.allowed(n.mod); });
+      // sidebar counters
+      var miss = needs.filter(function (n) { return n.mod === 'attendance'; }).length;
+      App.S.counts = { attendance: miss || 0, leave: f.leave.filter(function (l) { return l.status === 'pending'; }).length, speakup: sp, stock: br };
+      Object.keys(App.S.counts).forEach(function (k) { if (!App.S.counts[k]) delete App.S.counts[k]; });
+      var nav = document.querySelector('.side-nav'); if (nav) { var tmp = document.createElement('div'); tmp.innerHTML = App.side(); nav.innerHTML = tmp.querySelector('.side-nav').innerHTML; }
+      // tonight
+      var b = f.briefings.filter(function (x) { return x.date === t; })[0], reads = f.reads.filter(function (r) { return r.date === t; }).length;
+      var onToday = act.filter(function (s) { var di = dayInfo(d, s, t); return di.shifts.length || (di.due && !di.off); }).length;
+      // who is in
+      var inNow = [], later = [];
+      act.forEach(function (s) { var di = dayInfo(d, s, t);
+        if (di.live) inNow.push({ n: s.name, team: s.team, since: M.hhmm(di.shifts.filter(function (x) { return x.live; })[0].inP.at), late: di.late });
+        else if (di.due && !di.off && !di.shifts.length) later.push({ n: s.name, team: s.team, due: di.due }); });
+      later.sort(function (x, y) { return x.due < y.due ? -1 : 1; });
+      // month so far
+      var sales = 0, food = 0, fb = 0; mo.closing.forEach(function (c) { sales += (+c.food || 0) + (+c.beverage || 0) + (+c.other || 0); food += +c.food || 0; });
+      mo.purchases.forEach(function (p) { if (!p.voided && p.category === 'food') fb += +p.amount; });
+      var h = '<div class="tgrid"><div class="tcol">';
+      if (App.allowed('attendance') || App.allowed('leave')) {
+        h += '<section>' + App.sec(T('Needs you') + ' · ' + needs.length) + (needs.length ? '<div class="card list">' + needs.map(function (n, i) {
+          return '<button class="li" data-go="' + n.mod + '"><span class="li-t"><b class="serif">' + E(n.t) + '</b><span>' + E(n.s) + '</span></span><span class="li-go">' + E(n.go.toUpperCase()) + '</span></button>';
+        }).join('') + '</div>' : '<div class="card calm serif">' + E(T('Nothing waiting. A calm day.')) + '</div>') + '</section>';
+      }
+      if (App.allowed('briefing')) {
+        h += '<section>' + App.sec(T('Tonight')) + '<div class="card"><div class="figs">' +
+          '<div><b>' + (b && b.covers_lunch != null ? b.covers_lunch : '—') + '</b><span>' + E(T('Covers · lunch').toUpperCase()) + '</span></div>' +
+          '<div><b>' + (b && b.covers_dinner != null ? b.covers_dinner : '—') + '</b><span>' + E(T('Covers · dinner').toUpperCase()) + '</span></div>' +
+          '<div><b>' + (b ? reads + '<small> / ' + onToday + '</small>' : '—') + '</b><span>' + E(T('Read the briefing').toUpperCase()) + '</span></div></div>' +
+          (b ? '<div class="excerpt serif">' + [['specials', 'Specials'], ['eighty_six', 'Not today'], ['allergies', 'Allergies'], ['vip', 'Bookings']].filter(function (q) { return b[q[0]]; }).map(function (q) {
+            return '<i>' + E(T(q[1])) + '</i> — ' + E(b[q[0]]); }).join('<br>') + '</div>' : '<div class="excerpt serif"><i>' + E(T('Today\'s briefing is not written yet.')) + '</i></div>') +
+          '<button class="lnk" data-go="briefing">' + E((b ? T('Open the briefing') : T('Write the briefing')).toUpperCase()) + '</button></div></section>';
+      }
+      h += '</div><div class="tcol">';
+      if (App.allowed('attendance')) {
+        h += '<section>' + App.sec(T('Who is in')) + '<div class="card list">' +
+          (inNow.length ? inNow.map(function (p) { return '<div class="li"><span>' + E(p.n) + ' · <span class="muted">' + E(T(p.team)) + '</span></span><span class="li-in">' + E(T('since {t}', { t: p.since })) + (p.late ? ' · <em>' + E(T('late {m}′', { m: p.late })) + '</em>' : '') + '</span></div>'; }).join('') : '<div class="li muted">' + E(T('Nobody is in yet.')) + '</div>') +
+          later.slice(0, 6).map(function (p) { return '<div class="li muted"><span>' + E(p.n) + ' · ' + E(T(p.team)) + '</span><span>' + E(T('due {d}', { d: p.due })) + '</span></div>'; }).join('') + '</div></section>';
+      }
+      if (App.allowed('closing') || App.allowed('costing')) {
+        h += '<section>' + App.sec(M.monthName(ms) + ' · ' + T('so far')) + '<div class="card"><div class="figs two">' +
+          '<div><b>' + M.money0(sales) + '</b><span>' + E(T('Sales').toUpperCase()) + '</span></div>' +
+          '<div><b>' + (M.pct(fb, food) != null ? M.pct(fb, food) + '%' : '—') + '</b><span>' + E(T('Food cost').toUpperCase()) + '</span></div></div>' +
+          '<div class="small muted" style="margin-top:10px">' + E(T('{n} closing reports this month', { n: mo.closing.length })) + '</div></div></section>';
+      }
+      main.innerHTML = h + '</div></div>';
+      App.on(main, '[data-go]', function (x) { App.go(x.getAttribute('data-go')); });
     });
   };
 
