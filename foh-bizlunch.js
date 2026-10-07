@@ -61,6 +61,10 @@ function blDigest(iso, j){
       } else if(p) { xg += p; }
     });
     if(!menus) return;
+    // The check SUBTOTAL is the truth: some discounts never reach the item list
+    // (Tue 6 Oct check 11626: items 1,010, subtotal 770). Extras = check - menus.
+    var cg = (typeof r.gross === 'number') ? r.gross : (mg + xg);
+    xg = cg - mg;
     out.menus += menus; out.menuGross += mg; out.extraGross += xg; out.tables++; out.guests += Number(r.pax)||0;
     Object.keys(dishes).forEach(function(k){ out.dishes[k] = (out.dishes[k]||0) + dishes[k]; });
     out.rows.push({ time: r.time||'', tables: (r.tables||[]).join(', '), area: r.area||'', pax: Number(r.pax)||0,
@@ -207,6 +211,32 @@ function renderBizLunch(){
   }
   h.push('</div>');
 
+  // ── Against all lunch: Simphony's own lunch guests and net (closing report) ──
+  var cmpDays = shown.filter(function(d){ return d <= today; });
+  if(cmpDays.length){
+    h.push('<div class="bl-day bl-cmp"><div class="bl-day-h"><div><div class="bl-day-t">Against all lunch</div>'
+      + '<div class="bl-day-s">Simphony&rsquo;s lunch guests'+(money?' and lunch net':'')+' from the closing report, beside the business lunch</div></div></div>');
+    h.push('<table class="bl-tbl"><thead><tr><th>Day</th><th class="r">BL menus</th><th class="r">Lunch guests</th><th class="r">BL share</th>'
+      + (money ? '<th class="r">BL tables net</th><th class="r">Lunch net</th><th class="r">BL share</th>' : '')+'</tr></thead><tbody>');
+    var tg = { m:0, c:0, bn:0, ln:0 };
+    cmpDays.forEach(function(d){
+      var n = BL.nights[d], sim = BL.sim[d] || {}, m = n ? n.menus : null, c = sim.covers, ln = sim.net;
+      var bn = n ? blNet(n.menuGross + n.extraGross, d) : null;
+      if(m != null && c){ tg.m += m; tg.c += c; }
+      if(bn != null && ln){ tg.bn += bn; tg.ln += ln; }
+      h.push('<tr><td>'+blEsc(blDayName(d))+' '+blEsc(blDateLabel(d))+(d===today?' <span class="bl-sofar">so far</span>':'')+'</td>'
+        + '<td class="r"><b>'+(m==null ? '&hellip;' : blN(m))+'</b></td>'
+        + '<td class="r">'+(c==null ? '&ndash;' : blN(c))+'</td>'
+        + '<td class="r">'+(m!=null && c ? Math.round(m/c*100)+'%' : '&ndash;')+'</td>'
+        + (money ? '<td class="r">'+(bn==null ? '&hellip;' : blN(bn))+'</td><td class="r">'+(ln==null ? '&ndash;' : blN(ln))+'</td>'
+                 + '<td class="r">'+(bn!=null && ln ? Math.round(bn/ln*100)+'%' : '&ndash;')+'</td>' : '')+'</tr>');
+    });
+    h.push('<tr class="bl-tot"><td>Days with a closing report</td><td class="r"><b>'+blN(tg.m)+'</b></td><td class="r">'+blN(tg.c)+'</td>'
+      + '<td class="r">'+(tg.c ? Math.round(tg.m/tg.c*100)+'%' : '&ndash;')+'</td>'
+      + (money ? '<td class="r">'+blN(tg.bn)+'</td><td class="r">'+blN(tg.ln)+'</td><td class="r">'+(tg.ln ? Math.round(tg.bn/tg.ln*100)+'%' : '&ndash;')+'</td>' : '')+'</tr>');
+    h.push('</tbody></table></div>');
+  }
+
   // ── Two panels: by day · what they chose ──
   var max = 1; shown.forEach(function(d){ var n = BL.nights[d]; if(n && n.menus > max) max = n.menus; });
   h.push('<div class="bl-grid">');
@@ -267,7 +297,7 @@ function renderBizLunch(){
   // ── How it is counted (folded) ──
   h.push('<details class="bl-how"><summary>How these numbers are counted</summary>'
     + '<p>Counted from the Simphony check SevenRooms attaches to each booking: every <b>BusinessLunch@'+blN(price)+'</b> line is one menu, every <b>BL &hellip;</b> line is a course. Focaccia goes to every guest, so it is not counted as a choice. Nothing is typed in and nothing is stored &mdash; Refresh reads the book again.</p>'
-    + '<p>A check rung without a booking is not linked to SevenRooms and is <b>not</b> in these figures. The Simphony lunch guests beside each day come from the closing report, so a gap shows up as a difference.</p>'
+    + '<p>A check rung without a booking is not linked to SevenRooms and is <b>not</b> in these figures. The Simphony lunch guests beside each day come from the closing report, so a gap shows up as a difference. BL tables net is everything on a table that had a business lunch (menus and extras); a lunch check with no booking is missed, so the BL share of lunch net is a floor, never an overstatement.</p>'
     + (money ? '<p>Net = menu price &divide; '+blDiv(dates[0])+' (10% service and 5% VAT are inside the price; since 16 Sep 2026 the 7% DIFC fee is added on top of the bill). AED '+blN(price)+' = '+blN2(price/blDiv(dates[0]))+' net. Extras are everything else on a business-lunch table &mdash; water, drinks, desserts. Tips are not included.</p>' : '')
     + '</details>');
   h.push('<div class="res-foot">Read-only from SevenRooms'+(money ? '' : ' &middot; money is hidden on your access')+'.</div>');
@@ -321,6 +351,9 @@ function blCss(){
     '.bl-courses{color:var(--text-mid);font-size:12px}',
     '.bl-items td{background:var(--surface2);padding:4px 12px 12px 24px}',
     '.bl-items div{display:flex;justify-content:space-between;gap:12px;font-size:12px;color:var(--text-mid);padding:3px 0;max-width:420px}',
+    '.bl-cmp .bl-tbl td:first-child{white-space:nowrap}',
+    '.bl-tot td{background:var(--surface2);font-weight:600;color:var(--vino)}',
+    '.bl-sofar{font-size:10px;color:var(--gold-dim);letter-spacing:.06em;text-transform:uppercase;margin-left:4px}',
     '.bl-how{margin:4px 0 10px;font-size:12px;color:var(--text-mid)}',
     '.bl-how summary{cursor:pointer;color:var(--gold-dim);font-size:11px;letter-spacing:.08em;text-transform:uppercase;font-weight:600;padding:6px 0}',
     '.bl-how p{margin:6px 0;line-height:1.55;max-width:760px}',

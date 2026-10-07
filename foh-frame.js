@@ -22,6 +22,7 @@
     reviews:      { k:'Guests',                 t:'Guest Reviews',       s:'Our Google rating, what guests write, and how DIFC compares.' },
     reservations: { k:'SevenRooms · Live',      t:'Reservations',        s:'Tonight’s book and the next 7 days, straight from SevenRooms.' },
     resreports:   { k:'Reservations · Reports', t:'Reservation Reports', s:'Pick a report and the dates, then read it here or download the Excel.' },
+    bizlunch:     { k:'Lunch · set menu',       t:'Business Lunch',      s:'Menus sold, what guests chose and spend — straight from the checks.' },
     admin:        { k:'Both apps',              t:'Admin',               s:'People, usage, feedback, emails and settings.' }
   };
 
@@ -36,6 +37,8 @@
     '#main-content[data-frame=reservations] .res-kicker{display:none}' +
     '#main-content[data-frame=resreports] .res-head-l{display:none}' +
     '#main-content[data-frame=resreports] .res-head{justify-content:flex-end}' +
+    '#main-content[data-frame=bizlunch] .res-head-l{display:none}' +
+    '#main-content[data-frame=bizlunch] .res-head{justify-content:flex-end}' +
     '#main-content[data-frame=admin] .adm-head h2{display:none}' +
     '#main-content[data-frame=admin] .adm-head{justify-content:flex-end}';
   document.head.appendChild(css);
