@@ -627,7 +627,7 @@ function stInjectCss(){
     '.st-qty{width:76px;height:38px;text-align:center;border:1px solid #c9a84c;border-radius:8px;font-size:16px;background:#fff}'+
     '.st-add{width:76px;height:30px;text-align:center;border:1px dashed #1d7a4a;border-radius:8px;font-size:13px;color:#1B6F44;background:#f3faf5}'+
     '.st-add::placeholder{color:#3E6B51}'+
-    '.st-unit{height:30px;background:#e1d3c2;border:1px solid #cbb892;border-radius:6px;font-size:12px;color:#4F4535;max-width:180px;padding:0 4px}'+
+    '.st-unit{height:30px;background:#e1d3c2;border:1px solid #cbb892;border-radius:6px;font-size:12px;color:#4F4535;max-width:min(180px,100%);padding:0 4px}'+
     '.st-line{justify-self:end;min-width:96px;text-align:right;font-weight:700;color:#410207;font-size:13px;font-variant-numeric:tabular-nums}'+
     '.st-addbtn{margin:14px;width:calc(100% - 28px);height:42px;border:1px dashed #c9a84c;background:#fff;color:#410207;font-weight:700;border-radius:10px;cursor:pointer}'+
     '.st-nodata{padding:26px 14px;text-align:center;color:#4F4535;font-size:13px}'+
@@ -1311,7 +1311,7 @@ function stGateHtml(){
     ? '<div class="st-who"><span><span style="color:#1B6F44">●</span> Counting as <b>'+stEsc(stUser.name)+'</b> · #'+stEsc(stUser.emp_id)+'</span>'+
       '<button class="st-btn" style="flex:none" onclick="stSignOut()">Switch</button></div>'
     : '<div class="st-gate"><div><b>Enter your employee ID to count</b></div>'+
-      '<div style="display:flex;gap:8px;margin-top:8px"><input class="st-input" id="st-empid" inputmode="numeric" placeholder="e.g. 1042" style="flex:1" onkeydown="if(event.key===\'Enter\')stSignIn()">'+
+      '<div style="display:flex;gap:8px;margin-top:8px"><input class="st-input" id="st-empid" inputmode="numeric" placeholder="e.g. 1042" style="flex:1;min-width:0" onkeydown="if(event.key===\'Enter\')stSignIn()">'+
       '<button class="st-btn" style="flex:none" onclick="stSignIn()">Start</button></div></div>';
 }
 

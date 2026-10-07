@@ -2921,6 +2921,8 @@
   .res-area b{letter-spacing:.04em;text-transform:none;font-weight:700;font-size:11.5px;color:var(--vino-dark)}
   .res-area i{font-style:normal;color:#4F4535;font-size:10.5px}
   .res-pill{display:inline-block;font-size:10px;font-weight:600;letter-spacing:.03em;border-radius:11px;padding:4px 9px;white-space:nowrap}
+  /* a two-word status wraps rather than run into the next column */
+  .res-pill{white-space:normal;line-height:1.25;max-width:100%;text-align:center}
   .res-pill-due{background:rgba(168,137,48,.12);color:#775F1A;border:1px solid rgba(168,137,48,.3)}
   .res-pill-seated{background:rgba(46,107,52,.12);color:#2E6B34;border:1px solid rgba(46,107,52,.32)}
   .res-pill-done{background:rgba(107,31,42,.07);color:#4F4535;border:1px solid rgba(107,31,42,.16)}

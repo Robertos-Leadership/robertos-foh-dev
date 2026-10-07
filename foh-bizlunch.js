@@ -356,6 +356,7 @@ function blCss(){
     '.bl-day-t{font-family:"Playfair Display",serif;font-size:20px;color:var(--vino-dark)}',
     '.bl-day-s{font-size:12px;color:var(--text-mid);margin-top:3px}',
     '.bl-tbl{width:100%;border-collapse:collapse;font-size:13px}',
+    '@media (max-width:640px){.bl-tbl{display:block;overflow-x:auto;-webkit-overflow-scrolling:touch}}',
     '.bl-tbl th{font-size:9px;letter-spacing:.15em;text-transform:uppercase;color:var(--text-light);font-weight:600;text-align:left;padding:9px 12px;border-bottom:1px solid var(--border)}',
     '.bl-tbl td{padding:10px 12px;border-bottom:1px solid var(--border);color:var(--text);font-variant-numeric:tabular-nums;vertical-align:top}',
     '.bl-tbl .r{text-align:right}',
