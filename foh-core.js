@@ -372,8 +372,11 @@ function fohBlocked(module){
 // nothing is taken away — it is just shaded back with a "Paused" badge so the
 // team can see at a glance that no activations are running. One switch: flip
 // this to [] and the card, its badge and its status line all come back.
-var FOH_PAUSED_MODULES = ['events'];
-var FOH_HIDE_ACTIVATIONS = true;
+// 7 Oct 2026: Moda Night (Wednesday, 8 PM - 1 AM, Scala) runs as an activation, so the
+// module is no longer paused and its card is back beside Business Lunch. The four old
+// nights (cancelled 28 Aug) are paused one by one in the events table instead.
+var FOH_PAUSED_MODULES = [];
+var FOH_HIDE_ACTIVATIONS = false;
 function fohModulePaused(m){ return FOH_PAUSED_MODULES.indexOf(m) !== -1; }
 function applyFohAccess(){
   ['events'].forEach(function(m){
@@ -720,7 +723,7 @@ async function loadFohAccess(){
 //  ADMIN MODULE — manage logins + module access (notifications: phase 2). Admin-only.
 // ══════════════════════════════════════════════
 var SUPA_USERS_URL='https://supabase.com/dashboard/project/paoaivwtkzujmrgrfjuq/auth/users';
-var ADMIN_MODULES=[{k:'events',n:'Business Lunch'},{k:'privateevents',n:'Events'},{k:'operations',n:'Closing Report'},{k:'revenue',n:'Revenue'},{k:'stocktake',n:'Stock Take'},{k:'reviews',n:'Guest Reviews'},{k:'reservations',n:'Reservations'},{k:'mare',n:'Mare Attendance'}];
+var ADMIN_MODULES=[{k:'events',n:'Business Lunch & Activations'},{k:'privateevents',n:'Events'},{k:'operations',n:'Closing Report'},{k:'revenue',n:'Revenue'},{k:'stocktake',n:'Stock Take'},{k:'reviews',n:'Guest Reviews'},{k:'reservations',n:'Reservations'},{k:'mare',n:'Mare Attendance'}];
 // Every automatic email the app sends, and the notify key that decides who gets it.
 // A person is on a list when that key is in their app_users.notify array — ticked
 // here or on the Emails tab, never in code. The edge functions read the same keys,
