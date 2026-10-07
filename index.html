@@ -376,6 +376,20 @@ if ('serviceWorker' in navigator) {
             <div class="module-stat" id="hubstat-bizlunch"></div>
           </div>
         </div>
+        <!-- Moda Night (7 Oct 2026): Wednesday in Scala, read from the checks like Business
+             Lunch. Same permission as Business Lunch ('events'); money inside needs Revenue. -->
+        <div class="module-card" id="mod-card-modanight" onclick="enterApp('modanight')" style="--acc:#A88930; display:none;">
+          <div class="module-band">
+            <span class="module-ico"><span class="module-mono">M</span></span>
+            <div class="module-name">Moda Night</div>
+            <span class="module-new" id="mod-new-modanight" style="display:none;">NEW</span>
+          </div>
+          <div class="module-accent"></div>
+          <div class="module-body">
+            <div class="module-desc">Wednesdays in Scala, 8 PM to 1 AM &mdash; packages, what guests had &amp; spend.</div>
+            <div class="module-stat" id="hubstat-modanight"></div>
+          </div>
+        </div>
         <div class="module-card" id="mod-card-events" onclick="enterApp('events')" style="--acc:#E85D24;">
           <div class="module-band">
             <span class="module-ico"><span class="module-mono">A</span></span>
@@ -524,10 +538,10 @@ if ('serviceWorker' in navigator) {
      Loaded here, not with the foh-*.js at the foot of the body, because the
      inline Admin code below READS it rather than just calling into it. -->
 <script src="foh-rounds.js?v=20261007learnfoh"></script>
-<script src="foh-core.js?v=20261007moda"></script>
+<script src="foh-core.js?v=20261007mn"></script>
 <script src="foh-bible.js?v=20260930master"></script>
 <script src="foh-sched-xlsx.js?v=20260927a3b"></script>
-<script src="foh-events.js?v=20261007moda2"></script>
+<script src="foh-events.js?v=20261007mn"></script>
 <script src="foh-privateevents.js?v=20260929kv"></script>
 <script src="foh-revenue.js?v=20260919req"></script>
 <script src="foh-closing.js?v=20261006time"></script>
@@ -537,6 +551,7 @@ if ('serviceWorker' in navigator) {
 <script src="foh-reviews.js?v=20260925audit"></script>
 <script src="foh-reservations.js?v=20261006week"></script>
 <script src="foh-bizlunch.js?v=20261007fcclean"></script>
+<script src="foh-modanight.js?v=20261007mn"></script>
 <script src="foh-resreports.js?v=20261006time"></script>
 
 <!-- "Tell us" — the button the team press when THEY have something to say.
@@ -580,7 +595,7 @@ window.FB_INBOX = {
         var t = (typeof state === 'object' && state.currentTab) || '';
         var NAME = { dashboard:'Leaders', revenue:'Revenue', operations:'Operations',
                      stocktake:'Stock take', privateevents:'Private events', reviews:'Guest reviews',
-                     reservations:'Reservations', resreports:'Reservation reports', bizlunch:'Business lunch', admin:'Admin' };
+                     reservations:'Reservations', resreports:'Reservation reports', bizlunch:'Business lunch', modanight:'Moda Night', admin:'Admin' };
         if (t === 'admin') return 'Admin → ' + ((state.adminView||'people').charAt(0).toUpperCase() + (state.adminView||'people').slice(1));
         if (String(t).indexOf('event_') === 0) {
           var ev = (state.events||[]).filter(function(x){ return 'event_'+x.id === t; })[0];
