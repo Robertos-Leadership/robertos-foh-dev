@@ -147,6 +147,147 @@ FB_WORK_ANSWERS[FB_A.ADDS] = 1;
 
 // ── The rounds. Newest first. ───────────────────────────────────────────────
 var FB_ROUNDS = {
+  // ── FOH Learning section, for Alessandro Longhi (Restaurant Manager) ──────
+  // Born from his "Tell us" idea of 7 Oct 2026 (inbox 0f27d406): a Learning
+  // section in the FOH app "same as the BOH" — Food Bible, wine bible by the
+  // glass, and tests on staff knowledge. The Kitchen's Learning has been live
+  // since 22 Sep; the engine is reused, the content is his. Each item is OUR
+  // proposal and he answers "like this" or "my way" with a note. The works:true
+  // items are how the Kitchen's already works — shown so he can still object.
+  // Figures measured 7 Oct 2026: 53 dishes on A la carte 2026 (Kitchen
+  // recipe_menus), 105 FOH SOPs in the 3.0 library (Reservation 13, Hostess 13,
+  // Bar 37, Dining 39, Guest Experience 3), 30 of 36 active foh_staff with an
+  // emp_id. No wine-by-the-glass list exists in either database.
+  'learning-alessandro': {
+    name: 'FOH Learning section — how do you want it built? (Alessandro)',
+    email: {
+      subject: 'The FOH Learning section — how do you want it built?',
+      body: ['Thank you for the idea of a Learning section in the FOH app — the Food Bible, the wine bible by the glass, and tests on what the team knows. Francesco wants to build it, and wants it built <b>your</b> way.',
+             'It runs on the same engine as the Kitchen’s Learning, live since September. We wrote down how we would build each part: <b>18 short questions</b>. For each one tap <b>Yes, like this</b> or <b>I want it differently</b> and tell us how in the note.',
+             'Nothing gets built until you answer.'],
+      cta: 'Tell us how to build it',
+      wa: 'Thank you for the idea of a Learning section in the FOH app. Francesco wants to build it your way — same engine as the Kitchen’s, 18 short questions on how each part should work, starting with where the test questions come from and what goes in the wine bible. Tap "Yes, like this" or tell us your way in the note. Nothing gets built until you answer.'
+    },
+    title: 'The FOH Learning section — how should it work?',
+    ask: FB_ASK.DESIGN,
+    okLabel: 'Same as the Kitchen — already decided',
+    intro: [
+      'Hi Alessandro — you asked for a Learning section in the FOH app, the same as the Kitchen’s: the Food Bible, the wine bible by the glass, and tests on what the team knows.',
+      'The Kitchen’s has been live since 22 September: a short page to read, then a 5-question test with a score. Yours will run on the same engine — but <b>the content is yours</b>, so before we build anything, <b>we are asking you how it should work</b>.',
+      'Each question below says <b>how we would build it</b>. Where you agree, one tap. Where you don’t, tell us your way.'
+    ],
+    howto: 'Tap <b>Yes, like this</b> if our plan is right, or <b>I want it differently</b> and write your way in the note — the note is the most useful part.<br><br>The ones marked <b>Same as the Kitchen — already decided</b> are how the Kitchen’s Learning already works. If one of them is wrong for the floor, say so.<br><br>Answers save on this phone as you go, so you can stop and come back. Tap <b>Send my answers</b> when you are done.',
+    lastQ: 'What do guests ask that the team struggles to answer today? And is there anything the Learning section must do that is not on this list?',
+    items: [
+      { id:'q-source',
+        said: 'Where do the test questions come from?',
+        today: 'Five possible sources — tell us which ones, and in what order:<br><br>'
+             + '<b>1. The Food Bible</b>, already in the FOH app. <b>53 dishes</b> are on A la carte 2026, each with its description, ingredients, allergens, plate and cutlery. So: <i>“Which allergens are in this dish?”</i>, <i>“What does it come with?”</i>, <i>“Which cutlery do you set?”</i> When the kitchen changes a dish, its questions change with it.<br>'
+             + '<b>2. The wine bible by the glass</b> — it does not exist yet; see the next two questions.<br>'
+             + '<b>3. Our SOPs.</b> There are <b>105</b> for the floor: Reservation 13, Hostess 13, Bar 37, Dining 39, Guest Experience 3 — for example <i>Serve Wine By The Glass</i> and <i>Take Wine Order</i>.<br>'
+             + '<b>4. General knowledge</b> — service, grapes, regions — written by Claude.<br>'
+             + '<b>5. Written by you</b>, for what only you know.<br><br>'
+             + 'Our plan: <b>Food Bible first</b>, then <b>wine by the glass</b>, then <b>SOPs</b>, and yours whenever you want to add them.',
+        label: 'Where test questions come from' },
+
+      { id:'q-wine',
+        said: 'What goes in the wine bible for each wine by the glass?',
+        today: 'Our plan — <b>one phone screen per wine</b>, with a photo of the label:<br>'
+             + '· name and producer · region · grape(s) · vintage<br>'
+             + '· style, in a few words (e.g. dry, crisp, light)<br>'
+             + '· <b>which dishes on our menu it goes with</b><br>'
+             + '· serving temperature and glass · pour size and price<br><br>'
+             + 'Tell us what to add or take out — and who can send us a photo of each bottle.',
+        label: 'What the wine bible holds' },
+
+      { id:'q-winekeep',
+        said: 'Who keeps the wine list up to date?',
+        today: 'Our plan: the by-the-glass list lives <b>in the app</b>, and you — or the person you name — change it when a wine comes on or off. A wine that changes re-writes its own questions, and a wine that comes off takes its questions with it, so <b>nobody is tested on a wine we no longer pour</b>.<br><br>Tell us who owns the list, and where it is kept today (a file, Micros, the printed list?) so we start from the real one.',
+        label: 'Who keeps the wine list' },
+
+      { id:'q-check',
+        said: 'Who checks every answer is right before the team sees it?',
+        today: 'A wrong answer in a test teaches the wrong thing to everyone who takes it. In the Kitchen, chefs check every question and Francesco approves it. Our plan for the floor: <b>you check first, then Francesco approves</b>. The dish facts come from the Kitchen’s recipes, so a chef already stands behind them. Should someone else check the wine questions — a sommelier or the bar manager? Tell us who.',
+        label: 'Who checks the answers' },
+
+      { id:'q-level',
+        said: 'One test for everyone, or by role?',
+        today: 'Our plan: <b>by role</b>, read from each person’s job title on the FOH staff list:<br>'
+             + '· <b>Host</b> — reservations and hostess SOPs, the menu, allergens<br>'
+             + '· <b>Runner</b> — the Food Bible, allergens, table setting<br>'
+             + '· <b>Waiter and captain</b> — the Food Bible, wine by the glass, dining SOPs<br>'
+             + '· <b>Bar</b> — bar SOPs, wine by the glass<br>'
+             + '· <b>Supervisor and manager</b> — everything, plus guest experience<br><br>'
+             + 'Tell us where you would draw the lines.',
+        label: 'Tests by role' },
+
+      { id:'l-first',
+        said: 'Which topics come first?',
+        today: 'We would start with four: <b>A la carte 2026</b> (from the Food Bible), <b>Wine by the glass</b>, <b>Allergens at the table</b>, and <b>Taking the order</b> (from the Dining SOPs). Please write in the note the <b>first ten topics</b> you want, in order.',
+        label: 'First topics' },
+
+      { id:'l-who',
+        said: 'Who is it for?',
+        today: 'The <b>FOH team</b>: hosts, runners, waiters, bar, supervisors. Today <b>30 of the 36</b> people on the FOH staff list have an employee ID — the other 6 cannot sign in until it is entered in Admin.<br><br>Should the kitchen team also see some floor topics — wine by the glass, for example?',
+        label: 'Who it is for' },
+
+      { id:'l-where',
+        said: 'Where does it sit?',
+        today: 'A <b>Learning</b> tile in the FOH app, next to the Food Bible, with the same Employee ID sign-in. It works on a phone, a tablet and the laptop.',
+        label: 'Where it sits' },
+
+      { id:'l-must',
+        said: 'Is it compulsory, or optional?',
+        today: 'Our plan: optional for the team to start, but <b>every new starter passes A la carte and Allergens in their first two weeks</b>, and waiters and bar also pass Wine by the glass in their first month. The app shows you who has not done it yet.',
+        label: 'Compulsory or optional' },
+
+      { id:'l-renew',
+        said: 'Does a pass last forever?',
+        today: '<b>Allergens expire after 12 months</b> and must be taken again, like food safety in the Kitchen. Menu and wine passes do not expire — but when a dish or a wine changes, its new questions go into the test, so the next test always covers what is on the floor tonight.',
+        label: 'Pass expiry' },
+
+      { id:'l-scores',
+        said: 'Who sees the scores?',
+        today: 'Each person sees <b>their own</b>. You, and the managers Francesco ticks in Admin, see everyone’s — with how long each test took, the same as the Kitchen’s Scores.',
+        label: 'Who sees scores' },
+
+      { id:'l-practical',
+        said: 'What about things a phone cannot test?',
+        today: 'Opening a bottle at the table, carrying three plates, pouring the right measure — a test cannot check those. Our plan: a <b>practical sign-off</b> that a manager ticks after watching someone do it, shown next to their test scores. Build it now, later, or not at all?',
+        label: 'Practical sign-off' },
+
+      { id:'l-lang',
+        said: 'Which language?',
+        today: '<b>English only</b> — guests are served in English, and the Kitchen’s Learning is English only too. Tell us if part of the team needs another language.',
+        label: 'Language' },
+
+      { id:'d-id', works:true,
+        said: 'How do we know who took the test?',
+        today: 'Before the test, the person <b>types their employee ID</b> — the same as the Food Bible. An ID that is not on the staff list is refused.',
+        label: 'Employee ID before the test' },
+
+      { id:'d-test', works:true,
+        said: 'What does the test look like?',
+        today: '<b>5 questions, 4 choices each</b>, in a different order every time. <b>One clock for the whole test</b>, longer for longer questions. At the end they see which ones they missed, the right answer, and one line explaining why — so the test also teaches.',
+        label: 'Test format' },
+
+      { id:'d-bank', works:true,
+        said: 'Is the retake the same test?',
+        today: 'No. Each topic has a <b>bank of questions</b> and every test picks 5 at random, so someone who retakes gets different questions and cannot just learn the answers.',
+        label: 'Question bank per topic' },
+
+      { id:'d-pass', works:true,
+        said: 'What is a pass?',
+        today: '<b>4 out of 5.</b> They can retake as many times as they like, and the best score is kept.',
+        label: 'Pass mark' },
+
+      { id:'d-approve', works:true,
+        said: 'Can anything reach the team without being checked?',
+        today: 'No. <b>Every page and every question is approved by Francesco</b> before anyone sees it. Until then the topic shows <i>Coming soon</i>.',
+        label: 'Nothing unchecked reaches the team' }
+    ]
+  },
+
   // ── Roberto's Mare app — try it and tell us (6 Oct 2026) ────────────────
   // Rewritten for the Concierge design. Andrea FALCONE tries it first (chef's
   // eye), then Andrea SACCHI once Falcone's changes are in — same round, the
