@@ -359,6 +359,23 @@ if ('serviceWorker' in navigator) {
             <div class="module-stat" id="hubstat-operations"></div>
           </div>
         </div>
+        <!-- Business Lunch (7 Oct 2026) takes the slot Activations held. Activations
+             is hidden, not deleted: its card stays in the page (display:none, see
+             applyFohAccess) and all its tables and code are untouched. Same
+             permission as the card it replaces ('events'), so nobody gains or
+             loses access on the day it ships; money inside is gated on Revenue. -->
+        <div class="module-card" id="mod-card-bizlunch" onclick="enterApp('bizlunch')" style="--acc:#6B1F2A; display:none;">
+          <div class="module-band">
+            <span class="module-ico"><span class="module-mono">B</span></span>
+            <div class="module-name">Business Lunch</div>
+            <span class="module-new" id="mod-new-bizlunch" style="display:none;">NEW</span>
+          </div>
+          <div class="module-accent"></div>
+          <div class="module-body">
+            <div class="module-desc">Menus sold each day, what guests chose &amp; spend &mdash; straight from the checks.</div>
+            <div class="module-stat" id="hubstat-bizlunch"></div>
+          </div>
+        </div>
         <div class="module-card" id="mod-card-events" onclick="enterApp('events')" style="--acc:#E85D24;">
           <div class="module-band">
             <span class="module-ico"><span class="module-mono">A</span></span>
@@ -519,6 +536,7 @@ if ('serviceWorker' in navigator) {
 <script src="foh-equipment.js?v=20261006eqx"></script>
 <script src="foh-reviews.js?v=20260925audit"></script>
 <script src="foh-reservations.js?v=20261006week"></script>
+<script src="foh-bizlunch.js?v=20261007bl"></script>
 <script src="foh-resreports.js?v=20261006time"></script>
 
 <!-- "Tell us" — the button the team press when THEY have something to say.
@@ -562,7 +580,7 @@ window.FB_INBOX = {
         var t = (typeof state === 'object' && state.currentTab) || '';
         var NAME = { dashboard:'Leaders', revenue:'Revenue', operations:'Operations',
                      stocktake:'Stock take', privateevents:'Private events', reviews:'Guest reviews',
-                     reservations:'Reservations', resreports:'Reservation reports', admin:'Admin' };
+                     reservations:'Reservations', resreports:'Reservation reports', bizlunch:'Business lunch', admin:'Admin' };
         if (t === 'admin') return 'Admin → ' + ((state.adminView||'people').charAt(0).toUpperCase() + (state.adminView||'people').slice(1));
         if (String(t).indexOf('event_') === 0) {
           var ev = (state.events||[]).filter(function(x){ return 'event_'+x.id === t; })[0];

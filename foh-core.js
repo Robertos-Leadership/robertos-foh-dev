@@ -297,7 +297,7 @@ function renderNav(){
   const active = resolveTab(state.currentTab);
   // Module-scoped nav: Revenue and Operations are single pages reached from the Manager
   // landing — no cross-module links there. Only the Events module keeps its own sub-tabs.
-  if(active==='revenue' || active==='operations' || active==='stocktake' || active==='admin' || active==='privateevents' || active==='reviews' || active==='reservations' || active==='resreports'){ nav.innerHTML=''; return; }
+  if(active==='revenue' || active==='operations' || active==='stocktake' || active==='admin' || active==='privateevents' || active==='reviews' || active==='reservations' || active==='resreports' || active==='bizlunch'){ nav.innerHTML=''; return; }
   const eventTabs = state.events.slice().sort(eventSort).map(ev=>
     `<div class="nav-tab ${active===eventTab(ev)?'active':''}" data-tab="${eventTab(ev)}" onclick="switchTab('${eventTab(ev)}')">${ev.name}</div>`
   ).join('');
@@ -334,6 +334,9 @@ function moduleOf(t){
   // re-ticked them one by one. Anyone who can see the book can see the reports;
   // money inside them is still gated on Revenue, separately, as everywhere else.
   if(t==='resreports') return 'reservations';
+  // Business Lunch took Activations' hub slot (7 Oct 2026) and rides on the same
+  // permission, so nobody gains or loses access the day it ships.
+  if(t==='bizlunch') return 'events';
   if(t==='revenue'||t==='operations'||t==='stocktake'||t==='admin'||t==='privateevents'||t==='reviews'||t==='reservations') return t;
   return 'events';   // dashboard, event_*, events => the Events module
 }
@@ -370,6 +373,7 @@ function fohBlocked(module){
 // team can see at a glance that no activations are running. One switch: flip
 // this to [] and the card, its badge and its status line all come back.
 var FOH_PAUSED_MODULES = ['events'];
+var FOH_HIDE_ACTIVATIONS = true;
 function fohModulePaused(m){ return FOH_PAUSED_MODULES.indexOf(m) !== -1; }
 function applyFohAccess(){
   ['events'].forEach(function(m){
@@ -384,6 +388,15 @@ function applyFohAccess(){
   });
   // Reservation Reports rides on the 'reservations' permission (see moduleOf),
   // so it is keyed off the tab name rather than being in the list above.
+  // Activations is HIDDEN (7 Oct 2026, Francesco) — Business Lunch shows in its
+  // place on the same permission. Nothing is deleted: flip FOH_HIDE_ACTIVATIONS
+  // to false and the Activations card is back exactly as it was.
+  var evc=document.getElementById('mod-card-events');
+  if(evc && FOH_HIDE_ACTIVATIONS) evc.style.display = 'none';
+  var blc=document.getElementById('mod-card-bizlunch');
+  if(blc) blc.style.display = fohBlocked('bizlunch') ? 'none' : '';
+  var bln=document.getElementById('mod-new-bizlunch');
+  if(bln) bln.style.display = fohNewSeen('events') ? 'none' : '';
   var rrc=document.getElementById('mod-card-resreports');
   if(rrc) rrc.style.display = fohBlocked('resreports') ? 'none' : '';
   var rrn=document.getElementById('mod-new-resreports');
@@ -707,7 +720,7 @@ async function loadFohAccess(){
 //  ADMIN MODULE — manage logins + module access (notifications: phase 2). Admin-only.
 // ══════════════════════════════════════════════
 var SUPA_USERS_URL='https://supabase.com/dashboard/project/paoaivwtkzujmrgrfjuq/auth/users';
-var ADMIN_MODULES=[{k:'events',n:'Activations'},{k:'privateevents',n:'Events'},{k:'operations',n:'Closing Report'},{k:'revenue',n:'Revenue'},{k:'stocktake',n:'Stock Take'},{k:'reviews',n:'Guest Reviews'},{k:'reservations',n:'Reservations'},{k:'mare',n:'Mare Attendance'}];
+var ADMIN_MODULES=[{k:'events',n:'Business Lunch'},{k:'privateevents',n:'Events'},{k:'operations',n:'Closing Report'},{k:'revenue',n:'Revenue'},{k:'stocktake',n:'Stock Take'},{k:'reviews',n:'Guest Reviews'},{k:'reservations',n:'Reservations'},{k:'mare',n:'Mare Attendance'}];
 // Every automatic email the app sends, and the notify key that decides who gets it.
 // A person is on a list when that key is in their app_users.notify array — ticked
 // here or on the Emails tab, never in code. The edge functions read the same keys,
@@ -4624,7 +4637,7 @@ function enterApp(module){
   // Land in the chosen module — Revenue/Operations go straight there; Events keeps the
   // current Events-family tab (Leaders or an event) but NEVER another module's tab.
   var cur=state.currentTab;
-  var target=(module==='revenue'||module==='operations'||module==='stocktake'||module==='admin'||module==='privateevents'||module==='reviews'||module==='reservations'||module==='resreports') ? module
+  var target=(module==='revenue'||module==='operations'||module==='stocktake'||module==='admin'||module==='privateevents'||module==='reviews'||module==='reservations'||module==='resreports'||module==='bizlunch') ? module
     : ((cur==='dashboard' || (cur && cur.indexOf('event_')===0)) ? cur : 'dashboard');
   switchTab(target);
 }
