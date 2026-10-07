@@ -179,7 +179,8 @@ begin
         'tech_name', c.tech_name, 'hold_reason', c.hold_reason, 'completed_at', c.completed_at, 'checked_at', c.checked_at, 'checked_by', c.checked_by,
         'sent_back_at', c.sent_back_at, 'media', jsonb_array_length(c.media), 'is_test', c.is_test,
         'photos', (select count(*) from jsonb_array_elements(c.media) m where m->>'kind' = 'photo'),
-        'videos', (select count(*) from jsonb_array_elements(c.media) m where m->>'kind' = 'video'))
+        'videos', (select count(*) from jsonb_array_elements(c.media) m where m->>'kind' = 'video'),
+        'thumb', (select m->>'path' from jsonb_array_elements(c.media) m where m->>'kind' = 'photo' limit 1))
       order by c.reported_at desc) from fmaint_cards c
       where (c.checked_at is null or c.checked_at > now() - interval '120 days')
         and (not c.is_test or s.name ~* '^zz')), '[]'::jsonb));
