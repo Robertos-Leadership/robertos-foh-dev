@@ -15,7 +15,7 @@
    controllerchange reload), a fresh deploy reaches every screen with no manual
    tap. To force a clean cache rebuild, bump the CACHE version string below. */
 
-const CACHE = 'robertos-foh-v20260930lockmc-20261006marelink-eqx-learnfoh';
+const CACHE = 'robertos-foh-v20260930lockmc-20261006marelink-eqx-learnfoh-maint';
 
 // Best-effort warm cache. The bare paths are precached on install; the real
 // runtime requests (some carry a ?v= cache-buster) are cached on the fly by the
@@ -50,6 +50,7 @@ const ASSETS = [
   './foh-ops.js',
   './stock-take.js',
   './foh-equipment.js',   // Equipment count, inside Stock Take
+  './foh-maintenance.html',   // Maintenance job cards (its own page, opened from the Home tile)
   './foh-reviews.js',
   './foh-reservations.js',
   './foh-resreports.js',

@@ -198,7 +198,7 @@ if ('serviceWorker' in navigator) {
     <div class="foh-hero-content">
       <img class="foh-hero-logo" src="robertos-logo-white.svg" alt="Roberto's">
     </div>
-    <div id="foh-build" style="position:absolute;bottom:6px;right:10px;font-size:9px;letter-spacing:.08em;color:rgba(255,255,255,.4);z-index:3;font-variant-numeric:tabular-nums;">build 2026-09-29.1</div>
+    <div id="foh-build" style="position:absolute;bottom:6px;right:10px;font-size:9px;letter-spacing:.08em;color:rgba(255,255,255,.4);z-index:3;font-variant-numeric:tabular-nums;">build 2026-10-07.1</div>
   </div>
 
   <!-- main scroll area -->
@@ -223,7 +223,7 @@ if ('serviceWorker' in navigator) {
     </div>
 
     <!-- MODULE BOXES -->
-    <style>#foh-boxes{grid-template-columns:repeat(4,1fr)}@media (max-width:700px){#foh-boxes{grid-template-columns:1fr 1fr}}</style>
+    <style>#foh-boxes{grid-template-columns:repeat(5,1fr)}@media (max-width:700px){#foh-boxes{grid-template-columns:1fr 1fr}#foh-maint-tile{grid-column:1/-1}}</style>
     <div id="foh-boxes" style="min-height:160px;flex-shrink:0;display:grid;gap:10px;padding:12px;background:#F5F0E8;">
 
       <div onclick="fohTab('schedule')" style="background:#fff;border:1px solid rgba(107,31,42,0.12);border-top:2px solid #6B1F2A;padding:16px 14px;cursor:pointer;display:flex;flex-direction:column;">
@@ -254,7 +254,35 @@ if ('serviceWorker' in navigator) {
         <div style="font-size:16px;color:#6B1F2A;opacity:.4;margin-top:8px;">&rsaquo;</div>
       </div>
 
+      <!-- Maintenance — Alessandro's Tell us idea (inbox c4ff2eae, 29 Sep 2026): one place
+           where anyone reports a fault and everyone sees what is already reported. Its own
+           page (foh-maintenance.html), so an email link opens straight onto a job card. The
+           count is fmaint_summary(): open cards, no sign-in, test cards left out. -->
+      <a id="foh-maint-tile" href="foh-maintenance.html" style="background:#fff;border:1px solid rgba(107,31,42,0.12);border-top:2px solid #6B1F2A;padding:16px 14px;cursor:pointer;display:flex;flex-direction:column;text-decoration:none;">
+        <div style="font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:#544418;font-weight:700;margin-bottom:6px;">Live</div>
+        <div style="font-family:'Playfair Display',serif;font-size:17px;color:#2C1810;margin-bottom:5px;">Maintenance <span id="foh-maint-badge" style="display:none;font-family:var(--font-sans,sans-serif);font-size:11px;font-weight:700;color:#fff;background:#6B1F2A;border-radius:99px;padding:2px 7px;vertical-align:3px;"></span></div>
+        <div style="font-size:11px;color:#4F4535;line-height:1.4;flex:1;">Report a fault &mdash; and see everything already reported</div>
+        <div style="font-size:16px;color:#6B1F2A;opacity:.4;margin-top:8px;">&rsaquo;</div>
+      </a>
+
     </div>
+    <script>
+    (function(){
+      function n(){
+        fetch('https://paoaivwtkzujmrgrfjuq.supabase.co/rest/v1/rpc/fmaint_summary', { cache:'no-store', headers:{
+          apikey: SUPABASE_KEY, Authorization: 'Bearer ' + SUPABASE_KEY } })
+        .then(function(r){ return r.ok ? r.json() : null; })
+        .then(function(j){
+          var b = document.getElementById('foh-maint-badge'); if (!b || !j) return;
+          b.textContent = j.open ? j.open + ' open' : '';
+          b.style.display = j.open ? 'inline-block' : 'none';
+        }).catch(function(){});
+      }
+      // SUPABASE_KEY comes from foh-core.js, which loads after this block
+      window.addEventListener('load', n);
+      document.addEventListener('visibilitychange', function(){ if (!document.hidden) n(); });
+    })();
+    </script>
 
     <!-- SWITCH TO KITCHEN APP -->
     <div style="padding:4px 12px 16px;background:#F5F0E8;flex-shrink:0;">
