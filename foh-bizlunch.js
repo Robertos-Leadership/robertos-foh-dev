@@ -312,8 +312,6 @@ function renderBizLunch(){
     h.push('</tbody></table></div>');
   }
 
-  if(money) h.push(blFoodCostHtml(shown, today));
-
   // ── Two panels: by day · what they chose ──
   var max = 1; shown.forEach(function(d){ var n = BL.nights[d]; if(n && n.menus > max) max = n.menus; });
   h.push('<div class="bl-grid">');
@@ -345,6 +343,9 @@ function renderBizLunch(){
     h.push('</div>');
   }
   h.push('</div></div>');
+
+  // Food cost sits under the day chart (Francesco, 7 Oct)
+  if(money) h.push(blFoodCostHtml(shown, today));
 
   // ── The chosen day's tables ──
   if(BL.pick && BL.nights[BL.pick]){
