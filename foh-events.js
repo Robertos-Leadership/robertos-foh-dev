@@ -51,7 +51,10 @@ function setWeekScope(scope){
 const EVENTS_ACTIVE_DAYS = 60;
 async function loadAll(){
   const { data: events } = await sb.from('events').select('*').order('created_at');
-  state.events = (events || []).slice().sort(eventSort);
+  // 7 Oct 2026, Francesco: the old nights (cancelled 28 Aug, status 'paused') are HIDDEN,
+  // not shown as paused cards. Only the running activations (Moda Night) appear. Their rows,
+  // weeks and results stay in the database; set status back to 'active' to bring one back.
+  state.events = (events || []).filter(e=>(e.status||'active')!=='paused').slice().sort(eventSort);
   const evIds = state.events.map(e=>e.id);
   const allWeeks = evIds.length
     ? (await sb.from('weeks').select('*').in('event_id', evIds).order('week_date',{ascending:false})).data || []
