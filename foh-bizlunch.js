@@ -154,10 +154,75 @@ function blSum(days){
 }
 
 
-// Food cost moved to the Kitchen app on 7 Oct 2026 (Francesco: chefs own it, FOH does not
-// show it) — Recipes > Business lunch, business-lunch.html in the Kitchen repo.
+// Food cost — a clean, read-only report (Francesco, 7 Oct 2026: "just a clean report").
+// The chefs own the costing and the till-name links in the Kitchen app (Recipes >
+// Business lunch, chef code to change). Here it is only READ: the recipe book's own cost
+// through its read-only bridge, and the links the chefs saved. No per-dish lines, no
+// matching, nothing to edit.
 function blTill(name){ return String(name||'').replace(/\s+/g,' ').trim(); }
 function blNorm(name){ return blTill(name).toLowerCase(); }
+var BLC = { state:'idle' };
+function blKitchenPage(){
+  if(window.BL_KITCHEN_PAGE) return window.BL_KITCHEN_PAGE;
+  return /robertos-foh-dev|localhost|127\.0\.0\.1/.test(location.hostname)
+    ? 'https://robertos-kitchen.github.io/robertos-kitchen/' : 'https://guarracinofamily.github.io/robertos-kitchen/';
+}
+function blCostStart(){
+  if(BLC.state !== 'idle') return;
+  BLC.state = 'loading';
+  var page = blKitchenPage(), origin = new URL(page, location.href).origin, done = false;
+  var f = document.createElement('iframe');
+  f.src = page + 'recipe-create.html?costbridge=1&origin=' + encodeURIComponent(location.origin);
+  f.setAttribute('aria-hidden', 'true'); f.tabIndex = -1; f.setAttribute('inert', '');
+  f.style.cssText = 'position:fixed;width:1px;height:1px;left:-9999px;top:0;border:0;visibility:hidden';
+  function finish(err, list){
+    if(done) return; done = true; clearTimeout(t); window.removeEventListener('message', on);
+    setTimeout(function(){ if(f.parentNode) f.parentNode.removeChild(f); }, 0);
+    if(err){ BLC = { state:'error', err:String(err.message || err) }; blRepaint(); return; }
+    var by = {}, bn = {}; list.forEach(function(x){ by[x.id] = x; bn[blNorm(x.name)] = x; });
+    BLC.byId = by; BLC.byName = bn; BLC.costed = true; if(BLC.links) BLC.state = 'ready'; blRepaint();
+  }
+  function on(e){
+    if(e.origin !== origin || !e.data || e.data.type !== 'rk-costs') return;
+    if(e.data.ok) finish(null, e.data.list || []); else finish(new Error(e.data.error || 'no cost'));
+  }
+  window.addEventListener('message', on);
+  var t = setTimeout(function(){ finish(new Error('the recipe book did not answer')); }, 60000);
+  document.body.appendChild(f);
+  sbKitchen.from('kitchen_event_overrides').select('dish_name,label').eq('event_id', '__bl_till_link__').then(function(r){
+    var m = {}; ((r && r.data) || []).forEach(function(x){ if(x.label) m[x.dish_name] = x.label; });
+    BLC.links = m; if(BLC.costed) BLC.state = 'ready'; blRepaint();
+  }, function(){ BLC.links = {}; if(BLC.costed) BLC.state = 'ready'; blRepaint(); });
+}
+function blCostOf(till){
+  var id = BLC.links && BLC.links[till], r = (id && BLC.byId[id]) || BLC.byName[blNorm(till)];
+  return r && r.cost != null ? r.cost : null;
+}
+function blFoodCostHtml(shown, today){
+  setTimeout(blCostStart, 0);
+  var h = ['<div class="bl-day bl-fc"><div class="bl-day-h"><div><div class="bl-day-t">Food cost</div></div></div>'];
+  if(BLC.state !== 'ready'){
+    h.push('<div class="bl-empty bl-pad">'+(BLC.state === 'error' ? 'The recipe book could not be read just now.' : 'Costing from the recipe book&hellip;')+'</div></div>');
+    return h.join('');
+  }
+  var days = shown.filter(function(d){ return d <= today && BL.nights[d]; }), T = { m:0, fc:0, net:0, miss:0 }, missing = {};
+  h.push('<table class="bl-tbl"><thead><tr><th>Day</th><th class="r">Menus</th><th class="r">Food cost</th><th class="r">Per menu</th><th class="r">Food cost %</th></tr></thead><tbody>');
+  days.forEach(function(d){
+    var n = BL.nights[d], c = n.courses || {}, fc = 0, miss = 0;
+    Object.keys(c).forEach(function(k){ var v = blCostOf(k); if(v != null) fc += v * c[k]; else { miss += c[k]; missing[k] = 1; } });
+    var net = blNet(n.menuGross, d);
+    T.m += n.menus; T.fc += fc; T.net += net; T.miss += miss;
+    h.push('<tr><td>'+blEsc(blDayName(d))+' '+blEsc(blDateLabel(d))+(d===today?' <span class="bl-sofar">so far</span>':'')+'</td><td class="r"><b>'+blN(n.menus)+'</b></td>'
+      + '<td class="r">'+(miss ? '&ge; ' : '')+blN2(fc)+'</td><td class="r">'+(n.menus ? (miss ? '&ge; ' : '')+blN2(fc/n.menus) : '&ndash;')+'</td>'
+      + '<td class="r"><b>'+(!miss && net ? (fc/net*100).toFixed(1)+'%' : '&ndash;')+'</b></td></tr>');
+  });
+  h.push('<tr class="bl-tot"><td>Week</td><td class="r">'+blN(T.m)+'</td><td class="r">'+(T.miss ? '&ge; ' : '')+blN2(T.fc)+'</td>'
+    + '<td class="r">'+(T.m ? (T.miss ? '&ge; ' : '')+blN2(T.fc/T.m) : '&ndash;')+'</td><td class="r">'+(!T.miss && T.net ? (T.fc/T.net*100).toFixed(1)+'%' : '&ndash;')+'</td></tr></tbody></table>');
+  var ml = Object.keys(missing);
+  if(ml.length) h.push('<div class="bl-note bl-pad">Not costed yet: '+ml.map(function(k){ return blEsc(k.replace(/^BL\s+/,'')); }).join(', ')+' &mdash; the % shows once the kitchen costs '+(ml.length===1?'it':'them')+'.</div>');
+  h.push('</div>');
+  return h.join('');
+}
 
 function renderBizLunch(){
   blCss();
@@ -246,6 +311,8 @@ function renderBizLunch(){
       + (money ? '<td class="r">'+blN(tg.bn)+'</td><td class="r">'+blN(tg.ln)+'</td><td class="r">'+(tg.ln ? Math.round(tg.bn/tg.ln*100)+'%' : '&ndash;')+'</td>' : '')+'</tr>');
     h.push('</tbody></table></div>');
   }
+
+  if(money) h.push(blFoodCostHtml(shown, today));
 
   // ── Two panels: by day · what they chose ──
   var max = 1; shown.forEach(function(d){ var n = BL.nights[d]; if(n && n.menus > max) max = n.menus; });
