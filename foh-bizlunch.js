@@ -37,6 +37,10 @@ function blNet(gross, iso){ return (Number(gross)||0) / blDiv(iso); }
 function blMoney(){ return (typeof fohBlocked==='function') ? !fohBlocked('revenue') : false; }
 function blIsMenu(name){ return /^business\s*lunch/i.test(String(name||'')); }
 function blIsCourse(name){ return /^BL\s/.test(String(name||'')); }
+// Served to every business-lunch guest by default — not a choice, so never counted
+// as one (Francesco, 7 Oct 2026). It still shows on the check itself.
+var BL_NOT_A_CHOICE = ['focaccia'];
+function blIsChoice(name){ return BL_NOT_A_CHOICE.indexOf(blCourseName(name).toLowerCase()) === -1; }
 function blCourseName(name){ var s = String(name||'').replace(/^BL\s+/,''); return s.charAt(0).toUpperCase()+s.slice(1).toLowerCase(); }
 
 // One night's book → the business-lunch view of it.
@@ -52,6 +56,7 @@ function blDigest(iso, j){
         menus += q; mg += p;
         var m = String(it.name).match(/@\s*(\d+(?:\.\d+)?)/); if(m) out.price = Number(m[1]);
       } else if(blIsCourse(it.name)){
+        if(!blIsChoice(it.name)) return;
         var k = blCourseName(it.name); dishes[k] = (dishes[k]||0) + q;
       } else if(p) { xg += p; }
     });
@@ -261,7 +266,7 @@ function renderBizLunch(){
 
   // ── How it is counted (folded) ──
   h.push('<details class="bl-how"><summary>How these numbers are counted</summary>'
-    + '<p>Counted from the Simphony check SevenRooms attaches to each booking: every <b>BusinessLunch@'+blN(price)+'</b> line is one menu, every <b>BL &hellip;</b> line is a course. Nothing is typed in and nothing is stored &mdash; Refresh reads the book again.</p>'
+    + '<p>Counted from the Simphony check SevenRooms attaches to each booking: every <b>BusinessLunch@'+blN(price)+'</b> line is one menu, every <b>BL &hellip;</b> line is a course. Focaccia goes to every guest, so it is not counted as a choice. Nothing is typed in and nothing is stored &mdash; Refresh reads the book again.</p>'
     + '<p>A check rung without a booking is not linked to SevenRooms and is <b>not</b> in these figures. The Simphony lunch guests beside each day come from the closing report, so a gap shows up as a difference.</p>'
     + (money ? '<p>Net = menu price &divide; '+blDiv(dates[0])+' (10% service and 5% VAT are inside the price; since 16 Sep 2026 the 7% DIFC fee is added on top of the bill). AED '+blN(price)+' = '+blN2(price/blDiv(dates[0]))+' net. Extras are everything else on a business-lunch table &mdash; water, drinks, desserts. Tips are not included.</p>' : '')
     + '</details>');
