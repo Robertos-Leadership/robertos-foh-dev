@@ -213,6 +213,7 @@ async function blLoadLinks(){
   } catch(e){ BLC.links = BLC.links || {}; BLC.linkErr = String(e && e.message || e); }
   blRepaint();
 }
+function blToggleCourses(){ BLC.showCourses = !BLC.showCourses; blRepaint(); }
 function blCostStart(){ if(BLC.state === 'idle'){ blCostEngine(); blLoadLinks(); } }
 function blCostRetry(){ BLC.state = 'idle'; BLC.p = null; blCostStart(); blRepaint(); }
 // till name -> { rec, how } ; rec null when nothing matches
@@ -250,10 +251,7 @@ async function blLinkSave(i){
 }
 function blFoodCostHtml(dates, shown, today){
   setTimeout(blCostStart, 0);
-  var h = ['<div class="bl-day bl-fc"><div class="bl-day-h"><div><div class="bl-day-t">Food cost</div>'
-    + '<div class="bl-day-s">Each course sold &times; its cost in the Kitchen recipe book, on today&rsquo;s FMC prices'
-    + (BLC.at ? ' &middot; costed '+BLC.at.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}) : '')+'</div></div>'
-    + (BLC.state === 'ready' || BLC.state === 'error' ? '<button class="res-btn" onclick="blCostRetry()">Re-cost</button>' : '')+'</div>'];
+  var h = ['<div class="bl-day bl-fc"><div class="bl-day-h"><div><div class="bl-day-t">Food cost</div></div></div>'];
   if(BLC.state === 'loading' || BLC.state === 'idle'){
     h.push('<div class="bl-empty bl-pad">Costing the dishes in the recipe book&hellip; this takes about ten seconds.</div></div>'); return h.join('');
   }
@@ -279,7 +277,16 @@ function blFoodCostHtml(dates, shown, today){
   });
   h.push('<tr class="bl-tot"><td>Week</td><td class="r">'+blN(T.m)+'</td><td class="r">'+(T.miss ? '&ge; ' : '')+blN2(T.fc)+'</td><td class="r">'+(T.m && !T.miss ? blN2(T.fc/T.m) : '&ndash;')+'</td>'
     + '<td class="r">'+(T.miss ? 'incomplete' : (T.net ? (T.fc/T.net*100).toFixed(1)+'%' : '&ndash;'))+'</td><td class="r">'+(T.miss ? blN(T.miss) : '&ndash;')+'</td></tr></tbody></table>');
-  if(T.miss) h.push('<div class="bl-note bl-pad">'+blN(T.miss)+' course'+(T.miss===1?' has':'s have')+' no cost yet, so the food cost above is a floor (&ge;) and no % is given until '+(T.miss===1?'it is':'they are')+' costed &mdash; see the list below.</div>');
+  // Everything below the day table is for whoever fixes a missing cost, not for the
+  // team reading the day: folded behind one tap, shut by default (Francesco, 7 Oct).
+  var nMiss = 0;
+  Object.keys(wk).forEach(function(k){ var r = blResolve(k).rec; if(!(r && r.cost != null)) nMiss++; });
+  h.push('<button class="bl-more" onclick="blToggleCourses()">'+(BLC.showCourses ? '&#9662;' : '&#9656;')+' Cost per course'
+    + (nMiss ? ' <span class="bl-miss">&middot; '+nMiss+' without a recipe</span>' : '')+'</button>');
+  if(!BLC.showCourses){ h.push('</div>'); return h.join(''); }
+  h.push('<div class="bl-note bl-pad">Each course sold &times; its cost in the Kitchen recipe book, on today&rsquo;s FMC prices'
+    + (BLC.at ? ' (costed '+BLC.at.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})+' &middot; <a href="#" onclick="blCostRetry();return false">re-cost</a>)' : '')
+    + (T.miss ? '. Until every course has a cost the day shows a floor (&ge;) and no %.' : '.')+'</div>');
   // per course
   var tills = Object.keys(wk).sort(function(a,b){
     var ra = blResolve(a).rec, rb = blResolve(b).rec;
@@ -522,6 +529,8 @@ function blCss(){
     '.bl-tot td{background:var(--surface2);font-weight:600;color:var(--vino)}',
     '.bl-sofar{font-size:10px;color:var(--gold-dim);letter-spacing:.06em;text-transform:uppercase;margin-left:4px}',
     '.bl-pad{margin:10px 18px}',
+    '.bl-more{display:block;width:100%;text-align:left;background:none;border:0;border-top:1px solid var(--border);padding:11px 18px;font:inherit;font-size:11px;letter-spacing:.08em;text-transform:uppercase;font-weight:600;color:var(--gold-dim);cursor:pointer}',
+    '.bl-more .bl-miss{text-transform:none;letter-spacing:0;font-weight:600}',
     '.bl-note{font-size:12px;color:var(--text-mid)}',
     '.bl-miss{color:#8C2F1E;font-weight:600}',
     '.bl-missrow td{background:#FBF3F0}',
