@@ -78,6 +78,18 @@ language plpgsql stable security definer set search_path to 'public' as $$
 declare s foh_staff;
 begin
   if length(trim(coalesce(p_emp,''))) < 2 then raise exception 'no_emp' using errcode = 'P0001'; end if;
+  -- 1212 and the personal master codes (foh-master-code.sql) open it too, as an admin who is NOT a
+  -- foh_staff row (Francesco must never appear on a roster). Fixed id, never a real staff id.
+  -- The admin has the MANAGER powers (sign off, send back) but not the technician's: opening a card
+  -- as technician stamps it Acknowledged, and an admin looking must never read as "the technician saw it".
+  if trim(p_emp) = '1212' or foh_master_name(p_emp) is not null then
+    s.id := '00000000-0000-0000-0000-000000001212';
+    s.name := coalesce(foh_master_name(p_emp), 'Admin');
+    s.role := 'Admin';
+    s.emp_id := trim(p_emp);
+    s.active := true;
+    return s;
+  end if;
   select * into s from foh_staff where active and trim(emp_id) = trim(p_emp) order by created_at limit 1;
   if s.id is null then raise exception 'no_emp' using errcode = 'P0001'; end if;
   return s;
@@ -87,6 +99,7 @@ revoke all on function fmaint_who(text) from public, anon, authenticated;
 create or replace function fmaint_has(p_staff uuid, p_role text) returns boolean
 language sql stable security definer set search_path to 'public' as $$
   select exists(select 1 from fmaint_people where staff_id = p_staff and role = p_role and active)
+      or (p_role = 'manager' and p_staff = '00000000-0000-0000-0000-000000001212'::uuid)
 $$;
 
 create or replace function fmaint_me(p_emp text) returns jsonb
