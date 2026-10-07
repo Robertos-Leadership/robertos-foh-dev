@@ -71,6 +71,7 @@ function blDigest(iso, j){
     Object.keys(dishes).forEach(function(k){ out.dishes[k] = (out.dishes[k]||0) + dishes[k]; });
     Object.keys(courses).forEach(function(k){ out.courses[k] = (out.courses[k]||0) + courses[k]; });
     out.rows.push({ time: r.time||'', tables: (r.tables||[]).join(', '), area: r.area||'', pax: Number(r.pax)||0,
+                    guest: String(r.name||'').trim(), walkin: /walk\s*in/i.test(String(r.booked_by||'')), vip: !!r.vip,
                     menus: menus, menuGross: mg, extraGross: xg, dishes: dishes,
                     items: items.filter(function(it){ return (Number(it.price)||0) || blIsCourse(it.name) || blIsMenu(it.name); }) });
   });
@@ -437,15 +438,15 @@ function renderBizLunch(){
       + (sim && sim.covers!=null ? ' &middot; Simphony lunch guests '+blN(sim.covers) : '')
       + (money && sim && sim.net!=null ? ' &middot; SevenRooms checks found '+blN(blNet(N.menuGross+N.extraGross, N.date))+' of Simphony&rsquo;s '+blN(sim.net)+' lunch net' : '')
       + '</div></div><button class="res-btn" onclick="blPick(\''+BL.pick+'\')">Close</button></div>');
-    h.push('<table class="bl-tbl"><thead><tr><th>Time</th><th>Table</th><th class="r">Guests</th><th class="r">Menus</th><th class="bl-hide-s">Courses</th>'
+    h.push('<table class="bl-tbl"><thead><tr><th>Time</th><th>Guest</th><th>Table</th><th class="r">Guests</th><th class="r">Menus</th><th class="bl-hide-s">Courses</th>'
       + (money ? '<th class="r">Extras net</th><th class="r">Check net</th>' : '')+'</tr></thead><tbody>');
     N.rows.forEach(function(r, i){
       var courses = Object.keys(r.dishes).map(function(k){ return (r.dishes[k]>1 ? r.dishes[k]+'× ' : '')+k; }).join(', ');
-      h.push('<tr class="bl-row'+(BL.open[i]?' open':'')+'" onclick="blToggle('+i+')"><td>'+blEsc(r.time)+'</td><td>'+blEsc(r.tables||'—')+'</td><td class="r">'+blN(r.pax)+'</td><td class="r"><b>'+blN(r.menus)+'</b></td>'
+      h.push('<tr class="bl-row'+(BL.open[i]?' open':'')+'" onclick="blToggle('+i+')"><td>'+blEsc(r.time)+'</td><td class="bl-guest">'+blEsc(r.guest||'—')+(r.vip?' <span class="bl-tag">VIP</span>':'')+(r.walkin?' <span class="bl-tag">walk-in</span>':'')+'</td><td>'+blEsc(r.tables||'—')+'</td><td class="r">'+blN(r.pax)+'</td><td class="r"><b>'+blN(r.menus)+'</b></td>'
         + '<td class="bl-hide-s bl-courses">'+blEsc(courses)+'</td>'
         + (money ? '<td class="r">'+blN(blNet(r.extraGross, N.date))+'</td><td class="r">'+blN(blNet(r.menuGross + r.extraGross, N.date))+'</td>' : '')+'</tr>');
       if(BL.open[i]){
-        h.push('<tr class="bl-items"><td colspan="'+(money?7:5)+'">'+r.items.map(function(it){
+        h.push('<tr class="bl-items"><td colspan="'+(money?8:6)+'">'+r.items.map(function(it){
           var p = Number(it.price)||0;
           return '<div><span>'+(Number(it.qty)>1 ? blN(it.qty)+'× ' : '')+blEsc(it.name)+'</span><span>'+(p ? (money ? 'AED '+blN(p) : '') : 'incl.')+'</span></div>';
         }).join('')+'</td></tr>');
@@ -513,6 +514,8 @@ function blCss(){
     '.bl-row{cursor:pointer}',
     '.bl-row:hover td,.bl-row.open td{background:var(--surface2)}',
     '.bl-courses{color:var(--text-mid);font-size:12px}',
+    '.bl-guest{font-weight:600;color:var(--vino-dark)}',
+    '.bl-tag{font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--gold-dim);font-weight:600;margin-left:4px;white-space:nowrap}',
     '.bl-items td{background:var(--surface2);padding:4px 12px 12px 24px}',
     '.bl-items div{display:flex;justify-content:space-between;gap:12px;font-size:12px;color:var(--text-mid);padding:3px 0;max-width:420px}',
     '.bl-cmp .bl-tbl td:first-child{white-space:nowrap}',
