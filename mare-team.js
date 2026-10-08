@@ -671,8 +671,27 @@
       var d = r.data;
       if (!d.ok) { main.innerHTML = '<div class="card stack"><h1 class="serif">' + E(T('Link not valid')) + '</h1><p class="big">' + E(T('This link is no longer active. Ask the manager for a new one.')) + '</p></div>'; return; }
       S.meName = d.name;
-      if (!d.has_pin) { main.innerHTML = '<div class="card stack"><h1 class="serif">' + E(T('Hi {n}', { n: d.name })) + '</h1><p class="big">' + E(T('Choose your 4-digit code on the tablet at the staff entrance first. Then come back to this link.')) + '</p></div>'; return; }
+      if (!d.has_pin) { phoneSetPin(); return; }   // first visit: choose the code here (8 Oct 2026, no tablet needed)
       if (saved) { S.mePin = saved; phoneLoad(); } else phonePin();
+    });
+  }
+  // First time on this link: choose a 4-digit code, then type it again. mare_me_set_pin only
+  // works while the person has no code, so a link can never overwrite one.
+  function phoneSetPin(msg) {
+    S.screen = 'mepin'; S.pin = '';
+    var again = !!S.pin1;
+    main.innerHTML = '<div class="pinwrap"><div class="pad"><div class="who" style="align-items:center;text-align:center"><div class="act">' + E(again ? T('TYPE IT AGAIN') : T('CHOOSE YOUR CODE')) + '</div><div class="nm serif">' + E(S.meName || '') + '</div></div>' +
+      '<div class="lbl">' + E(again ? T('Type the same 4 digits again') : T('Choose a 4-digit code. Keep it to yourself.')) + '</div><div class="dots" id="dots"></div><div class="msg err" id="msg">' + E(msg || '') + '</div><div class="keys" id="keys"></div></div></div>';
+    drawKeys(function () {
+      if (!S.pin1) { S.pin1 = S.pin; phoneSetPin(); return; }
+      if (S.pin1 !== S.pin) { S.pin1 = null; phoneSetPin(T('The two codes were different. Start again.')); return; }
+      var chosen = S.pin; S.pin1 = null;
+      M.rpc('mare_me_set_pin', { p_token: meToken, p_pin: chosen }).then(function (r) {
+        if (r.error) { phoneSetPin(r.error.network ? T('No internet. Try again in a moment.') : T('Something went wrong. Try again.')); return; }
+        if (!r.data.ok && r.data.error !== 'already_set') { phoneSetPin(T('Something went wrong. Try again.')); return; }
+        if (!r.data.ok) { phonePin(); return; }   // a code was set meanwhile (e.g. on the tablet): type that one
+        S.mePin = chosen; phoneLoad();
+      });
     });
   }
   function phonePin(msg) {
