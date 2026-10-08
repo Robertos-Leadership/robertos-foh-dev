@@ -263,6 +263,113 @@
     });
   }
 
+  // ── photo zoom (Andrea, 8 Oct 2026): tap a dish photo and it opens full screen.
+  // Pinch, double-tap, the mouse wheel or + / − zoom in; drag to look at one part
+  // of the plate. One viewer for every Mare screen, team and management alike.
+  var ZOOM_CSS = 'img.photo,img.recipe-photo{cursor:zoom-in}' +
+    '.mz{position:fixed;inset:0;z-index:1000;background:rgba(6,20,22,.94);overscroll-behavior:contain}' +
+    '.mz-stage{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;overflow:hidden;touch-action:none;cursor:zoom-in}' +
+    '.mz.on .mz-stage{cursor:grab}' +
+    '.mz-stage img{max-width:100%;max-height:100%;width:auto;height:auto;border-radius:0;box-shadow:none;object-fit:contain;transform-origin:50% 50%;user-select:none;-webkit-user-select:none;-webkit-user-drag:none;will-change:transform}' +
+    '.mz-bar{position:absolute;top:max(12px,env(safe-area-inset-top));right:12px;display:flex;gap:8px}' +
+    '.mz-bar button{min-width:48px;height:48px;padding:0 16px;border:0;border-radius:24px;background:#fff;color:#0B2E33;font:600 17px/1 system-ui,sans-serif;cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,.35)}' +
+    '.mz-bar button[data-z="+"],.mz-bar button[data-z="-"]{font-size:26px;padding:0}' +
+    '.mz-hint{position:absolute;left:50%;bottom:max(20px,env(safe-area-inset-bottom));transform:translateX(-50%);background:rgba(0,0,0,.6);color:#fff;font:500 15px/1.3 system-ui,sans-serif;padding:10px 16px;border-radius:20px;pointer-events:none;transition:opacity .6s;text-align:center;max-width:calc(100% - 32px)}';
+  function zoomCss() {
+    if (document.getElementById('mz-css')) return;
+    var st = document.createElement('style'); st.id = 'mz-css'; st.textContent = ZOOM_CSS; (document.head || document.documentElement).appendChild(st);
+  }
+  function zoomPhoto(src) {
+    if (!src) return;
+    zoomCss();
+    var v = document.createElement('div'); v.className = 'mz'; v.setAttribute('role', 'dialog'); v.setAttribute('aria-modal', 'true'); v.setAttribute('aria-label', T('Photo'));
+    v.innerHTML = '<div class="mz-stage"><img alt="" draggable="false"></div>' +
+      '<div class="mz-bar"><button type="button" data-z="-" aria-label="' + esc(T('Zoom out')) + '">−</button><button type="button" data-z="+" aria-label="' + esc(T('Zoom in')) + '">+</button><button type="button" data-z="x">' + esc(T('Close')) + '</button></div>' +
+      '<div class="mz-hint">' + esc(T('Pinch or double-tap to zoom. Drag to look closer.')) + '</div>';
+    var stage = v.querySelector('.mz-stage'), im = stage.querySelector('img'), bar = v.querySelector('.mz-bar'), hint = v.querySelector('.mz-hint');
+    im.src = src;
+    var s = 1, tx = 0, ty = 0, MAX = 6;
+    var pts = {}, pinch = null, pan = null, moved = false, lastTap = 0, lastX = 0, lastY = 0;
+    var bodyOv = document.body.style.overflow; document.body.style.overflow = 'hidden';
+    function clamp() {
+      if (s <= 1.001) { s = 1; tx = 0; ty = 0; return; }
+      var mx = Math.max(0, (im.offsetWidth * s - stage.clientWidth) / 2), my = Math.max(0, (im.offsetHeight * s - stage.clientHeight) / 2);
+      tx = Math.max(-mx, Math.min(mx, tx)); ty = Math.max(-my, Math.min(my, ty));
+    }
+    function draw() { clamp(); im.style.transform = 'translate(' + tx + 'px,' + ty + 'px) scale(' + s + ')'; v.classList.toggle('on', s > 1); }
+    function centre() { var r = stage.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; }
+    // Keep the point under the finger (or cursor) still while the scale changes.
+    function zoomAt(px, py, ns) {
+      ns = Math.max(1, Math.min(MAX, ns)); var c = centre();
+      tx = px - c.x - (px - c.x - tx) * ns / s; ty = py - c.y - (py - c.y - ty) * ns / s; s = ns; draw();
+    }
+    function close() {
+      document.removeEventListener('keydown', onKey, true);
+      document.body.style.overflow = bodyOv; v.remove();
+    }
+    function onKey(e) {
+      var c = centre();
+      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); }
+      else if (e.key === '+' || e.key === '=') zoomAt(c.x, c.y, s * 1.6);
+      else if (e.key === '-') zoomAt(c.x, c.y, s / 1.6);
+    }
+    function list() { return Object.keys(pts).map(function (k) { return pts[k]; }); }
+    stage.addEventListener('pointerdown', function (e) {
+      try { stage.setPointerCapture(e.pointerId); } catch (x) {}
+      pts[e.pointerId] = { x: e.clientX, y: e.clientY }; var p = list();
+      if (p.length === 1) { moved = false; pinch = null; pan = { x: e.clientX, y: e.clientY, tx: tx, ty: ty }; }
+      else if (p.length === 2) {
+        moved = true; pan = null;
+        pinch = { d: Math.hypot(p[0].x - p[1].x, p[0].y - p[1].y) || 1, mx: (p[0].x + p[1].x) / 2, my: (p[0].y + p[1].y) / 2, s: s, tx: tx, ty: ty };
+      }
+    });
+    stage.addEventListener('pointermove', function (e) {
+      if (!pts[e.pointerId]) return;
+      pts[e.pointerId] = { x: e.clientX, y: e.clientY }; var p = list();
+      if (pinch && p.length >= 2) {
+        var d = Math.hypot(p[0].x - p[1].x, p[0].y - p[1].y), mx = (p[0].x + p[1].x) / 2, my = (p[0].y + p[1].y) / 2, c = centre();
+        var ns = Math.max(1, Math.min(MAX, pinch.s * d / pinch.d));
+        s = ns; tx = mx - c.x - (pinch.mx - c.x - pinch.tx) * ns / pinch.s; ty = my - c.y - (pinch.my - c.y - pinch.ty) * ns / pinch.s; draw();
+      } else if (pan) {
+        var dx = e.clientX - pan.x, dy = e.clientY - pan.y;
+        if (Math.abs(dx) + Math.abs(dy) > 6) moved = true;
+        if (s > 1) { tx = pan.tx + dx; ty = pan.ty + dy; draw(); }
+      }
+    });
+    function up(e) {
+      if (!pts[e.pointerId]) return;
+      delete pts[e.pointerId]; var p = list();
+      if (p.length === 1) { pinch = null; pan = { x: p[0].x, y: p[0].y, tx: tx, ty: ty }; return; }
+      if (p.length) return;
+      pan = null; pinch = null;
+      if (moved || e.type === 'pointercancel') return;
+      var now = Date.now();
+      if (now - lastTap < 320 && Math.abs(e.clientX - lastX) < 30 && Math.abs(e.clientY - lastY) < 30) {
+        lastTap = 0; if (s > 1) { s = 1; draw(); } else zoomAt(e.clientX, e.clientY, 2.5); return;
+      }
+      lastTap = now; lastX = e.clientX; lastY = e.clientY;
+      // One tap beside the photo, while not zoomed in, closes it.
+      if (e.target !== im && s === 1) { var t0 = now; setTimeout(function () { if (lastTap === t0) close(); }, 330); }
+    }
+    stage.addEventListener('pointerup', up); stage.addEventListener('pointercancel', up);
+    stage.addEventListener('wheel', function (e) { e.preventDefault(); zoomAt(e.clientX, e.clientY, s * Math.exp(-e.deltaY * 0.0015)); }, { passive: false });
+    bar.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-z]'); if (!b) return; var z = b.getAttribute('data-z'), c = centre();
+      if (z === 'x') close(); else zoomAt(c.x, c.y, z === '+' ? s * 1.6 : s / 1.6);
+    });
+    document.addEventListener('keydown', onKey, true);
+    document.body.appendChild(v);
+    setTimeout(function () { hint.style.opacity = '0'; }, 3000);
+    bar.querySelector('[data-z="x"]').focus();
+    return v;
+  }
+  zoomCss();
+  document.addEventListener('click', function (e) {
+    var im = e.target.closest && e.target.closest('img.photo, img.recipe-photo');
+    if (!im || !(im.currentSrc || im.src)) return;
+    e.preventDefault(); zoomPhoto(im.currentSrc || im.src);
+  });
+
   var ICONS = {
     clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
     rota: '<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4M7 13h3M7 17h3M14 13h3"/>',
@@ -294,7 +401,7 @@
     weekStart: weekStart, monthStart: monthStart, addMonths: addMonths, day: day, niceDate: niceDate, shortDate: shortDate, monthName: monthName,
     toInstant: toInstant, mins: mins, dur: dur, durShort: durShort, timeToMin: timeToMin, shifts: shifts, lateness: lateness, actualByDay: actualByDay, actualHtml: actualHtml, GRACE_MIN: GRACE_MIN,
     rpc: rpc, kitchen: kitchen, dubaiBook: dubaiBook, dubaiLines: dubaiLines, dubaiRecipe: dubaiRecipe, dubaiLinesHtml: dubaiLinesHtml, dubaiBookHtml: dubaiBookHtml, esc: esc, safeJpeg: safeJpeg, safeImg: safeImg, money: money, money0: money0, num: num, numSafe: numSafe, parseNum: parseNum, toast: toast, pct: pct,
-    photoFromFile: photoFromFile, icon: icon,
+    photoFromFile: photoFromFile, zoomPhoto: zoomPhoto, icon: icon,
     // kept for old callers
     DAYS: DAYS.en
   };
