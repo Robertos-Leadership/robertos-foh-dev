@@ -23,6 +23,9 @@
 
   async function lookup(raw){
     var found = null, reached = 0;
+    // 1212, the admin code Stock Take already uses (STOCK_SUPER in stock-take.js), opens this
+    // read-only page too - Francesco, 8 Oct 2026. It opens THIS page only: it is not a master code.
+    if (String(raw).trim() === '1212') return { person:{ name: 'Admin' }, reached: 1 };
     // A personal master code (checked in the database, never stored in this file) opens it too.
     try{ var mc = await sb.rpc('foh_master_check', { p_code: raw }); if(mc && mc.data) return { person:{ name: mc.data }, reached: 1 }; }catch(e){}
     var jobs = [
