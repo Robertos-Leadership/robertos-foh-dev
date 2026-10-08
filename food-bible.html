@@ -9,7 +9,7 @@
      It matters more now: a dish is photographed on a phone, and the control for that
      was landing at a third of its size behind a hover state phones do not have. -->
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Roberto's Food Bible — one page, one dish</title>
+<title>Roberto's Food &amp; Beverage Bible — one page, one dish, one glass</title>
 <!-- The three venue rooms. They used to be pasted in here as base64 and made this
      file 1.28 MB: 646 KB of decoration that a phone re-downloaded in full every
      time either this page or the app was deployed, because an inline image cannot
@@ -405,6 +405,38 @@ img{display:block;max-width:100%}
   .cut .c.set{background:none!important;color:#000!important;border:.6mm solid #000!important;font-weight:700}
   .unknown{color:#000!important;border-left-color:#000!important}
 }
+
+/* ── Food | Wine switch — the Food & Beverage Bible (8 Oct 2026) ──
+   One page for both halves, so a waiter learns one screen. The wine page reuses the dish
+   sheet's own frame (.sheet/.hero/.shot/.mid/.side) — only what is new is styled here. */
+.fbmode{display:inline-flex;margin-top:14px;border:1px solid rgba(242,211,184,.6);border-radius:6px;overflow:hidden}
+.fbmode button{font-family:var(--sans);font-size:14px;font-weight:600;letter-spacing:.04em;padding:10px 18px;
+  min-height:44px;background:transparent;color:#f2d3b8;border:0;cursor:pointer}
+.fbmode button.on{background:#fbf3e9;color:var(--vino)}
+.glass{width:100%;max-width:210mm;box-sizing:border-box;display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;margin:0;padding:12px 14px;background:#fff;
+  border:1px solid var(--sabbia-dark);border-left:3px solid var(--oro);font-family:var(--sans);font-size:14px;line-height:1.45;color:var(--ink)}
+.glass .gl{font-size:10px;letter-spacing:.18em;text-transform:uppercase;font-weight:700;color:var(--vino-light)}
+.glass .why{flex:1 1 100%;font-family:var(--serif);font-style:italic;font-size:15px;line-height:1.4;color:var(--ink)}
+.glass .none{flex:1 1 auto;font-family:var(--serif);font-style:italic;font-size:15px;color:var(--ink)}
+.wchip{font-family:var(--sans);font-size:14px;font-weight:700;padding:8px 12px;min-height:40px;border-radius:4px;
+  border:1px solid var(--vino);background:var(--vino);color:var(--cream);cursor:pointer;text-align:left}
+.wchip.alt{background:#fff;color:var(--vino);font-weight:600}
+.wlist{list-style:none;margin:0;padding:0}
+.wlist li{border-bottom:.2mm solid rgba(207,192,173,.7)}
+.wlist li:last-child{border-bottom:none}
+.wdish{display:block;width:100%;text-align:left;background:none;border:0;padding:1.6mm 0;font-family:var(--sans);
+  font-size:9.5pt;line-height:1.35;color:var(--ink);cursor:pointer}
+.wdish .wn{color:var(--vino);font-weight:600;text-decoration:underline;text-decoration-color:rgba(107,31,42,.35);text-underline-offset:2px}
+.wdish .wc{color:#7a6a58;font-size:.9em}
+.wdish small{display:block;font-family:var(--serif);font-style:italic;font-size:9pt;line-height:1.35;margin-top:.6mm;color:var(--ink)}
+.shot.bottle img{max-height:78mm}
+@media screen and (max-width:900px){
+  .wdish{font-size:15.5px;padding:10px 0} .wdish small{font-size:14.5px}
+  .shot.bottle img{max-height:44vh}
+}
+/* the walk arrows sit on the screen edge up to 1060px - keep the bar out from under them, as .moved does */
+@media screen and (max-width:1060px){ .walking .glass{padding-left:50px;padding-right:50px} }
+@media print{ .fbmode,.glass{display:none!important} }
 </style>
 
 <div id="root"></div>
@@ -512,6 +544,7 @@ function local(path){
   (q[1] || '').split('&').forEach(function(kv){
     var i = kv.indexOf('='); if (i > 0) p[kv.slice(0,i)] = kv.slice(i+1);
   });
+  if (/^fb_/.test(table)) return [];
   var rows = (table === 'recipes' ? SNAP.recipes : SNAP.lines).slice();
   if (p.kind === 'eq.main') rows = rows.filter(function(r){ return r.kind === 'main'; });
   if (p.archived === 'is.false') rows = rows.filter(function(r){ return !r.archived; });
@@ -623,6 +656,7 @@ var SAMPLE = { code:'CR01', cat:'Starter / Crudo', name:'Ricciola',
 var DISHES = [], loadErr = null, busy = true;
 
 function load(){
+  wineErr = null;
   return Promise.all([
     sb('recipes?kind=eq.main&archived=is.false&select=id,name,section,method,allergens,updated_at&order=section,name'),
     sb('recipes?select=id,allergens'),
@@ -634,7 +668,11 @@ function load(){
     sb('recipe_menus?select=recipe_id,menu_id').catch(function(){ return []; }),
     /* the printed card, in the order it is printed — see menuOrder() */
     sb('menu_items?archived=is.false&select=menu_id,name,recipe_id,position&order=position')
-      .catch(function(){ return []; })
+      .catch(function(){ return []; }),
+    /* wine by the glass: never allowed to take the dishes down with it */
+    sb('fb_wines?active=is.true&select=id,position,style,name,region,grapes,notes,story,photo&order=position,name')
+      .catch(function(e){ wineErr = (e && e.message) || 'no answer'; return []; }),
+    sb('fb_wine_pairings?select=wine_id,recipe_id,rank,why').catch(function(){ return []; })
   ]).then(function(res){
     var ALL = {}, LINKS = {};
     res[1].forEach(function(r){ ALL[r.id] = r; });
@@ -644,6 +682,7 @@ function load(){
     MENUROWS = (res[3] || []).filter(function(m){ return m && m.id && 'name' in m; });
     MENUS = menuTree(MENUROWS);
     PRINTED = (res[5] || []).filter(function(r){ return r && r.menu_id; });
+    setWines(res[6], res[7]);
     dishSig = listSig(res[0]);
     var ON = {};
     (res[4]||[]).forEach(function(r){ (ON[r.recipe_id] = ON[r.recipe_id] || []).push(r.menu_id); });
@@ -847,6 +886,7 @@ function elsewhereNote(q){
 }
 /* stepping through the book stays inside the menu */
 function step(by){
+  if (mode === 'wine'){ wineStep(by); return; }
   var pool = inMenu(); if (!pool.length) return;
   var at = pool.indexOf(idx);
   if (at < 0){ idx = pool[0]; return; }
@@ -1053,8 +1093,13 @@ function sheet(d){
 /* the heading every Recipes screen opens with - the room behind it, the panel under it */
 function frame(inner){
   return '<div class="desk"><div class="front">' +
-    '<div class="noprint"><div class="eyebrow">Kitchen &nbsp;·&nbsp; Recipes</div>' +
-    '<h1 class="lede">Food Bible</h1></div>' +
+    '<div class="noprint"><div class="eyebrow">Roberto’s DIFC &nbsp;·&nbsp; Food &amp; Beverage</div>' +
+    '<h1 class="lede">Food &amp; Beverage Bible</h1>' +
+      /* Food | Wine — the same door, the same walk, the same search */
+      '<div class="fbmode" role="tablist" aria-label="Food or wine">' +
+        '<button role="tab" id="mfood" class="'+(mode==='food'?'on':'')+'" aria-selected="'+(mode==='food')+'">Food</button>' +
+        '<button role="tab" id="mwine" class="'+(mode==='wine'?'on':'')+'" aria-selected="'+(mode==='wine')+'">Wine by the glass</button>' +
+      '</div></div>' +
     inner +
   '</div></div>';
 }
@@ -1064,6 +1109,7 @@ function render(){
     root.innerHTML = frame('<div class="onpaper noprint"><div class="fbstat">Reading the recipes…</div></div>');
     return;
   }
+  if (mode === 'wine') return renderWine();
   if (idx >= DISHES.length) idx = 0;
   /* switching menu can leave you standing on a dish that is not on it */
   var pool = inMenu();
@@ -1139,11 +1185,206 @@ function render(){
           esc(when(changed)) + '. This page, and anything printed from it, is the older one. ' +
           '<button class="btn" id="reload">Show the new one</button></div>'
         : '') +
+      glassBar(d) +
       sheet(d) +
       '</div>' +
     '</div>');
   checkOneSheet();
   warmPhotos();
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   WINE BY THE GLASS — the second half of the Food & Beverage Bible (8 Oct 2026).
+   Same page, same door, same walk and search, so the floor learns one screen.
+   The wines and the pairings are rows in fb_wines / fb_wine_pairings (Kitchen
+   database, read only from here). A pairing is keyed on the RECIPE ID: a renamed
+   dish keeps its glass, and a dish taken off every menu drops out of the wine's
+   list on its own. Nothing about a wine is written in this file.
+   ═══════════════════════════════════════════════════════════════════════════ */
+var mode = 'food', WINES = [], WPAIR = {}, WDISH = {}, wineErr = null;
+var widx = 0, wq = '', wstyle = '';
+var WSTYLE = { sparkling:'Sparkling', white:'White', rose:'Rosé', red:'Red' };
+function wineIx(id){ for (var i = 0; i < WINES.length; i++) if (WINES[i].id === id) return i; return -1; }
+function dishIx(id){ for (var i = 0; i < DISHES.length; i++) if (DISHES[i].id === id) return i; return -1; }
+function setWines(wines, pairs){
+  var keep = WINES[widx] && WINES[widx].id;
+  WINES = (wines || []).filter(function(w){ return w && w.id && w.name; });
+  WPAIR = {}; WDISH = {};
+  (pairs || []).forEach(function(p){
+    if (!p || !p.wine_id || !p.recipe_id || wineIx(p.wine_id) < 0) return;
+    (WPAIR[p.recipe_id] = WPAIR[p.recipe_id] || []).push(p);
+    (WDISH[p.wine_id] = WDISH[p.wine_id] || []).push(p);
+  });
+  Object.keys(WPAIR).forEach(function(k){
+    WPAIR[k].sort(function(a, b){ return (a.rank - b.rank) || (wineIx(a.wine_id) - wineIx(b.wine_id)); });
+  });
+  var at = keep ? wineIx(keep) : -1;
+  widx = at > -1 ? at : Math.min(widx, Math.max(0, WINES.length - 1));
+}
+function winePool(){
+  var out = [];
+  WINES.forEach(function(w, i){ if (!wstyle || w.style === wstyle) out.push(i); });
+  return out;
+}
+/* "lamb" or "oysters" typed before service lands on the wines that go with it */
+function wineText(w){
+  return [w.name, w.region, w.grapes, WSTYLE[w.style] || '',
+    (WDISH[w.id] || []).map(function(p){ var i = dishIx(p.recipe_id); return i > -1 ? DISHES[i].name : ''; }).join(' ')
+  ].join(' ');
+}
+function findWines(qRaw){
+  var pool = winePool(), qw = words(qRaw);
+  if (!qw.length) return pool;
+  var hits = [];
+  pool.forEach(function(i){
+    var w = WINES[i], f = posIn(qw, w.name), rank;
+    if (f != null) rank = f;
+    else { var g = posIn(qw, wineText(w)); if (g == null) return; rank = 1000 + g; }
+    hits.push({ i:i, rank:rank, at:hits.length });
+  });
+  hits.sort(function(a, b){ return (a.rank - b.rank) || (a.at - b.at); });
+  return hits.map(function(h){ return h.i; });
+}
+function wineStep(by){
+  var pool = winePool(); if (!pool.length) return;
+  var at = pool.indexOf(widx);
+  widx = at < 0 ? pool[0] : pool[(at + by + pool.length) % pool.length];
+}
+/* the dishes a wine goes with — in the order the menu is laid out, never A-Z */
+function wineDishes(w, rank){
+  return (WDISH[w.id] || []).filter(function(p){ return p.rank === rank; })
+    .map(function(p){ return { p:p, i:dishIx(p.recipe_id) }; })
+    .filter(function(r){ return r.i > -1; })
+    .sort(function(a, b){
+      var sa = FB_SECTIONS.indexOf(DISHES[a.i].cat), sb2 = FB_SECTIONS.indexOf(DISHES[b.i].cat);
+      return ((sa < 0 ? 99 : sa) - (sb2 < 0 ? 99 : sb2)) || DISHES[a.i].name.localeCompare(DISHES[b.i].name);
+    });
+}
+function wchip(id, alt){
+  var w = WINES[wineIx(id)];
+  return w ? '<button class="wchip' + (alt ? ' alt' : '') + '" data-w="' + esc(w.id) + '">' + esc(w.name) + '</button>' : '';
+}
+/* above the dish's A4, never on it: the sheet's one-page promise is measured on the sheet */
+function glassBar(d){
+  if (!d || d.isSample || !WINES.length) return '';
+  var ps = WPAIR[d.id] || [];
+  var first = ps.filter(function(p){ return p.rank === 1; }), also = ps.filter(function(p){ return p.rank === 2; });
+  if (!first.length){
+    /* a dessert with no glass is an answer the floor needs, not a blank */
+    return d.cat === 'Dessert'
+      ? '<div class="glass noprint"><span class="gl">By the glass</span><span class="none">No wine on the by-the-glass list suits this dessert — ' +
+        'every glass is dry, and a dry wine tastes sour next to something sweet.</span></div>'
+      : '';
+  }
+  return '<div class="glass noprint"><span class="gl">By the glass</span>' +
+    first.map(function(p){ return wchip(p.wine_id, false); }).join('') +
+    (also.length ? '<span class="gl">also</span>' + also.map(function(p){ return wchip(p.wine_id, true); }).join('') : '') +
+    (first[0].why ? '<div class="why">' + esc(first[0].why) + '</div>' : '') +
+  '</div>';
+}
+function wineSheet(w){
+  var best = wineDishes(w, 1), also = wineDishes(w, 2);
+  function list(rows, withWhy){
+    return '<ul class="wlist">' + rows.map(function(r){
+      var d = DISHES[r.i];
+      return '<li><button class="wdish" data-r="' + esc(d.id) + '"><span class="wn">' + esc(d.name) + '</span>' +
+        (d.cat ? ' <span class="wc">· ' + esc(d.cat) + '</span>' : '') +
+        (withWhy && r.p.why ? '<small>' + esc(r.p.why) + '</small>' : '') + '</button></li>';
+    }).join('') + '</ul>';
+  }
+  return '<div class="sheet">' +
+    '<div class="rh">' +
+      '<span class="cat">' + esc(WSTYLE[w.style] || '') + ' · by the glass</span>' +
+      '<span class="house">Roberto’s DIFC &nbsp;·&nbsp; Wine by the glass 2026</span>' +
+    '</div>' +
+    '<div class="hero">' +
+      '<div class="shot bottle' + (w.photo ? '' : ' empty') + '">' +
+        (w.photo ? '<img src="' + esc(w.photo) + '" alt="' + esc(w.name) + '">'
+                 : '<div class="none"><b>No photograph yet</b><span>the bottle goes here</span></div>') +
+      '</div>' +
+      '<div class="title"><h1>' + esc(w.name) + '</h1>' +
+        '<div class="desc">' + esc([w.region, w.grapes].filter(Boolean).join(' · ')) + '</div>' +
+      '</div>' +
+    '</div>' +
+    '<div class="mid">' +
+      '<div>' +
+        '<div class="story" style="margin-top:0"><span class="lab">In the glass</span>' +
+          (w.notes ? '<div class="prose">' + esc(w.notes) + '</div>' : todo('Not written yet.')) + '</div>' +
+        '<div class="story"><span class="lab">How to sell it</span>' +
+          (w.story ? '<div class="prose">' + esc(w.story) + '</div>' : todo('Not written yet.')) + '</div>' +
+      '</div>' +
+      '<div class="side">' +
+        (best.length
+          ? '<div><span class="lab">The best glass for</span>' + list(best, true) + '</div>' +
+            (also.length ? '<div class="garnish"><span class="lab">Also good with</span>' + list(also, false) + '</div>' : '')
+          : '<div><span class="lab">Good with</span>' +
+            (also.length ? list(also, false) : '<div class="todo">No dish on the menu is paired with it yet.</div>') + '</div>') +
+      '</div>' +
+    '</div>' +
+    '<div class="foot"><span>Paired against each dish as the kitchen wrote it</span>' +
+      '<span class="r">Tap a dish to open its page</span></div>' +
+  '</div>';
+}
+function renderWine(){
+  var root = document.getElementById('root');
+  if (!WINES.length){
+    root.innerHTML = frame('<div class="onpaper"><div class="fbstat">' +
+      (wineErr ? 'Could not read the wine list — ' + esc(wineErr)
+               : frozen ? 'The wine list is only shown when the page can read the live list.'
+               : 'No wine by the glass is on the list yet.') + '</div></div>');
+    return;
+  }
+  var pool = winePool();
+  if (pool.length && pool.indexOf(widx) < 0) widx = pool[0];
+  var w = WINES[widx], hits = findWines(wq), walk = pool.length > 1;
+  root.innerHTML = frame(
+    '<div class="onpaper">' +
+      '<div class="fbctl noprint">' +
+      '<div class="tools">' +
+        '<span class="pickwrap">' +
+          '<select id="wstyle" aria-label="Which wines">' +
+            '<option value=""' + (wstyle ? '' : ' selected') + '>All wines by the glass</option>' +
+            ['sparkling','white','rose','red'].map(function(k){
+              return '<option value="' + k + '"' + (wstyle === k ? ' selected' : '') + '>' + WSTYLE[k] + '</option>'; }).join('') +
+          '</select>' +
+          '<input id="wq" value="' + esc(wq) + '" aria-label="Search wines" ' +
+            'placeholder="a wine, a grape or a dish — malbec, lamb…">' +
+          '<select id="wpick" aria-label="Which wine"' + (hits.length ? '' : ' disabled') + '>' +
+            (hits.length
+              ? hits.map(function(i){ return '<option value="' + i + '"' + (i === widx ? ' selected' : '') + '>' + esc(WINES[i].name) + '</option>'; }).join('')
+              : '<option>nothing matches</option>') +
+          '</select>' +
+          (wq ? '<button class="btn ghost" id="wclr">Clear</button>' : '') +
+        '</span>' +
+        '<span class="walk"><button class="btn" id="print">Print this page</button></span>' +
+      '</div>' +
+      '<div class="fbstat"><span>' +
+        (wq ? hits.length + ' of ' + pool.length + ' match' : 'Wine ' + (Math.max(0, pool.indexOf(widx)) + 1) + ' of ' + pool.length) +
+        (wstyle ? ' · ' + esc(WSTYLE[wstyle]) : '') + ' &nbsp;·&nbsp; by the glass' +
+      '</span><span id="fit"></span></div>' +
+      '</div>' +
+      '<div class="fbpage' + (walk ? ' walking' : '') + '">' +
+      (walk
+        ? '<div class="fbrail l noprint"><button class="fbarrow" id="prev" aria-label="Previous wine" title="Previous wine">&larr;</button></div>' +
+          '<div class="fbrail r noprint"><button class="fbarrow" id="next" aria-label="Next wine" title="Next wine">&rarr;</button></div>'
+        : '') +
+      wineSheet(w) +
+      '</div>' +
+    '</div>');
+  checkOneSheet();
+}
+/* from a wine to the dish, and back — the pairing is one link, read from both ends */
+function openDish(id){
+  var i = dishIx(id); if (i < 0) return;
+  mode = 'food'; idx = i; bq = ''; changed = null;
+  if (menuPick && !onPick(DISHES[i])) menuPick = '';
+  render(); window.scrollTo(0, 0);
+}
+function openWine(id){
+  var i = wineIx(id); if (i < 0) return;
+  mode = 'wine'; widx = i; wq = '';
+  if (wstyle && WINES[i].style !== wstyle) wstyle = '';
+  render(); window.scrollTo(0, 0);
 }
 
 /* The page promises one dish on one A4 in its own header. Past the word budgets it
@@ -1176,6 +1417,8 @@ document.addEventListener('change', function(e){
   if (e.target && e.target.id === 'mpick'){
     menuPick = e.target.value; bq=''; changed=null; render(); window.scrollTo(0,0); return;
   }
+  if (e.target && e.target.id === 'wstyle'){ wstyle = e.target.value; wq = ''; render(); window.scrollTo(0,0); return; }
+  if (e.target && e.target.id === 'wpick'){ widx = +e.target.value; render(); window.scrollTo(0,0); return; }
   if (e.target && e.target.id === 'pick'){
     idx = +e.target.value; changed = null; render(); window.scrollTo(0,0);
   }
@@ -1185,10 +1428,11 @@ document.addEventListener('change', function(e){
    NOT changed while you type: a waiter looking up Branzino should not watch four
    other dishes flash past on the way. */
 document.addEventListener('input', function(e){
-  if (!e.target || e.target.id !== 'bq') return;
-  var at = e.target.selectionStart;
-  bq = e.target.value; render();
-  var n = document.getElementById('bq');
+  if (!e.target || (e.target.id !== 'bq' && e.target.id !== 'wq')) return;
+  var box = e.target.id, at = e.target.selectionStart;
+  if (box === 'wq') wq = e.target.value; else bq = e.target.value;
+  render();
+  var n = document.getElementById(box);
   if (n){ n.focus(); try{ n.setSelectionRange(at,at); }catch(_){} }
 });
 /* the arrow keys walk the menu too — but never while typing a search or choosing in the list */
@@ -1203,6 +1447,10 @@ document.addEventListener('keydown', function(e){
 });
 /* Enter opens the best match — the whole point is not having to reach for the list */
 document.addEventListener('keydown', function(e){
+  if (e.target && e.target.id === 'wq' && e.key === 'Enter'){
+    var wh = findWines(wq); if (!wh.length) return;
+    e.preventDefault(); widx = wh[0]; wq = ''; render(); window.scrollTo(0,0); return;
+  }
   if (!e.target || e.target.id !== 'bq' || e.key !== 'Enter') return;
   var hits = findDishes(bq);
   if (!hits.length) return;
@@ -1229,6 +1477,14 @@ document.addEventListener('click', function(e){
     return;
   }
   if (!b) return;
+  if (b.id==='mfood' || b.id==='mwine'){
+    var want = b.id === 'mwine' ? 'wine' : 'food';
+    if (want !== mode){ mode = want; changed = null; render(); window.scrollTo(0,0); }
+    return;
+  }
+  if (b.getAttribute('data-w')){ openWine(b.getAttribute('data-w')); return; }
+  if (b.getAttribute('data-r')){ openDish(b.getAttribute('data-r')); return; }
+  if (b.id==='wclr'){ wq=''; render(); var wc=document.getElementById('wq'); if (wc) wc.focus(); return; }
   if (b.id==='bclr'){ bq=''; render(); var c=document.getElementById('bq'); if (c) c.focus(); return; }
   if (b.id==='reload'){
     var keep = DISHES[idx] && DISHES[idx].id;
@@ -1255,6 +1511,7 @@ document.addEventListener('keydown', function(e){
    and the picker stay, because the module opens this page without naming a dish. */
 var Q = new URLSearchParams(location.search);
 var embedded = Q.get('embed') === '1';
+if (Q.get('mode') === 'wine') mode = 'wine';
 if (embedded) document.documentElement.classList.add('embed');
 
 render();

@@ -1,4 +1,5 @@
-/* Food Bible for the team — read only, opened with an Employee ID.
+/* Food & Beverage Bible for the team (was the Food Bible; wine by the glass added 8 Oct 2026) —
+   read only, opened with an Employee ID.
    The page itself (food-bible.html) reads the Kitchen recipes live and contains no code that
    writes anything. This file is only the door: it asks for an Employee ID, checks it against the
    same two staff lists the rest of the app uses (FOH: foh_staff, Kitchen: staff), and opens the
@@ -45,7 +46,7 @@
     overlay.innerHTML =
       '<div style="background:#F8F4EC;width:100%;max-width:340px;padding:28px 24px 22px;text-align:center;border-top:3px solid #C9A84C;box-shadow:0 30px 80px rgba(0,0,0,.45)">'
       + '<div style="font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:#544418;font-weight:700">Read only</div>'
-      + '<div style="font-family:' + SERIF + ';font-size:22px;color:#2C1810;margin:4px 0 6px">Food Bible</div>'
+      + '<div style="font-family:' + SERIF + ';font-size:22px;color:#2C1810;margin:4px 0 6px">Food &amp; Beverage Bible</div>'
       + '<div style="font-size:12px;color:#4F4535;margin-bottom:14px">Enter your Employee ID to open it.</div>'
       + '<input id="bible-id" type="text" inputmode="numeric" autocomplete="off" placeholder="Employee ID" style="width:100%;box-sizing:border-box;height:42px;border:1px solid #b9ab94;background:#fff;padding:0 12px;font-size:16px;text-align:center">'
       + '<div id="bible-err" style="min-height:18px;font-size:12px;color:#8B1A1A;margin:8px 0 4px"></div>'
@@ -83,10 +84,10 @@
     frameWrap.style.cssText = 'position:fixed;inset:0;z-index:9500;background:#2b0104;display:flex;flex-direction:column';
     frameWrap.innerHTML =
       '<div style="flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 14px;background:#6B1F2A;border-bottom:2px solid #C9A84C;color:#F8F4EC">'
-      + '<div style="font-family:' + SERIF + ';font-size:15px">Food Bible <span style="font-size:11px;opacity:.7;letter-spacing:.08em">&nbsp;· ' + esc(name || '') + '</span></div>'
+      + '<div style="font-family:' + SERIF + ';font-size:15px">Food &amp; Beverage Bible <span style="font-size:11px;opacity:.7;letter-spacing:.08em">&nbsp;· ' + esc(name || '') + '</span></div>'
       + '<button id="bible-close" style="background:none;border:1px solid #C9A84C;color:#C9A84C;font-size:12px;letter-spacing:.06em;padding:6px 12px;cursor:pointer">Close</button>'
       + '</div>'
-      + '<iframe title="Food Bible" src="food-bible.html?embed=1" style="flex:1 1 auto;width:100%;border:0;background:#cdbba6"></iframe>';
+      + '<iframe title="Food and Beverage Bible" src="food-bible.html?embed=1&v=20261008wine" style="flex:1 1 auto;width:100%;border:0;background:#cdbba6"></iframe>';
     document.body.appendChild(frameWrap);
     document.getElementById('bible-close').onclick = function(){ frameWrap.remove(); frameWrap = null; };
   }
