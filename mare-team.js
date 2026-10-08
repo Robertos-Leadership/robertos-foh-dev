@@ -476,16 +476,7 @@
         : '<div class="card muted big">' + E(T('No Mare recipes yet.')) + '</div>';
       main.innerHTML = frame('Recipes', h, TABS);
       bindFrame();
-      on('[data-r]', function (b) {
-        rpcS('mare_s_recipe', { p_device: dev(), p_token: meToken, p_pin: pinArg(), p_id: b.getAttribute('data-r') }).then(function (x) {
-          if (!x || !x.ok || !x.recipe) return;
-          var r = x.recipe, ph = M.safeJpeg(r.photo);
-          main.innerHTML = frame(r.name, '<div class="stack">' + (ph ? '<img class="photo" src="' + ph + '" alt="">' : '') +
-            '<div class="row">' + (r.category ? '<span class="tag grey">' + E(r.category) + '</span>' : '') + (r.portions ? '<span class="tag grey">' + E(r.portions) + '</span>' : '') + (r.allergens ? '<span class="tag amber">' + E(r.allergens) + '</span>' : '') + '</div>' +
-            dubaiBlk(T('Ingredients'), r.ingredients) + dubaiBlk(T('Method'), r.method) + dubaiBlk(T('Plating and garnish'), r.plating) + '</div>');
-          bindFrame(function () { openMod('recipes', 'mare'); });
-        });
-      });
+      on('[data-r]', function (b) { mareCard(b.getAttribute('data-r')); });
       return;
     }
     main.innerHTML = frame('Recipes', '<div class="muted big">' + E(T('Loading the Dubai recipe cards…')) + '</div>', TABS);
@@ -509,9 +500,73 @@
     }, function () { main.innerHTML = frame('Recipes', '<div class="card big">' + E(T('Could not reach the Dubai recipe cards. Check the internet.')) + '</div>', TABS); bindFrame(); });
   }
 
+  function mareCard(rid, then) {
+    rpcS('mare_s_recipe', { p_device: dev(), p_token: meToken, p_pin: pinArg(), p_id: rid }).then(function (x) {
+      if (!x || !x.ok || !x.recipe) return;
+      var r = x.recipe, ph = M.safeJpeg(r.photo);
+      main.innerHTML = frame(r.name, '<div class="stack">' + (ph ? '<img class="photo" src="' + ph + '" alt="">' : '') +
+        '<div class="row">' + (r.category ? '<span class="tag grey">' + E(r.category) + '</span>' : '') + (r.portions ? '<span class="tag grey">' + E(r.portions) + '</span>' : '') + (r.allergens ? '<span class="tag amber">' + E(r.allergens) + '</span>' : '') + '</div>' +
+        dubaiBlk(T('Ingredients'), r.ingredients) + dubaiBlk(T('Method'), r.method) + dubaiBlk(T('Plating and garnish'), r.plating) + askBox() + '</div>');
+      bindFrame(function () { openMod('recipes', 'mare'); });
+      askLoad('mare', rid, r.name, function (t) { S.mod = 'recipes'; S.sub = 'mare'; S.screen = 'mod'; mareCard(rid, t); });
+      if (then) then(); else window.scrollTo(0, 0);
+    });
+  }
+
+  // ── Ask the chef (Andrea Falcone, Tell us 2bf15403, 8 Oct 2026) ──
+  // At the end of every recipe card: a team member asks about anything not clear. The database
+  // mails the chef (mare_settings 'recipe_question_to'); he answers from the link in the mail and
+  // the answer shows here, under the question, for the whole team. Either side can write again
+  // below it, like a small chat. A question starting "zz" is a test: it mails Francesco only.
+  function askBox() { return '<div class="card stack" id="rq"><h2 class="serif" style="margin:0">' + E(T('Not clear? Ask the chef')) + '</h2>' +
+    '<p class="muted" style="margin:0">' + E(T('Your question goes to the chef in Dubai by email. The answer comes back here, under your question, within 24 hours.')) + '</p>' +
+    '<div class="stack" id="rqt"></div>' +
+    '<label class="f"><span id="rql">' + E(T('Your question')) + '</span><textarea id="rqn" style="min-height:96px"></textarea></label>' +
+    '<div class="msg err" id="rqm" style="text-align:left"></div><button class="btn" id="rqs" style="align-self:flex-start">' + E(T('Send to the chef')) + '</button></div>'; }
+  function rqWhen(at) { var d = new Date(at); return M.niceDate(M.dateKey(d)) + ' · ' + M.hhmm(d); }
+  function rqThread(t) {
+    return '<div class="rq-th">' + t.msgs.map(function (m) {
+      return '<div class="rq-m' + (m.from_chef ? ' chef' : '') + '"><div class="rq-w">' + E(m.author) + ' · ' + E(rqWhen(m.at)) + '</div><div class="pre">' + E(m.text) + '</div></div>';
+    }).join('') + (t.answered ? '' : '<div class="muted small">' + E(T('Waiting for the chef’s answer.')) + '</div>') +
+      '<button class="btn ghost" data-rq="' + E(t.id) + '" style="min-height:40px;padding:8px 16px;align-self:flex-start">' + E(T('Write below this')) + '</button></div>';
+  }
+  function askLoad(kind, rid, rname, reopen) {
+    var box = document.getElementById('rqt'); if (!box) return;
+    var replyTo = null;
+    document.getElementById('rqs').onclick = function () {
+      var ta = document.getElementById('rqn'), msg = document.getElementById('rqm'), t = ta.value.trim();
+      if (t.length < 3) { msg.textContent = T('Write your question first.'); ta.focus(); return; }
+      var btn = this; btn.disabled = true; msg.textContent = '';
+      askWho(T('Question about {r}', { r: rname }), function (staff, pin) {
+        return rpcS('mare_s_rq_ask', { p_device: dev(), p_token: meToken, p_staff: staff, p_pin: pin || pinArg(), p_kind: kind, p_recipe: String(rid), p_name: rname, p_q: replyTo, p_text: t });
+      }).then(function (x) {
+        if (x && x.ok) { reopen(function () { var b = document.getElementById('rq'); if (b) b.scrollIntoView({ block: 'start' }); phoneToast(T('Sent to the chef. The answer will show here.')); }); return; }
+        if (!document.getElementById('rqs')) return;   // left the card (Back on Who are you?)
+        btn.disabled = false;
+        if (x) msg.textContent = x.network ? T('No internet. Try again in a moment.') : x.error === 'busy' ? T('Too many questions today. Try again tomorrow.') : T('Something went wrong. Try again.');
+      });
+    };
+    document.getElementById('rqn').oninput = function () { idle(300000); };
+    if (PREVIEW) { box.innerHTML = '<div class="muted small">' + E(T('Questions are not shown in View as.')) + '</div>'; return; }
+    rpcS('mare_s_rq_list', { p_device: dev(), p_token: meToken, p_pin: pinArg(), p_kind: kind, p_recipe: String(rid) }).then(function (x) {
+      if (box !== document.getElementById('rqt') || !x || !x.ok) return;
+      var th = x.threads || [];
+      box.innerHTML = th.length ? '<div class="muted small">' + E(T('Questions about this recipe')) + '</div>' + th.map(rqThread).join('') : '';
+      box.querySelectorAll('[data-rq]').forEach(function (b) {
+        b.onclick = function () {
+          replyTo = b.getAttribute('data-rq');
+          box.querySelectorAll('.rq-th').forEach(function (z) { z.classList.toggle('on', z === b.parentNode); });
+          document.getElementById('rql').textContent = T('Your reply');
+          document.getElementById('rqs').textContent = T('Send my reply');
+          var ta = document.getElementById('rqn'); ta.scrollIntoView({ block: 'center' }); ta.focus();
+        };
+      });
+    });
+  }
+
   // One Dubai card as a full screen. A batch line (data-b) opens that batch recipe;
   // trail = the cards above it, so Back goes to the dish, then to the list.
-  function dubaiCard(id, isBatch, trail) {
+  function dubaiCard(id, isBatch, trail, then) {
     Promise.all([M.dubaiRecipe(id, isBatch), M.dubaiLines(id)]).then(function (x) {
       if (S.mod !== 'recipes' || S.sub !== 'dubai') return;
       var r = x[0], m = (r.method && typeof r.method === 'object') ? r.method : {}, ph = (Array.isArray(r.photos) ? r.photos : []).map(function (p) { return M.safeImg(p && p.u); }).filter(Boolean)[0];
@@ -523,13 +578,14 @@
         (r.makes_qty ? '<span class="tag grey">' + E(T('Makes {q}', { q: r.makes_qty + ' ' + (r.makes_unit || '') })) + '</span>' : '') + '</div>' +
         (ph ? '<img class="photo" src="' + ph + '" alt="">' : '') +
         dubaiBlk(T('What the guest is told'), m.foh) + ing + dubaiBlk(T('Mise en place'), m.mise) + dubaiBlk(T('Method'), m.method) + dubaiBlk(T('Plating'), m.plating) + dubaiBlk(T('Garnish'), m.garnish) + dubaiBlk(T('Storage'), m.store) + dubaiBlk(T('Good to know'), m.more) +
-        ((r.allergens && r.allergens.length) ? '<div class="row">' + r.allergens.map(function (a) { return '<span class="tag amber">' + E(a) + '</span>'; }).join('') + '</div>' : '') + '</div>');
+        ((r.allergens && r.allergens.length) ? '<div class="row">' + r.allergens.map(function (a) { return '<span class="tag amber">' + E(a) + '</span>'; }).join('') + '</div>' : '') + askBox() + '</div>');
       function up() { if (prev) dubaiCard(prev.id, prev.isBatch, trail.slice(0, -1)); else openMod('recipes', 'dubai'); }
       bindFrame(function () { openMod('recipes', 'dubai'); });
       on('[data-bk]', up);
       var here = { id: id, isBatch: isBatch, name: r.name };
       on('[data-b]', function (b) { dubaiCard(b.getAttribute('data-b'), true, trail.concat([here])); });
-      window.scrollTo(0, 0);
+      askLoad(isBatch ? 'batch' : 'dubai', id, r.name, function (t) { S.mod = 'recipes'; S.sub = 'dubai'; S.screen = 'mod'; dubaiCard(id, isBatch, trail, t); });
+      if (then) then(); else window.scrollTo(0, 0);
     }, function () { main.innerHTML = frame('Recipes', '<div class="card big">' + E(T('Could not load this card.')) + '</div>'); bindFrame(function () { openMod('recipes', 'dubai'); }); });
   }
 

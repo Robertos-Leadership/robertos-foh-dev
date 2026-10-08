@@ -138,6 +138,11 @@ label.f input,label.f select,label.f textarea{color:var(--ink);font-weight:400;l
 .rcard b{font-size:23px;line-height:1.1;display:block}
 .pre{white-space:pre-wrap;line-height:1.5}
 .card .pre.big{font-family:'Cormorant Garamond',Georgia,serif;font-size:22px}
+.rq-th{display:flex;flex-direction:column;gap:8px;border-top:1px solid var(--line);padding-top:12px}
+.rq-th.on{border-top-color:var(--teal)}
+.rq-m{background:var(--soft);border-radius:10px;padding:10px 14px;max-width:88%;align-self:flex-start}
+.rq-m.chef{background:var(--tint);align-self:flex-end;border-left:3px solid var(--teal)}
+.rq-w{font-size:13px;font-weight:700;color:var(--muted);margin-bottom:2px}
 .photo{width:100%;max-height:360px;object-fit:cover;border-radius:12px;box-shadow:var(--lift)}
 .idchip{display:inline-flex;align-items:center;gap:8px;background:var(--tint);color:var(--teal);border-radius:6px;padding:8px 14px;font-weight:700;font-size:14px}
 .idchip button{background:none;border:0;color:var(--teal);text-decoration:underline;font-weight:600}
@@ -204,10 +209,10 @@ body.pvphone .bnav{max-width:430px}
   <main id="main"></main>
 </div>
 <canvas id="snap" width="240" height="180" style="display:none"></canvas>
-<script src="mare-i18n.js?v=20261008b"></script>
-<script src="mare-common.js?v=20261008b"></script>
-<script src="mare-media.js?v=20261008b"></script>
-<script src="mare-team.js?v=20261008b"></script>
+<script src="mare-i18n.js?v=20261008c"></script>
+<script src="mare-common.js?v=20261008c"></script>
+<script src="mare-media.js?v=20261008c"></script>
+<script src="mare-team.js?v=20261008c"></script>
 <!-- "Tell us" — same button and inbox as the Kitchen and FOH apps. -->
 <script>
 window.FB_INBOX = {
@@ -216,6 +221,6 @@ window.FB_INBOX = {
   screen: function () { return window.__mareScreen ? window.__mareScreen() : 'Mare tablet'; }
 };
 </script>
-<script src="feedback-button.js?v=20261008b"></script>
+<script src="feedback-button.js?v=20261008c"></script>
 </body>
 </html>

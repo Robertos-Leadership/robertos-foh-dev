@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#0E4A50">
+<title>Roberto's Mare · Answer a question</title>
+<link rel="icon" href="mare-logo-teal.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=Karla:wght@400;600;700&display=swap" rel="stylesheet">
+<!-- Roberto's Mare — the chef answers a team member's recipe question (8 Oct 2026, Andrea Falcone,
+     Tell us 2bf15403). Opened from the email that mare-rq-notify sends: ?q=<the thread's 32-hex
+     answer token>. No password — the link is the key, like a staff phone link. RPCs: mare_rq_get,
+     mare_rq_answer. The answer shows under the question on the recipe card in the team app. -->
+<style>
+:root{--teal:#0E4A50;--teal-2:#16606A;--tint:#E3ECEB;--cream:#F6F1EA;--line:#E4DBCD;--gold:#A8834B;--ink:#1B2426;--muted:#4B5557;--soft:#EFE8DF;--red:#9B1C1C}
+*{box-sizing:border-box}
+body{margin:0;background:var(--cream);color:var(--ink);font-family:Karla,Arial,sans-serif;font-size:17px;line-height:1.5}
+header{background:var(--teal);color:#fff;padding:16px 20px}
+header small{display:block;letter-spacing:2px;font-size:11px;font-weight:700;text-transform:uppercase;opacity:.8}
+h1{font-family:'Cormorant Garamond',Georgia,serif;font-weight:600;font-size:30px;margin:2px 0 0;line-height:1.1}
+main{max-width:640px;margin:0 auto;padding:18px 16px 40px;display:flex;flex-direction:column;gap:14px}
+.card{background:#fff;border:1px solid rgba(168,131,75,.24);border-radius:12px;padding:16px 18px;display:flex;flex-direction:column;gap:10px}
+.m{background:var(--soft);border-radius:10px;padding:10px 14px;max-width:88%;align-self:flex-start}
+.m.chef{background:var(--tint);align-self:flex-end;border-left:3px solid var(--teal)}
+.w{font-size:13px;font-weight:700;color:var(--muted);margin-bottom:2px}
+.pre{white-space:pre-wrap}
+.muted{color:var(--muted)}
+label{display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted)}
+textarea,input{font:inherit;color:var(--ink);font-size:17px;padding:12px 14px;border:1px solid #D6CABA;border-radius:8px;background:#fff;width:100%;letter-spacing:0;text-transform:none;font-weight:400}
+textarea{min-height:130px}
+button{font:inherit;background:var(--teal);color:#fff;border:0;border-radius:8px;padding:13px 24px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;font-size:13px;align-self:flex-start;min-height:48px;cursor:pointer}
+button:disabled{opacity:.55}
+.err{color:var(--red);font-weight:700;min-height:1.2em}
+.ok{color:var(--teal);font-weight:700}
+</style>
+</head>
+<body>
+<header><small>Roberto's Mare · question from the team</small><h1 id="ttl">Loading…</h1></header>
+<main id="main"></main>
+<script src="mare-common.js?v=20261008c"></script>
+<script>
+(function () {
+  var M = window.Mare, E = M.esc, main = document.getElementById('main');
+  var tok = new URLSearchParams(location.search).get('q') || '';
+  var LS_NAME = 'mare_answer_name';
+  function ls(v) { try { if (v === undefined) return localStorage.getItem(LS_NAME); localStorage.setItem(LS_NAME, v); } catch (e) { return null; } }
+  function when(at) { var d = new Date(at); return M.niceDate(M.dateKey(d)) + ' · ' + M.hhmm(d) + ' (Montenegro)'; }
+  var KIND = { mare: 'Mare recipe', dubai: 'Dubai recipe card', batch: 'Dubai batch recipe' };
+  function fail(t) { document.getElementById('ttl').textContent = 'Roberto\'s Mare'; main.innerHTML = '<div class="card"><p style="margin:0">' + E(t) + '</p></div>'; }
+  function paint(th, note) {
+    document.getElementById('ttl').textContent = th.recipe_name;
+    main.innerHTML = '<p class="muted" style="margin:0">' + E(KIND[th.recipe_kind] || 'Recipe') + ' · asked by ' + E(th.staff_name) + '</p>' +
+      '<div class="card" id="th">' + th.msgs.map(function (m) {
+        return '<div class="m' + (m.from_chef ? ' chef' : '') + '"><div class="w">' + E(m.author) + ' · ' + E(when(m.at)) + '</div><div class="pre">' + E(m.text) + '</div></div>';
+      }).join('') + '</div>' +
+      (note ? '<div class="ok">' + E(note) + '</div>' : '') +
+      '<div class="card"><label>' + (th.answered ? 'Write again' : 'Your answer') + '<textarea id="a"></textarea></label>' +
+      '<label>Your name, as the team sees it<input type="text" id="n" autocomplete="name"></label>' +
+      '<div class="err" id="e"></div><button id="s">Send to the team</button>' +
+      '<p class="muted" style="margin:0;font-size:14px">It shows under the question on the recipe card, on the tablet and on the team\'s phones. If they write again, you get another email with this same link.</p></div>';
+    document.getElementById('n').value = ls() || 'Chef Andrea';
+    document.getElementById('s').onclick = function () {
+      var a = document.getElementById('a').value.trim(), n = document.getElementById('n').value.trim(), btn = this;
+      if (a.length < 2) { document.getElementById('e').textContent = 'Write your answer first.'; return; }
+      if (!n) { document.getElementById('e').textContent = 'Write your name.'; return; }
+      btn.disabled = true; document.getElementById('e').textContent = '';
+      M.rpc('mare_rq_answer', { p_token: tok, p_text: a, p_name: n }).then(function (r) {
+        if (r.data && r.data.ok) { ls(n); paint(r.data.thread, 'Sent. The team sees it under the question now.'); return; }
+        btn.disabled = false;
+        document.getElementById('e').textContent = r.error && r.error.network ? 'No internet. Try again in a moment.' : 'It did not save. Try again.';
+      });
+    };
+  }
+  if (!/^[0-9a-f]{32}$/.test(tok)) { fail('This link is not complete. Open it again from the email.'); return; }
+  M.rpc('mare_rq_get', { p_token: tok }).then(function (r) {
+    if (r.error) { fail(r.error.network ? 'No internet. Try again in a moment.' : 'Something went wrong. Reload the page.'); return; }
+    if (!r.data.ok) { fail('This question was not found. Open the newest email about it.'); return; }
+    paint(r.data.thread);
+  });
+})();
+</script>
+</body>
+</html>
