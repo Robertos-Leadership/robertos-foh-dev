@@ -418,9 +418,14 @@ img{display:block;max-width:100%}
 .glass .gl{font-size:10px;letter-spacing:.18em;text-transform:uppercase;font-weight:700;color:var(--vino-light)}
 .glass .why{flex:1 1 100%;font-family:var(--serif);font-style:italic;font-size:15px;line-height:1.4;color:var(--ink)}
 .glass .none{flex:1 1 auto;font-family:var(--serif);font-style:italic;font-size:15px;color:var(--ink)}
-.wchip{font-family:var(--sans);font-size:14px;font-weight:700;padding:8px 12px;min-height:40px;border-radius:4px;
-  border:1px solid var(--vino);background:var(--vino);color:var(--cream);cursor:pointer;text-align:left}
-.wchip.alt{background:#fff;color:var(--vino);font-weight:600}
+/* the wine is named the way the sheet names a dish - serif, in the house colour - not a filled
+   block: Francesco, 8 Oct 2026, "very heavy on the page, losing elegance". The fine gold rule is
+   the only sign it can be tapped; the target stays 40px tall. */
+.wchip{font-family:var(--serif);font-size:17px;font-weight:400;line-height:1.2;padding:8px 0 5px;min-height:40px;
+  border:0;border-bottom:1px solid var(--oro-light);border-radius:0;background:transparent;color:var(--vino);
+  cursor:pointer;text-align:left}
+.wchip:hover,.wchip:focus-visible{border-bottom-color:var(--vino);outline:none}
+.wchip.alt{font-size:15px;font-style:italic;border-bottom-color:rgba(217,189,63,.55)}
 .wlist{list-style:none;margin:0;padding:0}
 .wlist li{border-bottom:.2mm solid rgba(207,192,173,.7)}
 .wlist li:last-child{border-bottom:none}

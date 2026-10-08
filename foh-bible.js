@@ -90,7 +90,7 @@
       + '<div style="font-family:' + SERIF + ';font-size:15px">Food &amp; Beverage Bible <span style="font-size:11px;opacity:.7;letter-spacing:.08em">&nbsp;· ' + esc(name || '') + '</span></div>'
       + '<button id="bible-close" style="background:none;border:1px solid #C9A84C;color:#C9A84C;font-size:12px;letter-spacing:.06em;padding:6px 12px;cursor:pointer">Close</button>'
       + '</div>'
-      + '<iframe title="Food and Beverage Bible" src="food-bible.html?embed=1&v=20261008wine" style="flex:1 1 auto;width:100%;border:0;background:#cdbba6"></iframe>';
+      + '<iframe title="Food and Beverage Bible" src="food-bible.html?embed=1&v=20261008light" style="flex:1 1 auto;width:100%;border:0;background:#cdbba6"></iframe>';
     document.body.appendChild(frameWrap);
     document.getElementById('bible-close').onclick = function(){ frameWrap.remove(); frameWrap = null; };
   }

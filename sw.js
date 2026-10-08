@@ -15,7 +15,7 @@
    controllerchange reload), a fresh deploy reaches every screen with no manual
    tap. To force a clean cache rebuild, bump the CACHE version string below. */
 
-const CACHE = 'robertos-foh-v20260930lockmc-20261006marelink-eqx-learnfoh-maint-bizlunch2-frame-20261007bl3-noframe-fc-fc-moda-fold-nofc-moda2-look-fcclean-moda3-swap-fbwine-bible1212';
+const CACHE = 'robertos-foh-v20260930lockmc-20261006marelink-eqx-learnfoh-maint-bizlunch2-frame-20261007bl3-noframe-fc-fc-moda-fold-nofc-moda2-look-fcclean-moda3-swap-fbwine-bible1212-biblelight';
 
 // Best-effort warm cache. The bare paths are precached on install; the real
 // runtime requests (some carry a ?v= cache-buster) are cached on the fly by the
