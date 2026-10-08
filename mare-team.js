@@ -504,18 +504,33 @@
       paint(''); document.getElementById('q').oninput = function () { paint(this.value); };
       document.getElementById('rl').onclick = function (e) {
         var b = e.target.closest('[data-k]'); if (!b) return;
-        var id = b.getAttribute('data-k');
-        Promise.all([M.kitchen('recipes?select=name,section,makes_qty,makes_unit,allergens,method,photos&show_mare=is.true&id=eq.' + encodeURIComponent(id)), M.dubaiLines(id)]).then(function (x) {
-          if (!x[0][0]) return;
-          var r = x[0][0], m = (r.method && typeof r.method === 'object') ? r.method : {}, ph = (Array.isArray(r.photos) ? r.photos : []).map(function (p) { return M.safeImg(p && p.u); }).filter(Boolean)[0];
-          var lines = x[1].map(function (l) { return (l.qty ? l.qty + ' ' : '') + l.name + (l.note ? ' (' + l.note + ')' : ''); }).join('\n');
-          main.innerHTML = frame(r.name, '<div class="stack"><span class="tag blue" style="align-self:flex-start">' + E(T('ROBERTO\'S DUBAI · READ ONLY')) + '</span>' + (ph ? '<img class="photo" src="' + ph + '" alt="">' : '') +
-            dubaiBlk(T('What the guest is told'), m.foh) + dubaiBlk(T('Ingredients'), lines || m.ing) + dubaiBlk(T('Mise en place'), m.mise) + dubaiBlk(T('Method'), m.method) + dubaiBlk(T('Plating'), m.plating) + dubaiBlk(T('Garnish'), m.garnish) + dubaiBlk(T('Good to know'), m.more) +
-            ((r.allergens && r.allergens.length) ? '<div class="row">' + r.allergens.map(function (a) { return '<span class="tag amber">' + E(a) + '</span>'; }).join('') + '</div>' : '') + '</div>');
-          bindFrame(function () { openMod('recipes', 'dubai'); });
-        });
+        dubaiCard(b.getAttribute('data-k'), false, []);
       };
     }, function () { main.innerHTML = frame('Recipes', '<div class="card big">' + E(T('Could not reach the Dubai recipe cards. Check the internet.')) + '</div>', TABS); bindFrame(); });
+  }
+
+  // One Dubai card as a full screen. A batch line (data-b) opens that batch recipe;
+  // trail = the cards above it, so Back goes to the dish, then to the list.
+  function dubaiCard(id, isBatch, trail) {
+    Promise.all([M.dubaiRecipe(id, isBatch), M.dubaiLines(id)]).then(function (x) {
+      if (S.mod !== 'recipes' || S.sub !== 'dubai') return;
+      var r = x[0], m = (r.method && typeof r.method === 'object') ? r.method : {}, ph = (Array.isArray(r.photos) ? r.photos : []).map(function (p) { return M.safeImg(p && p.u); }).filter(Boolean)[0];
+      var prev = trail[trail.length - 1];
+      var ing = x[1].length ? '<div class="card"><h2 class="serif">' + E(T('Ingredients')) + '</h2>' + M.dubaiLinesHtml(x[1]) + '</div>' : dubaiBlk(T('Ingredients'), m.ing);
+      main.innerHTML = frame(r.name, '<div class="stack">' +
+        (prev ? '<button class="btn ghost" data-bk style="align-self:flex-start">‹ ' + E(T('Back to {n}', { n: prev.name })) + '</button>' : '') +
+        '<div class="row"><span class="tag blue">' + E(T('ROBERTO\'S DUBAI · READ ONLY')) + '</span>' + (r.kind === 'batch' ? '<span class="tag amber">' + E(T('Batch recipe')) + '</span>' : '') +
+        (r.makes_qty ? '<span class="tag grey">' + E(T('Makes {q}', { q: r.makes_qty + ' ' + (r.makes_unit || '') })) + '</span>' : '') + '</div>' +
+        (ph ? '<img class="photo" src="' + ph + '" alt="">' : '') +
+        dubaiBlk(T('What the guest is told'), m.foh) + ing + dubaiBlk(T('Mise en place'), m.mise) + dubaiBlk(T('Method'), m.method) + dubaiBlk(T('Plating'), m.plating) + dubaiBlk(T('Garnish'), m.garnish) + dubaiBlk(T('Storage'), m.store) + dubaiBlk(T('Good to know'), m.more) +
+        ((r.allergens && r.allergens.length) ? '<div class="row">' + r.allergens.map(function (a) { return '<span class="tag amber">' + E(a) + '</span>'; }).join('') + '</div>' : '') + '</div>');
+      function up() { if (prev) dubaiCard(prev.id, prev.isBatch, trail.slice(0, -1)); else openMod('recipes', 'dubai'); }
+      bindFrame(function () { openMod('recipes', 'dubai'); });
+      on('[data-bk]', up);
+      var here = { id: id, isBatch: isBatch, name: r.name };
+      on('[data-b]', function (b) { dubaiCard(b.getAttribute('data-b'), true, trail.concat([here])); });
+      window.scrollTo(0, 0);
+    }, function () { main.innerHTML = frame('Recipes', '<div class="card big">' + E(T('Could not load this card.')) + '</div>'); bindFrame(function () { openMod('recipes', 'dubai'); }); });
   }
 
   // ── breakage (Montenegro: no waste, Francesco 6 Oct 2026) ──

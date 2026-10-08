@@ -60,23 +60,20 @@
     };
     var tg = o.querySelector('#rt'); if (tg) tg.onclick = function () { App.save('mare_recipes', { id: r.id, active: !r.active }).then(function (x) { if (x) { o.close(); App.reload(); } }); };
   }
-  App.dubaiCard = function (id) {
-    return Promise.all([M.kitchen('recipes?select=id,name,kind,section,makes_qty,makes_unit,allergens,method,photos,notes&show_mare=is.true&id=eq.' + encodeURIComponent(id)),
-                        M.dubaiLines(id)])
-      .then(function (r) { if (!r[0][0]) throw new Error('hidden'); return { r: r[0][0], lines: r[1] }; });
+  App.dubaiCard = function (id, isBatch) {
+    return Promise.all([M.dubaiRecipe(id, isBatch), M.dubaiLines(id)])
+      .then(function (r) { return { r: r[0], lines: r[1] }; });
   };
   App.dubaiHtml = function (c) {
     var r = c.r, m = (r.method && typeof r.method === 'object') ? r.method : {}, ph = (Array.isArray(r.photos) ? r.photos : []).map(function (p) { return M.safeImg(p && p.u); }).filter(Boolean)[0];
     function blk(title, txt) { return txt ? '<div><h3 style="margin:6px 0">' + E(title) + '</h3><div class="pre">' + E(txt) + '</div></div>' : ''; }
-    var lines = c.lines.length ? '<ul style="margin:0;padding-left:20px;line-height:1.6">' + c.lines.map(function (l) {
-      return '<li>' + (l.qty ? '<b>' + E(l.qty) + '</b> ' : '') + E(l.name) + (l.note ? ' <span class="muted">(' + E(l.note) + ')</span>' : '') + '</li>';
-    }).join('') + '</ul>' : '';
+    var lines = c.lines.length ? M.dubaiLinesHtml(c.lines) : '';
     return (ph ? '<img class="recipe-photo" src="' + ph + '" alt="">' : '') +
-      '<div class="row"><span class="tag teal">' + E(T('ROBERTO\'S DUBAI · READ ONLY')) + '</span>' + (r.section ? '<span class="tag grey">' + E(r.section) + '</span>' : '') +
+      '<div class="row"><span class="tag teal">' + E(T('ROBERTO\'S DUBAI · READ ONLY')) + '</span>' + (r.kind === 'batch' ? '<span class="tag amber">' + E(T('Batch recipe')) + '</span>' : '') + (r.section && r.kind !== 'batch' ? '<span class="tag grey">' + E(r.section) + '</span>' : '') +
       (r.makes_qty ? '<span class="tag grey">' + E(T('Makes {q}', { q: r.makes_qty + ' ' + (r.makes_unit || '') })) + '</span>' : '') + '</div>' +
       blk(T('What the guest is told'), m.foh) +
       (lines ? '<div><h3 style="margin:6px 0">' + E(T('Ingredients')) + '</h3>' + lines + '</div>' : blk(T('Ingredients'), m.ing)) +
-      blk(T('Mise en place'), m.mise) + blk(T('Method'), m.method) + blk(T('Plating'), m.plating) + blk(T('Garnish'), m.garnish) + blk(T('Good to know'), m.more) +
+      blk(T('Mise en place'), m.mise) + blk(T('Method'), m.method) + blk(T('Plating'), m.plating) + blk(T('Garnish'), m.garnish) + blk(T('Storage'), m.store) + blk(T('Good to know'), m.more) +
       ((r.allergens && r.allergens.length) ? '<div><h3 style="margin:6px 0">' + E(T('Allergens')) + '</h3>' + r.allergens.map(function (a) { return '<span class="tag amber">' + E(a) + '</span>'; }).join(' ') + '</div>' : '') +
       blk(T('Notes'), r.notes);
   };
@@ -94,11 +91,25 @@
         '<div class="stack" id="dl"></div></section>';
       main.querySelector('#dq').oninput = function () { RC.q = this.value; paint(); };
       paint();
+      // A batch line opens its recipe in the same window; Back returns to the dish.
       App.on(main, '[data-k]', function (b) {
-        var o = App.overlay('<div class="muted">' + E(T('Loading…')) + '</div>');
-        App.dubaiCard(b.getAttribute('data-k')).then(function (c) {
-          o.firstChild.innerHTML = '<div class="row between"><h3 class="serif" style="font-size:28px">' + E(c.r.name) + '</h3><button class="btn ghost sm" data-close>' + E(T('Close')) + '</button></div>' + App.dubaiHtml(c);
-        }, function () { o.firstChild.innerHTML = '<div>' + E(T('Could not load this card.')) + '</div><button class="btn ghost" data-close>' + E(T('Close')) + '</button>'; });
+        var o = App.overlay('<div class="muted">' + E(T('Loading…')) + '</div>'), trail = [];
+        function show(id, isBatch) {
+          o.firstChild.innerHTML = '<div class="muted">' + E(T('Loading…')) + '</div>';
+          App.dubaiCard(id, isBatch).then(function (c) {
+            var prev = trail[trail.length - 1];
+            o.firstChild.innerHTML = (prev ? '<button class="btn ghost sm" data-bk style="align-self:flex-start">‹ ' + E(T('Back to {n}', { n: prev.name })) + '</button>' : '') +
+              '<div class="row between"><h3 class="serif" style="font-size:28px">' + E(c.r.name) + '</h3><button class="btn ghost sm" data-close>' + E(T('Close')) + '</button></div>' + App.dubaiHtml(c);
+            o.cur = { id: id, isBatch: isBatch, name: c.r.name };
+            o.scrollTop = 0; o.firstChild.scrollTop = 0;
+          }, function () { o.firstChild.innerHTML = '<div>' + E(T('Could not load this card.')) + '</div><button class="btn ghost" data-close>' + E(T('Close')) + '</button>'; });
+        }
+        o.addEventListener('click', function (e) {
+          var s = e.target.closest('[data-b]'), k = e.target.closest('[data-bk]');
+          if (s && o.cur) { trail.push(o.cur); show(s.getAttribute('data-b'), true); }
+          else if (k && trail.length) { var p = trail.pop(); show(p.id, p.isBatch); }
+        });
+        show(b.getAttribute('data-k'), false);
       });
     }, function () { main.innerHTML = App.empty(T('Could not reach the Dubai recipe cards. Check the internet.')); });
   }

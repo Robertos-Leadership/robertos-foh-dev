@@ -172,10 +172,24 @@
         var by = {}; rs.forEach(function (r) { by[r.id] = r.name; });
         return ls.map(function (l) {
           var sub = l.child_recipe_id ? by[l.child_recipe_id] : null, named = sub || l.stock_name;
-          return { qty: named && l.qty != null ? (l.qty + ' ' + (l.unit || '')).trim() : '', name: named || l.typed_text || '', note: l.note || '', sub: !!sub };
+          return { qty: named && l.qty != null ? (l.qty + ' ' + (l.unit || '')).trim() : '', name: named || l.typed_text || '', note: l.note || '', sub: !!sub, subId: sub ? l.child_recipe_id : null };
         });
       });
     });
+  }
+  // One Dubai card. A dish must be ticked "Mare" (show_mare); a batch recipe is opened
+  // from a line of a dish that is, so the chef ticks the dish once and its batches come
+  // with it (Francesco, 8 Oct 2026: "no batch recipes, how can they read and cook").
+  function dubaiRecipe(id, isBatch) {
+    return kitchen('recipes?select=id,name,kind,section,makes_qty,makes_unit,allergens,method,photos,notes' + (isBatch ? '' : '&show_mare=is.true') + '&id=eq.' + encodeURIComponent(id))
+      .then(function (r) { if (!r[0]) throw new Error('hidden'); return r[0]; });
+  }
+  // The ingredient list. A batch line is a button (data-b = its recipe id) that opens it.
+  function dubaiLinesHtml(lines) {
+    return '<ul class="dlines">' + lines.map(function (l) {
+      var t = (l.qty ? '<b>' + esc(l.qty) + '</b> ' : '') + esc(l.name) + (l.note ? ' <span class="muted">(' + esc(l.note) + ')</span>' : '');
+      return '<li>' + (l.subId ? '<button class="sublink" data-b="' + esc(l.subId) + '"><span>' + t + '</span><em>' + esc(T('Batch recipe')) + ' ›</em></button>' : t) + '</li>';
+    }).join('') + '</ul>';
   }
   function dubaiBookHtml(book, q) {
     q = (q || '').toLowerCase().trim(); var n = 0;
@@ -279,7 +293,7 @@
     parts: parts, pad: pad, hhmm: hhmm, dateKey: dateKey, today: today, dow: dow, addDays: addDays, daysBetween: daysBetween,
     weekStart: weekStart, monthStart: monthStart, addMonths: addMonths, day: day, niceDate: niceDate, shortDate: shortDate, monthName: monthName,
     toInstant: toInstant, mins: mins, dur: dur, durShort: durShort, timeToMin: timeToMin, shifts: shifts, lateness: lateness, actualByDay: actualByDay, actualHtml: actualHtml, GRACE_MIN: GRACE_MIN,
-    rpc: rpc, kitchen: kitchen, dubaiBook: dubaiBook, dubaiLines: dubaiLines, dubaiBookHtml: dubaiBookHtml, esc: esc, safeJpeg: safeJpeg, safeImg: safeImg, money: money, money0: money0, num: num, numSafe: numSafe, parseNum: parseNum, toast: toast, pct: pct,
+    rpc: rpc, kitchen: kitchen, dubaiBook: dubaiBook, dubaiLines: dubaiLines, dubaiRecipe: dubaiRecipe, dubaiLinesHtml: dubaiLinesHtml, dubaiBookHtml: dubaiBookHtml, esc: esc, safeJpeg: safeJpeg, safeImg: safeImg, money: money, money0: money0, num: num, numSafe: numSafe, parseNum: parseNum, toast: toast, pct: pct,
     photoFromFile: photoFromFile, icon: icon,
     // kept for old callers
     DAYS: DAYS.en

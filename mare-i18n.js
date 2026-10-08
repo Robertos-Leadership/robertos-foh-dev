@@ -4,6 +4,9 @@
    Words kept the same everywhere: DOLAZAK/ODLAZAK (clock in/out), šifra (code),
    smjena (shift), raspored (rota), brifing, kontrolna lista (checklist). */
 window.MARE_ME = {
+"Batch recipe": "Osnovni recept",
+"Back to {n}": "Nazad na {n}",
+"Storage": "Čuvanje",
 "working": "radi",
 "no clock-out": "nema odlaska",
 "no clock-in": "nema dolaska",

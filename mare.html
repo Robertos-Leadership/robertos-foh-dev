@@ -254,19 +254,20 @@ table.sheet tr.has:hover td{background:#FBF6EE}
 table.sheet tr.inv td{background:#FBF6EE;padding:10px 14px}
 table.sheet tfoot th, table.sheet tfoot td{border-top:2px solid var(--gold, #A8834B);font-weight:700}
 .kpi.green b{color:#285C36} .kpi.red b{color:#8A2E2E}
+.dlines{list-style:none;margin:0;padding:0}.dlines li{padding:7px 0;border-bottom:1px solid var(--line);line-height:1.45}.dlines li:last-child{border-bottom:0}.sublink{all:unset;box-sizing:border-box;cursor:pointer;display:flex;gap:10px;align-items:center;justify-content:space-between;width:100%;min-height:44px;color:var(--teal)}.sublink span{text-decoration:underline;text-decoration-color:var(--gold);text-underline-offset:4px}.sublink em{font-style:normal;font-size:12px;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap;border:1px solid var(--teal);border-radius:999px;padding:3px 9px}.sublink:hover em,.sublink:focus-visible em{background:var(--teal);color:#fff}
 </style>
 </head>
 <body>
 <div id="app"><div class="wrap muted" style="padding-top:40px">Loading…</div></div>
 <div class="status" id="status" role="status"></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="mare-i18n.js?v=20261006w"></script>
-<script src="mare-common.js?v=20261006w"></script>
-<script src="mare-media.js?v=20261006w"></script>
-<script src="mare-mgr.js?v=20261006w"></script>
-<script src="mare-mgr-ops.js?v=20261006w"></script>
-<script src="mare-mgr-back.js?v=20261006w"></script>
-<script src="mare-mgr-viewas.js?v=20261006w"></script>
+<script src="mare-i18n.js?v=20261008a"></script>
+<script src="mare-common.js?v=20261008a"></script>
+<script src="mare-media.js?v=20261008a"></script>
+<script src="mare-mgr.js?v=20261008a"></script>
+<script src="mare-mgr-ops.js?v=20261008a"></script>
+<script src="mare-mgr-back.js?v=20261008a"></script>
+<script src="mare-mgr-viewas.js?v=20261008a"></script>
 <script>MareApp.start();</script>
 <!-- "Tell us" — the same button as the Kitchen and FOH apps, into the same inbox
      (Admin → Feedback → Inbox). It says by itself which Mare module it was on. -->
@@ -280,6 +281,6 @@ window.FB_INBOX = {
   who: function () { var A = window.MareApp; return (A && A.S.me) || ''; }
 };
 </script>
-<script src="feedback-button.js?v=20261006w"></script>
+<script src="feedback-button.js?v=20261008a"></script>
 </body>
 </html>
