@@ -49,7 +49,7 @@ details summary{cursor:pointer;font-weight:700;color:var(--teal)}
 <body>
 <header><small>Roberto's Mare · Learning</small><h1>Check the Learning</h1></header>
 <main id="main"><div class="card">Loading…</div></main>
-<script src="mare-common.js?v=20261008d"></script>
+<script src="mare-common.js?v=20261009g"></script>
 <script>
 (function () {
   var M = window.Mare, E = M.esc, main = document.getElementById('main');
@@ -58,6 +58,16 @@ details summary{cursor:pointer;font-weight:700;color:var(--teal)}
   function ls(v) { try { if (v === undefined) return localStorage.getItem(LS); localStorage.setItem(LS, v); } catch (e) { return null; } }
   var ST = { draft: 'Waiting for you', approved: 'Approved', change: 'Change asked' };
   var topics = [], open = {};
+  var KIND = { one: 'Pick one', multi: 'Pick all that apply', order: 'Put in order', match: 'Match the pairs' };
+  function qHtml(q) {
+    var k = q.type || 'one', h = '<li><b>' + E(q.q) + '</b><span class="small muted">' + E(KIND[k]) + '</span>';
+    if (k === 'multi') h += '<span class="ans">✓ ' + q.answers.map(E).join(' · ✓ ') + '</span><div class="wr">✗ ' + q.wrong.map(E).join(' · ✗ ') + '</div>';
+    else if (k === 'order') h += '<span class="ans">' + q.items.map(function (x, i) { return (i + 1) + '. ' + E(x); }).join('<br>') + '</span>';
+    else if (k === 'match') h += '<span class="ans">' + q.pairs.map(function (p) { return E(p[0]) + ' → ' + E(p[1]); }).join('<br>') + '</span>';
+    else h += '<span class="ans">✓ ' + E(q.answer) + '</span><div class="wr">✗ ' + q.wrong.map(E).join(' · ✗ ') + '</div>';
+    return h + '</li>';
+  }
+
   function load() {
     return M.rpc('mare_learn_review_get', { p_token: tok }).then(function (r) {
       if (r.error) { main.innerHTML = '<div class="card">' + E(r.error.network ? 'No internet. Try again in a moment.' : 'Something went wrong. Try again.') + '</div>'; return; }
@@ -69,7 +79,7 @@ details summary{cursor:pointer;font-weight:700;color:var(--teal)}
     var done = topics.filter(function (t) { return t.status === 'approved'; }).length;
     var h = '<div class="card"><p style="margin:0">Six short topics for the Mare kitchen team, written from the Montenegrin laws on food safety, hygiene, infectious diseases and safety at work. ' +
       'Read each one with its questions, then press <b>Approve</b> or <b>Ask for a change</b>. A topic reaches the team only once you approve it.</p>' +
-      '<p class="small muted" style="margin:0">The team takes <b>one test with 3 questions from every topic</b> (18 in all), drawn at random from the 5 below. Pass mark 80%, timed the same way as Dubai.</p>' +
+      '<p class="small muted" style="margin:0">Each test is <b>20 questions from 5 topics picked at random</b> (these six and ten Roberto’s kitchen topics shared from Dubai), 4 questions per topic drawn from the ones below. Pass mark 80%, timed the same way as Dubai.</p>' +
       '<div class="sum"><span class="tag approved">' + done + ' of ' + topics.length + ' approved</span></div>' +
       (msg ? '<div style="color:var(--green);font-weight:700">' + E(msg) + '</div>' : '') + '</div>';
     topics.forEach(function (t, i) {
@@ -79,8 +89,7 @@ details summary{cursor:pointer;font-weight:700;color:var(--teal)}
         (t.reviewer_note ? '<div class="note"><b>For you to check:</b> ' + E(t.reviewer_note) + '</div>' : '') +
         '<details' + (t.status !== 'approved' ? ' open' : '') + '><summary>The page the team reads</summary><div class="pre" style="margin-top:10px">' + E(t.body) + '</div></details>' +
         '<div class="src"><b>Sources:</b> ' + E(t.sources) + '</div>' +
-        '<details' + (t.status !== 'approved' ? ' open' : '') + '><summary>The 5 questions (correct answer in green)</summary><ol style="margin-top:10px">' + t.questions.map(function (q) {
-          return '<li><b>' + E(q.q) + '</b><span class="ans">✓ ' + E(q.answer) + '</span><div class="wr">✗ ' + q.wrong.map(E).join(' · ✗ ') + '</div></li>'; }).join('') + '</ol></details>' +
+        '<details' + (t.status !== 'approved' ? ' open' : '') + '><summary>The ' + t.questions.length + ' questions (correct answers in green)</summary><ol style="margin-top:10px">' + t.questions.map(qHtml).join('') + '</ol></details>' +
         '<label>Note (needed to ask for a change)<textarea data-note="' + E(t.id) + '"></textarea></label>' +
         '<div class="row"><button data-act="approve" data-t="' + E(t.id) + '">Approve</button><button class="ghost" data-act="change" data-t="' + E(t.id) + '">Ask for a change</button></div>' +
         '<div class="err" data-err="' + E(t.id) + '"></div></div>';

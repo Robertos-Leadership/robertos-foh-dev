@@ -138,6 +138,12 @@
     }, function () { return { error: { network: true, message: 'No internet' } }; });
   }
   function rpc(name, args, token) { return post(SB_URL, SB_KEY, name, args, token); }
+  // an edge function, called with the public key (the function checks the person itself)
+  function edge(name, body) {
+    return fetch(SB_URL + '/functions/v1/' + name, { method: 'POST', headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY, 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) })
+      .then(function (r) { return r.json().then(function (j) { return r.ok ? { data: j } : { error: { status: r.status, message: (j && j.error) || ('HTTP ' + r.status) } }; }, function () { return { error: { status: r.status } }; }); },
+            function () { return { error: { network: true, message: 'No internet' } }; });
+  }
   function kitchen(path) {
     return fetch(K_URL + '/rest/v1/' + path, { headers: { 'apikey': K_KEY, 'Authorization': 'Bearer ' + K_KEY } })
       .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); });
@@ -400,7 +406,7 @@
     parts: parts, pad: pad, hhmm: hhmm, dateKey: dateKey, today: today, dow: dow, addDays: addDays, daysBetween: daysBetween,
     weekStart: weekStart, monthStart: monthStart, addMonths: addMonths, day: day, niceDate: niceDate, shortDate: shortDate, monthName: monthName,
     toInstant: toInstant, mins: mins, dur: dur, durShort: durShort, timeToMin: timeToMin, shifts: shifts, lateness: lateness, actualByDay: actualByDay, actualHtml: actualHtml, GRACE_MIN: GRACE_MIN,
-    rpc: rpc, kitchen: kitchen, dubaiBook: dubaiBook, dubaiLines: dubaiLines, dubaiRecipe: dubaiRecipe, dubaiLinesHtml: dubaiLinesHtml, dubaiBookHtml: dubaiBookHtml, esc: esc, safeJpeg: safeJpeg, safeImg: safeImg, money: money, money0: money0, num: num, numSafe: numSafe, parseNum: parseNum, toast: toast, pct: pct,
+    rpc: rpc, edge: edge, kitchen: kitchen, dubaiBook: dubaiBook, dubaiLines: dubaiLines, dubaiRecipe: dubaiRecipe, dubaiLinesHtml: dubaiLinesHtml, dubaiBookHtml: dubaiBookHtml, esc: esc, safeJpeg: safeJpeg, safeImg: safeImg, money: money, money0: money0, num: num, numSafe: numSafe, parseNum: parseNum, toast: toast, pct: pct,
     photoFromFile: photoFromFile, zoomPhoto: zoomPhoto, icon: icon,
     // kept for old callers
     DAYS: DAYS.en

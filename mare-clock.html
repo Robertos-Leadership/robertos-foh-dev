@@ -282,6 +282,22 @@ body.phone #fbi-btn{bottom:calc(84px + env(safe-area-inset-bottom,0px)) !importa
 .ln-score.good,.ln-per .good,.ln-wrong .good{color:var(--green)} .ln-score.bad,.ln-per .bad,.ln-wrong .bad{color:var(--red)}
 .ln-per{display:flex;justify-content:space-between;gap:10px;border-bottom:1px solid var(--line-2);padding:6px 0;font-size:15px}
 .ln-wrong{border-bottom:1px solid var(--line-2);padding:8px 0;font-size:15px;display:flex;flex-direction:column;gap:2px}
+/* Learning formats (9 Oct 2026) */
+.ln-hint{font-size:13px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--gold)}
+.ln-multi{display:flex;align-items:center;gap:12px}
+.ln-box{width:26px;height:26px;border-radius:6px;border:1.5px solid #C9BEB1;display:grid;place-items:center;flex:none;font-weight:700;background:#fff}
+.ln-multi.on .ln-box{background:var(--teal);border-color:var(--teal);color:#fff}
+.ln-order{display:flex;flex-direction:column;gap:8px;touch-action:none}
+.ln-row{display:flex;align-items:center;gap:12px;background:#fff;border:1px solid #D6CABA;border-radius:10px;padding:12px 14px;min-height:54px;font-size:16px;cursor:grab;user-select:none;-webkit-user-select:none;touch-action:none}
+.ln-row.drag{box-shadow:0 10px 24px -8px rgba(14,59,63,.45);border-color:var(--teal);background:var(--tint-2);cursor:grabbing}
+.ln-grip{color:var(--gold);font-size:20px}
+.ln-pos{width:24px;height:24px;border-radius:50%;background:var(--tint);color:var(--teal);font-weight:700;font-size:13px;display:grid;place-items:center;flex:none}
+.ln-match{display:flex;flex-direction:column;gap:12px}
+.ln-pair{display:flex;flex-direction:column;gap:6px;font-weight:700;font-size:15px}
+.ln-pair select{font-weight:400}
+.ln-shots{display:flex;gap:6px;flex-wrap:wrap}
+.ln-shots img{width:72px;height:72px;object-fit:cover;border-radius:8px;border:1px solid var(--line)}
+.ln-choice.pic{display:flex;flex-direction:column;align-items:flex-start;gap:8px}
 </style>
 </head>
 <body>
@@ -294,9 +310,9 @@ body.phone #fbi-btn{bottom:calc(84px + env(safe-area-inset-bottom,0px)) !importa
 </div>
 <canvas id="snap" width="240" height="180" style="display:none"></canvas>
 <script src="mare-i18n.js?v=20261009e"></script>
-<script src="mare-common.js?v=20261008d"></script>
+<script src="mare-common.js?v=20261009g"></script>
 <script src="mare-media.js?v=20261008d"></script>
-<script src="mare-team.js?v=20261009f"></script>
+<script src="mare-team.js?v=20261009g"></script>
 <!-- "Tell us" — same button and inbox as the Kitchen and FOH apps. -->
 <script>
 window.FB_INBOX = {

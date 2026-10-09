@@ -706,65 +706,84 @@
     });
   }
 
-  // ── learning (9 Oct 2026): Montenegrin health & safety, checked by Chef Andrea ──
-  // Read the approved topics, then ONE test with 3 questions from every topic (Francesco: "each test
-  // should have all 6 topics in once"). Pass 80%, one clock for the whole test (Dubai's timing).
-  // The answers stay in the database until hand-in (mare_s_learn_start / _finish).
-  var LN = { data: null, topic: null, test: null, qi: 0, picks: [], result: null, tick: null, busy: false };
-  function lnCall(name, extra) {
-    var a = { p_device: dev(), p_token: meToken, p_staff: null, p_pin: pinArg() };
-    Object.keys(extra || {}).forEach(function (k) { a[k] = extra[k]; });
-    if (PREVIEW && name !== 'mare_s_learn_home') { M.toast(T('Read only: you are viewing as someone else. Nothing is saved.')); return Promise.resolve(null); }
-    if (PREVIEW) return Promise.resolve({ ok: true, topics: [], attempts: [], total_topics: 0, approved_topics: 0 });
-    return rpcS(name, a);
+  // ── learning (9 Oct 2026) ──
+  // Mare's six Montenegrin health & safety topics (checked by Chef Andrea) + the ten Dubai topics that
+  // also fit Mare (checked in Dubai). Each test: 20 questions from 5 random topics, mixed, in four
+  // formats: pick one (with plate photos), pick all that apply, put in order (drag), match the pairs.
+  // Built on the server (edge fn mare-learn), so the answers never reach the phone; handed in to
+  // mare_s_learn_finish. Pass 80%, one clock for the whole test (Dubai's timing).
+  var LN = { data: null, topic: null, pi: 0, test: null, qi: 0, picks: [], result: null, tick: null, busy: false };
+  function lnEdge(action) {
+    if (PREVIEW) {
+      if (action === 'home') return Promise.resolve({ ok: true, topics: [], shared: [], attempts: [], total_topics: 0, approved_topics: 0 });
+      M.toast(T('Read only: you are viewing as someone else. Nothing is saved.')); return Promise.resolve(null);
+    }
+    return M.edge('mare-learn', { action: action, device: dev(), token: meToken, pin: pinArg() }).then(function (r) {
+      if (r.error) return { ok: false, network: !!r.error.network, error: 'error' }; return r.data; });
   }
+  function lnFail(r) { return r && r.network ? T('No internet. Try again in a moment.') : T('Something went wrong. Try again.'); }
   function modLearn() {
     if (LN.test && !LN.result) { lnTest(); return; }
     LN.topic = null; LN.result = null;
     main.innerHTML = frame('Learning', '<div class="card big muted" style="font-family:inherit;font-size:17px">' + E(T('Loading…')) + '</div>');
     bindFrame();
-    lnCall('mare_s_learn_home').then(function (r) {
+    lnEdge('home').then(function (r) {
       if (S.mod !== 'learn') return;
-      if (!r || !r.ok) { main.innerHTML = frame('Learning', '<div class="card big">' + E(r && r.network ? T('No internet. Try again in a moment.') : T('Something went wrong. Try again.')) + '</div>'); bindFrame(); return; }
+      if (!r || !r.ok) { main.innerHTML = frame('Learning', '<div class="card big">' + E(lnFail(r)) + '</div>'); bindFrame(); return; }
       LN.data = r; lnHome();
     });
   }
+  function lnTopicBtn(t, n) {
+    var reads = t.body || (t.pages && t.pages.length);
+    return '<button class="ln-topic" data-t="' + E(t.id) + '"' + (reads ? '' : ' disabled') + '><span class="ln-n">' + n + '</span><span><b>' + E(t.title) + '</b><small>' +
+      E(reads ? t.summary : T('Questions only, no page to read')) + '</small></span>' + (reads ? '<span class="ln-go">›</span>' : '') + '</button>';
+  }
   function lnHome() {
     var d = LN.data, last = d.attempts[0], best = d.attempts.filter(function (a) { return a.passed; })[0];
-    var h = '<p class="ln-intro">' + E(T('Health and safety in Montenegro: the law, and how we work at Roberto\'s. Read the topics, then take the test.')) + '</p>';
-    if (!d.topics.length) h += '<div class="kr-card"><div class="kr-q">' + E(T('Coming soon')) + '</div><p class="ln-p">' + E(T('Chef Andrea is checking the topics. They open here as soon as he approves them.')) + '</p></div>';
-    else {
-      h += '<div class="ln-list">' + d.topics.map(function (t, i) {
-        return '<button class="ln-topic" data-t="' + E(t.id) + '"><span class="ln-n">' + (i + 1) + '</span><span><b>' + E(t.title) + '</b><small>' + E(t.summary) + '</small></span><span class="ln-go">›</span></button>'; }).join('') + '</div>';
-      if (d.approved_topics < d.total_topics) h += '<p class="small muted" style="margin:0">' + E(T('{a} of {b} topics are open. The rest open when Chef Andrea approves them.', { a: d.approved_topics, b: d.total_topics })) + '</p>';
-      var n = d.topics.length * 3;
-      h += '<div class="kr-card"><div class="kr-q">' + E(T('The test')) + '</div><p class="ln-p">' + E(T('{n} questions, 3 from every topic. Timed. You pass with 80%.', { n: n })) + '</p>' +
-        (best ? '<div class="kr-sent">' + E(T('Passed on {d} with {s}/{t}.', { d: M.shortDate(M.dateKey(new Date(best.at))), s: best.score, t: best.total })) + '</div>' :
-          last ? '<div class="kr-sent warn">' + E(T('Last try: {s}/{t}, not passed yet.', { s: last.score, t: last.total })) + '</div>' : '') +
-        '<button class="btn" id="lnstart">' + E(best ? T('Take it again') : T('Start the test')) + '</button></div>';
-    }
+    var all = d.topics.concat(d.shared || []);
+    var h = '<p class="ln-intro">' + E(T('Read the topics, then take the test: 20 questions from 5 topics picked at random.')) + '</p>';
+    h += '<div class="sec"><span>' + E(T('Health and safety in Montenegro')) + '</span><i></i></div>';
+    h += d.topics.length ? '<div class="ln-list">' + d.topics.map(function (t, i) { return lnTopicBtn(t, i + 1); }).join('') + '</div>'
+      : '<p class="ln-p muted">' + E(T('Chef Andrea is checking these topics. They open here as soon as he approves them.')) + '</p>';
+    if (d.topics.length && d.approved_topics < d.total_topics) h += '<p class="small muted" style="margin:0">' + E(T('{a} of {b} topics are open. The rest open when Chef Andrea approves them.', { a: d.approved_topics, b: d.total_topics })) + '</p>';
+    if ((d.shared || []).length) h += '<div class="sec"><span>' + E(T('The Roberto\'s kitchen')) + '</span><i></i></div><div class="ln-list">' + d.shared.map(function (t, i) { return lnTopicBtn(t, d.topics.length + i + 1); }).join('') + '</div>';
+    else if (d.shared_ok === false) h += '<p class="small muted" style="margin:0">' + E(T('The Roberto\'s kitchen topics could not be loaded just now.')) + '</p>';
+    var ready = d.topics.length + (d.shared || []).filter(function (t) { return t.in_test; }).length;
+    if (ready) h += '<div class="kr-card"><div class="kr-q">' + E(T('The test')) + '</div><p class="ln-p">' + E(T('20 questions from 5 topics picked at random. Some have more than one right answer, some ask you to put steps in order or match pairs. Timed. You pass with 80%.')) + '</p>' +
+      (best ? '<div class="kr-sent">' + E(T('Passed on {d} with {s}/{t}.', { d: M.shortDate(M.dateKey(new Date(best.at))), s: best.score, t: best.total })) + '</div>' :
+        last ? '<div class="kr-sent warn">' + E(T('Last try: {s}/{t}, not passed yet.', { s: last.score, t: last.total })) + '</div>' : '') +
+      '<button class="btn" id="lnstart">' + E(best ? T('Take another test') : T('Start the test')) + '</button></div>';
     main.innerHTML = frame('Learning', '<div class="stack">' + h + '</div>');
     bindFrame();
-    on('[data-t]', function (b) { LN.topic = d.topics.filter(function (t) { return t.id === b.getAttribute('data-t'); })[0]; lnTopic(); });
+    on('[data-t]', function (b) { LN.topic = all.filter(function (t) { return t.id === b.getAttribute('data-t'); })[0]; LN.pi = 0; lnTopic(); });
     var st = document.getElementById('lnstart'); if (st) st.onclick = function () { lnStart(this); };
   }
   function lnTopic() {
-    var t = LN.topic, i = LN.data.topics.indexOf(t), nx = LN.data.topics[i + 1];
+    var t = LN.topic, pages = t.pages && t.pages.length ? t.pages : [{ title: t.title, body: t.body }], p = pages[LN.pi], last = LN.pi >= pages.length - 1;
     main.innerHTML = frame('Learning', '<div class="stack"><button class="lnk" id="lnback" style="margin-top:0">‹ ' + E(T('All topics')) + '</button>' +
-      '<div class="kr-card"><div class="kr-q" style="font-size:26px">' + E(t.title) + '</div><div class="ln-body">' + E(t.body) + '</div></div>' +
-      (nx ? '<button class="btn ghost" id="lnnext">' + E(T('Next topic: {t}', { t: nx.title })) + '</button>' : '<button class="btn" id="lnstart">' + E(T('Start the test')) + '</button>') + '</div>');
+      '<div class="kr-card"><div class="small muted">' + E(t.title) + (pages.length > 1 ? ' · ' + E(T('Page {i} of {n}', { i: LN.pi + 1, n: pages.length })) : '') + '</div>' +
+      '<div class="kr-q" style="font-size:26px">' + E(p.title) + '</div>' + (p.photo ? '<img class="photo" src="' + E(p.photo) + '" alt="">' : '') + '<div class="ln-body">' + E(p.body) + '</div></div>' +
+      '<div class="row" style="justify-content:space-between">' + (LN.pi > 0 ? '<button class="btn ghost" id="lnpp">‹ ' + E(T('Back')) + '</button>' : '<span></span>') +
+      (!last ? '<button class="btn" id="lnnp">' + E(T('Next page')) + ' ›</button>' : '<button class="btn ghost" id="lnback2">' + E(T('All topics')) + '</button>') + '</div></div>');
     bindFrame(); window.scrollTo(0, 0);
     document.getElementById('lnback').onclick = lnHome;
-    var n = document.getElementById('lnnext'); if (n) n.onclick = function () { LN.topic = nx; lnTopic(); };
-    var s = document.getElementById('lnstart'); if (s) s.onclick = function () { lnStart(this); };
+    var b2 = document.getElementById('lnback2'); if (b2) b2.onclick = lnHome;
+    var pp = document.getElementById('lnpp'); if (pp) pp.onclick = function () { LN.pi--; lnTopic(); };
+    var np = document.getElementById('lnnp'); if (np) np.onclick = function () { LN.pi++; lnTopic(); };
   }
   function lnStart(btn) {
     btn.disabled = true;
-    lnCall('mare_s_learn_start').then(function (r) {
+    lnEdge('start').then(function (r) {
       btn.disabled = false;
       if (!r) return;
-      if (!r.ok) { phoneToast(r.network ? T('No internet. Try again in a moment.') : r.error === 'not_ready' ? T('The topics are still being checked.') : T('Something went wrong. Try again.')); return; }
-      LN.test = r; LN.test.until = Date.now() + r.limit * 1000; LN.qi = 0; LN.picks = []; LN.result = null;
+      if (!r.ok) { phoneToast(r.error === 'not_ready' ? T('The topics are still being checked.') : lnFail(r)); return; }
+      LN.test = r; LN.test.until = Date.now() + r.limit * 1000; LN.qi = 0; LN.result = null;
+      LN.picks = r.questions.map(function (q) {
+        if (q.type === 'multi') return [];
+        if (q.type === 'order') return q.items.slice();
+        if (q.type === 'match') return q.lefts.map(function () { return null; });
+        return null;
+      });
       clearInterval(LN.tick);
       LN.tick = setInterval(function () {
         if (!LN.test || LN.result) { clearInterval(LN.tick); return; }
@@ -777,26 +796,76 @@
   }
   function lnLeft() { return Math.max(0, Math.ceil((LN.test.until - Date.now()) / 1000)); }
   function lnClock(t) { return T('{t} left', { t: Math.floor(t / 60) + ':' + ('0' + (t % 60)).slice(-2) }); }
+  function lnShots(sh) { return sh && sh.length ? '<span class="ln-shots">' + sh.map(function (x) { return '<img src="' + E(x.thumb) + '" alt="' + E(x.name) + '" loading="lazy">'; }).join('') + '</span>' : ''; }
+  function lnAnswered(q, p) {
+    if (q.type === 'multi') return p.length > 0;
+    if (q.type === 'match') return p.every(function (x) { return x != null; });
+    if (q.type === 'order') return true;
+    return p != null;
+  }
   function lnTest() {
-    var qs = LN.test.questions, q = qs[LN.qi], n = qs.length, pick = LN.picks[LN.qi];
+    var qs = LN.test.questions, q = qs[LN.qi], n = qs.length, pick = LN.picks[LN.qi], body = '', hint = '';
+    if (q.type === 'multi') {
+      hint = T('Tick all that apply');
+      body = '<div class="ln-choices">' + q.choices.map(function (c, i) { var on = pick.indexOf(c) >= 0;
+        return '<button class="ln-choice ln-multi' + (on ? ' on' : '') + '" data-m="' + i + '" aria-pressed="' + on + '"><span class="ln-box">' + (on ? '✓' : '') + '</span>' + E(c) + '</button>'; }).join('') + '</div>';
+    } else if (q.type === 'order') {
+      hint = T('Drag the rows into the right order');
+      body = '<div class="ln-order" id="lnord">' + pick.map(function (c, i) { return '<div class="ln-row" data-o="' + i + '"><span class="ln-grip">≡</span><span class="ln-pos">' + (i + 1) + '</span><span>' + E(c) + '</span></div>'; }).join('') + '</div>';
+    } else if (q.type === 'match') {
+      hint = T('Pick the right match for each one');
+      body = '<div class="ln-match">' + q.lefts.map(function (l, i) {
+        return '<label class="ln-pair"><span>' + E(l) + '</span><select data-p="' + i + '"><option value="">' + E(T('Choose…')) + '</option>' +
+          q.rights.map(function (r, j) { return '<option value="' + j + '"' + (pick[i] === r ? ' selected' : '') + '>' + E(r) + '</option>'; }).join('') + '</select></label>'; }).join('') + '</div>';
+    } else {
+      body = '<div class="ln-choices">' + q.choices.map(function (c, i) { var sh = q.shots && q.shots[c];
+        return '<button class="ln-choice' + (sh ? ' pic' : '') + (pick === c ? ' on' : '') + '" data-c="' + i + '" aria-pressed="' + (pick === c) + '">' + lnShots(sh) + '<span>' + E(c) + '</span></button>'; }).join('') + '</div>';
+    }
+    var can = lnAnswered(q, pick);
     main.innerHTML = frame('Learning', '<div class="stack"><div class="ln-bar"><i style="width:' + Math.round(100 * LN.qi / n) + '%"></i></div>' +
       '<div class="ln-qhead"><span>' + E(T('Question {i} of {n}', { i: LN.qi + 1, n: n })) + ' · ' + E(q.topic) + '</span><span class="ln-clock" id="lnclock">' + E(lnClock(lnLeft())) + '</span></div>' +
-      '<div class="kr-card"><div class="kr-q">' + E(q.q) + '</div><div class="ln-choices">' + q.choices.map(function (c, i) {
-        return '<button class="ln-choice' + (pick === c ? ' on' : '') + '" data-c="' + i + '" aria-pressed="' + (pick === c) + '">' + E(c) + '</button>'; }).join('') + '</div></div>' +
+      '<div class="kr-card"><div class="kr-q">' + E(q.q) + '</div>' + (hint ? '<div class="ln-hint">' + E(hint) + '</div>' : '') + body + '</div>' +
       '<div class="row" style="justify-content:space-between">' + (LN.qi > 0 ? '<button class="btn ghost" id="lnprev">‹ ' + E(T('Back')) + '</button>' : '<span></span>') +
-      (LN.qi < n - 1 ? '<button class="btn" id="lnnextq"' + (pick == null ? ' disabled' : '') + '>' + E(T('Next')) + ' ›</button>'
-                     : '<button class="btn" id="lnfin"' + (pick == null ? ' disabled' : '') + '>' + E(T('Hand it in')) + '</button>') + '</div></div>');
+      (LN.qi < n - 1 ? '<button class="btn" id="lnnextq"' + (can ? '' : ' disabled') + '>' + E(T('Next')) + ' ›</button>'
+                     : '<button class="btn" id="lnfin"' + (can ? '' : ' disabled') + '>' + E(T('Hand it in')) + '</button>') + '</div></div>');
     bindFrame(); idle(3600000);
     on('[data-c]', function (b) { LN.picks[LN.qi] = q.choices[+b.getAttribute('data-c')]; lnTest(); });
+    on('[data-m]', function (b) { var c = q.choices[+b.getAttribute('data-m')], i = pick.indexOf(c); if (i >= 0) pick.splice(i, 1); else pick.push(c); lnTest(); });
+    on('select[data-p]', function (s) { LN.picks[LN.qi][+s.getAttribute('data-p')] = s.value === '' ? null : q.rights[+s.value]; lnTest(); }, 'change');
+    if (q.type === 'order') lnDrag(document.getElementById('lnord'));
     var p = document.getElementById('lnprev'); if (p) p.onclick = function () { LN.qi--; lnTest(); };
     var nq = document.getElementById('lnnextq'); if (nq) nq.onclick = function () { LN.qi++; lnTest(); window.scrollTo(0, 0); };
     var f = document.getElementById('lnfin'); if (f) f.onclick = function () { lnFinish(); };
   }
+  // Reorder by dragging the whole row (touch and mouse), never arrows.
+  function lnDrag(list) {
+    var drag = null;
+    list.addEventListener('pointerdown', function (e) {
+      var row = e.target.closest('.ln-row'); if (!row) return;
+      e.preventDefault(); drag = row; row.classList.add('drag'); row.setPointerCapture(e.pointerId);
+    });
+    list.addEventListener('pointermove', function (e) {
+      if (!drag) return;
+      var rows = [].slice.call(list.children), over = null;
+      rows.forEach(function (r) { if (r === drag) return; var b = r.getBoundingClientRect(); if (e.clientY > b.top && e.clientY < b.bottom) over = r; });
+      if (!over) return;
+      var b = over.getBoundingClientRect();
+      if (e.clientY < b.top + b.height / 2) list.insertBefore(drag, over); else list.insertBefore(drag, over.nextSibling);
+    });
+    function drop() {
+      if (!drag) return;
+      drag.classList.remove('drag'); drag = null;
+      var cur = LN.picks[LN.qi].slice();
+      LN.picks[LN.qi] = [].slice.call(list.children).map(function (r) { return cur[+r.getAttribute('data-o')]; });
+      [].slice.call(list.children).forEach(function (r, i) { r.setAttribute('data-o', i); r.querySelector('.ln-pos').textContent = i + 1; });
+    }
+    list.addEventListener('pointerup', drop); list.addEventListener('pointercancel', drop);
+  }
   function lnFinish() {
     if (LN.busy || !LN.test) return;
     LN.busy = true; clearInterval(LN.tick);
-    var qs = LN.test.questions, answers = qs.map(function (_, i) { return LN.picks[i] == null ? null : LN.picks[i]; });
-    lnCall('mare_s_learn_finish', { p_attempt: LN.test.attempt, p_answers: answers }).then(function (r) {
+    var a = { p_device: dev(), p_token: meToken, p_staff: null, p_pin: pinArg(), p_attempt: LN.test.attempt, p_answers: LN.picks };
+    (PREVIEW ? Promise.resolve(null) : rpcS('mare_s_learn_finish', a)).then(function (r) {
       LN.busy = false;
       if (!r || !r.ok) { phoneToast(r && r.network ? T('No internet. Your answers are kept; press Hand it in again.') : T('Something went wrong. Try again.')); lnTest(); return; }
       LN.result = r; lnResult();
@@ -811,7 +880,8 @@
       '<div class="kr-q">' + E(r.passed ? T('Passed. Well done.') : r.late ? T('Time ran out, so this try cannot pass.') : T('Not passed yet. You need {n}.', { n: r.pass })) + '</div></div>' +
       '<div class="kr-card"><div class="kr-q">' + E(T('By topic')) + '</div>' + per + '</div>' +
       (wrong.length ? '<div class="kr-card"><div class="kr-q">' + E(T('Check these again')) + '</div>' + wrong.map(function (p) {
-        return '<div class="ln-wrong"><b>' + E(p[1].q) + '</b><div class="bad">✗ ' + E(p[0].picked || T('No answer')) + '</div><div class="good">✓ ' + E(p[0].answer) + '</div></div>'; }).join('') + '</div>' : '') +
+        return '<div class="ln-wrong"><b>' + E(p[1].q) + '</b><div class="bad">✗ ' + E(p[0].picked || T('No answer')) + '</div><div class="good">✓ ' + E(p[0].answer) + '</div>' +
+          (p[0].shot ? lnShots(p[0].shot) : '') + (p[0].why ? '<div class="small muted">' + E(p[0].why) + '</div>' : '') + '</div>'; }).join('') + '</div>' : '') +
       '<button class="btn" id="lndone">' + E(T('Back to Learning')) + '</button></div>');
     bindFrame(); window.scrollTo(0, 0);
     document.getElementById('lndone').onclick = function () { LN.test = null; LN.result = null; modLearn(); };
