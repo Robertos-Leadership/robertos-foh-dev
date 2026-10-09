@@ -890,5 +890,18 @@ window.MARE_ME = {
 "You said Yes to question {n}: write one line about it.": "Odgovorili ste Da na pitanje {n}: napišite jedan red o tome.",
 "Sent to Chef Francesco. Thank you.": "Poslato šefu Francescu. Hvala.",
 "Saved. Send it when you finish.": "Sačuvano. Pošaljite kad završite.",
-"No internet. Your answers stay on this phone; try again in a moment.": "Nema interneta. Odgovori ostaju na ovom telefonu; pokušajte ponovo za trenutak."
+"No internet. Your answers stay on this phone; try again in a moment.": "Nema interneta. Odgovori ostaju na ovom telefonu; pokušajte ponovo za trenutak.",
+// 9 Oct 2026: guests + revenue on the closing report
+"Guests served": "Broj gostiju",
+"Total revenue (€)": "Ukupan promet (€)",
+"e.g. 85": "npr. 85",
+"e.g. 4250": "npr. 4250",
+"{m} per guest": "{m} po gostu",
+"Check the guests: write a whole number, e.g. 85.": "Provjerite broj gostiju: upišite cijeli broj, npr. 85.",
+"Check the revenue: write it like 4250 or 4250,50, without a thousands dot.": "Provjerite promet: upišite kao 4250 ili 4250,50, bez tačke za hiljade.",
+"Write how many guests were served.": "Upišite koliko je gostiju posluženo.",
+"Write the total revenue.": "Upišite ukupan promet.",
+"Send to {to}": "Pošalji: {to}",
+"Sent to {to} at {t} by {n}.": "Poslato ({to}) u {t}, poslao/la {n}.",
+"Sent to {to}. Thank you.": "Poslato ({to}). Hvala."
 };

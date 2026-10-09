@@ -97,6 +97,9 @@ create table if not exists public.mare_kreport (
   is_test boolean not null default false
 );
 alter table public.mare_kreport add column if not exists rating int check (rating between 1 and 5);   -- service, as in Dubai (1–5)
+-- 9 Oct 2026, Francesco: "need also to know the number of guest served and the total revenue"
+alter table public.mare_kreport add column if not exists guests int check (guests between 0 and 5000);
+alter table public.mare_kreport add column if not exists revenue numeric(12,2) check (revenue >= 0);
 create table if not exists public.mare_kreport_mail (
   id bigserial primary key,
   date date not null references public.mare_kreport(date) on delete cascade,
@@ -136,6 +139,7 @@ begin
   me := (a->>'id')::uuid;
   if d < public.mare_today() - 60 or d > public.mare_today() then return jsonb_build_object('ok', false, 'error', 'range'); end if;
   return jsonb_build_object('ok', true, 'date', d, 'today', public.mare_today(),
+    'send_to', coalesce((select value #>> '{}' from public.mare_settings where key = 'kitchen_report_label'), 'the chefs'),
     'report', (select to_jsonb(k) - 'staff_id' - 'is_test' from public.mare_kreport k where k.date = d),
     'kitchen', coalesce((select jsonb_agg(jsonb_build_object('name', s.name, 'on', exists (select 1 from public.mare_shifts h where h.staff_id = s.id and h.date = d and h.kind = 'work')) order by s.sort, s.name)
                          from public.mare_staff s where s.active and s.team = 'Kitchen' and s.name !~* '^zz\M'), '[]'::jsonb),
@@ -145,8 +149,9 @@ end $$;
 
 -- save (and, with p_send, email) the report. Anyone in the Kitchen team may write it.
 drop function if exists public.mare_s_kreport_save(text,text,uuid,text,date,jsonb,text[],text,boolean);
+drop function if exists public.mare_s_kreport_save(text,text,uuid,text,date,jsonb,text[],text,int,boolean);
 create or replace function public.mare_s_kreport_save(p_device text, p_token text, p_staff uuid, p_pin text, p_date date,
-  p_entries jsonb, p_chefs text[], p_feedback text, p_rating int, p_send boolean) returns jsonb
+  p_entries jsonb, p_chefs text[], p_feedback text, p_rating int, p_guests int, p_revenue numeric, p_send boolean) returns jsonb
 language plpgsql security definer set search_path = public as $$
 declare a jsonb; me uuid; nm text; tm text; d date := coalesce(p_date, public.mare_today()); ents jsonb; v_to text[]; mail bigint; test boolean; was timestamptz;
 begin
@@ -163,12 +168,15 @@ begin
     into ents from jsonb_array_elements(case when jsonb_typeof(p_entries) = 'array' then p_entries else '[]'::jsonb end) e
    where e->>'type' in ('complaint','unavailable','operation','team');
   if jsonb_array_length(ents) > 60 then return jsonb_build_object('ok', false, 'error', 'too_many'); end if;
+  if p_guests is not null and (p_guests < 0 or p_guests > 5000) then return jsonb_build_object('ok', false, 'error', 'guests'); end if;
+  if p_revenue is not null and (p_revenue < 0 or p_revenue > 1000000) then return jsonb_build_object('ok', false, 'error', 'revenue'); end if;
+  if coalesce(p_send, false) and (p_guests is null or p_revenue is null) then return jsonb_build_object('ok', false, 'error', 'figures'); end if;
   test := nm ~* '^zz\M' or coalesce(p_feedback,'') ~* '^\s*zz';
   select sent_at into was from public.mare_kreport where date = d;
-  insert into public.mare_kreport(date, entries, chefs_on, feedback, rating, written_by, staff_id, updated_at, is_test)
+  insert into public.mare_kreport(date, entries, chefs_on, feedback, rating, guests, revenue, written_by, staff_id, updated_at, is_test)
   values (d, ents, coalesce((select array_agg(left(x,60)) from unnest(coalesce(p_chefs,'{}')) x where btrim(x) <> ''), '{}'),
-          nullif(left(btrim(coalesce(p_feedback,'')),4000),''), case when p_rating between 1 and 5 then p_rating end, nm, me, now(), test)
-  on conflict (date) do update set entries = excluded.entries, chefs_on = excluded.chefs_on, feedback = excluded.feedback, rating = excluded.rating,
+          nullif(left(btrim(coalesce(p_feedback,'')),4000),''), case when p_rating between 1 and 5 then p_rating end, p_guests, round(p_revenue, 2), nm, me, now(), test)
+  on conflict (date) do update set entries = excluded.entries, chefs_on = excluded.chefs_on, feedback = excluded.feedback, rating = excluded.rating, guests = excluded.guests, revenue = excluded.revenue,
     written_by = excluded.written_by, staff_id = excluded.staff_id, updated_at = now(), is_test = excluded.is_test;
   if coalesce(p_send, false) then
     if test then v_to := array['fguarracino@robertos.ae'];
@@ -185,11 +193,17 @@ end $$;
 
 revoke all on function public.mare_s_rota(text,text,uuid,text,date), public.mare_s_shift_save(text,text,uuid,text,uuid,date,text,text,text,text,text,text),
   public.mare_s_shift_clear(text,text,uuid,text,uuid,date), public.mare_kreport_kick(bigint),
-  public.mare_s_kreport_get(text,text,uuid,text,date), public.mare_s_kreport_save(text,text,uuid,text,date,jsonb,text[],text,int,boolean) from public;
+  public.mare_s_kreport_get(text,text,uuid,text,date), public.mare_s_kreport_save(text,text,uuid,text,date,jsonb,text[],text,int,int,numeric,boolean) from public;
 grant execute on function public.mare_s_rota(text,text,uuid,text,date), public.mare_s_shift_save(text,text,uuid,text,uuid,date,text,text,text,text,text,text),
   public.mare_s_shift_clear(text,text,uuid,text,uuid,date),
-  public.mare_s_kreport_get(text,text,uuid,text,date), public.mare_s_kreport_save(text,text,uuid,text,date,jsonb,text[],text,int,boolean) to anon, authenticated;
+  public.mare_s_kreport_get(text,text,uuid,text,date), public.mare_s_kreport_save(text,text,uuid,text,date,jsonb,text[],text,int,int,numeric,boolean) to anon, authenticated;
 
 -- Vinay edits the rota; the Kitchen team sees Schedule, Recipes and the Closing report only.
 update public.mare_staff set can_rota = true where name = 'Vinay Rawat' and team = 'Kitchen';
 update public.mare_settings set value = jsonb_set(value, '{Kitchen}', '["rota","recipes","kclose"]'::jsonb) where key = 'team_modules';
+
+-- 9 Oct 2026, Francesco: the closing report goes to him AND Andrea Falcone. The button names them
+-- from kitchen_report_label, so a change of recipients is two settings, no code.
+update public.mare_settings set value = '["fguarracino@robertos.ae","afalcone@robertos.ae"]'::jsonb where key = 'kitchen_report_to';
+insert into public.mare_settings(key, value) values ('kitchen_report_label', '"Chef Francesco and Chef Andrea"'::jsonb)
+  on conflict (key) do update set value = excluded.value;

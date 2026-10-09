@@ -23,14 +23,19 @@ const SECTIONS: [string, string, string][] = [
 ];
 const FACES = ["😖", "😕", "😐", "🙂", "🔥"];
 type Row = Record<string, any>;
+const eur = (n: unknown) => n == null || n === "" ? "—" : "€" + Number(n).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 function build(k: Row, resend: boolean) {
   const day = new Date(k.date + "T12:00:00Z").toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
   const ents: Row[] = Array.isArray(k.entries) ? k.entries : [];
   const n = (t: string) => ents.filter((e) => e.type === t).length;
-  const subject = (resend ? "Updated: " : "") + "Mare kitchen closing report · " + day +
+  const subject = (resend ? "Updated: " : "") + "Mare kitchen closing report · " + day + (k.guests != null ? " · " + k.guests + " guests, " + eur(k.revenue) : "") +
     (ents.length ? " · " + SECTIONS.filter((x) => n(x[0])).map((x) => x[1].split(" (")[0].toLowerCase()).join(", ") : " · all good");
+  const g = k.guests == null ? null : Number(k.guests), v = k.revenue == null ? null : Number(k.revenue);
   const rows: [string, string][] = [
+    ["Guests served", g == null ? "—" : String(g)],
+    ["Total revenue", eur(v)],
+    ["Per guest", g && v != null ? eur(v / g) : "—"],
     ["Service", k.rating ? FACES[k.rating - 1] + " (" + k.rating + "/5)" : "—"],
     ["Chefs on duty", (k.chefs_on || []).join(", ") || "—"],
     ["Report by", k.sent_by || k.written_by || "—"],
