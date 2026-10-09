@@ -90,7 +90,7 @@ async function mnLoadSim(dates){
     (res.data||[]).forEach(function(r){ MN.sim[String(r.service_date).slice(0,10)] = { net: r.lounge_net==null ? null : Number(r.lounge_net), covers: r.lounge_covers_actual }; });
   } catch(e){}
   try {
-    var sp = await sb.from('moda_night_sim').select('night,packages,packages_paid,packages_comp,package_net,comp_value,comps,items,scala_window_net,scala_day_net,note,read_at').in('night', dates);
+    var sp = await sb.from('moda_night_sim').select('night,packages,packages_paid,packages_comp,package_net,comp_value,comps,items,checks,scala_window_net,scala_day_net,note,read_at').in('night', dates);
     MN.simph = {};
     (sp.data||[]).forEach(function(r){ MN.simph[String(r.night).slice(0,10)] = r; });
   } catch(e){}
@@ -193,14 +193,23 @@ function renderModaNight(){
     h.push('<div class="bl-day"><div class="bl-day-h"><div><div class="bl-day-t">Scala tables</div><div class="bl-day-s">'+blN(N.tables)+' tables &middot; tap one for its check</div></div></div>');
     h.push('<table class="bl-tbl"><thead><tr><th>Time</th><th>Guest</th><th>Table</th><th class="r">Guests</th><th class="r">Packages</th>'+(money?'<th class="r">Check net</th>':'')+'</tr></thead><tbody>');
     var compT = {}; (S && Array.isArray(S.comps) ? S.comps : []).forEach(function(c){ String(c.table||'').split(/[\s,\/]+/).forEach(function(x){ if(x) compT[x] = true; }); });
+    // Simphony's version of each package check, matched to the booking by table number. Where it
+    // matches, the row's packages, check net and items are Simphony's, not SevenRooms' copy.
+    var simC = {}; (S && Array.isArray(S.checks) ? S.checks : []).forEach(function(c){ String(c.table||'').split(/[\s,\/]+/).forEach(function(x){ if(x) simC[x] = c; }); });
     N.rows.forEach(function(r, k){
-      var comped = String(r.tables||'').split(/[\s,]+/).some(function(x){ return compT[x]; });
+      var tl = String(r.tables||'').split(/[\s,]+/), comped = tl.some(function(x){ return compT[x]; }), sc = null;
+      tl.forEach(function(x){ if(!sc && simC[x]) sc = simC[x]; });
+      var pk = sc ? Number(sc.packages)||0 : r.packages, its = r.items;
+      if(sc){ its = {}; Object.keys(sc.items||{}).forEach(function(x){ var n = mnNice('MN '+x); its[n] = (its[n]||0) + (Number(sc.items[x])||0); }); }
+      var net = comped ? 0 : sc ? blNet(sc.subtotal, d) : blNet(r.check, d);
       h.push('<tr class="bl-row'+(MN.open[k]?' open':'')+'" onclick="mnToggle('+k+')"><td>'+blEsc(r.time)+'</td><td class="bl-guest">'+blEsc(r.guest||'—')
         + (r.vip?' <span class="bl-tag">VIP</span>':'')+(r.walkin?' <span class="bl-tag">walk-in</span>':'')+(comped?' <span class="bl-tag">comped</span>':'')+'</td><td>'+blEsc(r.tables||'—')+'</td>'
-        + '<td class="r">'+blN(r.pax)+'</td><td class="r"><b>'+(r.packages ? blN(r.packages) : '&ndash;')+'</b></td>'+(money?'<td class="r">'+(comped ? '0' : blN(blNet(r.check, d)))+'</td>':'')+'</tr>');
+        + '<td class="r">'+blN(r.pax)+'</td><td class="r"><b>'+(pk ? blN(pk) : '&ndash;')+'</b></td>'+(money?'<td class="r">'+blN(net)+'</td>':'')+'</tr>');
       if(MN.open[k]){
-        var keys = Object.keys(r.items);
-        h.push('<tr class="bl-items"><td colspan="'+(money?6:5)+'">'+(keys.length ? keys.map(function(x){ return '<div><span>'+(r.items[x]>1?blN(r.items[x])+'× ':'')+blEsc(x)+'</span><span>in the package</span></div>'; }).join('') : '<div><span>No package on this table</span></div>')+'</td></tr>');
+        var keys = Object.keys(its).filter(function(x){ return its[x] > 0; }).sort(function(a,b){ return its[b]-its[a] || (a<b?-1:1); });
+        h.push('<tr class="bl-items"><td colspan="'+(money?6:5)+'">'
+          + '<div><span><b>'+(sc ? 'Simphony check '+blEsc(sc.check)+' &middot; table '+blEsc(sc.table) : 'From the booking &mdash; not checked in Simphony')+'</b></span><span></span></div>'
+          + (keys.length ? keys.map(function(x){ return '<div><span>'+(its[x]>1?blN(its[x])+'× ':'')+blEsc(x)+'</span><span>in the package</span></div>'; }).join('') : '<div><span>No package on this table</span></div>')+'</td></tr>');
       }
     });
     h.push('</tbody></table></div>');
