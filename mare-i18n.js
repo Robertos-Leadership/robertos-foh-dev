@@ -880,6 +880,7 @@ window.MARE_ME = {
 "No": "Ne",
 "Yes": "Da",
 "Note for Chef Francesco": "Napomena za šefa Francesca",
+"Note for the chefs": "Napomena za šefove",
 "(optional)": "(neobavezno)",
 "On duty": "Na dužnosti",
 "nobody ticked": "niko nije označen",
