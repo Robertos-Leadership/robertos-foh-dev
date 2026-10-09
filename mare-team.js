@@ -603,115 +603,91 @@
       .then(function () { phoneToast(bad ? T('{n} days copied, {b} could not be copied.', { n: n, b: bad }) : T('{n} days copied. Days already planned were left alone.', { n: n })); modRota(); });
   }
 
-  // ── kitchen closing report (9 Oct 2026: the Dubai Kitchen closing report's sections, emailed to Francesco) ──
-  var KR_CATS = {
-    complaint: ['Taste / Seasoning', 'Temperature', 'Slow service', 'Wrong order', 'Portion', 'Quality', 'Other'],
-    unavailable: ['Ran out during service', 'Supplier issue', 'Quality rejected', 'Prep shortfall', 'Other'],
-    operation: ['Staffing', 'Equipment', 'Supply / Delivery', 'Timing / Pass', 'Kitchen–floor coordination', 'Other'],
-    team: ['Attendance', 'Conflict', 'Performance', 'Wellbeing', 'Other']
-  };
-  var KR_META = {
-    complaint: ['Complaints', 'No complaints tonight', 'Dish', true],
-    unavailable: ['86 / Not available', 'Everything available', 'Item', false],
-    operation: ['Operation issues', 'No operation issues', '', true],
-    team: ['Team issues', 'No team issues', '', true]
-  };
-  var KR = { date: null, data: null, entries: [], chefs: null, rating: null, open: null, loadedFor: null };
+  // ── kitchen closing report (9 Oct 2026) ──
+  // Francesco: "make the closing report easy to fill for the team, not too complicated".
+  // Three yes/no questions (a text box only after Yes), the service faces, an optional note,
+  // one big Send. Who was on duty comes from the schedule. Emailed to mare_settings 'kitchen_report_to'.
+  var KR_Q = [
+    ['unavailable', 'Did anything run out?', 'What ran out, and at what time?'],
+    ['complaint', 'Any guest complaints?', 'Which dish, what happened, what you did'],
+    ['operation', 'Any problem with equipment, deliveries or the team?', 'What happened'],
+  ];
+  var KR = { date: null, data: null, ans: {}, chefs: null, rating: null, note: '', editChefs: false, loadedFor: null };
   function krDefaultDate() { var t = feed().today || M.today(); return M.parts(new Date()).hh < 6 ? M.addDays(t, -1) : t; }   // before 6 AM = last night's report
   function krDraftKey() { return 'mare_kr_' + (S.meId || 'x') + '_' + KR.date; }
-  function krKeep() { if (KR.loadedFor !== KR.date) return; ls(krDraftKey(), JSON.stringify({ e: KR.entries, c: KR.chefs, r: KR.rating, f: (document.getElementById('krf') || {}).value })); }
+  function krKeep() { if (KR.loadedFor === KR.date) ls(krDraftKey(), JSON.stringify({ a: KR.ans, c: KR.chefs, r: KR.rating, n: KR.note })); }
   function modKclose() {
     if (!KR.date) KR.date = krDefaultDate();
     main.innerHTML = frame('Closing report', '<div class="card big muted" style="font-family:inherit;font-size:17px">' + E(T('Loading…')) + '</div>');
     bindFrame();
     var d0 = KR.date;
-    if (!S.dubai && !PREVIEW) M.dubaiBook().then(function (b) { S.dubai = b; }, function () {});   // dish names for the Dish box
     (PREVIEW ? Promise.resolve({ ok: true, date: d0, today: feed().today, report: null, kitchen: [], recent: [] })
              : rpcS('mare_s_kreport_get', { p_device: dev(), p_token: meToken, p_staff: null, p_pin: pinArg(), p_date: d0 })).then(function (r) {
       if (S.mod !== 'kclose' || KR.date !== d0) return;
       if (!r || !r.ok) { main.innerHTML = frame('Closing report', '<div class="card big">' + E(r && r.network ? T('No internet. Try again in a moment.') : T('Something went wrong. Try again.')) + '</div>'); bindFrame(); return; }
       KR.data = r;
       if (KR.loadedFor !== d0) {
-        var rep = r.report || {}, dr = null;
+        var rep = r.report, dr = null;
         try { dr = JSON.parse(ls(krDraftKey()) || 'null'); } catch (e) {}
-        var useDraft = !!dr && !rep.sent_at;   // an unsent draft on this phone; once sent, the saved report wins
-        KR.entries = useDraft ? dr.e || [] : (rep.entries || []).slice();
-        KR.chefs = useDraft && dr.c ? dr.c : (rep.chefs_on && rep.chefs_on.length ? rep.chefs_on.slice() : r.kitchen.filter(function (k) { return k.on; }).map(function (k) { return k.name; }));
-        KR.rating = useDraft ? dr.r : rep.rating || null;
-        KR.feedback = useDraft && dr.f != null ? dr.f : rep.feedback || '';
-        KR.open = null; KR.loadedFor = d0;
+        if (dr && !(rep && rep.sent_at)) { KR.ans = dr.a || {}; KR.chefs = dr.c; KR.rating = dr.r || null; KR.note = dr.n || ''; }   // an unsent draft on this phone
+        else if (rep) {   // a saved report: every question was answered (no line = No)
+          KR.ans = {}; KR_Q.forEach(function (q) { var e = (rep.entries || []).filter(function (x) { return x.type === q[0]; }); KR.ans[q[0]] = e.length ? e.map(function (x) { return x.detail || x.item || ''; }).join('\n') : false; });
+          KR.chefs = (rep.chefs_on || []).slice(); KR.rating = rep.rating || null; KR.note = rep.feedback || '';
+        } else { KR.ans = {}; KR.chefs = null; KR.rating = null; KR.note = ''; }
+        if (!KR.chefs || !KR.chefs.length) KR.chefs = r.kitchen.filter(function (k) { return k.on; }).map(function (k) { return k.name; });
+        KR.editChefs = false; KR.loadedFor = d0;
       }
       krDraw();
     });
   }
   function krDraw() {
     var r = KR.data, rep = r.report || {}, faces = ['😖', '😕', '😐', '🙂', '🔥'];
-    var dates = [r.today, M.addDays(r.today, -1)];
-    var h = '<div class="tabs">' + dates.map(function (k, i) { return '<button data-d="' + k + '" class="' + (k === KR.date ? 'on' : '') + '">' + E(i ? T('Yesterday') : T('Today')) + ' · ' + E(M.shortDate(k)) + '</button>'; }).join('') + '</div>';
-    if (rep.sent_at) h += '<div class="kr-sent">' + E(T('Sent to Chef Francesco at {t} by {n}.', { t: M.hhmm(rep.sent_at), n: rep.sent_by || '' })) + (rep.sent_count > 1 ? ' ' + E(T('Sent {n} times.', { n: rep.sent_count })) : '') + '</div>';
-    else if (rep.updated_at) h += '<div class="kr-sent warn">' + E(T('Saved by {n} at {t}, not sent yet.', { n: rep.written_by || '', t: M.hhmm(rep.updated_at) })) + '</div>';
-    h += '<div class="kr-card"><div class="kr-t">' + E(T('Service')) + '</div><div class="kr-faces">' + faces.map(function (f, i) { return '<button data-r="' + (i + 1) + '" class="' + (KR.rating === i + 1 ? 'on' : '') + '" aria-label="' + (i + 1) + '/5">' + f + '</button>'; }).join('') + '</div>' +
-      '<div class="kr-t" style="margin-top:14px">' + E(T('Chefs on duty')) + '</div><div class="kr-chips">' + r.kitchen.map(function (k) { return '<button data-c="' + E(k.name) + '" class="' + (KR.chefs.indexOf(k.name) >= 0 ? 'on' : '') + '">' + E(k.name.split(' ')[0]) + '</button>'; }).join('') + '</div></div>';
-    ['complaint', 'unavailable', 'operation', 'team'].forEach(function (type) {
-      var meta = KR_META[type], list = KR.entries.map(function (e, i) { return [e, i]; }).filter(function (p) { return p[0].type === type; });
-      h += '<div class="kr-card"><div class="kr-t">' + E(T(meta[0])) + '</div>';
-      if (!list.length) h += '<div class="kr-empty">✓ ' + E(T(meta[1])) + '</div>';
-      list.forEach(function (p) { var e = p[0];
-        h += '<div class="kr-entry"><button class="kr-del" data-del="' + p[1] + '" aria-label="' + E(T('Remove')) + '">✕</button><span class="kr-cat">' + E(T(e.category)) + '</span>' + (e.item ? ' <b>' + E(e.item) + '</b>' : '') +
-          (e.detail ? '<div>' + E(e.detail) + '</div>' : '') + (e.action ? '<div class="kr-act">' + E(T('Action')) + ': ' + E(e.action) + '</div>' : '') + '</div>'; });
-      if (KR.open === type) {
-        h += '<div class="kr-add"><div class="kr-chips" id="kcat">' + KR_CATS[type].map(function (c, i) { return '<button data-cat="' + E(c) + '" class="' + (i ? '' : 'on') + '">' + E(T(c)) + '</button>'; }).join('') + '</div>' +
-          (meta[2] ? '<label class="f">' + E(T(meta[2])) + '<input type="text" id="kitem" maxlength="120" list="kdish"></label><datalist id="kdish">' + krDishes() + '</datalist>' : '') +
-          '<label class="f">' + E(T('Detail')) + '<input type="text" id="kdet" maxlength="600" placeholder="' + E(T('One line is enough')) + '"></label>' +
-          (meta[3] ? '<label class="f">' + E(T('Action taken (optional)')) + '<input type="text" id="kact" maxlength="600" placeholder="' + E(T('What was done about it')) + '"></label>' : '') +
-          '<div class="row" style="gap:10px"><button class="btn" id="kadd">' + E(T('Add')) + '</button><button class="btn ghost" id="kcan">' + E(T('Cancel')) + '</button></div></div>';
-      } else h += '<button class="kr-plus" data-open="' + type + '">+ ' + E(T('Add')) + '</button>';
-      h += '</div>';
+    var h = '<div class="tabs">' + [r.today, M.addDays(r.today, -1)].map(function (k, i) { return '<button data-d="' + k + '" class="' + (k === KR.date ? 'on' : '') + '">' + E(i ? T('Yesterday') : T('Today')) + '</button>'; }).join('') + '</div>';
+    if (rep.sent_at) h += '<div class="kr-sent">' + E(T('Sent to Chef Francesco at {t} by {n}.', { t: M.hhmm(rep.sent_at), n: rep.sent_by || '' })) + '</div>';
+    h += '<div class="kr-card"><div class="kr-q">' + E(T('How was service?')) + '</div><div class="kr-faces">' + faces.map(function (f, i) { return '<button data-r="' + (i + 1) + '" class="' + (KR.rating === i + 1 ? 'on' : '') + '" aria-label="' + (i + 1) + '/5">' + f + '</button>'; }).join('') + '</div></div>';
+    KR_Q.forEach(function (q, i) {
+      var a = KR.ans[q[0]], yes = typeof a === 'string', no = a === false;
+      h += '<div class="kr-card"><div class="kr-q">' + (i + 1) + '. ' + E(T(q[1])) + '</div><div class="kr-yn">' +
+        '<button data-yn="' + q[0] + '" data-v="no" class="' + (no ? 'on' : '') + '">' + E(T('No')) + '</button><button data-yn="' + q[0] + '" data-v="yes" class="' + (yes ? 'on yes' : '') + '">' + E(T('Yes')) + '</button></div>' +
+        (yes ? '<textarea data-tx="' + q[0] + '" maxlength="600" placeholder="' + E(T(q[2])) + '">' + E(a) + '</textarea>' : '') + '</div>';
     });
-    h += '<div class="kr-card"><div class="kr-t">' + E(T('General feedback')) + '</div><textarea id="krf" maxlength="4000" placeholder="' + E(T('How the day went, and anything Dubai should know')) + '">' + E(KR.feedback || '') + '</textarea></div>' +
-      '<div class="msg err" id="krm"></div>' +
-      '<div class="stack" style="gap:10px"><button class="btn" id="krsend">' + E(rep.sent_at ? T('Send again to Chef Francesco') : T('Send to Chef Francesco')) + '</button>' +
-      '<button class="btn ghost" id="krsave">' + E(T('Save only, send later')) + '</button></div>';
-    if ((r.recent || []).length) h += '<div class="kr-card"><div class="kr-t">' + E(T('Last two weeks')) + '</div>' + r.recent.map(function (x) {
-      return '<div class="kr-hist"><span>' + E(M.shortDate(x.date)) + '</span><span class="tag ' + (x.sent_at ? 'green' : 'amber') + '">' + E(x.sent_at ? T('Sent') : T('Not sent')) + '</span><span class="small muted">' + E(x.by || '') + '</span></div>'; }).join('') + '</div>';
+    h += '<div class="kr-card"><div class="kr-q">' + E(T('Note for Chef Francesco')) + ' <span class="kr-opt">' + E(T('(optional)')) + '</span></div><textarea id="krn" maxlength="2000">' + E(KR.note || '') + '</textarea></div>';
+    var on = KR.chefs.map(function (n) { return n.split(' ')[0]; });
+    h += '<div class="kr-duty"><span>' + E(T('On duty')) + ': <b>' + E(on.length ? on.join(', ') : T('nobody ticked')) + '</b></span><button class="lnk" id="krc">' + E(KR.editChefs ? T('Done') : T('Change')) + '</button></div>';
+    if (KR.editChefs) h += '<div class="kr-chips">' + r.kitchen.map(function (k) { return '<button data-c="' + E(k.name) + '" class="' + (KR.chefs.indexOf(k.name) >= 0 ? 'on' : '') + '">' + E(k.name.split(' ')[0]) + '</button>'; }).join('') + '</div>';
+    h += '<div class="msg err" id="krm"></div><button class="btn" id="krsend">' + E(rep.sent_at ? T('Send again') : T('Send to Chef Francesco')) + '</button>' +
+      '<button class="lnk" id="krsave" style="align-self:center">' + E(T('Save, send later')) + '</button>';
     main.innerHTML = frame('Closing report', '<div class="stack">' + h + '</div>');
     bindFrame(); idle(600000);
-    var fb = document.getElementById('krf'); fb.oninput = function () { KR.feedback = fb.value; krKeep(); };
     on('[data-d]', function (b) { KR.date = b.getAttribute('data-d'); modKclose(); });
     on('[data-r]', function (b) { var v = +b.getAttribute('data-r'); KR.rating = KR.rating === v ? null : v; krKeep(); krDraw(); });
-    on('[data-c]', function (b) { var n = b.getAttribute('data-c'), i = KR.chefs.indexOf(n); if (i >= 0) KR.chefs.splice(i, 1); else KR.chefs.push(n); krKeep(); b.classList.toggle('on', i < 0); });
-    on('[data-del]', function (b) { KR.entries.splice(+b.getAttribute('data-del'), 1); krKeep(); krDraw(); });
-    on('[data-open]', function (b) { KR.open = b.getAttribute('data-open'); krDraw(); var it = document.getElementById('kitem') || document.getElementById('kdet'); if (it) it.focus(); });
-    var cat = null;
-    on('#kcat [data-cat]', function (b) { main.querySelectorAll('#kcat button').forEach(function (x) { x.classList.toggle('on', x === b); }); });
-    var ka = document.getElementById('kadd'); if (ka) ka.onclick = function () {
-      var sel = main.querySelector('#kcat button.on'); cat = sel ? sel.getAttribute('data-cat') : 'Other';
-      var it = document.getElementById('kitem'), dt = document.getElementById('kdet'), ac = document.getElementById('kact');
-      var e = { type: KR.open, category: cat, item: it ? it.value.trim() : '', detail: dt.value.trim(), action: ac ? ac.value.trim() : '' };
-      if (KR_META[KR.open][2] && !e.item) { it.focus(); document.getElementById('krm').textContent = T('Write the {w}.', { w: T(KR_META[KR.open][2]).toLowerCase() }); return; }
-      if (!e.item && !e.detail) { dt.focus(); return; }
-      KR.entries.push(e); KR.open = null; krKeep(); krDraw();
-    };
-    var kc = document.getElementById('kcan'); if (kc) kc.onclick = function () { KR.open = null; krDraw(); };
+    on('[data-yn]', function (b) {
+      var k = b.getAttribute('data-yn');
+      KR.ans[k] = b.getAttribute('data-v') === 'yes' ? (typeof KR.ans[k] === 'string' ? KR.ans[k] : '') : false;
+      krKeep(); krDraw();
+      var t = main.querySelector('[data-tx="' + k + '"]'); if (t) t.focus();
+    });
+    on('[data-tx]', function (t) { KR.ans[t.getAttribute('data-tx')] = t.value; krKeep(); }, 'input');
+    document.getElementById('krn').oninput = function () { KR.note = this.value; krKeep(); };
+    document.getElementById('krc').onclick = function () { KR.editChefs = !KR.editChefs; krDraw(); };
+    on('[data-c]', function (b) { var n = b.getAttribute('data-c'), i = KR.chefs.indexOf(n); if (i >= 0) KR.chefs.splice(i, 1); else KR.chefs.push(n); krKeep(); krDraw(); });
     document.getElementById('krsend').onclick = function () { krSave(true, this); };
     document.getElementById('krsave').onclick = function () { krSave(false, this); };
-  }
-  function krDishes() {
-    var names = {};
-    try { (S.dubai || []).forEach(function (g) { (g.items || g.dishes || []).forEach(function (x) { if (x && x.name) names[x.name] = 1; }); }); } catch (e) {}
-    (feed().recipes || []).forEach(function (x) { if (x.name) names[x.name] = 1; });
-    return Object.keys(names).sort().map(function (n) { return '<option value="' + E(n) + '">'; }).join('');
   }
   function krSave(send, btn) {
     if (PREVIEW) { M.toast(T('Read only: you are viewing as someone else. Nothing is saved.')); return; }
     var m = document.getElementById('krm'); m.textContent = '';
-    if (KR.open) { m.textContent = T('Finish the line you are adding, or cancel it.'); return; }
+    var miss = KR_Q.filter(function (q) { return KR.ans[q[0]] === undefined; });
+    if (send && miss.length) { m.textContent = T('Answer question {n}: tap No or Yes.', { n: KR_Q.indexOf(miss[0]) + 1 }); return; }
+    var empty = KR_Q.filter(function (q) { return typeof KR.ans[q[0]] === 'string' && !KR.ans[q[0]].trim(); });
+    if (send && empty.length) { m.textContent = T('You said Yes to question {n}: write one line about it.', { n: KR_Q.indexOf(empty[0]) + 1 }); var t = main.querySelector('[data-tx="' + empty[0][0] + '"]'); if (t) t.focus(); return; }
+    var entries = KR_Q.filter(function (q) { return typeof KR.ans[q[0]] === 'string' && KR.ans[q[0]].trim(); }).map(function (q) { return { type: q[0], category: '', detail: KR.ans[q[0]].trim() }; });
     btn.disabled = true;
-    rpcS('mare_s_kreport_save', { p_device: dev(), p_token: meToken, p_staff: null, p_pin: pinArg(), p_date: KR.date, p_entries: KR.entries, p_chefs: KR.chefs,
-      p_feedback: (document.getElementById('krf') || {}).value || null, p_rating: KR.rating, p_send: send }).then(function (r) {
+    rpcS('mare_s_kreport_save', { p_device: dev(), p_token: meToken, p_staff: null, p_pin: pinArg(), p_date: KR.date, p_entries: entries, p_chefs: KR.chefs,
+      p_feedback: KR.note.trim() || null, p_rating: KR.rating, p_send: send }).then(function (r) {
       btn.disabled = false;
-      if (r && r.ok) { ls(krDraftKey(), null); KR.loadedFor = null; phoneToast(r.sent ? T('Sent to Chef Francesco.') : T('Saved. Send it when the report is finished.')); modKclose(); return; }
-      m.textContent = r && r.network ? T('No internet. The report is kept on this phone; try again in a moment.') : r && r.error === 'not_allowed' ? T('Only the kitchen team can send this report.') : T('Something went wrong. Try again.');
+      if (r && r.ok) { ls(krDraftKey(), null); KR.loadedFor = null; phoneToast(r.sent ? T('Sent to Chef Francesco. Thank you.') : T('Saved. Send it when you finish.')); if (r.sent && meToken) home(); else modKclose(); return; }
+      m.textContent = r && r.network ? T('No internet. Your answers stay on this phone; try again in a moment.') : r && r.error === 'not_allowed' ? T('Only the kitchen team can send this report.') : T('Something went wrong. Try again.');
     });
   }
 

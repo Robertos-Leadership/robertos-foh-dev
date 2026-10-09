@@ -15,11 +15,11 @@ const CORS = {
 };
 const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { ...CORS, "Content-Type": "application/json" } });
 const esc = (s: unknown) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]!));
+// The team answers three yes/no questions (9 Oct 2026, "easy to fill, not too complicated").
 const SECTIONS: [string, string, string][] = [
-  ["complaint", "Complaints", "No complaints"],
-  ["unavailable", "86 / Not available", "Everything available"],
-  ["operation", "Operation issues", "No operation issues"],
-  ["team", "Team issues", "No team issues"],
+  ["unavailable", "Ran out", "Nothing ran out"],
+  ["complaint", "Guest complaints", "No complaints"],
+  ["operation", "Problems (equipment, deliveries, team)", "No problems"],
 ];
 const FACES = ["😖", "😕", "😐", "🙂", "🔥"];
 type Row = Record<string, any>;
@@ -29,7 +29,7 @@ function build(k: Row, resend: boolean) {
   const ents: Row[] = Array.isArray(k.entries) ? k.entries : [];
   const n = (t: string) => ents.filter((e) => e.type === t).length;
   const subject = (resend ? "Updated: " : "") + "Mare kitchen closing report · " + day +
-    (ents.length ? " · " + n("complaint") + " complaint" + (n("complaint") === 1 ? "" : "s") + ", " + n("unavailable") + " 86" : " · nothing to report");
+    (ents.length ? " · " + SECTIONS.filter((x) => n(x[0])).map((x) => x[1].split(" (")[0].toLowerCase()).join(", ") : " · all good");
   const rows: [string, string][] = [
     ["Service", k.rating ? FACES[k.rating - 1] + " (" + k.rating + "/5)" : "—"],
     ["Chefs on duty", (k.chefs_on || []).join(", ") || "—"],
@@ -39,8 +39,8 @@ function build(k: Row, resend: boolean) {
   const list = (t: string, empty: string) => {
     const l = ents.filter((e) => e.type === t);
     if (!l.length) return '<p style="margin:2px 0;color:#285C36;font-size:14px">✓ ' + esc(empty) + "</p>";
-    return l.map((e) => '<p style="margin:4px 0;font-size:14px;color:#1B2426"><strong>[' + esc(e.category) + "]</strong> " +
-      (e.item ? "<em>" + esc(e.item) + "</em>" + (e.detail ? " — " : "") : "") + esc(e.detail || "") +
+    return l.map((e) => '<p style="margin:4px 0;font-size:14px;color:#1B2426">' + (e.category ? "<strong>[" + esc(e.category) + "]</strong> " : "") +
+      (e.item ? "<em>" + esc(e.item) + "</em>" + (e.detail ? " — " : "") : "") + esc(e.detail || "").replace(/\n/g, "<br>") +
       (e.action ? '<br><span style="color:#4B5557;font-size:13px">Action: ' + esc(e.action) + "</span>" : "") + "</p>").join("");
   };
   const html = '<div style="font-family:Arial,Helvetica,sans-serif;max-width:620px;margin:0 auto;background:#F6F1EA;padding:24px;border-radius:12px">' +
@@ -55,7 +55,7 @@ function build(k: Row, resend: boolean) {
     rows.map((r) => r[0] + ": " + r[1]).join("\n") + "\n\n" +
     SECTIONS.map((s) => {
       const l = ents.filter((e) => e.type === s[0]);
-      return s[1].toUpperCase() + "\n" + (l.length ? l.map((e) => "- [" + e.category + "] " + (e.item ? e.item + (e.detail ? " — " : "") : "") + (e.detail || "") + (e.action ? " (Action: " + e.action + ")" : "")).join("\n") : "✓ " + s[2]);
+      return s[1].toUpperCase() + "\n" + (l.length ? l.map((e) => "- " + (e.category ? "[" + e.category + "] " : "") + (e.item ? e.item + (e.detail ? " — " : "") : "") + (e.detail || "") + (e.action ? " (Action: " + e.action + ")" : "")).join("\n") : "✓ " + s[2]);
     }).join("\n\n") + (k.feedback ? "\n\nGENERAL FEEDBACK\n" + k.feedback : "") + "\n\nSent from the Roberto's Mare app.";
   return { subject, html, text };
 }

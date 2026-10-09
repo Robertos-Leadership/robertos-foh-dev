@@ -868,5 +868,27 @@ window.MARE_ME = {
 "Sent to Chef Francesco.": "Poslato šefu Francescu.",
 "Saved. Send it when the report is finished.": "Sačuvano. Pošaljite kad izvještaj bude gotov.",
 "No internet. The report is kept on this phone; try again in a moment.": "Nema interneta. Izvještaj je sačuvan na ovom telefonu; pokušajte ponovo za trenutak.",
-"Only the kitchen team can send this report.": "Samo tim kuhinje može da pošalje ovaj izvještaj."
+"Only the kitchen team can send this report.": "Samo tim kuhinje može da pošalje ovaj izvještaj.",
+// 9 Oct 2026: simple kitchen closing report
+"How was service?": "Kako je prošao servis?",
+"Did anything run out?": "Da li je nešto nestalo?",
+"What ran out, and at what time?": "Šta je nestalo, i u koliko sati?",
+"Any guest complaints?": "Ima li žalbi gostiju?",
+"Which dish, what happened, what you did": "Koje jelo, šta se desilo, šta ste uradili",
+"Any problem with equipment, deliveries or the team?": "Ima li problema sa opremom, isporukom ili timom?",
+"What happened": "Šta se desilo",
+"No": "Ne",
+"Yes": "Da",
+"Note for Chef Francesco": "Napomena za šefa Francesca",
+"(optional)": "(neobavezno)",
+"On duty": "Na dužnosti",
+"nobody ticked": "niko nije označen",
+"Change": "Promijeni",
+"Send again": "Pošalji ponovo",
+"Save, send later": "Sačuvaj, pošalji kasnije",
+"Answer question {n}: tap No or Yes.": "Odgovorite na pitanje {n}: dodirnite Ne ili Da.",
+"You said Yes to question {n}: write one line about it.": "Odgovorili ste Da na pitanje {n}: napišite jedan red o tome.",
+"Sent to Chef Francesco. Thank you.": "Poslato šefu Francescu. Hvala.",
+"Saved. Send it when you finish.": "Sačuvano. Pošaljite kad završite.",
+"No internet. Your answers stay on this phone; try again in a moment.": "Nema interneta. Odgovori ostaju na ovom telefonu; pokušajte ponovo za trenutak."
 };

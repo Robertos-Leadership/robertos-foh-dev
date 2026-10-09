@@ -247,6 +247,17 @@ body.pvphone .bnav{max-width:430px}
 .kr-sent.warn{background:var(--amber-bg);color:var(--amber)}
 .kr-hist{display:flex;align-items:center;gap:10px;justify-content:space-between;font-size:15px;border-bottom:1px solid var(--line-2);padding:6px 0}
 .kr-card textarea{min-height:110px}
+/* simple closing report + fixes (9 Oct 2026) */
+.rt[hidden],#rtimes[hidden]{display:none}
+.kr-q{font-family:'Cormorant Garamond',Georgia,serif;font-size:22px;font-weight:600;color:var(--ink);line-height:1.2}
+.kr-opt{font-family:Karla,sans-serif;font-size:13px;font-weight:400;color:var(--muted)}
+.kr-yn{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.kr-yn button{min-height:56px;border-radius:10px;border:1px solid #D6CABA;background:#fff;font-size:17px;font-weight:700;color:var(--ink)}
+.kr-yn button.on{background:var(--green-bg);border-color:var(--green);color:var(--green)}
+.kr-yn button.on.yes{background:var(--amber-bg);border-color:var(--amber);color:var(--amber)}
+.kr-duty{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:16px;flex-wrap:wrap}
+.kr-duty .lnk{margin-top:0}
+body.phone #fbi-btn{bottom:calc(84px + env(safe-area-inset-bottom,0px)) !important}
 </style>
 </head>
 <body>
@@ -258,10 +269,10 @@ body.pvphone .bnav{max-width:430px}
   <main id="main"></main>
 </div>
 <canvas id="snap" width="240" height="180" style="display:none"></canvas>
-<script src="mare-i18n.js?v=20261009a"></script>
+<script src="mare-i18n.js?v=20261009b"></script>
 <script src="mare-common.js?v=20261008d"></script>
 <script src="mare-media.js?v=20261008d"></script>
-<script src="mare-team.js?v=20261009a"></script>
+<script src="mare-team.js?v=20261009b"></script>
 <!-- "Tell us" — same button and inbox as the Kitchen and FOH apps. -->
 <script>
 window.FB_INBOX = {
