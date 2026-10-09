@@ -652,8 +652,8 @@
         (yes ? '<textarea data-tx="' + q[0] + '" maxlength="600" placeholder="' + E(T(q[2])) + '">' + E(a) + '</textarea>' : '') + '</div>';
     });
     h += '<div class="kr-card"><div class="kr-q">' + E(T('Note for Chef Francesco')) + ' <span class="kr-opt">' + E(T('(optional)')) + '</span></div><textarea id="krn" maxlength="2000">' + E(KR.note || '') + '</textarea></div>';
-    var on = KR.chefs.map(function (n) { return n.split(' ')[0]; });
-    h += '<div class="kr-duty"><span>' + E(T('On duty')) + ': <b>' + E(on.length ? on.join(', ') : T('nobody ticked')) + '</b></span><button class="lnk" id="krc">' + E(KR.editChefs ? T('Done') : T('Change')) + '</button></div>';
+    var duty = KR.chefs.map(function (n) { return n.split(' ')[0]; });
+    h += '<div class="kr-duty"><span>' + E(T('On duty')) + ': <b>' + E(duty.length ? duty.join(', ') : T('nobody ticked')) + '</b></span><button class="lnk" id="krc">' + E(KR.editChefs ? T('Done') : T('Change')) + '</button></div>';
     if (KR.editChefs) h += '<div class="kr-chips">' + r.kitchen.map(function (k) { return '<button data-c="' + E(k.name) + '" class="' + (KR.chefs.indexOf(k.name) >= 0 ? 'on' : '') + '">' + E(k.name.split(' ')[0]) + '</button>'; }).join('') + '</div>';
     h += '<div class="msg err" id="krm"></div><button class="btn" id="krsend">' + E(rep.sent_at ? T('Send again') : T('Send to Chef Francesco')) + '</button>' +
       '<button class="lnk" id="krsave" style="align-self:center">' + E(T('Save, send later')) + '</button>';
