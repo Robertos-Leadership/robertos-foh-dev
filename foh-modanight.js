@@ -90,7 +90,7 @@ async function mnLoadSim(dates){
     (res.data||[]).forEach(function(r){ MN.sim[String(r.service_date).slice(0,10)] = { net: r.lounge_net==null ? null : Number(r.lounge_net), covers: r.lounge_covers_actual }; });
   } catch(e){}
   try {
-    var sp = await sb.from('moda_night_sim').select('night,packages,packages_paid,packages_comp,package_net,comp_value,comps,scala_window_net,scala_day_net,note,read_at').in('night', dates);
+    var sp = await sb.from('moda_night_sim').select('night,packages,packages_paid,packages_comp,package_net,comp_value,comps,items,scala_window_net,scala_day_net,note,read_at').in('night', dates);
     MN.simph = {};
     (sp.data||[]).forEach(function(r){ MN.simph[String(r.night).slice(0,10)] = r; });
   } catch(e){}
@@ -177,9 +177,14 @@ function renderModaNight(){
       + (s && s.packages_comp ? '<br>'+blN(s.packages_comp)+' comped' : (s ? '' : '<br>not checked'))+'</span></button>');
   });
   h.push('</div></div>');
-  var it = N ? N.items : {}, ks = Object.keys(it).sort(function(a,b){ return it[b]-it[a] || (a<b?-1:1); }), imx = ks.length ? it[ks[0]] : 1;
-  h.push('<div class="bl-panel"><div class="rv2-mix-title">What they had <span class="bl-hint">&middot; in the package</span></div>');
-  if(!ks.length) h.push('<div class="bl-empty">'+(N ? 'No package on the checks this night.' : 'Reading&hellip;')+'</div>');
+  // Simphony's own check journals once the night is checked: SevenRooms' copy of a check can be
+  // an earlier version of it (7 Oct: table 611 was re-rung after midnight as the comp check).
+  var simIt = S && S.items && typeof S.items === 'object' ? S.items : null, it = {};
+  if(simIt) Object.keys(simIt).forEach(function(k){ var n = mnNice('MN '+k); it[n] = (it[n]||0) + (Number(simIt[k])||0); });
+  else if(N) it = N.items;
+  var ks = Object.keys(it).filter(function(k){ return it[k] > 0; }).sort(function(a,b){ return it[b]-it[a] || (a<b?-1:1); }), imx = ks.length ? it[ks[0]] : 1;
+  h.push('<div class="bl-panel"><div class="rv2-mix-title">What they had <span class="bl-hint">&middot; in the package &middot; '+(simIt ? 'from Simphony' : 'from the bookings, not checked yet')+'</span></div>');
+  if(!ks.length) h.push('<div class="bl-empty">'+(N || simIt ? 'No package on the checks this night.' : 'Reading&hellip;')+'</div>');
   else h.push('<div class="bl-dishes">'+ks.map(function(k){ return '<div class="bl-dish"><span class="bl-dish-n">'+blEsc(k)+'</span><span class="bl-dish-b"><i style="width:'+Math.round(it[k]/imx*100)+'%"></i></span><span class="bl-dish-v">'+blN(it[k])+'</span></div>'; }).join('')+'</div>');
   h.push('</div></div>');
 
