@@ -94,17 +94,18 @@ details summary{cursor:pointer;font-weight:700;color:var(--teal)}
         '<div class="row"><button data-act="approve" data-t="' + E(t.id) + '">Approve</button><button class="ghost" data-act="change" data-t="' + E(t.id) + '">Ask for a change</button></div>' +
         '<div class="err" data-err="' + E(t.id) + '"></div></div>';
     });
-    h += '<div class="card"><label>Your name, as it is saved with your answers<input type="text" id="nm" autocomplete="name"></label></div>';
+    h += '<div class="card"><label>Your name (saved with what you approve)<input type="text" id="nm" autocomplete="name" placeholder="e.g. Chef Andrea"></label></div>';
     main.innerHTML = h;
-    var nm = document.getElementById('nm'); nm.value = ls() || 'Chef Andrea';
+    var nm = document.getElementById('nm'); nm.value = ls() || '';
     nm.onchange = function () { ls(nm.value.trim()); };
     main.querySelectorAll('[data-act]').forEach(function (b) {
       b.onclick = function () {
         var id = b.getAttribute('data-t'), act = b.getAttribute('data-act'), note = main.querySelector('[data-note="' + id + '"]').value.trim(), er = main.querySelector('[data-err="' + id + '"]');
         er.textContent = '';
+        if (!nm.value.trim()) { er.textContent = 'Write your name at the bottom of the page first.'; nm.focus(); return; }
         if (act === 'change' && note.length < 3) { er.textContent = 'Write what should change, then press Ask for a change.'; return; }
         b.disabled = true;
-        M.rpc('mare_learn_review_save', { p_token: tok, p_topic: id, p_action: act, p_note: note || null, p_name: nm.value.trim() || 'Chef Andrea' }).then(function (r) {
+        M.rpc('mare_learn_review_save', { p_token: tok, p_topic: id, p_action: act, p_note: note || null, p_name: nm.value.trim() }).then(function (r) {
           b.disabled = false;
           if (r.error || !r.data.ok) { er.textContent = r.error && r.error.network ? 'No internet. Try again in a moment.' : 'Something went wrong. Try again.'; return; }
           var title = (topics.filter(function (t) { return t.id === id; })[0] || {}).title;

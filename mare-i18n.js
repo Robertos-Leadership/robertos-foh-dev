@@ -895,6 +895,7 @@ window.MARE_ME = {
 // 9 Oct 2026: guests + revenue on the closing report
 "Guests served": "Broj gostiju",
 "Total revenue (€)": "Ukupan promet (€)",
+"Total revenue (€, gross with VAT)": "Ukupan promet (€, bruto sa PDV-om)",
 "e.g. 85": "npr. 85",
 "e.g. 4250": "npr. 4250",
 "{m} per guest": "{m} po gostu",

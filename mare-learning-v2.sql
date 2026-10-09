@@ -42,7 +42,7 @@ begin
       s := jsonb_build_object('topic', tp->>'title', 'type', ty, 'q', q->>'q', 'why', q->>'why');
       if ty = 'multi' then
         served := served || jsonb_build_array(s || jsonb_build_object('key', q->'answers'));
-        shown := shown || jsonb_build_array(jsonb_build_object('topic', tp->>'title', 'type', ty, 'q', q->>'q', 'choices', mare_learn_shuffle(q->'answers' || q->'wrong')));
+        shown := shown || jsonb_build_array(jsonb_build_object('topic', tp->>'title', 'type', ty, 'q', q->>'q', 'choices', mare_learn_shuffle((q->'answers') || (q->'wrong'))));
       elsif ty = 'order' then
         served := served || jsonb_build_array(s || jsonb_build_object('key', q->'items'));
         shown := shown || jsonb_build_array(jsonb_build_object('topic', tp->>'title', 'type', ty, 'q', q->>'q', 'items', mare_learn_shuffle(q->'items')));
@@ -55,7 +55,7 @@ begin
       else
         sh := case when jsonb_typeof(q->'shots') = 'object' then q->'shots' end;
         served := served || jsonb_build_array(s || jsonb_build_object('type', 'one', 'key', q->'answer', 'shots', sh));
-        shown := shown || jsonb_build_array(jsonb_build_object('topic', tp->>'title', 'type', 'one', 'q', q->>'q', 'choices', mare_learn_shuffle(jsonb_build_array(q->'answer') || q->'wrong'), 'shots', sh));
+        shown := shown || jsonb_build_array(jsonb_build_object('topic', tp->>'title', 'type', 'one', 'q', q->>'q', 'choices', mare_learn_shuffle(jsonb_build_array(q->'answer') || (q->'wrong')), 'shots', sh));
       end if;
       lim := lim + public.mare_learn_q_secs(q);
     end loop;

@@ -34,7 +34,7 @@ function build(k: Row, resend: boolean) {
   const g = k.guests == null ? null : Number(k.guests), v = k.revenue == null ? null : Number(k.revenue);
   const rows: [string, string][] = [
     ["Guests served", g == null ? "—" : String(g)],
-    ["Total revenue", eur(v)],
+    ["Total revenue (gross, with VAT)", eur(v)],
     ["Per guest", g && v != null ? eur(v / g) : "—"],
     ["Service", k.rating ? FACES[k.rating - 1] + " (" + k.rating + "/5)" : "—"],
     ["Chefs on duty", (k.chefs_on || []).join(", ") || "—"],

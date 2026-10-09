@@ -648,7 +648,7 @@
     var h = '<div class="tabs">' + [r.today, M.addDays(r.today, -1)].map(function (k, i) { return '<button data-d="' + k + '" class="' + (k === KR.date ? 'on' : '') + '">' + E(i ? T('Yesterday') : T('Today')) + '</button>'; }).join('') + '</div>';
     if (rep.sent_at) h += '<div class="kr-sent">' + E(T('Sent to {to} at {t} by {n}.', { to: r.send_to, t: M.hhmm(rep.sent_at), n: rep.sent_by || '' })) + '</div>';
     h += '<div class="kr-card"><div class="kr-fig"><label class="f">' + E(T('Guests served')) + '<input type="text" inputmode="numeric" data-num="1" id="krg" value="' + E(KR.guests) + '" placeholder="' + E(T('e.g. 85')) + '"></label>' +
-      '<label class="f">' + E(T('Total revenue (€)')) + '<input type="text" inputmode="decimal" data-num="1" id="krv" value="' + E(KR.revenue) + '" placeholder="' + E(T('e.g. 4250')) + '"></label></div><div class="kr-avg" id="kravg"></div></div>';
+      '<label class="f">' + E(T('Total revenue (€, gross with VAT)')) + '<input type="text" inputmode="decimal" data-num="1" id="krv" value="' + E(KR.revenue) + '" placeholder="' + E(T('e.g. 4250')) + '"></label></div><div class="kr-avg" id="kravg"></div></div>';
     h += '<div class="kr-card"><div class="kr-q">' + E(T('How was service?')) + '</div><div class="kr-faces">' + faces.map(function (f, i) { return '<button data-r="' + (i + 1) + '" class="' + (KR.rating === i + 1 ? 'on' : '') + '" aria-label="' + (i + 1) + '/5">' + f + '</button>'; }).join('') + '</div></div>';
     KR_Q.forEach(function (q, i) {
       var a = KR.ans[q[0]], yes = typeof a === 'string', no = a === false;
