@@ -324,15 +324,6 @@ function renderBizLunch(){
     if(S.checkedDays) h.push('<div class="rv2-stat"><div class="l">Comps &amp; discounts</div><div class="v">'+blN(S.compValue)+'</div></div>');
   }
   h.push('</div>');
-  // every comp on the checked days, with its reason
-  var compList = [];
-  shown.forEach(function(d){ var n = V[d]; if(n && n.checked) n.comps.forEach(function(c){ compList.push({ d: d, c: c }); }); });
-  if(compList.length) h.push('<div class="bl-note bl-comps"><b>Comps and discounts</b>'+compList.map(function(x){
-    var c = x.c; return '<div>'+blEsc(blDayName(x.d))+' &middot; '+(c.menus ? blN(c.menus)+' menu'+(c.menus==1?'':'s')+' comped' : 'discount')+' &middot; table '+blEsc(c.table)+' &middot; check '+blEsc(c.check)
-      + (money && c.amount != null ? ' &middot; '+blN(c.amount) : '')+' &mdash; '+blEsc(c.reason||'no reason given')
-      + (c.what ? ' <span class="bl-hint">('+blEsc(c.what)+')</span>' : '')+'</div>'; }).join('')+'</div>');
-  if(S.checkedDays) h.push('<div class="bl-note">Days marked &#10003; are read from Simphony: menus, net after discounts and comps. Net per menu is the price; menu net counts paid menus only.</div>');
-
   // ── Against all lunch: Simphony's own lunch guests and net (closing report) ──
   var cmpDays = shown.filter(function(d){ return d <= today; });
   if(cmpDays.length){
@@ -356,6 +347,28 @@ function renderBizLunch(){
     h.push('<tr class="bl-tot"><td>Days with a closing report</td><td class="r"><b>'+blN(tg.m)+'</b></td><td class="r">'+blN(tg.c)+'</td>'
       + '<td class="r">'+(tg.c ? Math.round(tg.m/tg.c*100)+'%' : '&ndash;')+'</td>'
       + (money ? '<td class="r">'+blN(tg.bn)+'</td><td class="r">'+blN(tg.ln)+'</td><td class="r">'+(tg.ln ? Math.round(tg.bn/tg.ln*100)+'%' : '&ndash;')+'</td>' : '')+'</tr>');
+    h.push('</tbody></table></div>');
+  }
+
+  // ── Comps and discounts on the checked days (Simphony) — its own card, one row each; tap for what was given ──
+  var compList = [];
+  shown.forEach(function(d){ var n = V[d]; if(n && n.checked) n.comps.forEach(function(c){ compList.push({ d: d, c: c }); }); });
+  if(compList.length){
+    var cmM = 0, cmA = 0; compList.forEach(function(x){ cmM += Number(x.c.menus)||0; cmA += Number(x.c.amount)||0; });
+    h.push('<div class="bl-day bl-cmpd"><div class="bl-day-h"><div><div class="bl-day-t">Comps &amp; discounts</div>'
+      + '<div class="bl-day-s">'+blN(cmM)+' menu'+(cmM===1?'':'s')+' comped &middot; '+blN(compList.length)+' check'+(compList.length===1?'':'s')+' &middot; from Simphony &middot; tap one for what was given</div></div></div>');
+    h.push('<table class="bl-tbl"><thead><tr><th>Day</th><th>For</th><th class="bl-hide-s">Check</th><th class="bl-hide-s">Table</th><th class="r">Menus comped</th>'
+      + (money ? '<th class="r">Amount</th>' : '')+'</tr></thead><tbody>');
+    compList.forEach(function(x, i){
+      var c = x.c, key = 'cmp'+i, what = String(c.what||'').replace(/\s*\(check still paid\)\s*$/,'');
+      h.push('<tr class="bl-row'+(BL.open[key]?' open':'')+'" onclick="blToggle(\''+key+'\')"><td>'+blEsc(blDayName(x.d))+'</td>'
+        + '<td class="bl-guest">'+blEsc(c.reason||'no reason given')+' <span class="bl-tag">'+(c.menus ? 'comped' : 'discount')+'</span></td>'
+        + '<td class="bl-hide-s">'+blEsc(c.check)+'</td><td class="bl-hide-s">'+blEsc(c.table)+'</td>'
+        + '<td class="r"><b>'+(c.menus ? blN(c.menus) : '&ndash;')+'</b></td>'+(money ? '<td class="r">'+blN(c.amount)+'</td>' : '')+'</tr>');
+      if(BL.open[key]) h.push('<tr class="bl-items"><td colspan="'+(money?6:5)+'"><div><span>'+blEsc(what || 'No detail')+'</span><span>check '+blEsc(c.check)+' &middot; table '+blEsc(c.table)
+        + (c.menus ? '' : ' &middot; check still paid')+'</span></div></td></tr>');
+    });
+    h.push('<tr class="bl-tot"><td>Week</td><td></td><td class="bl-hide-s"></td><td class="bl-hide-s"></td><td class="r"><b>'+blN(cmM)+'</b></td>'+(money ? '<td class="r">'+blN(cmA)+'</td>' : '')+'</tr>');
     h.push('</tbody></table></div>');
   }
 
@@ -490,8 +503,6 @@ function blCss(){
     '.bl-bar-s{font-size:10px;color:var(--text-light);white-space:nowrap}',
     '.bl-dishes{display:flex;flex-direction:column;gap:7px}',
     '.bl-ok{font-style:normal;color:#2e6b45;font-weight:700}',
-    '.bl-comps{margin-bottom:10px}',
-    '.bl-comps div{margin-top:4px}',
     '.bl-book{margin-top:8px}',
     '.bl-dish{display:grid;grid-template-columns:minmax(0,9em) 1fr 2.4em;align-items:center;gap:10px;font-size:13px;color:var(--text)}',
     '.bl-dish-n{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
