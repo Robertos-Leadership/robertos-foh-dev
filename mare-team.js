@@ -123,7 +123,7 @@
   };
   var MODS = [
     ['brief', 'brief', 'Today\'s briefing'], ['check', 'check', 'Checklists'], ['rota', 'rota', 'Schedule'], ['recipes', 'recipe', 'Recipes'],
-    ['kclose', 'closing', 'Closing report'], ['breakage', 'breakage', 'Breakage'], ['leave', 'leave', 'Ask for leave'], ['speak', 'speak', 'Speak up']
+    ['kclose', 'closing', 'Closing report'], ['learn', 'check', 'Learning'], ['breakage', 'breakage', 'Breakage'], ['leave', 'leave', 'Ask for leave'], ['speak', 'speak', 'Speak up']
   ];
   function teamMods() {
     var tm = S.feed && S.feed.team_modules; if (!tm) return MODS;
@@ -139,6 +139,7 @@
     if (k === 'rota') { var n = f.shifts.filter(function (s) { return s.date === f.today && s.kind === 'work'; }).length; return [T('{n} on today', { n: n }), false]; }
     if (k === 'recipes') return [T('Mare + Dubai'), false];
     if (k === 'kclose') return [T('Send it at the end of service'), false];
+    if (k === 'learn') return [T('Health and safety'), false];
     return ['', false];
   }
   function home() {
@@ -377,7 +378,7 @@
   }
   function openMod(k, sub) {
     S.mod = k; S.screen = 'mod'; if (sub) S.sub = sub; else if (k !== S.lastMod) S.sub = null; S.lastMod = k;
-    ({ brief: modBrief, check: modCheck, rota: modRota, recipes: modRecipes, kclose: modKclose, breakage: modBreakage, leave: modLeave, speak: modSpeak, hours: modHours, more: modMore })[k]();
+    ({ brief: modBrief, check: modCheck, rota: modRota, recipes: modRecipes, kclose: modKclose, learn: modLearn, breakage: modBreakage, leave: modLeave, speak: modSpeak, hours: modHours, more: modMore })[k]();
     if (meToken) bnav(k === 'rota' || k === 'recipes' || k === 'kclose' ? k : 'more');
   }
   function feed() { return S.feed || { briefing: null, reads: [], staff: [], shifts: [], check_items: [], ticks: [], recipes: [], actions: [], today: M.today() }; }
@@ -705,6 +706,117 @@
     });
   }
 
+  // ── learning (9 Oct 2026): Montenegrin health & safety, checked by Chef Andrea ──
+  // Read the approved topics, then ONE test with 3 questions from every topic (Francesco: "each test
+  // should have all 6 topics in once"). Pass 80%, one clock for the whole test (Dubai's timing).
+  // The answers stay in the database until hand-in (mare_s_learn_start / _finish).
+  var LN = { data: null, topic: null, test: null, qi: 0, picks: [], result: null, tick: null, busy: false };
+  function lnCall(name, extra) {
+    var a = { p_device: dev(), p_token: meToken, p_staff: null, p_pin: pinArg() };
+    Object.keys(extra || {}).forEach(function (k) { a[k] = extra[k]; });
+    if (PREVIEW && name !== 'mare_s_learn_home') { M.toast(T('Read only: you are viewing as someone else. Nothing is saved.')); return Promise.resolve(null); }
+    if (PREVIEW) return Promise.resolve({ ok: true, topics: [], attempts: [], total_topics: 0, approved_topics: 0 });
+    return rpcS(name, a);
+  }
+  function modLearn() {
+    if (LN.test && !LN.result) { lnTest(); return; }
+    LN.topic = null; LN.result = null;
+    main.innerHTML = frame('Learning', '<div class="card big muted" style="font-family:inherit;font-size:17px">' + E(T('Loading…')) + '</div>');
+    bindFrame();
+    lnCall('mare_s_learn_home').then(function (r) {
+      if (S.mod !== 'learn') return;
+      if (!r || !r.ok) { main.innerHTML = frame('Learning', '<div class="card big">' + E(r && r.network ? T('No internet. Try again in a moment.') : T('Something went wrong. Try again.')) + '</div>'); bindFrame(); return; }
+      LN.data = r; lnHome();
+    });
+  }
+  function lnHome() {
+    var d = LN.data, last = d.attempts[0], best = d.attempts.filter(function (a) { return a.passed; })[0];
+    var h = '<p class="ln-intro">' + E(T('Health and safety in Montenegro: the law, and how we work at Roberto\'s. Read the topics, then take the test.')) + '</p>';
+    if (!d.topics.length) h += '<div class="kr-card"><div class="kr-q">' + E(T('Coming soon')) + '</div><p class="ln-p">' + E(T('Chef Andrea is checking the topics. They open here as soon as he approves them.')) + '</p></div>';
+    else {
+      h += '<div class="ln-list">' + d.topics.map(function (t, i) {
+        return '<button class="ln-topic" data-t="' + E(t.id) + '"><span class="ln-n">' + (i + 1) + '</span><span><b>' + E(t.title) + '</b><small>' + E(t.summary) + '</small></span><span class="ln-go">›</span></button>'; }).join('') + '</div>';
+      if (d.approved_topics < d.total_topics) h += '<p class="small muted" style="margin:0">' + E(T('{a} of {b} topics are open. The rest open when Chef Andrea approves them.', { a: d.approved_topics, b: d.total_topics })) + '</p>';
+      var n = d.topics.length * 3;
+      h += '<div class="kr-card"><div class="kr-q">' + E(T('The test')) + '</div><p class="ln-p">' + E(T('{n} questions, 3 from every topic. Timed. You pass with 80%.', { n: n })) + '</p>' +
+        (best ? '<div class="kr-sent">' + E(T('Passed on {d} with {s}/{t}.', { d: M.shortDate(M.dateKey(new Date(best.at))), s: best.score, t: best.total })) + '</div>' :
+          last ? '<div class="kr-sent warn">' + E(T('Last try: {s}/{t}, not passed yet.', { s: last.score, t: last.total })) + '</div>' : '') +
+        '<button class="btn" id="lnstart">' + E(best ? T('Take it again') : T('Start the test')) + '</button></div>';
+    }
+    main.innerHTML = frame('Learning', '<div class="stack">' + h + '</div>');
+    bindFrame();
+    on('[data-t]', function (b) { LN.topic = d.topics.filter(function (t) { return t.id === b.getAttribute('data-t'); })[0]; lnTopic(); });
+    var st = document.getElementById('lnstart'); if (st) st.onclick = function () { lnStart(this); };
+  }
+  function lnTopic() {
+    var t = LN.topic, i = LN.data.topics.indexOf(t), nx = LN.data.topics[i + 1];
+    main.innerHTML = frame('Learning', '<div class="stack"><button class="lnk" id="lnback" style="margin-top:0">‹ ' + E(T('All topics')) + '</button>' +
+      '<div class="kr-card"><div class="kr-q" style="font-size:26px">' + E(t.title) + '</div><div class="ln-body">' + E(t.body) + '</div></div>' +
+      (nx ? '<button class="btn ghost" id="lnnext">' + E(T('Next topic: {t}', { t: nx.title })) + '</button>' : '<button class="btn" id="lnstart">' + E(T('Start the test')) + '</button>') + '</div>');
+    bindFrame(); window.scrollTo(0, 0);
+    document.getElementById('lnback').onclick = lnHome;
+    var n = document.getElementById('lnnext'); if (n) n.onclick = function () { LN.topic = nx; lnTopic(); };
+    var s = document.getElementById('lnstart'); if (s) s.onclick = function () { lnStart(this); };
+  }
+  function lnStart(btn) {
+    btn.disabled = true;
+    lnCall('mare_s_learn_start').then(function (r) {
+      btn.disabled = false;
+      if (!r) return;
+      if (!r.ok) { phoneToast(r.network ? T('No internet. Try again in a moment.') : r.error === 'not_ready' ? T('The topics are still being checked.') : T('Something went wrong. Try again.')); return; }
+      LN.test = r; LN.test.until = Date.now() + r.limit * 1000; LN.qi = 0; LN.picks = []; LN.result = null;
+      clearInterval(LN.tick);
+      LN.tick = setInterval(function () {
+        if (!LN.test || LN.result) { clearInterval(LN.tick); return; }
+        var el = document.getElementById('lnclock'), left = lnLeft();
+        if (el) { el.textContent = lnClock(left); el.classList.toggle('low', left <= 30); }
+        if (left <= 0) { clearInterval(LN.tick); if (!LN.busy) lnFinish(); }
+      }, 1000);
+      lnTest();
+    });
+  }
+  function lnLeft() { return Math.max(0, Math.ceil((LN.test.until - Date.now()) / 1000)); }
+  function lnClock(t) { return T('{t} left', { t: Math.floor(t / 60) + ':' + ('0' + (t % 60)).slice(-2) }); }
+  function lnTest() {
+    var qs = LN.test.questions, q = qs[LN.qi], n = qs.length, pick = LN.picks[LN.qi];
+    main.innerHTML = frame('Learning', '<div class="stack"><div class="ln-bar"><i style="width:' + Math.round(100 * LN.qi / n) + '%"></i></div>' +
+      '<div class="ln-qhead"><span>' + E(T('Question {i} of {n}', { i: LN.qi + 1, n: n })) + ' · ' + E(q.topic) + '</span><span class="ln-clock" id="lnclock">' + E(lnClock(lnLeft())) + '</span></div>' +
+      '<div class="kr-card"><div class="kr-q">' + E(q.q) + '</div><div class="ln-choices">' + q.choices.map(function (c, i) {
+        return '<button class="ln-choice' + (pick === c ? ' on' : '') + '" data-c="' + i + '" aria-pressed="' + (pick === c) + '">' + E(c) + '</button>'; }).join('') + '</div></div>' +
+      '<div class="row" style="justify-content:space-between">' + (LN.qi > 0 ? '<button class="btn ghost" id="lnprev">‹ ' + E(T('Back')) + '</button>' : '<span></span>') +
+      (LN.qi < n - 1 ? '<button class="btn" id="lnnextq"' + (pick == null ? ' disabled' : '') + '>' + E(T('Next')) + ' ›</button>'
+                     : '<button class="btn" id="lnfin"' + (pick == null ? ' disabled' : '') + '>' + E(T('Hand it in')) + '</button>') + '</div></div>');
+    bindFrame(); idle(3600000);
+    on('[data-c]', function (b) { LN.picks[LN.qi] = q.choices[+b.getAttribute('data-c')]; lnTest(); });
+    var p = document.getElementById('lnprev'); if (p) p.onclick = function () { LN.qi--; lnTest(); };
+    var nq = document.getElementById('lnnextq'); if (nq) nq.onclick = function () { LN.qi++; lnTest(); window.scrollTo(0, 0); };
+    var f = document.getElementById('lnfin'); if (f) f.onclick = function () { lnFinish(); };
+  }
+  function lnFinish() {
+    if (LN.busy || !LN.test) return;
+    LN.busy = true; clearInterval(LN.tick);
+    var qs = LN.test.questions, answers = qs.map(function (_, i) { return LN.picks[i] == null ? null : LN.picks[i]; });
+    lnCall('mare_s_learn_finish', { p_attempt: LN.test.attempt, p_answers: answers }).then(function (r) {
+      LN.busy = false;
+      if (!r || !r.ok) { phoneToast(r && r.network ? T('No internet. Your answers are kept; press Hand it in again.') : T('Something went wrong. Try again.')); lnTest(); return; }
+      LN.result = r; lnResult();
+    });
+  }
+  function lnResult() {
+    var r = LN.result, qs = LN.test.questions;
+    var per = Object.keys(r.per_topic).map(function (k) { var x = r.per_topic[k]; return '<div class="ln-per"><span>' + E(k) + '</span><b class="' + (x.right < x.of ? 'bad' : 'good') + '">' + x.right + '/' + x.of + '</b></div>'; }).join('');
+    var wrong = r.results.map(function (x, i) { return [x, qs[i]]; }).filter(function (p) { return !p[0].right; });
+    main.innerHTML = frame('Learning', '<div class="stack"><div class="kr-card" style="align-items:center;text-align:center">' +
+      '<div class="ln-score ' + (r.passed ? 'good' : 'bad') + '">' + r.score + '/' + r.total + '</div>' +
+      '<div class="kr-q">' + E(r.passed ? T('Passed. Well done.') : r.late ? T('Time ran out, so this try cannot pass.') : T('Not passed yet. You need {n}.', { n: r.pass })) + '</div></div>' +
+      '<div class="kr-card"><div class="kr-q">' + E(T('By topic')) + '</div>' + per + '</div>' +
+      (wrong.length ? '<div class="kr-card"><div class="kr-q">' + E(T('Check these again')) + '</div>' + wrong.map(function (p) {
+        return '<div class="ln-wrong"><b>' + E(p[1].q) + '</b><div class="bad">✗ ' + E(p[0].picked || T('No answer')) + '</div><div class="good">✓ ' + E(p[0].answer) + '</div></div>'; }).join('') + '</div>' : '') +
+      '<button class="btn" id="lndone">' + E(T('Back to Learning')) + '</button></div>');
+    bindFrame(); window.scrollTo(0, 0);
+    document.getElementById('lndone').onclick = function () { LN.test = null; LN.result = null; modLearn(); };
+  }
+
   // ── recipes ──
   function dubaiBlk(t, v) { return v ? '<div class="card"><h2 class="serif">' + E(t) + '</h2><div class="pre big">' + E(v) + '</div></div>' : ''; }
   function modRecipes() {
@@ -991,7 +1103,7 @@
     var hasClock = (me.punches || []).length > 0, hasLeave = tm.indexOf('leave') >= 0;
     if (hasClock || hasLeave) h += '<div class="tot">' + (hasClock ? '<div><span>' + E(T('Hours this week')) + '</span><b>' + M.durShort(weekMin(sh, M.weekStart(f.today))) + '</b></div>' : '') +
       (hasLeave ? '<div><span>' + E(T('Leave days left')) + '</span><b>' + ((me.annual_days != null ? me.annual_days : 21) - used) + '</b></div>' : '') + '</div>';
-    var cards = teamMods().filter(function (m) { return m[0] === 'rota' || m[0] === 'recipes' || m[0] === 'kclose'; });
+    var cards = teamMods().filter(function (m) { return m[0] === 'rota' || m[0] === 'recipes' || m[0] === 'kclose' || m[0] === 'learn'; });
     if (cards.length) h += '<div class="mods">' + cards.map(function (m) { var st = modStat(m[0]);
       return '<button class="mod" data-open="' + m[0] + '"><span class="ic">' + M.icon(m[1], 22) + '</span><b>' + E(T(m[2])) + '</b><span class="s' + (st[1] ? ' alert' : '') + '">' + E(st[0]) + '</span></button>'; }).join('') + '</div>';
     if (hasClock) h += '<div class="small muted" style="text-align:center;font-family:\'Cormorant Garamond\',serif;font-style:italic;font-size:17px">' + E(T('Clock in at the tablet by the staff entrance.')) + '</div>';

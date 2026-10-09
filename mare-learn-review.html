@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#0E4A50">
+<title>Roberto's Mare · Check the Learning</title>
+<link rel="icon" href="mare-logo-teal.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=Karla:wght@400;600;700&display=swap" rel="stylesheet">
+<!-- Roberto's Mare — Chef Andrea checks the Learning topics (9 Oct 2026). Francesco: Learning to the
+     Montenegrin standard for health and safety, six topics, checked by Andrea Falcone. The link is
+     the key (?t=<mare_settings learn_review_token>), no password. RPCs: mare_learn_review_get,
+     mare_learn_review_save. A topic reaches the team only once it is approved here. -->
+<style>
+:root{--teal:#0E4A50;--teal-2:#16606A;--tint:#E3ECEB;--cream:#F6F1EA;--line:#E4DBCD;--gold:#A8834B;--ink:#1B2426;--muted:#4B5557;--soft:#EFE8DF;--red:#9B1C1C;--green:#285C36;--green-bg:#E8F2EA;--amber:#7A4A12;--amber-bg:#FBF1E2}
+*{box-sizing:border-box}
+body{margin:0;background:var(--cream);color:var(--ink);font-family:Karla,Arial,sans-serif;font-size:17px;line-height:1.5}
+header{background:var(--teal);color:#fff;padding:16px 20px}
+header small{display:block;letter-spacing:2px;font-size:11px;font-weight:700;text-transform:uppercase;opacity:.8}
+h1{font-family:'Cormorant Garamond',Georgia,serif;font-weight:600;font-size:30px;margin:2px 0 0;line-height:1.1}
+h2{font-family:'Cormorant Garamond',Georgia,serif;font-weight:600;font-size:26px;margin:0;line-height:1.15;color:var(--teal)}
+main{max-width:760px;margin:0 auto;padding:18px 16px 60px;display:flex;flex-direction:column;gap:16px}
+.card{background:#fff;border:1px solid rgba(168,131,75,.24);border-radius:12px;padding:16px 18px;display:flex;flex-direction:column;gap:12px}
+.pre{white-space:pre-wrap}
+.muted{color:var(--muted)}
+.small{font-size:14px}
+.tag{display:inline-block;font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;border-radius:4px;padding:4px 9px}
+.tag.draft{background:var(--soft);color:var(--muted)} .tag.approved{background:var(--green-bg);color:var(--green)} .tag.change{background:var(--amber-bg);color:var(--amber)}
+.src{font-size:14px;color:var(--muted);border-left:3px solid var(--gold);padding-left:10px}
+.note{font-size:14px;background:var(--amber-bg);color:var(--amber);border-radius:8px;padding:10px 12px}
+ol{margin:0;padding-left:22px;display:flex;flex-direction:column;gap:10px}
+ol li b{display:block}
+.ans{color:var(--green);font-weight:700}
+.wr{color:var(--muted);font-size:15px}
+label{display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted)}
+textarea,input{font:inherit;color:var(--ink);font-size:17px;padding:12px 14px;border:1px solid #D6CABA;border-radius:8px;background:#fff;width:100%;letter-spacing:0;text-transform:none;font-weight:400}
+textarea{min-height:90px}
+.row{display:flex;flex-wrap:wrap;gap:10px}
+button{font:inherit;background:var(--teal);color:#fff;border:0;border-radius:8px;padding:13px 22px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;font-size:13px;min-height:48px;cursor:pointer}
+button.ghost{background:#fff;color:var(--ink);border:1px solid #D6CABA}
+button:disabled{opacity:.55}
+.err{color:var(--red);font-weight:700;min-height:1.2em}
+.sum{display:flex;flex-wrap:wrap;gap:8px}
+details summary{cursor:pointer;font-weight:700;color:var(--teal)}
+</style>
+</head>
+<body>
+<header><small>Roberto's Mare · Learning</small><h1>Check the Learning</h1></header>
+<main id="main"><div class="card">Loading…</div></main>
+<script src="mare-common.js?v=20261008d"></script>
+<script>
+(function () {
+  var M = window.Mare, E = M.esc, main = document.getElementById('main');
+  var tok = new URLSearchParams(location.search).get('t') || '';
+  var LS = 'mare_learn_reviewer';
+  function ls(v) { try { if (v === undefined) return localStorage.getItem(LS); localStorage.setItem(LS, v); } catch (e) { return null; } }
+  var ST = { draft: 'Waiting for you', approved: 'Approved', change: 'Change asked' };
+  var topics = [], open = {};
+  function load() {
+    return M.rpc('mare_learn_review_get', { p_token: tok }).then(function (r) {
+      if (r.error) { main.innerHTML = '<div class="card">' + E(r.error.network ? 'No internet. Try again in a moment.' : 'Something went wrong. Try again.') + '</div>'; return; }
+      if (!r.data.ok) { main.innerHTML = '<div class="card">This link is not valid.</div>'; return; }
+      topics = r.data.topics; paint();
+    });
+  }
+  function paint(msg) {
+    var done = topics.filter(function (t) { return t.status === 'approved'; }).length;
+    var h = '<div class="card"><p style="margin:0">Six short topics for the Mare kitchen team, written from the Montenegrin laws on food safety, hygiene, infectious diseases and safety at work. ' +
+      'Read each one with its questions, then press <b>Approve</b> or <b>Ask for a change</b>. A topic reaches the team only once you approve it.</p>' +
+      '<p class="small muted" style="margin:0">The team takes <b>one test with 3 questions from every topic</b> (18 in all), drawn at random from the 5 below. Pass mark 80%, timed the same way as Dubai.</p>' +
+      '<div class="sum"><span class="tag approved">' + done + ' of ' + topics.length + ' approved</span></div>' +
+      (msg ? '<div style="color:var(--green);font-weight:700">' + E(msg) + '</div>' : '') + '</div>';
+    topics.forEach(function (t, i) {
+      h += '<div class="card" id="t-' + E(t.id) + '"><div class="row" style="justify-content:space-between;align-items:center"><h2>' + (i + 1) + '. ' + E(t.title) + '</h2><span class="tag ' + t.status + '">' + E(ST[t.status]) + '</span></div>' +
+        (t.checked_by && t.status !== 'draft' ? '<div class="small muted">' + E((t.status === 'approved' ? 'Approved by ' : 'Change asked by ') + t.checked_by + ' · ' + M.niceDate(M.dateKey(new Date(t.checked_at)))) + '</div>' : '') +
+        (t.note ? '<div class="note"><b>Note:</b> ' + E(t.note) + '</div>' : '') +
+        (t.reviewer_note ? '<div class="note"><b>For you to check:</b> ' + E(t.reviewer_note) + '</div>' : '') +
+        '<details' + (t.status !== 'approved' ? ' open' : '') + '><summary>The page the team reads</summary><div class="pre" style="margin-top:10px">' + E(t.body) + '</div></details>' +
+        '<div class="src"><b>Sources:</b> ' + E(t.sources) + '</div>' +
+        '<details' + (t.status !== 'approved' ? ' open' : '') + '><summary>The 5 questions (correct answer in green)</summary><ol style="margin-top:10px">' + t.questions.map(function (q) {
+          return '<li><b>' + E(q.q) + '</b><span class="ans">✓ ' + E(q.answer) + '</span><div class="wr">✗ ' + q.wrong.map(E).join(' · ✗ ') + '</div></li>'; }).join('') + '</ol></details>' +
+        '<label>Note (needed to ask for a change)<textarea data-note="' + E(t.id) + '"></textarea></label>' +
+        '<div class="row"><button data-act="approve" data-t="' + E(t.id) + '">Approve</button><button class="ghost" data-act="change" data-t="' + E(t.id) + '">Ask for a change</button></div>' +
+        '<div class="err" data-err="' + E(t.id) + '"></div></div>';
+    });
+    h += '<div class="card"><label>Your name, as it is saved with your answers<input type="text" id="nm" autocomplete="name"></label></div>';
+    main.innerHTML = h;
+    var nm = document.getElementById('nm'); nm.value = ls() || 'Chef Andrea';
+    nm.onchange = function () { ls(nm.value.trim()); };
+    main.querySelectorAll('[data-act]').forEach(function (b) {
+      b.onclick = function () {
+        var id = b.getAttribute('data-t'), act = b.getAttribute('data-act'), note = main.querySelector('[data-note="' + id + '"]').value.trim(), er = main.querySelector('[data-err="' + id + '"]');
+        er.textContent = '';
+        if (act === 'change' && note.length < 3) { er.textContent = 'Write what should change, then press Ask for a change.'; return; }
+        b.disabled = true;
+        M.rpc('mare_learn_review_save', { p_token: tok, p_topic: id, p_action: act, p_note: note || null, p_name: nm.value.trim() || 'Chef Andrea' }).then(function (r) {
+          b.disabled = false;
+          if (r.error || !r.data.ok) { er.textContent = r.error && r.error.network ? 'No internet. Try again in a moment.' : 'Something went wrong. Try again.'; return; }
+          var title = (topics.filter(function (t) { return t.id === id; })[0] || {}).title;
+          load().then(function () { paint((act === 'approve' ? 'Approved: ' : 'Change asked: ') + title); var el = document.getElementById('t-' + id); if (el) el.scrollIntoView({ block: 'start' }); });
+        });
+      };
+    });
+  }
+  load();
+})();
+</script>
+</body>
+</html>
