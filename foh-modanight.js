@@ -16,8 +16,16 @@
 // check SUBTOTAL is the table total (some discounts never reach the item list).
 // THE GAP: a walk-in rung with no booking is not here. The closing report's Scala figure for
 // the whole night is shown beside it, so the gap shows as a difference.
+//
+// COMPS (9 Oct 2026): SevenRooms' copy of a check NEVER carries its discounts. On 7 Oct 14 of
+// 16 packages were comped 100% (check 20331, "MODA NIGHT C/O MS OUAFA", total 0.00) and this
+// screen counted them at full price: 3,385 package net against Simphony's real 398. So every
+// Thursday night a scheduled task reads Simphony and writes the night into `moda_night_sim`
+// (FOH db, authenticated read). When that row exists, the money and the package counts on this
+// screen come from it — paid vs comped, with the comp reason — and SevenRooms only supplies the
+// table list and what was eaten. Until it exists the night is marked "not checked yet".
 
-var MN = { pick: null, nights: {}, loading: {}, failed: {}, sim: {}, open: {}, list: null };
+var MN = { pick: null, nights: {}, loading: {}, failed: {}, sim: {}, simph: {}, open: {}, list: null };
 var MN_FIRST = '2026-09-30';
 
 function mnIsPackage(n){ return /^moda\s*night/i.test(String(n||'')); }
@@ -81,6 +89,11 @@ async function mnLoadSim(dates){
     var res = await sb.from('rev_daily').select('service_date,lounge_net,lounge_covers_actual,lounge_dinner_net').in('service_date', dates);
     (res.data||[]).forEach(function(r){ MN.sim[String(r.service_date).slice(0,10)] = { net: r.lounge_net==null ? null : Number(r.lounge_net), covers: r.lounge_covers_actual }; });
   } catch(e){}
+  try {
+    var sp = await sb.from('moda_night_sim').select('night,packages,packages_paid,packages_comp,package_net,comp_value,comps,scala_window_net,scala_day_net,note,read_at').in('night', dates);
+    MN.simph = {};
+    (sp.data||[]).forEach(function(r){ MN.simph[String(r.night).slice(0,10)] = r; });
+  } catch(e){}
   mnRepaint();
 }
 function mnRepaint(){ if(typeof state === 'object' && state && state.currentTab === 'modanight' && typeof renderMain === 'function') renderMain(); }
@@ -109,16 +122,37 @@ function renderModaNight(){
 
   if(MN.failed[d]) h.push('<div class="rr-bad bl-bad">'+blEsc(blDayName(d)+' '+blDateLabel(d))+' could not be read. Press Refresh to try again.</div>');
 
-  // hero: packages that night
-  h.push('<div class="rv2-hero '+(N && N.packages ? 'good' : 'empty')+'"><div class="rv2-tag">'+(d===t ? 'Tonight' : blDayName(d, true)+' '+blDateLabel(d))+' &middot; packages sold</div>');
-  h.push('<div class="rv2-bignum"><span class="n">'+(N ? blN(N.packages) : '&hellip;')+'</span><span class="of">'
-    + (N ? blN(N.guests)+' guests at '+blN(N.tables)+' Scala table'+(N.tables===1?'':'s')+' from 8 PM' : 'reading the book&hellip;')
-    + (sim.covers ? ' &middot; closing report Scala covers '+blN(sim.covers) : '')+'</span></div>');
+  // hero: packages that night — Simphony's count once the Thursday check has run
+  var S = MN.simph[d] || null, hasPaid = S && S.packages_paid != null;
+  var heroN = S ? S.packages : (N ? N.packages : null);
+  h.push('<div class="rv2-hero '+(heroN ? 'good' : 'empty')+'"><div class="rv2-tag">'+(d===t ? 'Tonight' : blDayName(d, true)+' '+blDateLabel(d))+' &middot; packages sold'
+    + (S ? ' &middot; checked in Simphony' : '')+'</div>');
+  h.push('<div class="rv2-bignum"><span class="n">'+(heroN != null ? blN(heroN) : '&hellip;')+'</span><span class="of">'
+    + (S ? (hasPaid ? '<b>'+blN(S.packages_paid)+' paid</b> &middot; <b>'+blN(S.packages_comp)+' comped</b>' : 'comps not read yet')
+         : (N ? blN(N.guests)+' guests at '+blN(N.tables)+' Scala table'+(N.tables===1?'':'s')+' from 8 PM' : 'reading the book&hellip;'))
+    + (!S && sim.covers ? ' &middot; closing report Scala covers '+blN(sim.covers) : '')+'</span></div>');
   if(d === t) h.push('<div class="bl-hero-days"><span class="today">The night is still running &mdash; Refresh to read the latest checks.</span></div>');
+  else if(!S) h.push('<div class="bl-hero-days"><span class="today">Not checked in Simphony yet &mdash; until Thursday night&rsquo;s check, comped packages show here at full price.</span></div>');
   h.push('</div>');
 
-  if(N && money){
+  if(S){
+    if(money) h.push('<div class="rv2-stats">'
+      + '<div class="rv2-stat"><div class="l">Paid packages net</div><div class="v">'+blN(S.package_net)+'</div></div>'
+      + '<div class="rv2-stat"><div class="l">Comped (menu price)</div><div class="v">'+(S.comp_value != null ? blN(S.comp_value) : '&ndash;')+'</div></div>'
+      + '<div class="rv2-stat"><div class="l">Scala 8 PM &ndash; 1 AM</div><div class="v">'+blN(S.scala_window_net)+'</div></div>'
+      + '<div class="rv2-stat"><div class="l">Scala whole night</div><div class="v">'+blN(S.scala_day_net)+'</div></div>'
+      + '</div>');
+    var cs = Array.isArray(S.comps) ? S.comps : [];
+    if(cs.length) h.push('<div class="bl-note mn-sim mn-comps"><b>Comped</b>'+cs.map(function(c){
+      return '<div>'+blN(c.packages)+' package'+(c.packages==1?'':'s')+' &middot; table '+blEsc(c.table)+' &middot; check '+blEsc(c.check)
+        + (money && c.amount != null ? ' &middot; '+blN(c.amount) : '')+' &mdash; '+blEsc(c.reason||'no reason given')+'</div>'; }).join('')+'</div>');
+    if(S.note) h.push('<div class="bl-note mn-sim">'+blEsc(S.note)+'</div>');
+    if(money) h.push('<div class="bl-note mn-sim">From Simphony, net after discounts. Scala = Lounge, Cortina, Premium Lounge and Bar, walk-ins included; 8 PM &ndash; 1 AM is by the hour each line was rung.</div>');
+  }
+
+  if(N && money && !S){
     var pkNet = blNet(N.pkgFood + N.pkgDrink, d), allNet = blNet(N.checks, d);
+    h.push('<div class="bl-note mn-sim">From the bookings at menu price &mdash; comps are not seen until the Simphony check.</div>');
     h.push('<div class="rv2-stats">'
       + '<div class="rv2-stat"><div class="l">Package net</div><div class="v">'+blN(pkNet)+'</div></div>'
       + '<div class="rv2-stat"><div class="l">&nbsp;of it food</div><div class="v">'+blN(blNet(N.pkgFood, d))+'</div></div>'
@@ -131,13 +165,16 @@ function renderModaNight(){
   }
 
   // every Wednesday side by side + what they had
-  var mx = 1; weds.forEach(function(x){ var n = MN.nights[x]; if(n && n.packages > mx) mx = n.packages; });
+  function mnPk(x){ var s = MN.simph[x], n = MN.nights[x]; return s ? s.packages : (n ? n.packages : null); }
+  var mx = 1; weds.forEach(function(x){ var v = mnPk(x); if(v > mx) mx = v; });
   h.push('<div class="bl-grid"><div class="bl-panel"><div class="rv2-mix-title">Every Moda Night <span class="bl-hint">&middot; tap one</span></div><div class="bl-bars">');
   weds.slice().reverse().forEach(function(x){
-    var n = MN.nights[x], v = n ? n.packages : 0;
+    var s = MN.simph[x], n = MN.nights[x], v = mnPk(x), ok = v != null;
+    var sub = !money ? '&nbsp;' : s ? blN(s.scala_window_net)+' net' : (n ? blN(blNet(n.checks, x))+' booked' : '&nbsp;');
     h.push('<button class="bl-bar'+(x===t?' today':'')+(x===d?' on':'')+'" onclick="mnPickNight(\''+x+'\')">'
-      + '<span class="bl-bar-v">'+(n ? blN(v) : '&hellip;')+'</span><span class="bl-bar-col"><i style="height:'+(n ? Math.max(v?4:0, Math.round(v/mx*100)) : 0)+'%"></i></span>'
-      + '<span class="bl-bar-d">'+blEsc(blDateLabel(x))+'</span><span class="bl-bar-s">'+(money && n ? blN(blNet(n.checks, x))+' net' : '&nbsp;')+'</span></button>');
+      + '<span class="bl-bar-v">'+(ok ? blN(v) : '&hellip;')+'</span><span class="bl-bar-col"><i style="height:'+(ok ? Math.max(v?4:0, Math.round(v/mx*100)) : 0)+'%"></i></span>'
+      + '<span class="bl-bar-d">'+blEsc(blDateLabel(x))+'</span><span class="bl-bar-s">'+sub
+      + (s && s.packages_comp ? '<br>'+blN(s.packages_comp)+' comped' : (s ? '' : '<br>not checked'))+'</span></button>');
   });
   h.push('</div></div>');
   var it = N ? N.items : {}, ks = Object.keys(it).sort(function(a,b){ return it[b]-it[a] || (a<b?-1:1); }), imx = ks.length ? it[ks[0]] : 1;
@@ -150,10 +187,12 @@ function renderModaNight(){
   if(N && N.rows.length){
     h.push('<div class="bl-day"><div class="bl-day-h"><div><div class="bl-day-t">Scala tables</div><div class="bl-day-s">'+blN(N.tables)+' tables &middot; tap one for its check</div></div></div>');
     h.push('<table class="bl-tbl"><thead><tr><th>Time</th><th>Guest</th><th>Table</th><th class="r">Guests</th><th class="r">Packages</th>'+(money?'<th class="r">Check net</th>':'')+'</tr></thead><tbody>');
+    var compT = {}; (S && Array.isArray(S.comps) ? S.comps : []).forEach(function(c){ String(c.table||'').split(/[\s,\/]+/).forEach(function(x){ if(x) compT[x] = true; }); });
     N.rows.forEach(function(r, k){
+      var comped = String(r.tables||'').split(/[\s,]+/).some(function(x){ return compT[x]; });
       h.push('<tr class="bl-row'+(MN.open[k]?' open':'')+'" onclick="mnToggle('+k+')"><td>'+blEsc(r.time)+'</td><td class="bl-guest">'+blEsc(r.guest||'—')
-        + (r.vip?' <span class="bl-tag">VIP</span>':'')+(r.walkin?' <span class="bl-tag">walk-in</span>':'')+'</td><td>'+blEsc(r.tables||'—')+'</td>'
-        + '<td class="r">'+blN(r.pax)+'</td><td class="r"><b>'+(r.packages ? blN(r.packages) : '&ndash;')+'</b></td>'+(money?'<td class="r">'+blN(blNet(r.check, d))+'</td>':'')+'</tr>');
+        + (r.vip?' <span class="bl-tag">VIP</span>':'')+(r.walkin?' <span class="bl-tag">walk-in</span>':'')+(comped?' <span class="bl-tag">comped</span>':'')+'</td><td>'+blEsc(r.tables||'—')+'</td>'
+        + '<td class="r">'+blN(r.pax)+'</td><td class="r"><b>'+(r.packages ? blN(r.packages) : '&ndash;')+'</b></td>'+(money?'<td class="r">'+(comped ? '0' : blN(blNet(r.check, d)))+'</td>':'')+'</tr>');
       if(MN.open[k]){
         var keys = Object.keys(r.items);
         h.push('<tr class="bl-items"><td colspan="'+(money?6:5)+'">'+(keys.length ? keys.map(function(x){ return '<div><span>'+(r.items[x]>1?blN(r.items[x])+'× ':'')+blEsc(x)+'</span><span>in the package</span></div>'; }).join('') : '<div><span>No package on this table</span></div>')+'</td></tr>');
@@ -164,15 +203,15 @@ function renderModaNight(){
 
   h.push('<details class="bl-how"><summary>How these numbers are counted</summary>'
     + '<p>Read from the Simphony check SevenRooms attaches to each Scala booking (every area except Piemonte). A table counts when it has a Moda Night package or was booked for 8 PM or later. Every <b>ModaNight@'+blN(price)+'</b> line is one package; the price sits on the MN Fd, MN (Alc) and MN (Wine) lines, so food and drinks are already split. The MN lines with no price are what the guest had inside the package.</p>'
-    + '<p>A walk-in rung with no booking is not here. The closing report&rsquo;s Scala figure for the whole night is shown beside it, so the gap is visible. Nothing is typed in and nothing is stored &mdash; Refresh reads the book again.</p>'
+    + '<p>SevenRooms&rsquo; copy of a check does not carry its discounts, so a comped package looks paid there. Every Thursday night the Wednesday is checked in Simphony: packages paid and comped, who it was comped for, the paid net, and Scala&rsquo;s real revenue from 8 PM to 1 AM, walk-ins included. Once that check is in, those figures replace the booking figures at the top, and comped tables show 0.</p>'
     + (money ? '<p>Net = menu price &divide; '+blDiv(d)+' (10% service and 5% VAT are inside the price; the 7% DIFC fee is added to the bill). Table totals use the check subtotal. Tips are not included.</p>' : '')
     + '</details>');
-  h.push('<div class="res-foot">Read-only from SevenRooms'+(money ? '' : ' &middot; money is hidden on your access')+'.</div></div>');
+  h.push('<div class="res-foot">Read-only from SevenRooms'+(S && S.read_at ? ' &middot; checked in Simphony '+blEsc(String(S.read_at).slice(0,10)) : '')+(money ? '' : ' &middot; money is hidden on your access')+'.</div></div>');
   return h.join('');
 }
 function mnCss(){
   if(document.getElementById('mn-css')) return;
   var s = document.createElement('style'); s.id = 'mn-css';
-  s.textContent = '.mn-sim{margin:-6px 2px 16px}\n.mn-wrap .bl-items span:last-child{color:var(--text-light);font-size:11px}';
+  s.textContent = '.mn-sim{margin:-6px 2px 16px}\n.mn-comps div{margin-top:4px}\n.mn-wrap .bl-items span:last-child{color:var(--text-light);font-size:11px}';
   document.head.appendChild(s);
 }
