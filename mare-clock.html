@@ -198,6 +198,55 @@ body.pvphone .bnav{max-width:430px}
 .dsec{margin-bottom:6px}
 .dlines{list-style:none;margin:0;padding:0}.dlines li{padding:7px 0;border-bottom:1px solid var(--line);line-height:1.45}.dlines li:last-child{border-bottom:0}.sublink{all:unset;box-sizing:border-box;cursor:pointer;display:flex;gap:10px;align-items:center;justify-content:space-between;width:100%;min-height:44px;color:var(--teal)}.sublink span{text-decoration:underline;text-decoration-color:var(--gold);text-underline-offset:4px}.sublink em{font-style:normal;font-size:12px;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap;border:1px solid var(--teal);border-radius:999px;padding:3px 9px}.sublink:hover em,.sublink:focus-visible em{background:var(--teal);color:#fff}
 .card .dlines{font-family:'Cormorant Garamond',Georgia,serif;font-size:22px}
+/* ── Schedule in the Dubai format (9 Oct 2026) ── */
+.rw-nav{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.rw-nav b{font-family:'Cormorant Garamond',Georgia,serif;font-size:22px;font-weight:500}
+.rw-nav .btn.sm,.btn.sm{min-height:44px;padding:8px 16px;font-size:18px;letter-spacing:0}
+.rw-nav .lnk{margin-top:0}
+.dsch th,.dsch td{padding:8px 6px;font-size:13.5px;vertical-align:top}
+.dsch th span{font-weight:400;letter-spacing:0;font-size:10.5px}
+.dsch th.td,.dsch td.td{background:rgba(201,164,106,.12)}
+.dsch td.role{font-size:12px;color:var(--muted);text-align:left;white-space:normal;min-width:64px}
+.dsch td:first-child{position:sticky;left:0;background:#FFFDF9;z-index:1}
+.dsch tr.team td{background:#FCFAF7;font-size:11px;letter-spacing:2px;font-weight:700;color:var(--muted);text-align:left}
+.dsch tr.sum td{font-size:12px;font-weight:700;color:var(--muted)}
+.dsch td.ed{cursor:pointer}
+.dsch td.ed:hover{background:var(--tint-2)}
+.dsch .sh{font-size:12.5px;padding:3px 6px}
+.dsch .sh2{font-size:11px;color:var(--teal);font-weight:700;margin-top:3px}
+.dsch .add{color:#B9AE9F;font-size:18px;font-weight:700}
+.rsheet-bg{position:fixed;inset:0;background:rgba(14,30,32,.45);z-index:90;display:flex;align-items:flex-end;justify-content:center}
+.rsheet{background:var(--cream);width:100%;max-width:560px;max-height:92vh;overflow:auto;border-radius:18px 18px 0 0;padding:18px 18px calc(18px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:14px;box-shadow:0 -20px 40px -20px rgba(14,59,63,.5)}
+.rsheet .tabs{gap:16px}
+.rq-hd{font-size:10.5px;letter-spacing:2px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:6px}
+.rq{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px;margin-bottom:12px}
+.rq button{background:#fff;border:1px solid #D6CABA;border-radius:8px;padding:10px 6px;font-weight:700;font-size:15px;color:var(--teal);display:flex;flex-direction:column;align-items:center;gap:2px}
+.rq button small{font-size:11px;color:var(--muted)}
+.rt{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.rt label{display:flex;flex-direction:column;gap:6px;font-size:10.5px;letter-spacing:2px;font-weight:700;color:var(--muted);text-transform:uppercase}
+.hm{display:flex;align-items:center;gap:4px;font-size:18px;color:var(--ink)}
+.hm select{min-height:50px;padding:8px 6px;font-size:18px}
+/* ── Kitchen closing report (Dubai sections) ── */
+.kr-card{background:linear-gradient(180deg,#FFFFFF 0%,#FBF7F1 100%);border:1px solid rgba(168,131,75,.24);border-radius:12px;box-shadow:var(--lift);padding:16px 18px;display:flex;flex-direction:column;gap:10px}
+.kr-t{font-family:'Cormorant Garamond',Georgia,serif;font-size:22px;font-weight:600;color:var(--teal)}
+.kr-faces{display:flex;gap:8px}
+.kr-faces button{flex:1;min-height:52px;font-size:26px;background:#fff;border:1px solid #D6CABA;border-radius:10px;filter:grayscale(.7);opacity:.7}
+.kr-faces button.on{filter:none;opacity:1;border-color:var(--gold);box-shadow:0 0 0 2px var(--gold-2)}
+.kr-chips{display:flex;flex-wrap:wrap;gap:8px}
+.kr-chips button{min-height:44px;padding:8px 14px;border-radius:999px;border:1px solid #D6CABA;background:#fff;font-weight:700;font-size:14px;color:var(--ink)}
+.kr-chips button.on{background:var(--teal);border-color:var(--teal);color:#fff}
+.kr-empty{color:var(--green);font-weight:700;font-size:15px}
+.kr-entry{position:relative;background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px 44px 10px 12px;font-size:15px}
+.kr-entry div{margin-top:4px}
+.kr-cat{font-size:10.5px;letter-spacing:1.5px;font-weight:700;text-transform:uppercase;color:var(--amber);background:var(--amber-bg);border-radius:4px;padding:3px 7px}
+.kr-act{color:var(--muted);font-size:14px}
+.kr-del{position:absolute;right:6px;top:6px;width:36px;height:36px;border:0;background:none;font-size:16px;color:var(--muted)}
+.kr-add{display:flex;flex-direction:column;gap:10px;border-top:1px solid var(--line);padding-top:12px}
+.kr-plus{align-self:flex-start;background:none;border:1px dashed #C9BEB1;border-radius:8px;padding:10px 16px;font-weight:700;color:var(--teal);min-height:44px}
+.kr-sent{background:var(--green-bg);color:var(--green);border-radius:10px;padding:10px 14px;font-weight:700;font-size:15px}
+.kr-sent.warn{background:var(--amber-bg);color:var(--amber)}
+.kr-hist{display:flex;align-items:center;gap:10px;justify-content:space-between;font-size:15px;border-bottom:1px solid var(--line-2);padding:6px 0}
+.kr-card textarea{min-height:110px}
 </style>
 </head>
 <body>
@@ -209,10 +258,10 @@ body.pvphone .bnav{max-width:430px}
   <main id="main"></main>
 </div>
 <canvas id="snap" width="240" height="180" style="display:none"></canvas>
-<script src="mare-i18n.js?v=20261008d"></script>
+<script src="mare-i18n.js?v=20261009a"></script>
 <script src="mare-common.js?v=20261008d"></script>
 <script src="mare-media.js?v=20261008d"></script>
-<script src="mare-team.js?v=20261008d"></script>
+<script src="mare-team.js?v=20261009a"></script>
 <!-- "Tell us" — same button and inbox as the Kitchen and FOH apps. -->
 <script>
 window.FB_INBOX = {

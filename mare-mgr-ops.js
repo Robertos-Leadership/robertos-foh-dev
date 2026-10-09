@@ -20,9 +20,13 @@
   function shiftLabel(r) {
     if (!r) return '';
     if (r.kind === 'off') return T('OFF'); if (r.kind === 'leave') return T('LEAVE'); if (r.kind === 'sick') return T('SICK');
-    return (r.start_t || '?') + '–' + (r.end_t || '?');
+    return (r.start_t || '?') + '–' + (r.end_t || '?') + (r.start2_t ? ' / ' + r.start2_t + '–' + (r.end2_t || '?') : '');
   }
-  function shiftMin(r) { if (!r || r.kind !== 'work' || !r.start_t || !r.end_t) return 0; var a = M.timeToMin(r.start_t), b = M.timeToMin(r.end_t); if (b <= a) b += 1440; return b - a; }
+  function shiftMin(r) {
+    if (!r || r.kind !== 'work') return 0;
+    function seg(x, y) { if (!x || !y) return 0; var a = M.timeToMin(x), b = M.timeToMin(y); if (b <= a) b += 1440; return b - a; }
+    return seg(r.start_t, r.end_t) + seg(r.start2_t, r.end2_t);   // a split shift counts both parts, as in Dubai
+  }
 
   // ── voice notes and files (briefing, weekly meeting) ──
   App.mediaBlock = function (owner, key, hint) {
@@ -86,6 +90,8 @@
         // Clock-ins under each planned shift, as the Dubai schedule does. A failed read says so
         // rather than leaving every day blank, which would look like nobody came in.
         var ov = r[2] && r[2].data && r[2].data.ok ? r[2].data : null, act = ov ? M.actualByDay(ov.punches, ov.now) : {}, now = ov ? ov.now : new Date();
+        // Without any clock-ins (no tablet yet) every past shift would read "No clock-in": show the plan only.
+        var clockOn = !!(ov && (ov.punches || []).length);
         var rota = {}; f.shifts.forEach(function (x) { rota[x.staff_id + '|' + x.date] = x; });
         var minK = +((f.settings.filter(function (s) { return s.key === 'kitchen_min'; })[0] || {}).value || 3);
         var people = active(), days = [0, 1, 2, 3, 4, 5, 6].map(function (i) { return M.addDays(ws, i); });
@@ -104,7 +110,7 @@
             var x = rota[s.id + '|' + k]; tot += shiftMin(x);
             var pend = pending.some(function (l) { return l.staff_id === s.id && l.date_from <= k && l.date_to >= k; });
             return '<td><button class="shift ' + (x ? x.kind : 'empty') + '" data-s="' + s.id + '" data-k="' + k + '">' + E(x ? shiftLabel(x) : '+') + '</button>' +
-              (ov ? M.actualHtml(act[s.id + '|' + k], x, k, now) : '') +
+              (clockOn ? M.actualHtml(act[s.id + '|' + k], x, k, now) : '') +
               (pend ? '<div class="tiny" style="color:var(--blue);font-weight:700">' + E(T('leave asked')) + '</div>' : '') + '</td>';
           }).join('') + '<td class="nw"><b>' + M.durShort(tot) + '</b></td></tr>';
         });
@@ -138,15 +144,18 @@
     var o = App.overlay('<h3>' + E(App.staffName(sid)) + ' · ' + E(M.niceDate(key)) + '</h3>' +
       '<div class="row">' + ['work', 'off', 'leave', 'sick'].map(function (k) { return '<label class="row small" style="gap:6px"><input type="radio" name="kd" value="' + k + '"' + (x.kind === k ? ' checked' : '') + '> ' + E(T({ work: 'Working', off: 'Day off', leave: 'Leave', sick: 'Sick' }[k])) + '</label>'; }).join('') + '</div>' +
       '<div class="grid2"><label class="f">' + E(T('Start')) + '<input type="time" id="st" value="' + (x.start_t || '') + '"></label><label class="f">' + E(T('End')) + '<input type="time" id="en" value="' + (x.end_t || '') + '"></label></div>' +
+      '<div class="grid2"><label class="f">' + E(T('Split shift · start')) + '<input type="time" id="st2" value="' + (x.start2_t || '') + '"></label><label class="f">' + E(T('Split shift · end')) + '<input type="time" id="en2" value="' + (x.end2_t || '') + '"></label></div>' +
       (presets.length ? '<div class="row">' + presets.map(function (p) { return '<button class="btn ghost sm" data-pre="' + p + '">' + p + '</button>'; }).join('') + '</div>' : '') +
       '<label class="f">' + E(T('Note')) + '<input type="text" id="nt" value="' + E(x.note || '') + '"></label>' +
       '<div class="row"><button class="btn" id="sv">' + E(T('Save')) + '</button>' + (rota[sid + '|' + key] ? '<button class="btn warn" id="cl">' + E(T('Clear the day')) + '</button>' : '') + '<button class="btn ghost" data-close>' + E(T('Cancel')) + '</button></div>');
     App.on(o, '[data-pre]', function (b) { var p = b.getAttribute('data-pre').split('–'); o.querySelector('#st').value = p[0]; o.querySelector('#en').value = p[1]; o.querySelector('input[value=work]').checked = true; });
     o.querySelector('#sv').onclick = function () {
       var kind = o.querySelector('input[name=kd]:checked').value, st = o.querySelector('#st').value, en = o.querySelector('#en').value;
+      var st2 = o.querySelector('#st2').value, en2 = o.querySelector('#en2').value;
       if (kind === 'work' && (!st || !en)) { App.say(T('Type the start and end.')); return; }
+      if (kind === 'work' && (!st2 !== !en2)) { App.say(T('Type both times of the split shift, or neither.')); return; }
       this.disabled = true;
-      App.save('mare_shifts', { staff_id: sid, date: key, kind: kind, start_t: kind === 'work' ? st : null, end_t: kind === 'work' ? en : null, note: o.querySelector('#nt').value.trim() || null })
+      App.save('mare_shifts', { staff_id: sid, date: key, kind: kind, start_t: kind === 'work' ? st : null, end_t: kind === 'work' ? en : null, start2_t: kind === 'work' && st2 ? st2 : null, end2_t: kind === 'work' && en2 ? en2 : null, note: o.querySelector('#nt').value.trim() || null })
         .then(function (r) { if (r) { o.close(); App.reload(); } });
     };
     var cl = o.querySelector('#cl'); if (cl) cl.onclick = function () { App.call('mare_m_shift_clear', { p_staff: sid, p_date: key }).then(function (r) { if (r) { o.close(); App.reload(); } }); };

@@ -122,8 +122,8 @@
     return (meToken ? 'Mare phone' : 'Mare tablet') + ' · ' + (m ? m[2] : S.screen === 'home' || !S.screen ? 'Home' : S.screen);
   };
   var MODS = [
-    ['brief', 'brief', 'Today\'s briefing'], ['check', 'check', 'Checklists'], ['rota', 'rota', 'Rota'], ['recipes', 'recipe', 'Recipes'],
-    ['breakage', 'breakage', 'Breakage'], ['leave', 'leave', 'Ask for leave'], ['speak', 'speak', 'Speak up']
+    ['brief', 'brief', 'Today\'s briefing'], ['check', 'check', 'Checklists'], ['rota', 'rota', 'Schedule'], ['recipes', 'recipe', 'Recipes'],
+    ['kclose', 'closing', 'Closing report'], ['breakage', 'breakage', 'Breakage'], ['leave', 'leave', 'Ask for leave'], ['speak', 'speak', 'Speak up']
   ];
   function teamMods() {
     var tm = S.feed && S.feed.team_modules; if (!tm) return MODS;
@@ -138,6 +138,7 @@
     if (k === 'check') { var open = f.check_items.filter(function (i) { return /^open/.test(i.list); }), done = f.ticks.filter(function (t) { return open.some(function (i) { return i.id === t.item_id; }); }).length; return [T('Opening {a}/{b}', { a: done, b: open.length }), open.length > 0 && done < open.length]; }
     if (k === 'rota') { var n = f.shifts.filter(function (s) { return s.date === f.today && s.kind === 'work'; }).length; return [T('{n} on today', { n: n }), false]; }
     if (k === 'recipes') return [T('Mare + Dubai'), false];
+    if (k === 'kclose') return [T('Send it at the end of service'), false];
     return ['', false];
   }
   function home() {
@@ -376,8 +377,8 @@
   }
   function openMod(k, sub) {
     S.mod = k; S.screen = 'mod'; if (sub) S.sub = sub; else if (k !== S.lastMod) S.sub = null; S.lastMod = k;
-    ({ brief: modBrief, check: modCheck, rota: modRota, recipes: modRecipes, breakage: modBreakage, leave: modLeave, speak: modSpeak, hours: modHours, more: modMore })[k]();
-    if (meToken) bnav(k === 'rota' || k === 'recipes' ? k : 'more');
+    ({ brief: modBrief, check: modCheck, rota: modRota, recipes: modRecipes, kclose: modKclose, breakage: modBreakage, leave: modLeave, speak: modSpeak, hours: modHours, more: modMore })[k]();
+    if (meToken) bnav(k === 'rota' || k === 'recipes' || k === 'kclose' ? k : 'more');
   }
   function feed() { return S.feed || { briefing: null, reads: [], staff: [], shifts: [], check_items: [], ticks: [], recipes: [], actions: [], today: M.today() }; }
   function afterAction(line, sub) {
@@ -448,22 +449,270 @@
     });
   }
 
-  // ── rota ──
+  // ── schedule (9 Oct 2026: the Dubai Kitchen schedule's format) ──
+  // Name · Role · Mon–Sun · Hrs · Days, people grouped by team, a split shift on a second line,
+  // a "Kitchen on duty" count under the grid. Everyone with a link sees it; only a can_rota
+  // person (Vinay) taps a day to set it, for their own team. The database checks the same rule.
   function shiftLbl(r) { if (!r) return ''; if (r.kind === 'off') return T('OFF'); if (r.kind === 'leave') return T('LEAVE'); if (r.kind === 'sick') return T('SICK'); return (r.start_t || '?') + '–' + (r.end_t || '?'); }
+  function shiftMins(r) {
+    if (!r || r.kind !== 'work') return 0;
+    function seg(a, b) { if (!a || !b) return 0; var x = M.timeToMin(a), y = M.timeToMin(b); if (y <= x) y += 1440; return y - x; }
+    return seg(r.start_t, r.end_t) + seg(r.start2_t, r.end2_t);
+  }
+  var R = { ws: null, data: null, prev: null };
+  function rotaLoad(ws) {
+    if (PREVIEW) {   // View as: the feed's two weeks, read-only
+      var f = feed();
+      return Promise.resolve({ ok: true, week_start: ws, today: f.today, now: f.now, can_rota: false, my_team: S.meData && S.meData.team, kitchen_min: 3,
+        staff: f.staff, shifts: f.shifts.filter(function (x) { return x.date >= ws && x.date <= M.addDays(ws, 6); }), punches: f.punches || [] });
+    }
+    return rpcS('mare_s_rota', { p_device: dev(), p_token: meToken, p_staff: null, p_pin: pinArg(), p_ws: ws });
+  }
   function modRota() {
-    var f = feed(); if (!S.sub) S.sub = 'this';
-    var w0 = f.week_start || M.weekStart(M.today()), ws = S.sub === 'next' ? M.addDays(w0, 7) : w0;
-    var days = [0, 1, 2, 3, 4, 5, 6].map(function (i) { return M.addDays(ws, i); });
-    var act = M.actualByDay(f.punches, f.now);   // what the clock says, under the plan (as in Dubai)
-    var h = f.staff.length ? '<div class="boxx"><table class="rota"><thead><tr><th>' + E(T('Name')) + '</th>' + days.map(function (k, i) { return '<th' + (k === f.today ? ' style="color:var(--teal)"' : '') + '>' + E(M.day(i)) + ' ' + (+k.slice(8)) + '</th>'; }).join('') + '</tr></thead><tbody>' +
-      f.staff.map(function (s) {
-        return '<tr class="' + (s.id === S.meId ? 'me' : '') + '"><td>' + E(s.name) + '</td>' + days.map(function (k) {
-          var r = f.shifts.filter(function (x) { return x.staff_id === s.id && x.date === k; })[0];
-          return '<td>' + (r ? '<span class="sh ' + r.kind + '">' + E(shiftLbl(r)) + '</span>' : '') + M.actualHtml(act[s.id + '|' + k], r, k, f.now) + '</td>';
-        }).join('') + '</tr>';
-      }).join('') + '</tbody></table></div>' : '<div class="card big muted">' + E(T('No rota yet.')) + '</div>';
-    main.innerHTML = frame('Rota', h, [['this', 'This week'], ['next', 'Next week']]);
+    if (!R.ws) R.ws = M.weekStart(feed().today || M.today());
+    main.innerHTML = frame('Schedule', '<div class="card big muted" style="font-family:inherit;font-size:17px">' + E(T('Loading…')) + '</div>');
     bindFrame();
+    var ws = R.ws;
+    Promise.all([rotaLoad(ws), rotaLoad(M.addDays(ws, -7))]).then(function (r) {
+      if (S.mod !== 'rota' || R.ws !== ws) return;
+      var d = r[0];
+      if (!d || !d.ok) { main.innerHTML = frame('Schedule', '<div class="card big">' + E(d && d.network ? T('No internet. Try again in a moment.') : T('Something went wrong. Try again.')) + '</div>'); bindFrame(); return; }
+      R.data = d; R.prev = r[1] && r[1].ok ? r[1] : null;
+      rotaDraw();
+    });
+  }
+  function rotaDraw() {
+    var d = R.data, ws = d.week_start, days = [0, 1, 2, 3, 4, 5, 6].map(function (i) { return M.addDays(ws, i); });
+    var rota = {}; d.shifts.forEach(function (x) { rota[x.staff_id + '|' + x.date] = x; });
+    // Clock times only once the clock-in is in use: without punches every past day would read "No clock-in".
+    var clockOn = (d.punches || []).length > 0, act = clockOn ? M.actualByDay(d.punches, d.now) : {};
+    var canEdit = !!d.can_rota && !PREVIEW;
+    var h = '<div class="rw-nav"><button class="btn ghost sm" data-wk="-7">‹</button><b>' + E(T('Week of {d}', { d: M.shortDate(ws) })) + '</b><button class="btn ghost sm" data-wk="7">›</button>' +
+      (ws !== M.weekStart(d.today) ? '<button class="lnk" data-wk="0">' + E(T('This week')) + '</button>' : '') + '</div>';
+    if (!d.staff.length) h += '<div class="card big muted">' + E(T('No rota yet.')) + '</div>';
+    else {
+      h += '<div class="boxx"><table class="rota dsch"><thead><tr><th>' + E(T('Name')) + '</th><th>' + E(T('Role')) + '</th>' +
+        days.map(function (k, i) { return '<th class="' + (k === d.today ? 'td' : '') + '">' + E(M.day(i)) + '<br><span>' + E(M.shortDate(k).split(' ').slice(1).join(' ')) + '</span></th>'; }).join('') +
+        '<th>' + E(T('Hrs')) + '</th><th>' + E(T('Days')) + '</th></tr></thead><tbody>';
+      var lastTeam = null;
+      d.staff.forEach(function (s) {
+        if (s.team !== lastTeam) { h += '<tr class="team"><td colspan="11">' + E(T(s.team).toUpperCase()) + '</td></tr>'; lastTeam = s.team; }
+        var mins = 0, nd = 0, mine = canEdit && s.team === d.my_team;
+        h += '<tr class="' + (s.id === S.meId ? 'me' : '') + '"><td>' + E(s.name) + '</td><td class="role">' + E(s.role || '—') + '</td>' + days.map(function (k) {
+          var x = rota[s.id + '|' + k]; mins += shiftMins(x); if (x && x.kind === 'work') nd++;
+          var cell = x ? '<span class="sh ' + x.kind + '">' + E(shiftLbl(x)) + '</span>' + (x.kind === 'work' && x.start2_t ? '<div class="sh2">' + E(x.start2_t + '–' + x.end2_t) + '</div>' : '') : (mine ? '<span class="add">+</span>' : '');
+          cell += clockOn ? M.actualHtml(act[s.id + '|' + k], x, k, d.now) : '';
+          return '<td class="' + (k === d.today ? 'td' : '') + (mine ? ' ed' : '') + '"' + (mine ? ' data-s="' + s.id + '" data-k="' + k + '"' : '') + '>' + cell + '</td>';
+        }).join('') + '<td><b>' + M.durShort(mins) + '</b></td><td><b>' + nd + '</b></td></tr>';
+      });
+      var minK = d.kitchen_min || 3;
+      if (d.staff.some(function (s) { return s.team === 'Kitchen'; })) {
+        h += '<tr class="sum"><td colspan="2">' + E(T('Kitchen on duty')) + '</td>' + days.map(function (k) {
+          var n = d.staff.filter(function (s) { var x = rota[s.id + '|' + k]; return s.team === 'Kitchen' && x && x.kind === 'work'; }).length;
+          return '<td><span class="tag ' + (n < minK ? 'red' : 'green') + '">' + n + '</span></td>'; }).join('') + '<td></td><td></td></tr>';
+      }
+      h += '</tbody></table></div>';
+    }
+    if (canEdit) h += '<div class="row" style="gap:10px;flex-wrap:wrap"><button class="btn ghost" id="rcopy">' + E(T('Copy last week into this week')) + '</button></div>' +
+      '<p class="small muted" style="margin:0">' + E(T('Tap a day to set the shift. The whole team sees it straight away.')) + '</p>';
+    else h += '<p class="small muted" style="margin:0">' + E(T('{n} sets the schedule. Ask them to change a day.', { n: rotaEditors() })) + '</p>';
+    main.innerHTML = frame('Schedule', '<div class="stack">' + h + '</div>');
+    bindFrame();
+    on('[data-wk]', function (b) { var n = +b.getAttribute('data-wk'); R.ws = n ? M.addDays(R.ws, n) : M.weekStart(d.today); modRota(); });
+    on('td.ed', function (b) { rotaEdit(b.getAttribute('data-s'), b.getAttribute('data-k'), rota); });
+    var cp = document.getElementById('rcopy'); if (cp) cp.onclick = function () { rotaCopy(this); };
+  }
+  function rotaEditors() { var n = (R.data.editors || []).map(function (x) { return x.split(' ')[0]; }); return n.length ? n.join(', ') : T('The manager'); }
+  // Quick fill = the shift times already used this week and last (no invented times), as in Dubai.
+  function rotaPresets() {
+    var seen = {}, out = [];
+    [R.data, R.prev].forEach(function (d) { (d ? d.shifts : []).forEach(function (x) {
+      if (x.kind !== 'work' || !x.start_t || !x.end_t) return;
+      var k = x.start_t + '–' + x.end_t + (x.start2_t ? ' / ' + x.start2_t + '–' + x.end2_t : '');
+      if (!seen[k]) { seen[k] = 1; out.push(x); } }); });
+    return out.slice(0, 8);
+  }
+  function hmSel(id, val) {
+    var hv = val ? val.slice(0, 2) : '', mv = val ? val.slice(3, 5) : '00', h = '<select id="' + id + 'h"><option value="">--</option>', m = '<select id="' + id + 'm">';
+    for (var i = 0; i < 24; i++) { var x = (i < 10 ? '0' : '') + i; h += '<option' + (x === hv ? ' selected' : '') + '>' + x + '</option>'; }
+    ['00', '15', '30', '45'].concat(['00', '15', '30', '45'].indexOf(mv) < 0 ? [mv] : []).forEach(function (x) { m += '<option' + (x === mv ? ' selected' : '') + '>' + x + '</option>'; });
+    return '<span class="hm">' + h + '</select>:' + m + '</select></span>';
+  }
+  function hmVal(o, id) { var h = o.querySelector('#' + id + 'h').value, m = o.querySelector('#' + id + 'm').value; return h ? h + ':' + m : ''; }
+  function rotaEdit(sid, key, rota) {
+    var x = rota[sid + '|' + key] || { kind: 'work' }, name = (R.data.staff.filter(function (s) { return s.id === sid; })[0] || {}).name || '';
+    var pre = rotaPresets(), split = !!x.start2_t;
+    var o = document.createElement('div'); o.className = 'rsheet-bg';
+    o.innerHTML = '<div class="rsheet" role="dialog" aria-label="' + E(name) + '"><div class="sec"><span>' + E(name + ' · ' + M.niceDate(key)) + '</span><i></i></div>' +
+      '<div class="tabs" id="rk">' + [['work', 'Working'], ['off', 'Day off'], ['leave', 'Leave'], ['sick', 'Sick']].map(function (k) { return '<button data-k="' + k[0] + '" class="' + (x.kind === k[0] ? 'on' : '') + '">' + E(T(k[1])) + '</button>'; }).join('') + '</div>' +
+      '<div id="rtimes">' +
+      (pre.length ? '<div class="rq-hd">' + E(T('Quick fill')) + '</div><div class="rq">' + pre.map(function (p, i) { return '<button data-p="' + i + '">' + E(p.start_t + '–' + p.end_t) + (p.start2_t ? '<small>' + E(p.start2_t + '–' + p.end2_t) + '</small>' : '') + '</button>'; }).join('') + '</div>' : '') +
+      '<div class="rt"><label>' + E(T('Start')) + hmSel('a', x.start_t) + '</label><label>' + E(T('End')) + hmSel('b', x.end_t) + '</label></div>' +
+      '<button class="lnk" id="rsp">' + E(split ? T('− Remove split shift') : T('+ Add split shift')) + '</button>' +
+      '<div class="rt" id="rsplit"' + (split ? '' : ' hidden') + '><label>' + E(T('Start')) + hmSel('c', x.start2_t) + '</label><label>' + E(T('End')) + hmSel('d', x.end2_t) + '</label></div></div>' +
+      '<label class="f">' + E(T('Note')) + '<input type="text" id="rn" maxlength="200" value="' + E(x.note || '') + '"></label>' +
+      '<div class="msg err" id="rm"></div>' +
+      '<div class="row" style="gap:10px;flex-wrap:wrap"><button class="btn" id="rsv">' + E(T('Save')) + '</button>' +
+      (rota[sid + '|' + key] ? '<button class="btn ghost" id="rcl">' + E(T('Clear the day')) + '</button>' : '') +
+      '<button class="btn ghost" id="rx">' + E(T('Cancel')) + '</button></div></div>';
+    document.body.appendChild(o);
+    var kind = x.kind;
+    function paintKind() { o.querySelectorAll('#rk button').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-k') === kind); }); o.querySelector('#rtimes').hidden = kind !== 'work'; }
+    paintKind();
+    function close() { o.remove(); }
+    o.addEventListener('click', function (e) { if (e.target === o) close(); });
+    o.querySelector('#rx').onclick = close;
+    o.querySelectorAll('#rk button').forEach(function (b) { b.onclick = function () { kind = b.getAttribute('data-k'); paintKind(); }; });
+    function setHM(id, v) { if (!v) return; o.querySelector('#' + id + 'h').value = v.slice(0, 2); var m = o.querySelector('#' + id + 'm'); if (![].some.call(m.options, function (op) { return op.value === v.slice(3, 5); })) m.add(new Option(v.slice(3, 5))); m.value = v.slice(3, 5); }
+    function setSplit(on) { split = on; o.querySelector('#rsplit').hidden = !on; o.querySelector('#rsp').textContent = on ? T('− Remove split shift') : T('+ Add split shift'); }
+    o.querySelector('#rsp').onclick = function () { setSplit(!split); };
+    function save(k, a, b, c, dd) {
+      var btn = o.querySelector('#rsv'); btn.disabled = true;
+      rpcS('mare_s_shift_save', { p_device: dev(), p_token: meToken, p_staff: null, p_pin: pinArg(), p_for: sid, p_date: key, p_kind: k,
+        p_start: a || null, p_end: b || null, p_start2: c || null, p_end2: dd || null, p_note: o.querySelector('#rn').value.trim() || null }).then(function (r) {
+        btn.disabled = false;
+        if (r && r.ok) { close(); modRota(); return; }
+        o.querySelector('#rm').textContent = r && r.network ? T('No internet. Try again in a moment.') : r && r.error === 'not_allowed' ? T('Only the person who sets the schedule can change it.') : r && r.error === 'times' ? T('Pick the start and the end.') : T('Something went wrong. Try again.');
+      });
+    }
+    o.querySelectorAll('[data-p]').forEach(function (b) { b.onclick = function () {   // one tap fills AND saves, as in Dubai
+      var p = pre[+b.getAttribute('data-p')]; kind = 'work'; save('work', p.start_t, p.end_t, p.start2_t, p.end2_t); }; });
+    o.querySelector('#rsv').onclick = function () {
+      if (kind !== 'work') { save(kind); return; }
+      var a = hmVal(o, 'a'), b = hmVal(o, 'b'), c = split ? hmVal(o, 'c') : '', dd = split ? hmVal(o, 'd') : '';
+      if (!a || !b || (split && (!c || !dd))) { o.querySelector('#rm').textContent = T('Pick the start and the end.'); return; }
+      save('work', a, b, c, dd);
+    };
+    var cl = o.querySelector('#rcl'); if (cl) cl.onclick = function () {
+      this.disabled = true;
+      rpcS('mare_s_shift_clear', { p_device: dev(), p_token: meToken, p_staff: null, p_pin: pinArg(), p_for: sid, p_date: key }).then(function (r) {
+        if (r && r.ok) { close(); modRota(); } else o.querySelector('#rm').textContent = T('Something went wrong. Try again.'); });
+    };
+  }
+  // Copy last week into this week: only days still empty this week are filled; nothing is overwritten.
+  function rotaCopy(btn) {
+    if (!R.prev) { phoneToast(T('Could not load last week.')); return; }
+    var d = R.data, have = {}; d.shifts.forEach(function (x) { have[x.staff_id + '|' + x.date] = 1; });
+    var mine = {}; d.staff.forEach(function (s) { if (s.team === d.my_team) mine[s.id] = 1; });
+    var todo = R.prev.shifts.filter(function (x) { return mine[x.staff_id] && !have[x.staff_id + '|' + M.addDays(x.date, 7)]; });
+    if (!todo.length) { phoneToast(T('Nothing to copy: this week is already planned.')); return; }
+    btn.disabled = true; var n = 0, bad = 0;
+    todo.reduce(function (p, x) { return p.then(function () {
+      return rpcS('mare_s_shift_save', { p_device: dev(), p_token: meToken, p_staff: null, p_pin: pinArg(), p_for: x.staff_id, p_date: M.addDays(x.date, 7), p_kind: x.kind,
+        p_start: x.start_t, p_end: x.end_t, p_start2: x.start2_t || null, p_end2: x.end2_t || null, p_note: x.note || null }).then(function (r) { if (r && r.ok) n++; else bad++; }); }); }, Promise.resolve())
+      .then(function () { phoneToast(bad ? T('{n} days copied, {b} could not be copied.', { n: n, b: bad }) : T('{n} days copied. Days already planned were left alone.', { n: n })); modRota(); });
+  }
+
+  // ── kitchen closing report (9 Oct 2026: the Dubai Kitchen closing report's sections, emailed to Francesco) ──
+  var KR_CATS = {
+    complaint: ['Taste / Seasoning', 'Temperature', 'Slow service', 'Wrong order', 'Portion', 'Quality', 'Other'],
+    unavailable: ['Ran out during service', 'Supplier issue', 'Quality rejected', 'Prep shortfall', 'Other'],
+    operation: ['Staffing', 'Equipment', 'Supply / Delivery', 'Timing / Pass', 'Kitchen–floor coordination', 'Other'],
+    team: ['Attendance', 'Conflict', 'Performance', 'Wellbeing', 'Other']
+  };
+  var KR_META = {
+    complaint: ['Complaints', 'No complaints tonight', 'Dish', true],
+    unavailable: ['86 / Not available', 'Everything available', 'Item', false],
+    operation: ['Operation issues', 'No operation issues', '', true],
+    team: ['Team issues', 'No team issues', '', true]
+  };
+  var KR = { date: null, data: null, entries: [], chefs: null, rating: null, open: null, loadedFor: null };
+  function krDefaultDate() { var t = feed().today || M.today(); return M.parts(new Date()).hh < 6 ? M.addDays(t, -1) : t; }   // before 6 AM = last night's report
+  function krDraftKey() { return 'mare_kr_' + (S.meId || 'x') + '_' + KR.date; }
+  function krKeep() { if (KR.loadedFor !== KR.date) return; ls(krDraftKey(), JSON.stringify({ e: KR.entries, c: KR.chefs, r: KR.rating, f: (document.getElementById('krf') || {}).value })); }
+  function modKclose() {
+    if (!KR.date) KR.date = krDefaultDate();
+    main.innerHTML = frame('Closing report', '<div class="card big muted" style="font-family:inherit;font-size:17px">' + E(T('Loading…')) + '</div>');
+    bindFrame();
+    var d0 = KR.date;
+    if (!S.dubai && !PREVIEW) M.dubaiBook().then(function (b) { S.dubai = b; }, function () {});   // dish names for the Dish box
+    (PREVIEW ? Promise.resolve({ ok: true, date: d0, today: feed().today, report: null, kitchen: [], recent: [] })
+             : rpcS('mare_s_kreport_get', { p_device: dev(), p_token: meToken, p_staff: null, p_pin: pinArg(), p_date: d0 })).then(function (r) {
+      if (S.mod !== 'kclose' || KR.date !== d0) return;
+      if (!r || !r.ok) { main.innerHTML = frame('Closing report', '<div class="card big">' + E(r && r.network ? T('No internet. Try again in a moment.') : T('Something went wrong. Try again.')) + '</div>'); bindFrame(); return; }
+      KR.data = r;
+      if (KR.loadedFor !== d0) {
+        var rep = r.report || {}, dr = null;
+        try { dr = JSON.parse(ls(krDraftKey()) || 'null'); } catch (e) {}
+        var useDraft = !!dr && !rep.sent_at;   // an unsent draft on this phone; once sent, the saved report wins
+        KR.entries = useDraft ? dr.e || [] : (rep.entries || []).slice();
+        KR.chefs = useDraft && dr.c ? dr.c : (rep.chefs_on && rep.chefs_on.length ? rep.chefs_on.slice() : r.kitchen.filter(function (k) { return k.on; }).map(function (k) { return k.name; }));
+        KR.rating = useDraft ? dr.r : rep.rating || null;
+        KR.feedback = useDraft && dr.f != null ? dr.f : rep.feedback || '';
+        KR.open = null; KR.loadedFor = d0;
+      }
+      krDraw();
+    });
+  }
+  function krDraw() {
+    var r = KR.data, rep = r.report || {}, faces = ['😖', '😕', '😐', '🙂', '🔥'];
+    var dates = [r.today, M.addDays(r.today, -1)];
+    var h = '<div class="tabs">' + dates.map(function (k, i) { return '<button data-d="' + k + '" class="' + (k === KR.date ? 'on' : '') + '">' + E(i ? T('Yesterday') : T('Today')) + ' · ' + E(M.shortDate(k)) + '</button>'; }).join('') + '</div>';
+    if (rep.sent_at) h += '<div class="kr-sent">' + E(T('Sent to Chef Francesco at {t} by {n}.', { t: M.hhmm(rep.sent_at), n: rep.sent_by || '' })) + (rep.sent_count > 1 ? ' ' + E(T('Sent {n} times.', { n: rep.sent_count })) : '') + '</div>';
+    else if (rep.updated_at) h += '<div class="kr-sent warn">' + E(T('Saved by {n} at {t}, not sent yet.', { n: rep.written_by || '', t: M.hhmm(rep.updated_at) })) + '</div>';
+    h += '<div class="kr-card"><div class="kr-t">' + E(T('Service')) + '</div><div class="kr-faces">' + faces.map(function (f, i) { return '<button data-r="' + (i + 1) + '" class="' + (KR.rating === i + 1 ? 'on' : '') + '" aria-label="' + (i + 1) + '/5">' + f + '</button>'; }).join('') + '</div>' +
+      '<div class="kr-t" style="margin-top:14px">' + E(T('Chefs on duty')) + '</div><div class="kr-chips">' + r.kitchen.map(function (k) { return '<button data-c="' + E(k.name) + '" class="' + (KR.chefs.indexOf(k.name) >= 0 ? 'on' : '') + '">' + E(k.name.split(' ')[0]) + '</button>'; }).join('') + '</div></div>';
+    ['complaint', 'unavailable', 'operation', 'team'].forEach(function (type) {
+      var meta = KR_META[type], list = KR.entries.map(function (e, i) { return [e, i]; }).filter(function (p) { return p[0].type === type; });
+      h += '<div class="kr-card"><div class="kr-t">' + E(T(meta[0])) + '</div>';
+      if (!list.length) h += '<div class="kr-empty">✓ ' + E(T(meta[1])) + '</div>';
+      list.forEach(function (p) { var e = p[0];
+        h += '<div class="kr-entry"><button class="kr-del" data-del="' + p[1] + '" aria-label="' + E(T('Remove')) + '">✕</button><span class="kr-cat">' + E(T(e.category)) + '</span>' + (e.item ? ' <b>' + E(e.item) + '</b>' : '') +
+          (e.detail ? '<div>' + E(e.detail) + '</div>' : '') + (e.action ? '<div class="kr-act">' + E(T('Action')) + ': ' + E(e.action) + '</div>' : '') + '</div>'; });
+      if (KR.open === type) {
+        h += '<div class="kr-add"><div class="kr-chips" id="kcat">' + KR_CATS[type].map(function (c, i) { return '<button data-cat="' + E(c) + '" class="' + (i ? '' : 'on') + '">' + E(T(c)) + '</button>'; }).join('') + '</div>' +
+          (meta[2] ? '<label class="f">' + E(T(meta[2])) + '<input type="text" id="kitem" maxlength="120" list="kdish"></label><datalist id="kdish">' + krDishes() + '</datalist>' : '') +
+          '<label class="f">' + E(T('Detail')) + '<input type="text" id="kdet" maxlength="600" placeholder="' + E(T('One line is enough')) + '"></label>' +
+          (meta[3] ? '<label class="f">' + E(T('Action taken (optional)')) + '<input type="text" id="kact" maxlength="600" placeholder="' + E(T('What was done about it')) + '"></label>' : '') +
+          '<div class="row" style="gap:10px"><button class="btn" id="kadd">' + E(T('Add')) + '</button><button class="btn ghost" id="kcan">' + E(T('Cancel')) + '</button></div></div>';
+      } else h += '<button class="kr-plus" data-open="' + type + '">+ ' + E(T('Add')) + '</button>';
+      h += '</div>';
+    });
+    h += '<div class="kr-card"><div class="kr-t">' + E(T('General feedback')) + '</div><textarea id="krf" maxlength="4000" placeholder="' + E(T('How the day went, and anything Dubai should know')) + '">' + E(KR.feedback || '') + '</textarea></div>' +
+      '<div class="msg err" id="krm"></div>' +
+      '<div class="stack" style="gap:10px"><button class="btn" id="krsend">' + E(rep.sent_at ? T('Send again to Chef Francesco') : T('Send to Chef Francesco')) + '</button>' +
+      '<button class="btn ghost" id="krsave">' + E(T('Save only, send later')) + '</button></div>';
+    if ((r.recent || []).length) h += '<div class="kr-card"><div class="kr-t">' + E(T('Last two weeks')) + '</div>' + r.recent.map(function (x) {
+      return '<div class="kr-hist"><span>' + E(M.shortDate(x.date)) + '</span><span class="tag ' + (x.sent_at ? 'green' : 'amber') + '">' + E(x.sent_at ? T('Sent') : T('Not sent')) + '</span><span class="small muted">' + E(x.by || '') + '</span></div>'; }).join('') + '</div>';
+    main.innerHTML = frame('Closing report', '<div class="stack">' + h + '</div>');
+    bindFrame(); idle(600000);
+    var fb = document.getElementById('krf'); fb.oninput = function () { KR.feedback = fb.value; krKeep(); };
+    on('[data-d]', function (b) { KR.date = b.getAttribute('data-d'); modKclose(); });
+    on('[data-r]', function (b) { var v = +b.getAttribute('data-r'); KR.rating = KR.rating === v ? null : v; krKeep(); krDraw(); });
+    on('[data-c]', function (b) { var n = b.getAttribute('data-c'), i = KR.chefs.indexOf(n); if (i >= 0) KR.chefs.splice(i, 1); else KR.chefs.push(n); krKeep(); b.classList.toggle('on', i < 0); });
+    on('[data-del]', function (b) { KR.entries.splice(+b.getAttribute('data-del'), 1); krKeep(); krDraw(); });
+    on('[data-open]', function (b) { KR.open = b.getAttribute('data-open'); krDraw(); var it = document.getElementById('kitem') || document.getElementById('kdet'); if (it) it.focus(); });
+    var cat = null;
+    on('#kcat [data-cat]', function (b) { main.querySelectorAll('#kcat button').forEach(function (x) { x.classList.toggle('on', x === b); }); });
+    var ka = document.getElementById('kadd'); if (ka) ka.onclick = function () {
+      var sel = main.querySelector('#kcat button.on'); cat = sel ? sel.getAttribute('data-cat') : 'Other';
+      var it = document.getElementById('kitem'), dt = document.getElementById('kdet'), ac = document.getElementById('kact');
+      var e = { type: KR.open, category: cat, item: it ? it.value.trim() : '', detail: dt.value.trim(), action: ac ? ac.value.trim() : '' };
+      if (KR_META[KR.open][2] && !e.item) { it.focus(); document.getElementById('krm').textContent = T('Write the {w}.', { w: T(KR_META[KR.open][2]).toLowerCase() }); return; }
+      if (!e.item && !e.detail) { dt.focus(); return; }
+      KR.entries.push(e); KR.open = null; krKeep(); krDraw();
+    };
+    var kc = document.getElementById('kcan'); if (kc) kc.onclick = function () { KR.open = null; krDraw(); };
+    document.getElementById('krsend').onclick = function () { krSave(true, this); };
+    document.getElementById('krsave').onclick = function () { krSave(false, this); };
+  }
+  function krDishes() {
+    var names = {};
+    try { (S.dubai || []).forEach(function (g) { (g.items || g.dishes || []).forEach(function (x) { if (x && x.name) names[x.name] = 1; }); }); } catch (e) {}
+    (feed().recipes || []).forEach(function (x) { if (x.name) names[x.name] = 1; });
+    return Object.keys(names).sort().map(function (n) { return '<option value="' + E(n) + '">'; }).join('');
+  }
+  function krSave(send, btn) {
+    if (PREVIEW) { M.toast(T('Read only: you are viewing as someone else. Nothing is saved.')); return; }
+    var m = document.getElementById('krm'); m.textContent = '';
+    if (KR.open) { m.textContent = T('Finish the line you are adding, or cancel it.'); return; }
+    btn.disabled = true;
+    rpcS('mare_s_kreport_save', { p_device: dev(), p_token: meToken, p_staff: null, p_pin: pinArg(), p_date: KR.date, p_entries: KR.entries, p_chefs: KR.chefs,
+      p_feedback: (document.getElementById('krf') || {}).value || null, p_rating: KR.rating, p_send: send }).then(function (r) {
+      btn.disabled = false;
+      if (r && r.ok) { ls(krDraftKey(), null); KR.loadedFor = null; phoneToast(r.sent ? T('Sent to Chef Francesco.') : T('Saved. Send it when the report is finished.')); modKclose(); return; }
+      m.textContent = r && r.network ? T('No internet. The report is kept on this phone; try again in a moment.') : r && r.error === 'not_allowed' ? T('Only the kitchen team can send this report.') : T('Something went wrong. Try again.');
+    });
   }
 
   // ── recipes ──
@@ -721,7 +970,7 @@
     if (!b) { b = document.createElement('nav'); b.id = 'bnav'; b.className = 'bnav'; b.setAttribute('aria-label', T('Sections')); document.body.appendChild(b);
       b.addEventListener('click', function (e) { var x = e.target.closest('[data-b]'); if (!x) return; var k = x.getAttribute('data-b'); if (k === 'today') home(); else openMod(k); }); }
     var tm = teamMods().map(function (m) { return m[0]; });
-    var items = [['today', 'Today'], ['rota', 'Rota'], ['recipes', 'Recipes'], ['more', 'More']].filter(function (x) { return x[0] === 'today' || x[0] === 'more' || tm.indexOf(x[0]) >= 0; });
+    var items = [['today', 'Today'], ['rota', 'Schedule'], ['recipes', 'Recipes'], ['kclose', 'Report'], ['more', 'More']].filter(function (x) { return x[0] === 'today' || (x[0] === 'more' ? moreTiles().length > 0 : tm.indexOf(x[0]) >= 0); });
     b.style.gridTemplateColumns = 'repeat(' + items.length + ',minmax(0,1fr))';
     b.innerHTML = items.map(function (x) { return '<button data-b="' + x[0] + '" class="' + (x[0] === active ? 'on' : '') + '"><i></i>' + E(T(x[1])) + '</button>'; }).join('');
   }
@@ -748,15 +997,25 @@
           return '<i>' + E(T(q[1])) + '</i> — ' + E(b[q[0]]); }).join('<br>') + '</div><button class="lnk" data-open="brief">' + E(read ? T('Open the briefing') : T('Read all & sign')) + '</button>'
           : '<div class="bexc muted"><i>' + E(T('Today\'s briefing is not written yet.')) + '</i></div>') + '</div>';
     }
-    h += '<div class="tot"><div><span>' + E(T('Hours this week')) + '</span><b>' + M.durShort(weekMin(sh, M.weekStart(f.today))) + '</b></div>' +
-      '<div><span>' + E(T('Leave days left')) + '</span><b>' + ((me.annual_days != null ? me.annual_days : 21) - used) + '</b></div></div>' +
-      '<div class="small muted" style="text-align:center;font-family:\'Cormorant Garamond\',serif;font-style:italic;font-size:17px">' + E(T('Clock in at the tablet by the staff entrance.')) + '</div>';
+    // Hours and leave only when they mean something: no clock-ins yet would read "0:00 this week".
+    var hasClock = (me.punches || []).length > 0, hasLeave = tm.indexOf('leave') >= 0;
+    if (hasClock || hasLeave) h += '<div class="tot">' + (hasClock ? '<div><span>' + E(T('Hours this week')) + '</span><b>' + M.durShort(weekMin(sh, M.weekStart(f.today))) + '</b></div>' : '') +
+      (hasLeave ? '<div><span>' + E(T('Leave days left')) + '</span><b>' + ((me.annual_days != null ? me.annual_days : 21) - used) + '</b></div>' : '') + '</div>';
+    var cards = teamMods().filter(function (m) { return m[0] === 'rota' || m[0] === 'recipes' || m[0] === 'kclose'; });
+    if (cards.length) h += '<div class="mods">' + cards.map(function (m) { var st = modStat(m[0]);
+      return '<button class="mod" data-open="' + m[0] + '"><span class="ic">' + M.icon(m[1], 22) + '</span><b>' + E(T(m[2])) + '</b><span class="s' + (st[1] ? ' alert' : '') + '">' + E(st[0]) + '</span></button>'; }).join('') + '</div>';
+    if (hasClock) h += '<div class="small muted" style="text-align:center;font-family:\'Cormorant Garamond\',serif;font-style:italic;font-size:17px">' + E(T('Clock in at the tablet by the staff entrance.')) + '</div>';
     main.innerHTML = h;
     on('[data-open]', function (x) { openMod(x.getAttribute('data-open')); });
     bnav('today');
   }
+  // "More" holds what the bottom bar does not: My hours once the person has clock-ins, and any other module switched on.
+  function moreTiles() {
+    var hasClock = !!(S.meData && (S.meData.punches || []).length);
+    return (hasClock ? [['hours', 'hours', 'My hours']] : []).concat(teamMods().filter(function (m) { return m[0] !== 'rota' && m[0] !== 'recipes' && m[0] !== 'kclose'; }));
+  }
   function modMore() {
-    var tiles = [['hours', 'hours', 'My hours']].concat(teamMods().filter(function (m) { return m[0] !== 'rota' && m[0] !== 'recipes'; }));
+    var tiles = moreTiles();
     main.innerHTML = frame('More', '<div class="mods">' + tiles.map(function (m) { var s = m[0] === 'hours' ? ['', false] : modStat(m[0]);
       return '<button class="mod" data-mod="' + m[0] + '"><span class="ic">' + M.icon(m[1], 22) + '</span><b>' + E(T(m[2])) + '</b><span class="s' + (s[1] ? ' alert' : '') + '">' + E(s[0]) + '</span></button>'; }).join('') + '</div>');
     bindFrame();
