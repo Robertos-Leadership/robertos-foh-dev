@@ -5,7 +5,7 @@
 (function (w) {
   var M = w.Mare, T = M.T, E = M.esc, App = w.MareApp;
   var TEAM_MODS = [['brief', 'Today\'s briefing'], ['check', 'Checklists'], ['rota', 'Rota'], ['recipes', 'Recipes'],
-                   ['breakage', 'Breakage'], ['leave', 'Ask for leave'], ['speak', 'Speak up']];
+                   ['kclose', 'Closing report'], ['learn', 'Learning'], ['breakage', 'Breakage'], ['leave', 'Ask for leave'], ['speak', 'Speak up']];
   var TEAMS = ['Kitchen', 'Service', 'Bar', 'Other'];
   var V = { open: null };
 

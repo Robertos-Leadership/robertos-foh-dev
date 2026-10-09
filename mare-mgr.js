@@ -116,7 +116,19 @@
       '<p class="muted" style="margin:0">' + E(T('Use your Roberto\'s app account.')) + '</p>' +
       '<label class="f" for="em">' + E(T('Email')) + '<input id="em" type="email" autocomplete="username" required></label>' +
       '<label class="f" for="pw">' + E(T('Password')) + '<input id="pw" type="password" autocomplete="current-password" required></label>' +
-      '<div class="err">' + E(err || '') + '</div><button class="btn" type="submit">' + E(T('Sign in')) + '</button></form></div></div>';
+      '<div class="err">' + E(err || '') + '</div><button class="btn" type="submit">' + E(T('Sign in')) + '</button>' +
+      '<div class="row" style="gap:10px;align-items:flex-end;border-top:1px solid var(--line);padding-top:14px;margin-top:4px"><label class="f" for="mc" style="flex:1">' + E(T('Or your master code')) +
+      '<input id="mc" type="text" inputmode="numeric" autocomplete="off" style="-webkit-text-security:disc"></label><button class="btn ghost" type="button" id="mcgo">' + E(T('Open')) + '</button></div></form></div></div>';
+    // Master codes open everything (Francesco, 9 Oct 2026): the code signs in its holder's own login.
+    document.getElementById('mcgo').onclick = function () {
+      var c = document.getElementById('mc').value.trim(); if (!c) return;
+      this.disabled = true;
+      fetch(M.SB_URL + '/functions/v1/mare-try', { method: 'POST', headers: { 'Content-Type': 'application/json', apikey: M.SB_KEY, Authorization: 'Bearer ' + M.SB_KEY }, body: JSON.stringify({ master: c }) })
+        .then(function (r) { return r.json(); })
+        .then(function (x) { if (!x || !x.ok) throw new Error(x && x.error || 'code'); return sb.auth.verifyOtp({ token_hash: x.token_hash, type: 'magiclink' }); })
+        .then(function (v) { if (v.error || !v.data.session) throw new Error('otp'); App.S.token = v.data.session.access_token; App.S.email = (v.data.session.user.email || '').toLowerCase(); App.boot(); },
+              function () { App.signIn(T('That code is not right.')); });
+    };
     document.getElementById('f').onsubmit = function (ev) {
       ev.preventDefault();
       sb.auth.signInWithPassword({ email: document.getElementById('em').value.trim(), password: document.getElementById('pw').value }).then(function (r) {

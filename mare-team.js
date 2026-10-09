@@ -376,7 +376,19 @@
     on('[data-tab]', function (b) { openMod(S.mod, b.getAttribute('data-tab')); });
     idle(120000);
   }
+  // Team activity (9 Oct 2026): one line per person per screen every 5 minutes (who, when, screen, device,
+  // connection) so the Mare admin can see who uses the app and whether from the restaurant.
+  function lnDevice() {
+    var u = navigator.userAgent || '', os = /iPhone/.test(u) ? 'iPhone' : /iPad/.test(u) ? 'iPad' : /Android/.test(u) ? 'Android' : /Windows/.test(u) ? 'Windows' : /Mac/.test(u) ? 'Mac' : 'Other';
+    var br = /Edg\//.test(u) ? 'Edge' : /CriOS|Chrome\//.test(u) ? 'Chrome' : /FxiOS|Firefox\//.test(u) ? 'Firefox' : /Safari\//.test(u) ? 'Safari' : 'Browser';
+    return os + ' · ' + br;
+  }
+  function ping(k) {
+    if (PREVIEW || !meToken || !S.mePin) return;
+    M.rpc('mare_s_ping', { p_device: null, p_token: meToken, p_pin: S.mePin, p_module: k || 'home', p_ua: lnDevice() });
+  }
   function openMod(k, sub) {
+    ping(k);
     S.mod = k; S.screen = 'mod'; if (sub) S.sub = sub; else if (k !== S.lastMod) S.sub = null; S.lastMod = k;
     ({ brief: modBrief, check: modCheck, rota: modRota, recipes: modRecipes, kclose: modKclose, learn: modLearn, breakage: modBreakage, leave: modLeave, speak: modSpeak, hours: modHours, more: modMore })[k]();
     if (meToken) bnav(k === 'rota' || k === 'recipes' || k === 'kclose' ? k : 'more');
@@ -1131,7 +1143,7 @@
       if (!x.data.ok) { try { sessionStorage.removeItem('mare_me_pin'); } catch (e) {} phonePin(x.data.error === 'locked' ? T('Too many wrong codes. Wait 15 minutes or ask the manager.') : T('Wrong code. Try again.')); return; }
       try { sessionStorage.setItem('mare_me_pin', S.mePin); } catch (e) {}
       S.feed = x.data; S.meData = x.data.me; S.meId = x.data.me.id; S.meName = x.data.me.name;
-      if (!quiet) home();
+      if (!quiet) { home(); ping('home'); }
     });
   }
   function phoneToast(t) { var d = document.createElement('div'); d.textContent = t; d.style.cssText = 'position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:#1E2A2C;color:#fff;border-radius:999px;padding:12px 20px;font-weight:700;z-index:60;max-width:90vw;text-align:center'; document.body.appendChild(d); setTimeout(function () { d.remove(); }, 3500); }
