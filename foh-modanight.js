@@ -188,31 +188,45 @@ function renderModaNight(){
   else h.push('<div class="bl-dishes">'+ks.map(function(k){ return '<div class="bl-dish"><span class="bl-dish-n">'+blEsc(k)+'</span><span class="bl-dish-b"><i style="width:'+Math.round(it[k]/imx*100)+'%"></i></span><span class="bl-dish-v">'+blN(it[k])+'</span></div>'; }).join('')+'</div>');
   h.push('</div></div>');
 
-  // the tables
-  if(N && N.rows.length){
-    h.push('<div class="bl-day"><div class="bl-day-h"><div><div class="bl-day-t">Scala tables</div><div class="bl-day-s">'+blN(N.tables)+' tables &middot; tap one for its check</div></div></div>');
-    h.push('<table class="bl-tbl"><thead><tr><th>Time</th><th>Guest</th><th>Table</th><th class="r">Guests</th><th class="r">Packages</th>'+(money?'<th class="r">Check net</th>':'')+'</tr></thead><tbody>');
-    var compT = {}; (S && Array.isArray(S.comps) ? S.comps : []).forEach(function(c){ String(c.table||'').split(/[\s,\/]+/).forEach(function(x){ if(x) compT[x] = true; }); });
-    // Simphony's version of each package check, matched to the booking by table number. Where it
-    // matches, the row's packages, check net and items are Simphony's, not SevenRooms' copy.
-    var simC = {}; (S && Array.isArray(S.checks) ? S.checks : []).forEach(function(c){ String(c.table||'').split(/[\s,\/]+/).forEach(function(x){ if(x) simC[x] = c; }); });
-    N.rows.forEach(function(r, k){
-      var tl = String(r.tables||'').split(/[\s,]+/), comped = tl.some(function(x){ return compT[x]; }), sc = null;
-      tl.forEach(function(x){ if(!sc && simC[x]) sc = simC[x]; });
-      var pk = sc ? Number(sc.packages)||0 : r.packages, its = r.items;
-      if(sc){ its = {}; Object.keys(sc.items||{}).forEach(function(x){ var n = mnNice('MN '+x); its[n] = (its[n]||0) + (Number(sc.items[x])||0); }); }
-      var net = comped ? 0 : sc ? blNet(sc.subtotal, d) : blNet(r.check, d);
-      h.push('<tr class="bl-row'+(MN.open[k]?' open':'')+'" onclick="mnToggle('+k+')"><td>'+blEsc(r.time)+'</td><td class="bl-guest">'+blEsc(r.guest||'—')
-        + (r.vip?' <span class="bl-tag">VIP</span>':'')+(r.walkin?' <span class="bl-tag">walk-in</span>':'')+(comped?' <span class="bl-tag">comped</span>':'')+'</td><td>'+blEsc(r.tables||'—')+'</td>'
-        + '<td class="r">'+blN(r.pax)+'</td><td class="r"><b>'+(pk ? blN(pk) : '&ndash;')+'</b></td>'+(money?'<td class="r">'+blN(net)+'</td>':'')+'</tr>');
-      if(MN.open[k]){
+  // the tables. On a night checked in Simphony, Simphony's own package checks lead and the bookings
+  // (SevenRooms, before comps) fold underneath. Checks are NOT matched to bookings by table: on 30 Sep
+  // one booking spans 12 tables, and the 15 comped packages sit on check 29948 while their items are on
+  // check 29932 (another table) — a table match would put the numbers on the wrong rows.
+  var SC = S && Array.isArray(S.checks) && S.checks.length ? S.checks : null;
+  if(SC){
+    h.push('<div class="bl-day"><div class="bl-day-h"><div><div class="bl-day-t">Package checks in Simphony</div><div class="bl-day-s">'+blN(SC.length)+' check'+(SC.length===1?'':'s')+' &middot; tap one for what was on it</div></div></div>');
+    h.push('<table class="bl-tbl"><thead><tr><th>Opened</th><th>Check</th><th>Table</th><th class="r">Packages</th>'+(money?'<th class="r">Check net</th>':'')+'</tr></thead><tbody>');
+    SC.forEach(function(c, k){
+      var key = 'c'+k, its = {};
+      Object.keys(c.items||{}).forEach(function(x){ var n = mnNice('MN '+x); its[n] = (its[n]||0) + (Number(c.items[x])||0); });
+      h.push('<tr class="bl-row'+(MN.open[key]?' open':'')+'" onclick="mnToggle(\''+key+'\')"><td>'+blEsc(String(c.opened||'').slice(11,16))+'</td><td class="bl-guest">'+blEsc(c.check)
+        + (c.comp ? ' <span class="bl-tag">comped</span>' : '')+'</td><td>'+blEsc(c.table||'—')+'</td>'
+        + '<td class="r"><b>'+(c.packages ? blN(c.packages) : '&ndash;')+'</b></td>'+(money?'<td class="r">'+blN(blNet(c.subtotal, d))+'</td>':'')+'</tr>');
+      if(MN.open[key]){
         var keys = Object.keys(its).filter(function(x){ return its[x] > 0; }).sort(function(a,b){ return its[b]-its[a] || (a<b?-1:1); });
-        h.push('<tr class="bl-items"><td colspan="'+(money?6:5)+'">'
-          + '<div><span><b>'+(sc ? 'Simphony check '+blEsc(sc.check)+' &middot; table '+blEsc(sc.table) : 'From the booking &mdash; not checked in Simphony')+'</b></span><span></span></div>'
-          + (keys.length ? keys.map(function(x){ return '<div><span>'+(its[x]>1?blN(its[x])+'× ':'')+blEsc(x)+'</span><span>in the package</span></div>'; }).join('') : '<div><span>No package on this table</span></div>')+'</td></tr>');
+        h.push('<tr class="bl-items"><td colspan="'+(money?5:4)+'">'
+          + (c.comp ? '<div><span><b>Comped'+(money ? ' '+blN(c.comp.amount) : '')+'</b> &mdash; '+blEsc(c.comp.reason||'')+'</span><span></span></div>' : '')
+          + (c.note ? '<div><span>'+blEsc(c.note)+'</span><span></span></div>' : '')
+          + (keys.length ? keys.map(function(x){ return '<div><span>'+(its[x]>1?blN(its[x])+'× ':'')+blEsc(x)+'</span><span>in the package</span></div>'; }).join('') : '<div><span>No package items on this check</span></div>')+'</td></tr>');
       }
     });
     h.push('</tbody></table></div>');
+  }
+  if(N && N.rows.length){
+    if(SC) h.push('<details class="bl-how mn-book"><summary>Bookings in SevenRooms ('+blN(N.tables)+') &mdash; before comps; a check here can be an earlier copy</summary>');
+    h.push('<div class="bl-day"><div class="bl-day-h"><div><div class="bl-day-t">Scala tables</div><div class="bl-day-s">'+blN(N.tables)+' tables &middot; tap one for its check'+(SC ? ' &middot; from the bookings' : '')+'</div></div></div>');
+    h.push('<table class="bl-tbl"><thead><tr><th>Time</th><th>Guest</th><th>Table</th><th class="r">Guests</th><th class="r">Packages</th>'+(money?'<th class="r">Check net</th>':'')+'</tr></thead><tbody>');
+    N.rows.forEach(function(r, k){
+      h.push('<tr class="bl-row'+(MN.open[k]?' open':'')+'" onclick="mnToggle('+k+')"><td>'+blEsc(r.time)+'</td><td class="bl-guest">'+blEsc(r.guest||'—')
+        + (r.vip?' <span class="bl-tag">VIP</span>':'')+(r.walkin?' <span class="bl-tag">walk-in</span>':'')+'</td><td>'+blEsc(r.tables||'—')+'</td>'
+        + '<td class="r">'+blN(r.pax)+'</td><td class="r"><b>'+(r.packages ? blN(r.packages) : '&ndash;')+'</b></td>'+(money?'<td class="r">'+blN(blNet(r.check, d))+'</td>':'')+'</tr>');
+      if(MN.open[k]){
+        var keys = Object.keys(r.items);
+        h.push('<tr class="bl-items"><td colspan="'+(money?6:5)+'">'+(keys.length ? keys.map(function(x){ return '<div><span>'+(r.items[x]>1?blN(r.items[x])+'× ':'')+blEsc(x)+'</span><span>in the package</span></div>'; }).join('') : '<div><span>No package on this table</span></div>')+'</td></tr>');
+      }
+    });
+    h.push('</tbody></table></div>');
+    if(SC) h.push('</details>');
   }
 
   h.push('<details class="bl-how"><summary>How these numbers are counted</summary>'
@@ -226,6 +240,6 @@ function renderModaNight(){
 function mnCss(){
   if(document.getElementById('mn-css')) return;
   var s = document.createElement('style'); s.id = 'mn-css';
-  s.textContent = '.mn-sim{margin:-6px 2px 16px}\n.mn-comps div{margin-top:4px}\n.mn-wrap .bl-items span:last-child{color:var(--text-light);font-size:11px}';
+  s.textContent = '.mn-sim{margin:-6px 2px 16px}\n.mn-comps div{margin-top:4px}\n.mn-book{margin-top:8px}\n.mn-wrap .bl-items span:last-child{color:var(--text-light);font-size:11px}';
   document.head.appendChild(s);
 }
