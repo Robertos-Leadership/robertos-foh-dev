@@ -20,7 +20,12 @@
 // reservation) is invisible here. The Simphony lunch figures from the closing
 // report (rev_daily) are shown beside every day so a gap is visible, not hidden.
 
-var BL = { week: 0, nights: {}, loading: {}, failed: {}, sim: {}, simKey: '', pick: null, open: {}, kick: 0 };
+// COMPS (9 Oct 2026): SevenRooms' copy of a check never carries its discounts, and can be an
+// earlier version of the check (Moda Night 7 Oct: a whole order voided and re-rung as a comp).
+// So each day is also read from Simphony itself by the weekly reconciliation into `biz_lunch_sim`
+// (FOH db, authenticated read). Once a day is there, its menus, paid vs comped, net, courses and
+// checks on this screen are Simphony's; SevenRooms stays only as the bookings, folded.
+var BL = { week: 0, nights: {}, loading: {}, failed: {}, sim: {}, simph: {}, simKey: '', pick: null, open: {}, kick: 0 };
 
 function blEsc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function blToday(){ return (typeof chkToday==='function') ? chkToday().iso : new Date(Date.now()+4*3600000).toISOString().slice(0,10); }
@@ -79,6 +84,30 @@ function blDigest(iso, j){
   return out;
 }
 
+// One day as the screen shows it: Simphony's figures once the day is checked, otherwise the
+// bookings (SevenRooms) as before. Money here is already NET (menuNet / extraNet).
+function blView(d){
+  var n = BL.nights[d] || null, s = BL.simph[d];
+  if(!s){
+    if(!n) return null;
+    return { date: d, checked: false, menus: n.menus, menuNet: blNet(n.menuGross, d), extraNet: blNet(n.extraGross, d),
+             tables: n.tables, guests: n.guests, dishes: n.dishes, courses: n.courses, rows: n.rows, price: n.price };
+  }
+  var cs = Array.isArray(s.checks) ? s.checks : [], sub = 0, guests = 0, courses = {}, dishes = {};
+  cs.forEach(function(c){ sub += Number(c.subtotal)||0; guests += Number(c.guests)||0; });
+  Object.keys(s.courses||{}).forEach(function(k){
+    var q = Number(s.courses[k])||0; if(!q) return;
+    var tn = blTill(k); courses[tn] = (courses[tn]||0) + q;
+    if(!blIsChoice(tn)) return;
+    var nm = blCourseName(tn); dishes[nm] = (dishes[nm]||0) + q;
+  });
+  var menuNet = Number(s.menu_net)||0, tablesNet = blNet(sub, d);
+  return { date: d, checked: true, menus: Number(s.menus)||0, paid: s.menus_paid, comped: s.menus_comp, compValue: s.comp_value,
+           comps: Array.isArray(s.comps) ? s.comps : [], checks: cs, note: s.note, readAt: s.read_at,
+           menuNet: menuNet, extraNet: Math.max(0, tablesNet - menuNet), tables: cs.filter(function(c){ return Number(c.menus) > 0; }).length,
+           guests: guests || (n ? n.guests : 0), dishes: dishes, courses: courses, rows: n ? n.rows : [], price: n ? n.price : null };
+}
+
 async function blFetchNight(iso){
   var r = await fetch(KITCHEN_URL + '/functions/v1/sevenrooms-sync?daysheet=' + iso + '&include=all', {
     method:'POST',
@@ -128,6 +157,11 @@ async function blLoadSim(dates){
       BL.sim[String(r.service_date).slice(0,10)] = { covers: c, net: n };
     });
   } catch(e){ BL.simKey = ''; }
+  try {
+    var sp = await sb.from('biz_lunch_sim').select('day,menus,menus_paid,menus_comp,menu_net,comp_value,comps,courses,checks,note,read_at')
+      .gte('day', dates[0]).lte('day', dates[6]);
+    if(!sp.error) (sp.data||[]).forEach(function(r){ BL.simph[String(r.day).slice(0,10)] = r; });
+  } catch(e){}
   blRepaint();
 }
 
@@ -140,12 +174,13 @@ function blToggle(i){ BL.open[i] = !BL.open[i]; blRepaint(); }
 function blRefresh(){ BL.simKey = ''; var d = blWeekDates(BL.week); blLoad(d, true); blLoadSim(d); }
 
 function blSum(days){
-  var s = { menus:0, menuGross:0, extraGross:0, menuNet:0, extraNet:0, tables:0, guests:0, dishes:{}, sold:0, simCovers:0, simDays:0, menusOnSimDays:0 };
-  days.forEach(function(n){
+  var s = { menus:0, menuNet:0, extraNet:0, tables:0, guests:0, dishes:{}, sold:0, simCovers:0, simDays:0, menusOnSimDays:0,
+            comped:0, compValue:0, checkedDays:0, uncheckedDays:0 };
+  days.forEach(function(n){       // n = blView(day)
     if(!n) return;
-    s.menus += n.menus; s.menuGross += n.menuGross; s.extraGross += n.extraGross;
-    s.menuNet += blNet(n.menuGross, n.date); s.extraNet += blNet(n.extraGross, n.date);
+    s.menus += n.menus; s.menuNet += n.menuNet; s.extraNet += n.extraNet;
     s.tables += n.tables; s.guests += n.guests; if(n.menus) s.sold++;
+    if(n.checked){ s.checkedDays++; s.comped += Number(n.comped)||0; s.compValue += Number(n.compValue)||0; } else if(n.menus) s.uncheckedDays++;
     Object.keys(n.dishes).forEach(function(k){ s.dishes[k] = (s.dishes[k]||0) + n.dishes[k]; });
     var sim = BL.sim[n.date];
     if(sim && sim.covers){ s.simCovers += sim.covers; s.simDays++; s.menusOnSimDays += n.menus; }
@@ -205,12 +240,12 @@ function blFoodCostHtml(shown, today){
     h.push('<div class="bl-empty bl-pad">'+(BLC.state === 'error' ? 'The recipe book could not be read just now.' : 'Costing from the recipe book&hellip;')+'</div></div>');
     return h.join('');
   }
-  var days = shown.filter(function(d){ return d <= today && BL.nights[d]; }), T = { m:0, fc:0, net:0, miss:0 }, missing = {};
+  var days = shown.filter(function(d){ return d <= today && blView(d); }), T = { m:0, fc:0, net:0, miss:0 }, missing = {};
   h.push('<table class="bl-tbl"><thead><tr><th>Day</th><th class="r">Menus</th><th class="r">Food cost</th><th class="r">Per menu</th><th class="r">Food cost %</th></tr></thead><tbody>');
   days.forEach(function(d){
-    var n = BL.nights[d], c = n.courses || {}, fc = 0, miss = 0;
+    var n = blView(d), c = n.courses || {}, fc = 0, miss = 0;
     Object.keys(c).forEach(function(k){ var v = blCostOf(k); if(v != null) fc += v * c[k]; else { miss += c[k]; missing[k] = 1; } });
-    var net = blNet(n.menuGross, d);
+    var net = n.menuNet;
     T.m += n.menus; T.fc += fc; T.net += net; T.miss += miss;
     h.push('<tr><td>'+blEsc(blDayName(d))+' '+blEsc(blDateLabel(d))+(d===today?' <span class="bl-sofar">so far</span>':'')+'</td><td class="r"><b>'+blN(n.menus)+'</b></td>'
       + '<td class="r">'+(miss ? '&ge; ' : '')+blN2(fc)+'</td><td class="r">'+(n.menus ? (miss ? '&ge; ' : '')+blN2(fc/n.menus) : '&ndash;')+'</td>'
@@ -232,11 +267,12 @@ function renderBizLunch(){
   if(need){ BL.kick = Date.now(); setTimeout(function(){ blLoad(dates); }, 0); }
   if(BL.simKey !== dates[0]+'|'+dates[6]) setTimeout(function(){ blLoadSim(dates); }, 0);
 
-  var nights = dates.map(function(d){ return BL.nights[d] || null; });
+  var V = {}; dates.forEach(function(d){ V[d] = blView(d); });
+  var nights = dates.map(function(d){ return V[d]; });
   var S = blSum(nights);
   var busy = dates.some(function(d){ return BL.loading[d]; });
-  var failed = dates.filter(function(d){ return BL.failed[d]; });
-  var shown = dates.filter(function(d, i){ return i < 5 || (BL.nights[d] && BL.nights[d].menus); });
+  var failed = dates.filter(function(d){ return BL.failed[d] && !(V[d] && V[d].checked); });
+  var shown = dates.filter(function(d, i){ return i < 5 || (V[d] && V[d].menus); });
   var price = null; nights.forEach(function(n){ if(n && n.price) price = n.price; });
   if(price == null) price = 135;
   var h = ['<div class="res-wrap bl-wrap">'];
@@ -259,12 +295,14 @@ function renderBizLunch(){
   h.push('<div class="rv2-tag">'+(BL.week===0 ? 'This week' : 'Week of '+blDateLabel(dates[0]))+' &middot; menus sold</div>');
   h.push('<div class="rv2-bignum"><span class="n">'+(nights.some(Boolean) || !busy ? blN(S.menus) : '&hellip;')+'</span>');
   h.push('<span class="of">'+(share!=null ? '<b>'+share+'%</b> of Simphony lunch guests ('+blN(S.menusOnSimDays)+' of '+blN(S.simCovers)+')' : 'menus')
-    + (S.sold ? ' &middot; '+blN(S.tables)+' table'+(S.tables===1?'':'s') : '')+'</span></div>');
+    + (S.sold ? ' &middot; '+blN(S.tables)+' table'+(S.tables===1?'':'s') : '')
+    + (S.checkedDays ? ' &middot; <b>'+blN(S.comped)+' comped</b>' : '')+'</span></div>');
   h.push('<div class="bl-hero-days">'+shown.map(function(d){
-    var n = BL.nights[d];
-    var v = BL.loading[d] ? '&hellip;' : (n ? blN(n.menus) : (d > today ? '&ndash;' : (BL.failed[d] ? '!' : '&hellip;')));
-    return '<span'+(d===today?' class="today"':'')+'>'+blEsc(blDayName(d))+' <b>'+v+'</b></span>';
+    var n = V[d];
+    var v = (BL.loading[d] && !(n && n.checked)) ? '&hellip;' : (n ? blN(n.menus) : (d > today ? '&ndash;' : (BL.failed[d] ? '!' : '&hellip;')));
+    return '<span'+(d===today?' class="today"':'')+'>'+blEsc(blDayName(d))+' <b>'+v+'</b>'+(n && n.checked ? ' <i class="bl-ok" title="Checked in Simphony">&#10003;</i>' : '')+'</span>';
   }).join('')+'</div>');
+  if(S.uncheckedDays) h.push('<div class="bl-hero-days"><span class="today">'+(S.checkedDays ? 'Days without &#10003; are' : 'This week is')+' not checked in Simphony yet &mdash; until then a comped menu shows here as paid.</span></div>');
   h.push('</div>');
 
   if(failed.length){
@@ -283,8 +321,17 @@ function renderBizLunch(){
     h.push('<div class="rv2-stat"><div class="l">Menu net</div><div class="v">'+blN(S.menuNet)+'</div></div>');
     h.push('<div class="rv2-stat"><div class="l">Extras net</div><div class="v">'+blN(S.extraNet)+'</div></div>');
     h.push('<div class="rv2-stat"><div class="l">Net spend / guest</div><div class="v">'+(perGuest!=null ? blN(perGuest) : '&ndash;')+'</div></div>');
+    if(S.checkedDays) h.push('<div class="rv2-stat"><div class="l">Comps &amp; discounts</div><div class="v">'+blN(S.compValue)+'</div></div>');
   }
   h.push('</div>');
+  // every comp on the checked days, with its reason
+  var compList = [];
+  shown.forEach(function(d){ var n = V[d]; if(n && n.checked) n.comps.forEach(function(c){ compList.push({ d: d, c: c }); }); });
+  if(compList.length) h.push('<div class="bl-note bl-comps"><b>Comps and discounts</b>'+compList.map(function(x){
+    var c = x.c; return '<div>'+blEsc(blDayName(x.d))+' &middot; '+(c.menus ? blN(c.menus)+' menu'+(c.menus==1?'':'s')+' comped' : 'discount')+' &middot; table '+blEsc(c.table)+' &middot; check '+blEsc(c.check)
+      + (money && c.amount != null ? ' &middot; '+blN(c.amount) : '')+' &mdash; '+blEsc(c.reason||'no reason given')
+      + (c.what ? ' <span class="bl-hint">('+blEsc(c.what)+')</span>' : '')+'</div>'; }).join('')+'</div>');
+  if(S.checkedDays) h.push('<div class="bl-note">Days marked &#10003; are read from Simphony: menus, net after discounts and comps. Net per menu is the price; menu net counts paid menus only.</div>');
 
   // ── Against all lunch: Simphony's own lunch guests and net (closing report) ──
   var cmpDays = shown.filter(function(d){ return d <= today; });
@@ -295,11 +342,11 @@ function renderBizLunch(){
       + (money ? '<th class="r">BL tables net</th><th class="r">Lunch net</th><th class="r">BL share</th>' : '')+'</tr></thead><tbody>');
     var tg = { m:0, c:0, bn:0, ln:0 };
     cmpDays.forEach(function(d){
-      var n = BL.nights[d], sim = BL.sim[d] || {}, m = n ? n.menus : null, c = sim.covers, ln = sim.net;
-      var bn = n ? blNet(n.menuGross + n.extraGross, d) : null;
+      var n = V[d], sim = BL.sim[d] || {}, m = n ? n.menus : null, c = sim.covers, ln = sim.net;
+      var bn = n ? n.menuNet + n.extraNet : null;
       if(m != null && c){ tg.m += m; tg.c += c; }
       if(bn != null && ln){ tg.bn += bn; tg.ln += ln; }
-      h.push('<tr><td>'+blEsc(blDayName(d))+' '+blEsc(blDateLabel(d))+(d===today?' <span class="bl-sofar">so far</span>':'')+'</td>'
+      h.push('<tr><td>'+blEsc(blDayName(d))+' '+blEsc(blDateLabel(d))+(d===today?' <span class="bl-sofar">so far</span>':'')+(n && n.checked ? ' <i class="bl-ok" title="Checked in Simphony">&#10003;</i>' : '')+'</td>'
         + '<td class="r"><b>'+(m==null ? '&hellip;' : blN(m))+'</b></td>'
         + '<td class="r">'+(c==null ? '&ndash;' : blN(c))+'</td>'
         + '<td class="r">'+(m!=null && c ? Math.round(m/c*100)+'%' : '&ndash;')+'</td>'
@@ -313,11 +360,11 @@ function renderBizLunch(){
   }
 
   // ── Two panels: by day · what they chose ──
-  var max = 1; shown.forEach(function(d){ var n = BL.nights[d]; if(n && n.menus > max) max = n.menus; });
+  var max = 1; shown.forEach(function(d){ var n = V[d]; if(n && n.menus > max) max = n.menus; });
   h.push('<div class="bl-grid">');
   h.push('<div class="bl-panel"><div class="rv2-mix-title">Menus by day <span class="bl-hint">&middot; tap a day for its tables</span></div><div class="bl-bars">');
   shown.forEach(function(d){
-    var n = BL.nights[d], v = n ? n.menus : 0, sim = BL.sim[d];
+    var n = V[d], v = n ? n.menus : 0, sim = BL.sim[d];
     var cls = 'bl-bar' + (d===today?' today':'') + (BL.pick===d?' on':'') + (d>today?' future':'');
     var can = n && n.menus;
     h.push('<button class="'+cls+'"'+(can ? ' onclick="blPick(\''+d+'\')"' : ' disabled')+'>');
@@ -329,7 +376,7 @@ function renderBizLunch(){
   });
   h.push('</div></div>');
 
-  var dsrc = BL.pick && BL.nights[BL.pick] ? BL.nights[BL.pick].dishes : S.dishes;
+  var dsrc = BL.pick && V[BL.pick] ? V[BL.pick].dishes : S.dishes;
   var dk = Object.keys(dsrc).sort(function(a,b){ return dsrc[b]-dsrc[a] || (a<b?-1:1); });
   var dmax = dk.length ? dsrc[dk[0]] : 1;
   h.push('<div class="bl-panel"><div class="rv2-mix-title">What they chose <span class="bl-hint">&middot; '
@@ -348,7 +395,34 @@ function renderBizLunch(){
   if(money) h.push(blFoodCostHtml(shown, today));
 
   // ── The chosen day's tables ──
-  if(BL.pick && BL.nights[BL.pick]){
+  var P = BL.pick ? V[BL.pick] : null;
+  if(P && P.checked){
+    // Simphony's own business-lunch checks for the day; not matched to bookings by table.
+    var simD = BL.sim[BL.pick];
+    h.push('<div class="bl-day"><div class="bl-day-h"><div><div class="bl-day-t">'+blEsc(blDayName(BL.pick, true))+' '+blEsc(blDateLabel(BL.pick))+' &middot; checks in Simphony</div>');
+    h.push('<div class="bl-day-s">'+blN(P.menus)+' menus &middot; '+blN(P.paid)+' paid &middot; '+blN(P.comped)+' comped &middot; '+blN(P.checks.length)+' checks'
+      + (simD && simD.covers!=null ? ' &middot; Simphony lunch guests '+blN(simD.covers) : '')
+      + '</div></div><button class="res-btn" onclick="blPick(\''+BL.pick+'\')">Close</button></div>');
+    h.push('<table class="bl-tbl"><thead><tr><th>Opened</th><th>Check</th><th>Table</th><th class="r">Guests</th><th class="r">Menus</th>'
+      + (money ? '<th class="r">Check net</th>' : '')+'</tr></thead><tbody>');
+    P.checks.forEach(function(c, i){
+      var key = 's'+i, cs = c.courses || {};
+      h.push('<tr class="bl-row'+(BL.open[key]?' open':'')+'" onclick="blToggle(\''+key+'\')"><td>'+blEsc(String(c.opened||'').slice(11,16))+'</td><td class="bl-guest">'+blEsc(c.check)
+        + (c.comp ? ' <span class="bl-tag">'+(Number(c.subtotal) ? 'discount' : 'comped')+'</span>' : '')+'</td><td>'+blEsc(c.table||'—')+'</td><td class="r">'+(c.guests!=null ? blN(c.guests) : '&ndash;')+'</td>'
+        + '<td class="r"><b>'+(c.menus ? blN(c.menus) : '&ndash;')+'</b></td>'+(money ? '<td class="r">'+blN(blNet(c.subtotal, BL.pick))+'</td>' : '')+'</tr>');
+      if(BL.open[key]){
+        var ks = Object.keys(cs).filter(function(k){ return cs[k] > 0; }).sort(function(a,b){ return cs[b]-cs[a] || (a<b?-1:1); });
+        h.push('<tr class="bl-items"><td colspan="'+(money?6:5)+'">'
+          + (c.comp ? '<div><span><b>'+(Number(c.subtotal) ? 'Discount' : 'Comped')+(money ? ' '+blN(c.comp.amount) : '')+'</b> &mdash; '+blEsc(c.comp.reason||'')+(c.comp.what ? ' ('+blEsc(c.comp.what)+')' : '')+'</span><span></span></div>' : '')
+          + (c.note ? '<div><span>'+blEsc(c.note)+'</span><span></span></div>' : '')
+          + (ks.length ? ks.map(function(k){ return '<div><span>'+(cs[k]>1 ? blN(cs[k])+'× ' : '')+blEsc(blCourseName(k))+'</span><span>incl.</span></div>'; }).join('') : '<div><span>No courses on this check</span></div>')
+          + '</td></tr>');
+      }
+    });
+    h.push('</tbody></table></div>');
+  }
+  if(P && BL.nights[BL.pick]){
+    if(P.checked) h.push('<details class="bl-how bl-book"><summary>Bookings in SevenRooms &mdash; before comps; a check here can be an earlier copy</summary>');
     var N = BL.nights[BL.pick], sim = BL.sim[BL.pick];
     h.push('<div class="bl-day"><div class="bl-day-h"><div><div class="bl-day-t">'+blEsc(blDayName(BL.pick, true))+' '+blEsc(blDateLabel(BL.pick))+'</div>');
     h.push('<div class="bl-day-s">'+blN(N.menus)+' menus &middot; '+blN(N.tables)+' tables'
@@ -370,10 +444,12 @@ function renderBizLunch(){
       }
     });
     h.push('</tbody></table></div>');
+    if(P.checked) h.push('</details>');
   }
 
   // ── How it is counted (folded) ──
   h.push('<details class="bl-how"><summary>How these numbers are counted</summary>'
+    + '<p><b>Days marked &#10003;</b> are read from Simphony itself by the weekly reconciliation: every check with a business lunch, menus paid and comped, the comp reason, net after discounts, and the courses. SevenRooms&rsquo; copy of a check never shows discounts and can be an earlier version of it, so for those days its bookings are only folded under the checks.</p>'
     + '<p>Counted from the Simphony check SevenRooms attaches to each booking: every <b>BusinessLunch@'+blN(price)+'</b> line is one menu, every <b>BL &hellip;</b> line is a course. Focaccia goes to every guest, so it is not counted as a choice. Nothing is typed in and nothing is stored &mdash; Refresh reads the book again.</p>'
     + '<p>A check rung without a booking is not linked to SevenRooms and is <b>not</b> in these figures. The Simphony lunch guests beside each day come from the closing report, so a gap shows up as a difference. BL tables net is everything on a table that had a business lunch (menus and extras); a lunch check with no booking is missed, so the BL share of lunch net is a floor, never an overstatement.</p>'
     + (money ? '<p>Net = menu price &divide; '+blDiv(dates[0])+' (10% service and 5% VAT are inside the price; since 16 Sep 2026 the 7% DIFC fee is added on top of the bill). AED '+blN(price)+' = '+blN2(price/blDiv(dates[0]))+' net. Extras are everything else on a business-lunch table &mdash; water, drinks, desserts. Tips are not included.</p>' : '')
@@ -413,6 +489,10 @@ function blCss(){
     '.bl-bar.future .bl-bar-d{color:var(--text-light)}',
     '.bl-bar-s{font-size:10px;color:var(--text-light);white-space:nowrap}',
     '.bl-dishes{display:flex;flex-direction:column;gap:7px}',
+    '.bl-ok{font-style:normal;color:#2e6b45;font-weight:700}',
+    '.bl-comps{margin-bottom:10px}',
+    '.bl-comps div{margin-top:4px}',
+    '.bl-book{margin-top:8px}',
     '.bl-dish{display:grid;grid-template-columns:minmax(0,9em) 1fr 2.4em;align-items:center;gap:10px;font-size:13px;color:var(--text)}',
     '.bl-dish-n{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
     '.bl-dish-b{height:8px;background:var(--surface3)}',
