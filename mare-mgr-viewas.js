@@ -21,7 +21,7 @@
         var mg = r[0], f = r[1]; if (!mg || !f) { main.innerHTML = App.empty(T('Could not load.')); return; }
         var set = {}; f.settings.forEach(function (s) { set[s.key] = s.value; });
         var mgrMods = set.mgr_modules || {}, teamMods = set.team_modules || {};
-        var all = App.order.filter(function (k) { return k !== 'viewas'; });
+        var all = App.order.filter(function (k) { return k !== 'viewas' && k !== 'logins'; });
         var h = '<section class="vahero"><div class="k">' + E(T('SET-UP')) + '</div><h2 class="serif">' + E(T('View as')) + '</h2>' +
           '<div style="font-size:17px;line-height:1.5">' + E(T('See the app exactly as a colleague sees it. It is read only, and a banner lets you switch back at any time.')) + '</div></section>';
 
@@ -29,10 +29,10 @@
         h += '<section class="stack"><h2 class="serif">' + E(T('Managers · the Mare app')) + '</h2><div class="card" style="padding:0">';
         mg.managers.forEach(function (u) {
           var mods = Array.isArray(mgrMods[u.email]) ? mgrMods[u.email] : null;
-          var tag = u.is_admin ? T('Admin · everything') : mods ? T('{a} of {b} modules', { a: mods.filter(function (k) { return all.indexOf(k) >= 0; }).length, b: all.length }) : T('All modules');
+          var tag = u.is_admin || u.mare_admin ? T('Admin · everything') : mods ? T('{a} of {b} modules', { a: mods.filter(function (k) { return all.indexOf(k) >= 0; }).length, b: all.length }) : T('All modules');
           h += '<div class="varow"><div class="who"><b>' + E(u.name) + (u.email === mg.me ? ' <span class="tag grey" style="font-family:Karla;font-size:11px;vertical-align:middle">' + E(T('YOU')) + '</span>' : '') + '</b><span>' + E(u.email) + '</span></div>' +
             '<div class="acts">' + (u.title ? '<span class="tag grey">' + E(u.title) + '</span>' : '') + '<span class="tag ' + (mods ? 'amber' : 'teal') + '">' + E(tag) + '</span>' +
-            (u.is_admin ? '' : '<button class="vabtn" data-mm="' + E(u.email) + '">' + E(T('Modules')) + '</button>') +
+            (u.is_admin || u.mare_admin ? '' : '<button class="vabtn" data-mm="' + E(u.email) + '">' + E(T('Modules')) + '</button>') +
             (u.email === mg.me ? '' : '<button class="vabtn" data-vm="' + E(u.email) + '">' + M.icon('eye', 18) + E(T('View as')) + '</button>') + '</div></div>';
           if (V.open === 'm:' + u.email) {
             h += '<div class="ticks" data-for="' + E(u.email) + '">' + all.map(function (k) {
@@ -40,7 +40,7 @@
             }).join('') + '<button class="btn sm" data-msave="' + E(u.email) + '">' + E(T('Save')) + '</button></div>';
           }
         });
-        h += '<div class="varow"><div class="who"><span>' + E(T('Milica appears here as soon as her Roberto\'s login has Mare access (FOH Admin → Users & Access → Mare Attendance).')) + '</span></div></div>';
+        h += '<div class="varow"><div class="who"><span>' + E(T('To add or remove a manager, open Set-up → Logins.')) + '</span></div></div>';
         h += '</div></section>';
 
         // ── tablet ──
@@ -88,7 +88,7 @@
         });
         App.on(main, '[data-vm]', function (b) {
           var em = b.getAttribute('data-vm'), u = mg.managers.filter(function (x) { return x.email === em; })[0];
-          App.S.viewAs = { name: u.name, mods: u.is_admin ? null : (Array.isArray(mgrMods[em]) ? mgrMods[em] : null) };
+          App.S.viewAs = { name: u.name, mods: u.is_admin || u.mare_admin ? null : (Array.isArray(mgrMods[em]) ? mgrMods[em] : null) };
           App.go(null);
         });
         App.on(main, '[data-vt]', function () { openTeamApp('tablet'); });

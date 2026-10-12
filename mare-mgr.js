@@ -113,7 +113,7 @@
     a.innerHTML = '<div class="hero" style="min-height:100vh;justify-content:center"><div class="hero-top"><span></span>' + M.langSwitch() + '</div>' +
       '<div style="padding:20px 16px 60px"><form class="signin card" id="f" style="color:var(--ink)">' +
       '<div class="row"><img src="mare-logo-teal.svg" alt="" style="width:56px;height:56px"><h2 class="serif">' + E(T('Sign in')) + '</h2></div>' +
-      '<p class="muted" style="margin:0">' + E(T('Use your Roberto\'s app account.')) + '</p>' +
+      '<p class="muted" style="margin:0">' + E(T('Use your Roberto\'s app account.')) + ' ' + E(T('No password? Open the link from your email: it signs you in.')) + '</p>' +
       '<label class="f" for="em">' + E(T('Email')) + '<input id="em" type="email" autocomplete="username" required></label>' +
       '<label class="f" for="pw">' + E(T('Password')) + '<input id="pw" type="password" autocomplete="current-password" required></label>' +
       '<div class="err">' + E(err || '') + '</div><button class="btn" type="submit">' + E(T('Sign in')) + '</button>' +
@@ -148,7 +148,7 @@
         document.getElementById('so').onclick = App.signOut; return;
       }
       App.S.me = r.data.me; App.S.staff = r.data.staff;
-      return App.loadMyMods().then(function () { App.fromHash(); App.render(); });
+      return Promise.all([App.loadMyMods(), App.loadRole()]).then(function () { App.fromHash(); App.render(); });
     }).then(function () {
       setInterval(function () {
         var a = document.activeElement;
@@ -164,7 +164,16 @@
       App.S.myMods = (mm && App.S.email && Array.isArray(mm[App.S.email])) ? mm[App.S.email] : null;
     });
   };
-  App.allowed = function (k) { var mods = App.S.viewAs ? App.S.viewAs.mods : App.S.myMods; return !mods || mods.indexOf(k) >= 0 || (k === 'viewas' && !App.S.viewAs && !App.S.myMods); };
+  // Mare admin (Milica) or not, and whether this login also opens the Dubai app.
+  App.loadRole = function () {
+    return M.rpc('mare_m_whoami', {}, App.S.token).then(function (r) { var d = r.data && r.data.ok ? r.data : {}; App.S.admin = !!d.admin; App.S.foh = !!d.foh; App.S.fohAdmin = !!d.foh_admin; });
+  };
+  App.allowed = function (k) {
+    if (k === 'logins') return !!App.S.admin && !App.S.viewAs;
+    if (App.S.admin && !App.S.viewAs) return true;   // the admin opens everything, whatever the ticks say
+    return App.allowed0(k);
+  };
+  App.allowed0 = function (k) { var mods = App.S.viewAs ? App.S.viewAs.mods : App.S.myMods; return !mods || mods.indexOf(k) >= 0 || (k === 'viewas' && !App.S.viewAs && !App.S.myMods); };
   App.banner = function () {
     if (!App.S.viewAs) return '';
     return '<div class="vabar">' + M.icon('eye', 18) + '<span>' + E(T('Viewing as {n} — read only', { n: App.S.viewAs.name })) + '</span><button data-vaback>' + E(T('Switch back')) + '</button></div>';
@@ -197,7 +206,8 @@
       }).join('');
     });
     h += '</nav><div class="side-foot">' + M.langSwitch() + '<div class="side-me">' + E(App.S.me || '') + '</div>' +
-      '<div class="side-links"><a href="./">' + E(T('Roberto\'s FOH')) + ' &rarr;</a><button id="so">' + E(T('Sign out')) + '</button></div></div></aside>';
+      '<button class="side-ask" data-ask="1">' + E(T('Ask for a change or a new module')) + '</button>' +
+      '<div class="side-links">' + (App.S.foh ? '<a href="./">' + E(T('Roberto\'s FOH')) + ' &rarr;</a>' : '<span></span>') + '<button id="so">' + E(T('Sign out')) + '</button></div></div></aside>';
     return h;
   };
   App.shell = function (inner) {
@@ -207,6 +217,7 @@
       '<img src="mare-logo-white.svg" alt=""><span class="mtop-t serif">Roberto\'s Mare</span></div>' + inner + '</div><div class="scrim" id="scrim"></div></div>';
     App.on(a, '[data-nav]', function (b) { document.body.classList.remove('menu-open'); App.go(b.getAttribute('data-nav') || null); });
     a.querySelector('#so').onclick = App.signOut;
+    App.on(a, '[data-ask]', function () { document.body.classList.remove('menu-open'); if (w.FBI) w.FBI.open(); });
     a.querySelector('#burger').onclick = function () { document.body.classList.add('menu-open'); };
     a.querySelector('#scrim').onclick = function () { document.body.classList.remove('menu-open'); };
     return a;
@@ -631,7 +642,9 @@
   }
 
   // ════════════════ PEOPLE ════════════════
-  var P = { confirm: null };
+  // A short list: one line per person. Add in one line; Remove in one tap (and Bring back
+  // under "No longer here": nothing is ever deleted). Tap a person for the details.
+  var P = { confirm: null, open: null, rm: null, added: null };
   App.register('people', {
     title: 'People', icon: 'people', group: 'team', desc: 'The team, start times, contract hours, codes and phone links.',
     stat: function (H) { var n = H.ov.staff.filter(function (s) { return s.active; }).length, np = H.ov.staff.filter(function (s) { return s.active && !s.has_pin; }).length; return [T('{n} people', { n: n }) + (np ? ' · ' + T('{n} without a code', { n: np }) : ''), false]; },
@@ -646,65 +659,110 @@
   });
   function peopleView(main, d, extra) {
     var base = new URL('mare-clock.html', location.href).href, teams = ['Kitchen', 'Service', 'Bar', 'Other'];
-    var h = '<section class="card stack"><h3>' + E(T('Add a person')) + '</h3><div class="row"><input type="text" id="nn" placeholder="' + E(T('Name as the team knows them')) + '" aria-label="' + E(T('Name')) + '" style="flex:1 1 220px" maxlength="60">' +
-      '<select id="nteam" aria-label="' + E(T('Team')) + '">' + teams.map(function (t) { return '<option value="' + t + '"' + (t === 'Service' ? ' selected' : '') + '>' + E(T(t)) + '</option>'; }).join('') + '</select>' +
-      '<button class="btn" id="nadd">' + E(T('Add')) + '</button></div><div class="small muted">' + E(T('They choose their own 4-digit code the first time they tap their name on the tablet.')) + '</div></section>';
-    var list = d.staff.slice().sort(function (a, b) { return (b.active - a.active) || (teams.indexOf(a.team) - teams.indexOf(b.team)) || a.name.localeCompare(b.name); });
-    h += '<section class="stack"><h2 class="serif">' + E(T('The team')) + '</h2>';
-    if (!list.length) h += App.empty(T('Nobody yet.'));
-    list.forEach(function (s) {
-      var x = extra[s.id] || {}, resets = d.pin_events.filter(function (e) { return e.staff_id === s.id && e.kind === 'reset' && new Date(e.at) > new Date(Date.now() - 30 * 864e5); }).length;
-      var notes = d.notes.filter(function (n) { return n.staff_id === s.id; }), link = base + '?me=' + s.phone_token, conf = P.confirm === s.id;
-      h += '<div class="card stack" data-id="' + s.id + '" style="' + (s.active ? '' : 'opacity:.65') + '">' +
-        '<div class="row between"><div class="row"><input type="text" class="f-name" value="' + E(s.name) + '" aria-label="' + E(T('Name')) + '" maxlength="60" style="font-weight:700;font-size:18px">' +
-        '<select class="f-team" aria-label="' + E(T('Team')) + '">' + teams.map(function (t) { return '<option value="' + t + '"' + (t === s.team ? ' selected' : '') + '>' + E(T(t)) + '</option>'; }).join('') + '</select>' +
-        '<input type="text" class="f-role" value="' + E(x.role || '') + '" placeholder="' + E(T('Role (e.g. Head chef)')) + '" aria-label="' + E(T('Role')) + '">' +
-        '<label class="row small" style="gap:6px"><input type="checkbox" class="f-active" ' + (s.active ? 'checked' : '') + ' style="width:22px;height:22px"> ' + E(T('Works here now')) + '</label></div>' +
-        '<div class="row">' + (s.has_pin ? '<span class="tag teal">' + E(T('CODE SET')) + '</span>' : '<span class="tag amber">' + E(T('NO CODE YET')) + '</span>') +
-        (resets >= 2 ? ' <span class="tag blue">' + E(T('CODE RESET {n}× IN 30 DAYS', { n: resets })) + '</span>' : '') + '</div></div>' +
-        '<div class="grid4"><label class="f">' + E(T('Contract hours a week')) + '<input type="text" inputmode="decimal" data-num="1" class="f-hours" value="' + Number(s.contract_hours) + '" min="0" max="84" step="0.5"></label>' +
-        '<label class="f">' + E(T('Annual leave days a year')) + '<input type="text" inputmode="decimal" data-num="1" class="f-annual" value="' + (x.annual_days != null ? x.annual_days : 21) + '" min="0" max="60"></label></div>' +
-        '<div><div class="small" style="font-weight:700;margin-bottom:6px">' + E(T('Usual start time (used when the rota is empty; leave empty on days off)')) + '</div><div class="grid4" style="grid-template-columns:repeat(auto-fit,minmax(96px,1fr))">' +
-        [0, 1, 2, 3, 4, 5, 6].map(function (i) { var v = (s.start_times || {})[String(i + 1)] || ''; return '<label class="f">' + E(M.day(i)) + '<input type="time" class="f-st" data-d="' + (i + 1) + '" value="' + v + '"></label>'; }).join('') + '</div></div>' +
-        '<div class="row"><button class="btn" data-save="' + s.id + '">' + E(T('Save')) + '</button>' +
-        (conf ? '<span><b>' + E(T('Reset {n}\'s code?', { n: s.name })) + '</b> ' + E(T('They choose a new one on the tablet.')) + '</span><button class="btn warn" data-reset="' + s.id + '">' + E(T('Yes, reset')) + '</button><button class="btn ghost" data-cancel="1">' + E(T('Cancel')) + '</button>'
-          : (s.has_pin ? '<button class="btn ghost" data-askpin="' + s.id + '">' + E(T('Reset code…')) + '</button>' : '')) + '</div>' +
-        '<details><summary>' + E(T('Phone link: their own app')) + '</summary><div class="stack" style="margin-top:10px">' +
-        '<div class="small muted">' + E(T('Send this to {n} only, by WhatsApp. After their 4-digit code it shows their hours, shifts, the briefing, recipes, leave and Speak up. Phones never clock in.', { n: s.name })) + '</div>' +
+    function teamSel(cls, cur, id) { return '<select ' + (id ? 'id="' + id + '"' : 'class="' + cls + '"') + ' aria-label="' + E(T('Team')) + '">' + teams.map(function (t) { return '<option value="' + t + '"' + (t === cur ? ' selected' : '') + '>' + E(T(t)) + '</option>'; }).join('') + '</select>'; }
+    function linkBox(s) {
+      var link = base + '?me=' + s.phone_token;
+      return '<div class="stack plink" style="gap:10px"><div class="small muted">' + E(T('{n}\'s own app, for their phone. Send it to {n} only. The first time they choose a 4-digit code.', { n: s.name })) + '</div>' +
         '<input type="text" readonly value="' + E(link) + '" aria-label="' + E(T('Phone link')) + '" style="width:100%">' +
         '<div class="row"><button class="btn ghost sm" data-copy="' + E(link) + '">' + E(T('Copy')) + '</button>' +
         '<a class="btn ghost sm" style="text-decoration:none;display:inline-flex;align-items:center" target="_blank" rel="noopener" href="https://wa.me/?text=' + encodeURIComponent(T('Your Roberto\'s Mare app: {l}', { l: link })) + '">' + E(T('Send by WhatsApp')) + '</a>' +
-        '<button class="btn ghost sm" data-newlink="' + s.id + '">' + E(T('Make a new link (the old one stops)')) + '</button></div></div></details>' +
-        (notes.length ? '<details><summary>' + E(T('Notes')) + ' · ' + notes.length + '</summary><div class="stack" style="margin-top:10px;gap:6px">' + notes.map(function (n) {
-          var k = { late_accepted: T('Late, accepted'), warning: T('For a warning'), photo_flag: T('Photo marked'), general: T('Note') }[n.kind];
-          return '<div class="small"><b>' + E(n.ref_date ? M.shortDate(n.ref_date) : M.shortDate(M.dateKey(n.at))) + ' · ' + E(k) + '</b> ' + E(n.text) + ' <span class="muted">(' + E(n.by || '') + ')</span></div>'; }).join('') + '</div></details>' : '') +
-        '</div>';
+        '<button class="btn ghost sm" data-newlink="' + s.id + '">' + E(T('Make a new link (the old one stops)')) + '</button></div></div>';
+    }
+    var h = '<section class="card stack"><h3>' + E(T('Add a person')) + '</h3><div class="row padd"><input type="text" id="nn" placeholder="' + E(T('Name as the team knows them')) + '" aria-label="' + E(T('Name')) + '" style="flex:2 1 200px" maxlength="60">' +
+      teamSel('', 'Service', 'nteam') +
+      '<input type="text" id="nrole" placeholder="' + E(T('Role (e.g. Head chef)')) + '" aria-label="' + E(T('Role')) + '" style="flex:1 1 160px" maxlength="60">' +
+      '<button class="btn" id="nadd">' + E(T('Add')) + '</button></div></section>';
+    var act = d.staff.filter(function (s) { return s.active; }), gone = d.staff.filter(function (s) { return !s.active; });
+    h += '<section class="stack"><h2 class="serif">' + E(T('The team')) + ' · ' + act.length + '</h2>';
+    if (!act.length) h += App.empty(T('Nobody yet.'));
+    teams.forEach(function (team) {
+      var ppl = act.filter(function (s) { return s.team === team; }).sort(function (a, b) { return a.name.localeCompare(b.name); });
+      if (!ppl.length) return;
+      h += '<div>' + App.sec(T(team) + ' · ' + ppl.length) + '<div class="card plist">';
+      ppl.forEach(function (s) {
+        var x = extra[s.id] || {}, isOpen = P.open === s.id, rm = P.rm === s.id, conf = P.confirm === s.id;
+        var resets = d.pin_events.filter(function (e) { return e.staff_id === s.id && e.kind === 'reset' && new Date(e.at) > new Date(Date.now() - 30 * 864e5); }).length;
+        var notes = d.notes.filter(function (n) { return n.staff_id === s.id; });
+        h += '<div class="prow' + (isOpen ? ' open' : '') + '" data-id="' + s.id + '"><button class="phead" data-open="' + s.id + '" aria-expanded="' + isOpen + '">' +
+          '<span class="thumb">' + E(s.name.slice(0, 1).toUpperCase()) + '</span><span class="pwho"><b class="serif">' + E(s.name) + '</b><span>' + E(x.role || T(team)) + '</span></span>' +
+          (s.has_pin ? '<span class="tag teal">' + E(T('CODE SET')) + '</span>' : '<span class="tag amber">' + E(T('NO CODE YET')) + '</span>') + '</button>' +
+          '<div class="pacts"><button class="btn ghost sm" data-open="' + s.id + '">' + E(isOpen ? T('Close') : T('Open')) + '</button><button class="btn warn sm" data-rm="' + s.id + '">' + E(T('Remove')) + '</button></div>';
+        if (rm) h += '<div class="pconf"><span><b>' + E(T('Remove {n} from the team?', { n: s.name })) + '</b> ' + E(T('Their code and phone link stop working. Their hours stay on record, and you can bring them back.')) + '</span>' +
+          '<span class="row"><button class="btn warn sm" data-rmyes="' + s.id + '">' + E(T('Yes, remove')) + '</button><button class="btn ghost sm" data-cancel="1">' + E(T('Cancel')) + '</button></span></div>';
+        if (P.added === s.id) h += '<div class="pconf ok"><span><b>' + E(T('Added {n}.', { n: s.name })) + '</b> ' + E(T('Now send them their link.')) + '</span></div>';
+        if (isOpen) {
+          h += '<div class="pbody stack">' + linkBox(s) +
+            '<div class="grid4"><label class="f">' + E(T('Name')) + '<input type="text" class="f-name" value="' + E(s.name) + '" maxlength="60"></label>' +
+            '<label class="f">' + E(T('Team')) + teamSel('f-team', s.team) + '</label>' +
+            '<label class="f">' + E(T('Role')) + '<input type="text" class="f-role" value="' + E(x.role || '') + '" placeholder="' + E(T('Role (e.g. Head chef)')) + '" maxlength="60"></label>' +
+            '<label class="f">' + E(T('Contract hours a week')) + '<input type="text" inputmode="decimal" data-num="1" class="f-hours" value="' + Number(s.contract_hours) + '"></label>' +
+            '<label class="f">' + E(T('Annual leave days a year')) + '<input type="text" inputmode="decimal" data-num="1" class="f-annual" value="' + (x.annual_days != null ? x.annual_days : 21) + '"></label></div>' +
+            '<div><div class="small" style="font-weight:700;margin-bottom:6px">' + E(T('Usual start time (used when the rota is empty; leave empty on days off)')) + '</div><div class="grid4" style="grid-template-columns:repeat(auto-fit,minmax(96px,1fr))">' +
+            [0, 1, 2, 3, 4, 5, 6].map(function (i) { var v = (s.start_times || {})[String(i + 1)] || ''; return '<label class="f">' + E(M.day(i)) + '<input type="time" class="f-st" data-d="' + (i + 1) + '" value="' + v + '"></label>'; }).join('') + '</div></div>' +
+            '<div class="row"><button class="btn" data-save="' + s.id + '">' + E(T('Save')) + '</button>' +
+            (conf ? '<span><b>' + E(T('Reset {n}\'s code?', { n: s.name })) + '</b> ' + E(T('They choose a new one the next time they open the app.')) + '</span><button class="btn warn" data-reset="' + s.id + '">' + E(T('Yes, reset')) + '</button><button class="btn ghost" data-cancel="1">' + E(T('Cancel')) + '</button>'
+              : (s.has_pin ? '<button class="btn ghost" data-askpin="' + s.id + '">' + E(T('Forgot the code? Reset it…')) + '</button>' : '')) +
+            (resets >= 2 ? ' <span class="tag blue">' + E(T('CODE RESET {n}× IN 30 DAYS', { n: resets })) + '</span>' : '') + '</div>' +
+            (notes.length ? '<details><summary>' + E(T('Notes')) + ' · ' + notes.length + '</summary><div class="stack" style="margin-top:10px;gap:6px">' + notes.map(function (n) {
+              var k = { late_accepted: T('Late, accepted'), warning: T('For a warning'), photo_flag: T('Photo marked'), general: T('Note') }[n.kind];
+              return '<div class="small"><b>' + E(n.ref_date ? M.shortDate(n.ref_date) : M.shortDate(M.dateKey(n.at))) + ' · ' + E(k) + '</b> ' + E(n.text) + ' <span class="muted">(' + E(n.by || '') + ')</span></div>'; }).join('') + '</div></details>' : '') +
+            '</div>';
+        }
+        h += '</div>';
+      });
+      h += '</div></div>';
     });
-    main.innerHTML = h + '</section>';
-    main.querySelector('#nadd').onclick = function () {
-      var n = main.querySelector('#nn').value.trim(); if (!n) { App.say(T('Type a name.')); return; }
+    h += '</section>';
+    if (gone.length) {
+      h += '<details class="pgone"' + (P.goneOpen ? ' open' : '') + '><summary>' + E(T('No longer here')) + ' · ' + gone.length + '</summary><div class="card plist" style="margin-top:12px">' +
+        gone.sort(function (a, b) { return a.name.localeCompare(b.name); }).map(function (s) {
+          return '<div class="prow"><div class="phead" style="cursor:default"><span class="thumb" style="opacity:.6">' + E(s.name.slice(0, 1).toUpperCase()) + '</span><span class="pwho"><b class="serif">' + E(s.name) + '</b><span>' + E((extra[s.id] || {}).role || T(s.team)) + '</span></span></div>' +
+            '<div class="pacts"><button class="btn ghost sm" data-back="' + s.id + '">' + E(T('Bring back')) + '</button></div></div>'; }).join('') + '</div></details>';
+    }
+    main.innerHTML = h;
+    var gd = main.querySelector('.pgone'); if (gd) gd.addEventListener('toggle', function () { P.goneOpen = gd.open; });
+    function add() {
+      var n = main.querySelector('#nn').value.trim(), role = main.querySelector('#nrole').value.trim(), b = main.querySelector('#nadd');
+      if (!n) { App.say(T('Type a name.')); main.querySelector('#nn').focus(); return; }
       if (d.staff.some(function (s) { return s.active && s.name.toLowerCase() === n.toLowerCase(); })) { App.say(T('There is already an active {n}. Add a surname initial.', { n: n })); return; }
-      this.disabled = true;
-      App.call('mare_mgr_staff_save', { p: { name: n, team: main.querySelector('#nteam').value } }).then(function (r) { if (r) { App.say(T('Added {n}.', { n: n })); App.reload(); } });
-    };
+      b.disabled = true;
+      App.call('mare_mgr_staff_save', { p: { name: n, team: main.querySelector('#nteam').value } }).then(function (r) {
+        if (!r) { b.disabled = false; return null; }
+        P.added = P.open = r.id; P.rm = null;
+        return Promise.resolve(role ? App.call('mare_m_staff_extra', { p_staff: r.id, p_role: role, p_annual: 21 }) : null).then(function () { return true; });
+      }).then(function (r) { if (r) App.render().then(function () { var el = document.querySelector('.prow.open'); if (el) el.scrollIntoView({ block: 'center' }); }); });
+    }
+    main.querySelector('#nadd').onclick = add;
+    App.on(main, '.padd input', function (i, e) { if (e.key === 'Enter') add(); }, 'keydown');
+    App.on(main, '[data-open]', function (b) { var id = b.getAttribute('data-open'); P.open = P.open === id ? null : id; P.rm = P.confirm = P.added = null; App.reload(); });
+    App.on(main, '[data-rm]', function (b) { P.rm = b.getAttribute('data-rm'); P.confirm = P.added = null; App.reload(); });
+    App.on(main, '[data-rmyes]', function (b) {
+      var id = b.getAttribute('data-rmyes'), nm = App.staffName(id); b.disabled = true;
+      App.call('mare_mgr_staff_save', { p: { id: id, active: false } }).then(function (r) { P.rm = null; if (r) { if (P.open === id) P.open = null; P.goneOpen = true; App.say(T('{n} removed. Bring back is under “No longer here”.', { n: nm })); App.reload(); } else b.disabled = false; });
+    });
+    App.on(main, '[data-back]', function (b) {
+      var id = b.getAttribute('data-back'), nm = App.staffName(id); b.disabled = true;
+      if (d.staff.some(function (s) { return s.active && s.id !== id && s.name.toLowerCase() === nm.toLowerCase(); })) { App.say(T('There is already an active {n}. Add a surname initial.', { n: nm })); b.disabled = false; return; }
+      App.call('mare_mgr_staff_save', { p: { id: id, active: true } }).then(function (r) { if (r) { App.say(T('{n} is back in the team.', { n: nm })); App.reload(); } else b.disabled = false; });
+    });
     App.on(main, '[data-save]', function (b) {
-      var c = b.closest('.card'), st = {};
+      var c = b.closest('.prow'), st = {};
       Array.prototype.forEach.call(c.querySelectorAll('.f-st'), function (i) { st[i.getAttribute('data-d')] = i.value || null; });
       var hrs = M.num(c.querySelector('.f-hours').value), ann = M.num(c.querySelector('.f-annual').value);
       if (!(hrs >= 0 && hrs <= 84)) { App.say(T('Contract hours must be between 0 and 84.')); return; }
       b.disabled = true;
       App.call('mare_mgr_staff_save', { p: { id: b.getAttribute('data-save'), name: c.querySelector('.f-name').value.trim(), team: c.querySelector('.f-team').value,
-        active: c.querySelector('.f-active').checked, contract_hours: hrs, start_times: st } }).then(function (r) {
+        contract_hours: hrs, start_times: st } }).then(function (r) {
         if (!r) { b.disabled = false; return null; }
         return App.call('mare_m_staff_extra', { p_staff: b.getAttribute('data-save'), p_role: c.querySelector('.f-role').value.trim(), p_annual: ann == null ? 21 : Math.round(ann) });
       }).then(function (r) { if (r) { App.say(T('Saved.')); App.reload(); } });
     });
     App.on(main, '[data-askpin]', function (b) { P.confirm = b.getAttribute('data-askpin'); App.reload(); });
-    App.on(main, '[data-cancel]', function () { P.confirm = null; App.reload(); });
+    App.on(main, '[data-cancel]', function () { P.confirm = P.rm = null; App.reload(); });
     App.on(main, '[data-reset]', function (b) { b.disabled = true; App.call('mare_mgr_reset_pin', { p_staff: b.getAttribute('data-reset') }).then(function (r) { P.confirm = null; if (r) { App.say(T('Code reset.')); App.reload(); } }); });
     App.on(main, '[data-copy]', function (b) {
       var v = b.getAttribute('data-copy');
-      (navigator.clipboard ? navigator.clipboard.writeText(v) : Promise.reject()).then(function () { App.say(T('Copied.')); }, function () { b.closest('details').querySelector('input').select(); App.say(T('Selected. Copy it now.')); });
+      (navigator.clipboard ? navigator.clipboard.writeText(v) : Promise.reject()).then(function () { App.say(T('Copied.')); }, function () { b.closest('.plink').querySelector('input').select(); App.say(T('Selected. Copy it now.')); });
     });
     App.on(main, '[data-newlink]', function (b) { b.disabled = true; App.call('mare_mgr_phone_link_new', { p_staff: b.getAttribute('data-newlink') }).then(function (r) { if (r) { App.say(T('New link made. The old one no longer works.')); App.reload(); } }); });
   }

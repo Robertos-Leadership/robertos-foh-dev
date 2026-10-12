@@ -178,6 +178,26 @@ details summary{cursor:pointer;font-size:12px;letter-spacing:1.5px;font-weight:7
 .ticks{display:flex;flex-wrap:wrap;gap:8px 16px;padding:14px 22px 18px;background:rgba(246,241,234,.7);border-bottom:1px solid var(--line-2)}
 .ticks label{display:flex;align-items:center;gap:6px;font-size:15px}
 .ticks input{width:18px;height:18px}
+/* People and Logins: one line per person */
+.side-ask{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.4);color:#fff;border-radius:8px;padding:10px 12px;font-size:13px;font-weight:700;text-align:left;min-height:44px;line-height:1.3}
+.side-ask:hover{background:rgba(255,255,255,.16)}
+.card.plist{padding:0}
+.prow{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;padding:12px 18px;border-bottom:1px solid var(--line-2)}
+.prow:last-child{border-bottom:0}
+.prow.open{background:rgba(246,241,234,.6)}
+.phead{flex:1 1 260px;min-width:0;display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;background:none;border:0;padding:0;text-align:left;min-height:48px}
+.pwho{flex:1 1 150px;min-width:0;display:flex;flex-direction:column}
+.pwho b{font-size:23px;font-weight:500;line-height:1.15;overflow-wrap:anywhere}
+.pwho span{font-size:14px;color:var(--muted);overflow-wrap:anywhere}
+.pacts{display:flex;flex-wrap:wrap;gap:8px}
+.pacts .btn.sm,.pconf .btn.sm{min-height:40px}
+.pconf{flex:1 1 100%;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px 16px;background:var(--red-bg);border:1px solid rgba(138,46,46,.3);border-radius:10px;padding:12px 14px}
+.pconf.ok{background:var(--green-bg);border-color:rgba(40,92,54,.3)}
+.card > .pconf{margin-top:4px}
+.pbody{flex:1 1 100%;padding:8px 0 6px}
+.pbody .grid4{align-items:end}
+.padd > *{min-width:0}
+.pgone > summary{padding:6px 0}
 /* sign-in page */
 .hero{position:relative;color:#fff;display:flex;flex-direction:column;background:var(--rail) url('mare-hero.jpg') center 60%/cover no-repeat}
 .hero::before{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(8,30,33,.6),rgba(8,30,33,.8))}
@@ -201,6 +221,15 @@ details summary{cursor:pointer;font-size:12px;letter-spacing:1.5px;font-weight:7
   main{padding:20px 16px 60px}
   .tgrid{grid-template-columns:1fr;gap:26px}
   .figs b{font-size:34px}
+  .padd > input,.padd > select,.padd > .btn{flex:1 1 100%!important;width:100%}
+  .prow{padding:12px 14px}
+  .pacts{flex:1 1 100%}
+  .pacts .btn{flex:1 1 auto}
+  .pconf .row{flex:1 1 100%}
+  .pconf .row .btn{flex:1 1 auto}
+  .card{padding:16px}
+  .card.plist,.card.list{padding:0}
+  h2{font-size:27px}
 }
 
 /* voice notes, files, dictation */
@@ -261,13 +290,14 @@ table.sheet tfoot th, table.sheet tfoot td{border-top:2px solid var(--gold, #A88
 <div id="app"><div class="wrap muted" style="padding-top:40px">Loading…</div></div>
 <div class="status" id="status" role="status"></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="mare-i18n.js?v=20261012a"></script>
+<script src="mare-i18n.js?v=20261012c"></script>
 <script src="mare-common.js?v=20261009g"></script>
 <script src="mare-media.js?v=20261008d"></script>
-<script src="mare-mgr.js?v=20261009i"></script>
+<script src="mare-mgr.js?v=20261012c"></script>
 <script src="mare-mgr-ops.js?v=20261009a"></script>
 <script src="mare-mgr-back.js?v=20261008d"></script>
-<script src="mare-mgr-viewas.js?v=20261009i"></script>
+<script src="mare-mgr-logins.js?v=20261012c"></script>
+<script src="mare-mgr-viewas.js?v=20261012c"></script>
 <script src="mare-mgr-activity.js?v=20261009i"></script>
 <script>MareApp.start();</script>
 <!-- "Tell us" — the same button as the Kitchen and FOH apps, into the same inbox
