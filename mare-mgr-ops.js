@@ -181,14 +181,22 @@
           var x = f.shifts.filter(function (h) { return h.staff_id === s.id && h.date === d; })[0];
           return (x && x.kind === 'work') || ov.punches.some(function (p) { return p.staff_id === s.id && !p.voided && M.dateKey(p.at) === d; });
         });
+        // Simple first (Francesco, 12 Oct 2026): the covers and ONE box. The other lines are folded
+        // away, and open by themselves when one of them has something in it.
+        var more = BF.filter(function (q) { return q[2] === 't' && q[0] !== 'message'; }), anyMore = more.some(function (q) { return b[q[0]]; });
         var h = '<section class="stack"><div class="row between"><h2 class="serif">' + E(M.niceDate(d)) + '</h2>' + datePicker('bd', d) + '</div>' +
-          '<div class="card stack"><div class="grid2">' + BF.map(function (q) {
-            return q[2] === 'n' ? '<label class="f">' + E(T(q[1])) + '<input type="text" inputmode="decimal" data-num="1" min="0" data-f="' + q[0] + '" value="' + (b[q[0]] != null ? b[q[0]] : '') + '"></label>'
-              : '<label class="f" style="grid-column:1/-1">' + E(T(q[1])) + '<textarea data-f="' + q[0] + '">' + E(b[q[0]] || '') + '</textarea></label>';
-          }).join('') + '</div><div class="row"><button class="btn" id="bs">' + E(T('Save the briefing')) + '</button>' +
+          '<div class="card stack"><div class="grid2">' + BF.filter(function (q) { return q[2] === 'n'; }).map(function (q) {
+            return '<label class="f">' + E(T(q[1])) + '<input type="text" inputmode="decimal" data-num="1" min="0" data-f="' + q[0] + '" value="' + (b[q[0]] != null ? b[q[0]] : '') + '"></label>';
+          }).join('') + '</div>' +
+          '<label class="f">' + E(T('Today\'s briefing')) + '<textarea class="bmain" data-f="message" placeholder="' + E(T('Write it here, or press Dictate and say it.')) + '">' + E(b.message || '') + '</textarea></label>' +
+          '<details class="bmore"' + (anyMore ? ' open' : '') + '><summary>' + E(T('More lines: specials, not available, allergies, bookings')) + '</summary><div class="grid2" style="margin-top:12px">' + more.map(function (q) {
+            return '<label class="f">' + E(T(q[1])) + '<textarea data-dict="1" data-f="' + q[0] + '">' + E(b[q[0]] || '') + '</textarea></label>';
+          }).join('') + '</div></details>' +
+          '<div class="row"><button class="btn" id="bs">' + E(T('Save the briefing')) + '</button>' +
           (prev && !b.date ? '<button class="btn ghost" id="bc">' + E(T('Start from yesterday\'s')) + '</button>' : '') +
           (b.updated_by ? '<span class="small muted">' + E(T('Last saved by {w} at {t}', { w: b.updated_by, t: M.hhmm(b.updated_at) })) + '</span>' : '') + '</div></div>' +
-          App.mediaBlock('briefing', d, T('The team plays and opens these from the briefing on the tablet and on their phones.')) + '</section>';
+          '<details class="bvoice"><summary>' + E(T('Voice note & files')) + '</summary><div style="margin-top:12px">' +
+          App.mediaBlock('briefing', d, T('The team plays and opens these from the briefing on the tablet and on their phones.')) + '</div></details></section>';
         h += '<section class="stack"><h2 class="serif">' + E(T('Who has read it')) + '</h2><div class="card row">';
         var readIds = reads.map(function (x) { return x.staff_id; });
         h += on.length ? on.map(function (s) { var rd = reads.filter(function (x) { return x.staff_id === s.id; })[0];
@@ -212,6 +220,7 @@
               var cur = el.value.trim();
               if (q[2] === 'n' || !cur || v.indexOf(cur) === 0) el.value = v; else if (cur.indexOf(v) < 0) el.value = cur + '\n' + v; else return;
               el.classList.add('filled'); n++;
+              if (el.closest('.bmore')) el.closest('.bmore').open = true;
             });
             if (!n) { App.say(T('Nothing in the voice note matched a line of the briefing.')); return; }
             main.querySelector('.card').scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -219,6 +228,9 @@
           });
         };
         App.bindMedia(main); MareMedia.dictateAll(main);
+        // A day that already has a voice note or a file shows them without a tap.
+        var bv = main.querySelector('.bvoice'), ml = bv && bv.querySelector('.mlist');
+        if (ml) new MutationObserver(function () { if (ml.children.length) bv.open = true; }).observe(ml, { childList: true });
         bindDate(main, 'bd', function (v) { B.d = v; });
         var bc = main.querySelector('#bc'); if (bc) bc.onclick = function () { BF.forEach(function (q) { var el = main.querySelector('[data-f=' + q[0] + ']'); if (q[2] !== 'n' && prev[q[0]]) el.value = prev[q[0]]; }); };
         main.querySelector('#bs').onclick = function () {
@@ -250,7 +262,6 @@
         var h = '<section class="stack"><div class="row between"><h2 class="serif">' + E(M.niceDate(d)) + '</h2>' + datePicker('cd', d) + '</div>' +
           '<div class="card stack"><div class="grid4">' + CF.map(function (q) { return '<label class="f">' + E(T(q[1])) + '<input type="text" inputmode="decimal" data-num="1" step="' + (q[2] === 'n' ? '1' : '0.01') + '" min="0" data-f="' + q[0] + '" value="' + (c[q[0]] != null ? c[q[0]] : '') + '"></label>'; }).join('') + '</div>' +
           '<div class="kpis" id="ck"></div>' +
-          '<div class="grid2"><label class="f">' + E(T('Weather')) + '<input type="text" data-f="weather" value="' + E(c.weather || '') + '"></label></div>' +
           '<label class="f">' + E(T('Incidents and complaints')) + '<textarea data-f="incidents">' + E(c.incidents || '') + '</textarea></label>' +
           '<label class="f">' + E(T('Notes')) + '<textarea data-f="notes">' + E(c.notes || '') + '</textarea></label>' +
           '<div class="row"><button class="btn" id="cs">' + E(T('Save the closing report')) + '</button>' +
@@ -274,7 +285,7 @@
           var row = { date: d }, btn = this;
           try { CF.forEach(function (q) { var x = vStrict(q[0]); row[q[0]] = x == null ? null : (q[2] === 'n' ? Math.round(x) : Math.round(x * 100) / 100); }); }
           catch (err) { M.toast(err.message); return; }
-          ['weather', 'incidents', 'notes'].forEach(function (k) { row[k] = main.querySelector('[data-f=' + k + ']').value.trim() || null; });
+          ['incidents', 'notes'].forEach(function (k) { row[k] = main.querySelector('[data-f=' + k + ']').value.trim() || null; });
           btn.disabled = true;
           App.save('mare_closing', row).then(function (r) { btn.disabled = false; if (r) { App.say(T('Closing report saved.')); App.reload(); } });
         };
@@ -310,8 +321,8 @@
       main.querySelector('#mx').onclick = function () {
         var btn = this; btn.disabled = true;
         App.xlsx(function () {
-          var aoa = [[T('Date')].concat(CF.map(function (q) { return T(q[1]); })).concat([T('Total sales'), T('Weather'), T('Incidents and complaints'), T('Notes')])];
-          rows.forEach(function (c) { aoa.push([c.date].concat(CF.map(function (q) { return c[q[0]] != null ? +c[q[0]] : ''; })).concat([salesOf(c), c.weather || '', c.incidents || '', c.notes || ''])); });
+          var aoa = [[T('Date')].concat(CF.map(function (q) { return T(q[1]); })).concat([T('Total sales'), T('Incidents and complaints'), T('Notes')])];
+          rows.forEach(function (c) { aoa.push([c.date].concat(CF.map(function (q) { return c[q[0]] != null ? +c[q[0]] : ''; })).concat([salesOf(c), c.incidents || '', c.notes || ''])); });
           var wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), T('Closing')); XLSX.writeFile(wb, 'Robertos-Mare-closing-' + ms.slice(0, 7) + '.xlsx'); btn.disabled = false;
         }, btn);
       };

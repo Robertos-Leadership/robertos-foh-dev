@@ -198,6 +198,10 @@ details summary{cursor:pointer;font-size:12px;letter-spacing:1.5px;font-weight:7
 .pbody .grid4{align-items:end}
 .padd > *{min-width:0}
 .pgone > summary{padding:6px 0}
+/* briefing: one box first */
+.bmain{min-height:170px}
+.bmore textarea{min-height:66px}
+.bmore > summary,.bvoice > summary{padding:6px 0;min-height:32px}
 /* sign-in page */
 .hero{position:relative;color:#fff;display:flex;flex-direction:column;background:var(--rail) url('mare-hero.jpg') center 60%/cover no-repeat}
 .hero::before{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(8,30,33,.6),rgba(8,30,33,.8))}
@@ -290,11 +294,11 @@ table.sheet tfoot th, table.sheet tfoot td{border-top:2px solid var(--gold, #A88
 <div id="app"><div class="wrap muted" style="padding-top:40px">Loading…</div></div>
 <div class="status" id="status" role="status"></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="mare-i18n.js?v=20261012c"></script>
+<script src="mare-i18n.js?v=20261012d"></script>
 <script src="mare-common.js?v=20261009g"></script>
 <script src="mare-media.js?v=20261008d"></script>
 <script src="mare-mgr.js?v=20261012c"></script>
-<script src="mare-mgr-ops.js?v=20261009a"></script>
+<script src="mare-mgr-ops.js?v=20261012d"></script>
 <script src="mare-mgr-back.js?v=20261008d"></script>
 <script src="mare-mgr-logins.js?v=20261012c"></script>
 <script src="mare-mgr-viewas.js?v=20261012c"></script>

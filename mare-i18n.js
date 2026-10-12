@@ -4,6 +4,8 @@
    Words kept the same everywhere: DOLAZAK/ODLAZAK (clock in/out), šifra (code),
    smjena (shift), raspored (rota), brifing, kontrolna lista (checklist). */
 window.MARE_ME = {
+"Write it here, or press Dictate and say it.": "Napišite ovdje, ili pritisnite Diktiraj i izgovorite.",
+"More lines: specials, not available, allergies, bookings": "Još stavki: specijaliteti, nema danas, alergije, rezervacije",
 "Ask for a change or a new module": "Zatražite izmjenu ili novi modul",
 "No password? Open the link from your email: it signs you in.": "Nemate lozinku? Otvorite link iz emaila: on Vas prijavljuje.",
 "{n}'s own app, for their phone. Send it to {n} only. The first time they choose a 4-digit code.": "Lična aplikacija za telefon: {n}. Pošaljite je samo toj osobi. Prvi put bira šifru od 4 cifre.",
