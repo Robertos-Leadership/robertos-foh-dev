@@ -84,7 +84,7 @@ Deno.serve(async (req) => {
       if (ins.error) throw new Error(ins.error.message);
       return APP + "?try=" + tok;
     };
-    const send = async (name: string, link: string, note: string, copyMe: boolean, extraCc: string[]) => {
+    const send = async (name: string, link: string, note: string, copyMe: boolean, extraCc: string[], sign: string) => {
       if (!RESEND_API_KEY) return "no mail key";
       const test = /^zz/.test(email) || /^zz/i.test(name);
       const first = name.trim().split(/\s+/)[0] || "";
@@ -93,13 +93,13 @@ Deno.serve(async (req) => {
         "It works on the laptop and on the phone. Open it once on each and keep it: on the phone you can add it to the home screen.",
         "The link is yours only. Please do not forward it.",
       ];
-      const noteT = note.trim().slice(0, 3000);
-      const text = "Dear " + first + ",\n\n" + (noteT ? noteT + "\n\n" : "") + lines[0] + "\n" + link + "\n\n" + lines[1] + "\n\n" + lines[2] + "\n";
+      const noteT = note.trim().slice(0, 3000), signT = sign.trim().slice(0, 200);
+      const text = "Dear " + first + ",\n\n" + (noteT ? noteT + "\n\n" : "") + lines[0] + "\n" + link + "\n\n" + lines[1] + "\n\n" + lines[2] + "\n" + (signT ? "\n" + signT + "\n" : "");
       const p = (t: string) => '<p style="margin:0 0 14px">' + esc(t).replace(/\n/g, "<br>") + "</p>";
       const html = '<div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.55;color:#1B2426;max-width:560px">' +
         p("Dear " + first + ",") + (noteT ? p(noteT) : "") + p(lines[0]) +
         '<p style="margin:0 0 18px"><a href="' + esc(link) + '" style="display:inline-block;background:#0E4A50;color:#fff;padding:12px 20px;border-radius:10px;font-weight:bold;text-decoration:none">Open Roberto\'s Mare</a></p>' +
-        '<p style="margin:0 0 14px;font-size:13px;color:#4B5557;word-break:break-all">' + esc(link) + "</p>" + p(lines[1]) + p(lines[2]) + "</div>";
+        '<p style="margin:0 0 14px;font-size:13px;color:#4B5557;word-break:break-all">' + esc(link) + "</p>" + p(lines[1]) + p(lines[2]) + (signT ? p(signT) : "") + "</div>";
       // A copy to the admin who sent it; the FOH Admin (or the system) may name the copies instead.
       const cc = test ? [] : extraCc.length ? extraCc.filter((x) => x !== email) : copyMe && me.includes("@") && me !== email ? [me] : [];
       const r = await fetch("https://api.resend.com/emails", {
@@ -141,7 +141,7 @@ Deno.serve(async (req) => {
       if (act === "link") return json({ ok: true, link });
       const extraCc = fohAdmin && Array.isArray(body.cc) ? body.cc.map((x: unknown) => String(x).trim().toLowerCase()).filter((x: string) => /^[^@\s]+@[^@\s]+\.[^@\s.]{2,}$/.test(x)).slice(0, 5) : [];
       // Only the FOH Admin (or the system) may add words of his own above the link.
-      const err = await send(u.name || email, link, fohAdmin ? String(body.note || "") : "", body.copy_me !== false, extraCc);
+      const err = await send(u.name || email, link, fohAdmin ? String(body.note || "") : "", body.copy_me !== false, extraCc, fohAdmin ? String(body.sign || "") : "");
       return err ? json({ ok: false, error: "mail: " + err, link }) : json({ ok: true, mailed: true, test: /^zz/.test(email) || /^zz/i.test(u.name || "") });
     }
     if (act === "remove") {
