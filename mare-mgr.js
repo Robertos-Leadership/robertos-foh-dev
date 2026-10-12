@@ -103,7 +103,7 @@
           App.S.token = v.data.session.access_token; App.S.email = (v.data.session.user.email || '').toLowerCase();
           // A Mare-only login chooses its own password before anything opens; then the link stops.
           if (App.S.setup) App.choosePassword(tryTok); else App.boot();
-        }, function () { App.signIn(T('This link no longer works. Sign in with your email and password, or ask your admin for a new link.')); });
+        }, function () { App.signIn(null, true); });
     } else
     sb.auth.getSession().then(function (x) {
       var s = x.data && x.data.session;
@@ -112,17 +112,25 @@
     });
     w.addEventListener('hashchange', function () { App.fromHash(); App.render(); });
   };
-  App.signIn = function (err) {
+  // A plain sign-in: email, password, one button. A dead link gets its own box that says what to
+  // do next; the rare things (first time, master code) are folded under a tap.
+  App.signIn = function (err, dead) {
     var a = document.getElementById('app');
     a.innerHTML = '<div class="hero" style="min-height:100vh;justify-content:center"><div class="hero-top"><span></span>' + M.langSwitch() + '</div>' +
       '<div style="padding:20px 16px 60px"><form class="signin card" id="f" style="color:var(--ink)">' +
       '<div class="row"><img src="mare-logo-teal.svg" alt="" style="width:56px;height:56px"><h2 class="serif">' + E(T('Sign in')) + '</h2></div>' +
-      '<p class="muted" style="margin:0">' + E(T('Use your Roberto\'s app account.')) + ' ' + E(T('First time, or forgot your password? Open the link in your email: it lets you choose a password.')) + '</p>' +
+      (dead ? '<div class="notice"><b>' + E(T('This link no longer works.')) + '</b>' +
+        '<span>' + E(T('The link in the email works one time only, to choose your password.')) + '</span>' +
+        '<span>' + E(T('Already chose your password? Sign in below with your email and that password.')) + '</span>' +
+        '<span>' + E(T('Not yet? Ask your admin to send you a new link.')) + '</span></div>'
+        : '<p class="muted" style="margin:0">' + E(T('With your email and your password.')) + '</p>') +
       '<label class="f" for="em">' + E(T('Email')) + '<input id="em" type="email" autocomplete="username" required></label>' +
       '<label class="f" for="pw">' + E(T('Password')) + '<input id="pw" type="password" autocomplete="current-password" required></label>' +
-      '<div class="err">' + E(err || '') + '</div><button class="btn" type="submit">' + E(T('Sign in')) + '</button>' +
-      '<div class="row" style="gap:10px;align-items:flex-end;border-top:1px solid var(--line);padding-top:14px;margin-top:4px"><label class="f" for="mc" style="flex:1">' + E(T('Or your master code')) +
-      '<input id="mc" type="text" inputmode="numeric" autocomplete="off" style="-webkit-text-security:disc"></label><button class="btn ghost" type="button" id="mcgo">' + E(T('Open')) + '</button></div></form></div></div>';
+      (err ? '<div class="err">' + E(err) + '</div>' : '') + '<button class="btn" type="submit">' + E(T('Sign in')) + '</button>' +
+      '<details><summary>' + E(T('First time, or forgot your password?')) + '</summary><div class="small muted" style="margin-top:8px;line-height:1.6">' +
+      E(T('Open the link in your email and choose a password. If the link does not work any more, ask your admin to send a new one.')) + '</div></details>' +
+      '<details><summary>' + E(T('I have a master code')) + '</summary><div class="row" style="gap:10px;align-items:flex-end;margin-top:10px"><label class="f" for="mc" style="flex:1">' + E(T('Master code')) +
+      '<input id="mc" type="text" inputmode="numeric" autocomplete="off" style="-webkit-text-security:disc"></label><button class="btn ghost" type="button" id="mcgo">' + E(T('Open')) + '</button></div></details></form></div></div>';
     // Master codes open everything (Francesco, 9 Oct 2026): the code signs in its holder's own login.
     document.getElementById('mcgo').onclick = function () {
       var c = document.getElementById('mc').value.trim(); if (!c) return;

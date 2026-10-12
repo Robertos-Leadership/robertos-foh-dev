@@ -84,24 +84,63 @@ Deno.serve(async (req) => {
       if (ins.error) throw new Error(ins.error.message);
       return APP + "?try=" + tok;
     };
-    const send = async (name: string, link: string, note: string, copyMe: boolean, extraCc: string[], sign: string, after: string) => {
+    // The email a login gets with its link. One clean layout (tables and inline styles only, so
+    // Outlook and Gmail draw it the same): a teal header, the greeting, three numbered steps, one
+    // button, then (when given) the modules as a two-column list, and the sign-off.
+    // extra = { note, modules: [{ group, items: [[name, text], …] }], outro, sign } — only the FOH Admin
+    // or the system may pass it; a Mare admin's mail is the standard one.
+    const send = async (name: string, link: string, copyMe: boolean, extraCc: string[], extra: any) => {
       if (!RESEND_API_KEY) return "no mail key";
       const test = /^zz/.test(email) || /^zz/i.test(name);
       const first = name.trim().split(/\s+/)[0] || "";
-      const lines = [
-        "This is your own link to the Roberto's Mare app. Open it and choose your password. The link works only until you have chosen it.",
-        "After that you sign in at https://robertos-foh-dev.pages.dev/mare.html with your email (" + email + ") and your password, on the laptop and on the phone. On the phone you can add it to the home screen.",
-        "The link is yours only. Please do not forward it.",
+      const str = (v: unknown, n: number) => String(v ?? "").trim().slice(0, n);
+      const note = str(extra?.note, 3000), outro = str(extra?.outro, 2000), sign = str(extra?.sign, 200);
+      const groups: { group: string; items: [string, string][] }[] = Array.isArray(extra?.modules)
+        ? extra.modules.slice(0, 12).map((g: any) => ({ group: str(g?.group, 60), items: (Array.isArray(g?.items) ? g.items : []).slice(0, 20).map((i: any) => [str(i?.[0], 60), str(i?.[1], 600)] as [string, string]) }))
+        : [];
+      const SITE = APP.replace(/^https:\/\//, "");
+      const steps = [
+        "Press the button below and choose your password.",
+        "From then on, sign in at " + SITE + " with your email (" + email + ") and your password.",
+        "It works on the laptop and on the phone. On the phone you can add it to the home screen.",
       ];
-      const noteT = note.trim().slice(0, 3000), signT = sign.trim().slice(0, 200), afterT = after.trim().slice(0, 8000);
-      const text = "Dear " + first + ",\n\n" + (noteT ? noteT + "\n\n" : "") + lines[0] + "\n" + link + "\n\n" + lines[1] + "\n\n" + lines[2] + "\n" + (afterT ? "\n" + afterT + "\n" : "") + (signT ? "\n" + signT + "\n" : "");
-      const p = (t: string) => '<p style="margin:0 0 14px">' + esc(t).replace(/\n/g, "<br>") + "</p>";
-      const html = '<div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.55;color:#1B2426;max-width:560px">' +
-        p("Dear " + first + ",") + (noteT ? p(noteT) : "") + p(lines[0]) +
-        '<p style="margin:0 0 18px"><a href="' + esc(link) + '" style="display:inline-block;background:#0E4A50;color:#fff;padding:12px 20px;border-radius:10px;font-weight:bold;text-decoration:none">Choose my password</a></p>' +
-        '<p style="margin:0 0 14px;font-size:13px;color:#4B5557;word-break:break-all">' + esc(link) + "</p>" + p(lines[1]) + p(lines[2]) +
-        afterT.split(/\n{2,}/).filter((x) => x.trim()).map((para) => '<p style="margin:0 0 14px">' + para.split("\n").map((ln) => { const m = /^([A-Z][A-Za-z&' -]{1,28}): (.+)$/.exec(ln); return m ? "<b>" + esc(m[1]) + "</b> &ndash; " + esc(m[2]) : esc(ln); }).join("<br>") + "</p>").join("") +
-        (signT ? p(signT) : "") + "</div>";
+      const foot = "The button works one time only, to choose your password. It is yours: please do not forward this email.";
+
+      // ── plain text ──
+      const paras = (t: string) => t.split(/\n{2,}/).map((x) => x.trim()).filter(Boolean);
+      let text = "Dear " + first + ",\n\n" + (note ? paras(note).join("\n\n") + "\n\n" : "") +
+        "HOW TO START\n" + steps.map((s, i) => (i + 1) + ". " + s).join("\n") + "\n\nChoose your password here:\n" + link + "\n\n";
+      if (groups.length) text += "WHAT IS INSIDE\n\n" + groups.map((g) => g.group.toUpperCase() + "\n" + g.items.map((i) => "- " + i[0] + ": " + i[1]).join("\n")).join("\n\n") + "\n\n";
+      if (outro) text += paras(outro).join("\n\n") + "\n\n";
+      if (sign) text += sign + "\n\n";
+      text += foot + "\n";
+
+      // ── html ──
+      const F = "font-family:Arial,Helvetica,sans-serif;", S = "font-family:Georgia,'Times New Roman',serif;";
+      const P = (t: string) => paras(t).map((x) => '<p style="' + F + 'margin:0 0 14px;font-size:15px;line-height:23px;color:#1B2426">' + esc(x).replace(/\n/g, "<br>") + "</p>").join("");
+      const H = (t: string) => '<p style="' + F + 'margin:0 0 12px;font-size:11px;line-height:16px;letter-spacing:2.5px;font-weight:bold;color:#A8834B;text-transform:uppercase">' + esc(t) + "</p>";
+      const stepRows = steps.map((s, i) =>
+        '<tr><td width="34" valign="top" style="padding:0 0 10px"><div style="' + F + 'width:24px;height:24px;line-height:24px;border-radius:12px;background:#0E4A50;color:#ffffff;font-size:13px;font-weight:bold;text-align:center">' + (i + 1) + "</div></td>" +
+        '<td valign="top" style="' + F + 'padding:1px 0 10px;font-size:15px;line-height:22px;color:#1B2426">' + esc(s) + "</td></tr>").join("");
+      const modRows = groups.map((g) =>
+        '<tr><td colspan="2" style="' + F + 'padding:18px 0 6px;font-size:11px;line-height:16px;letter-spacing:2px;font-weight:bold;color:#0E4A50;text-transform:uppercase;border-bottom:1px solid #E4DBCD">' + esc(g.group) + "</td></tr>" +
+        g.items.map((i) => '<tr><td width="150" valign="top" style="' + F + 'padding:9px 12px 9px 0;font-size:14px;line-height:20px;font-weight:bold;color:#1B2426;border-bottom:1px solid #EFE8DD">' + esc(i[0]) + "</td>" +
+          '<td valign="top" style="' + F + 'padding:9px 0;font-size:14px;line-height:20px;color:#4B5557;border-bottom:1px solid #EFE8DD">' + esc(i[1]) + "</td></tr>").join("")).join("");
+      const html = '<!doctype html><html><body style="margin:0;padding:0;background:#F6F1EA">' +
+        '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#F6F1EA"><tr><td align="center" style="padding:24px 12px">' +
+        '<table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width:600px;max-width:100%;background:#ffffff;border:1px solid #E4DBCD">' +
+        '<tr><td align="center" style="background:#0E3B3F;padding:26px 24px 22px"><div style="' + S + 'font-size:26px;line-height:30px;color:#ffffff">Roberto&rsquo;s Mare</div>' +
+        '<div style="' + F + 'margin-top:6px;font-size:10px;line-height:14px;letter-spacing:3.5px;color:#C9A46A">PORTO MONTENEGRO</div></td></tr>' +
+        '<tr><td style="padding:30px 32px 8px">' + P("Dear " + first + ",") + (note ? P(note) : "") + "</td></tr>" +
+        '<tr><td style="padding:8px 32px 0">' + H("How to start") + '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">' + stepRows + "</table></td></tr>" +
+        '<tr><td align="center" style="padding:14px 32px 6px"><a href="' + esc(link) + '" style="' + F + 'display:inline-block;background:#0E4A50;color:#ffffff;padding:14px 30px;border-radius:6px;font-size:14px;letter-spacing:1px;font-weight:bold;text-decoration:none">CHOOSE MY PASSWORD</a></td></tr>' +
+        '<tr><td align="center" style="' + F + 'padding:8px 32px 22px;font-size:12px;line-height:18px;color:#6B7375">If the button does not open, copy this address into your browser:<br><span style="word-break:break-all;color:#0E4A50">' + esc(link) + "</span></td></tr>" +
+        (groups.length ? '<tr><td style="padding:8px 32px 6px;border-top:1px solid #E4DBCD"><div style="height:18px;line-height:18px;font-size:0">&nbsp;</div>' + H("What is inside") +
+          '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:-12px">' + modRows + "</table></td></tr>" : "") +
+        ((outro || sign) ? '<tr><td style="padding:22px 32px 10px">' + (outro ? P(outro) : "") + (sign ? P(sign) : "") + "</td></tr>" : "") +
+        '<tr><td style="' + F + 'background:#FBF7F1;border-top:1px solid #E4DBCD;padding:16px 32px;font-size:12px;line-height:18px;color:#6B7375">' + esc(foot) + "</td></tr>" +
+        "</table></td></tr></table></body></html>";
+
       // A copy to the admin who sent it; the FOH Admin (or the system) may name the copies instead.
       const cc = test ? [] : extraCc.length ? extraCc.filter((x) => x !== email) : copyMe && me.includes("@") && me !== email ? [me] : [];
       const r = await fetch("https://api.resend.com/emails", {
@@ -142,8 +181,8 @@ Deno.serve(async (req) => {
       const link = await mint();
       if (act === "link") return json({ ok: true, link });
       const extraCc = fohAdmin && Array.isArray(body.cc) ? body.cc.map((x: unknown) => String(x).trim().toLowerCase()).filter((x: string) => /^[^@\s]+@[^@\s]+\.[^@\s.]{2,}$/.test(x)).slice(0, 5) : [];
-      // Only the FOH Admin (or the system) may add words of his own above the link.
-      const err = await send(u.name || email, link, fohAdmin ? String(body.note || "") : "", body.copy_me !== false, extraCc, fohAdmin ? String(body.sign || "") : "", fohAdmin ? String(body.after || "") : "");
+      // Only the FOH Admin (or the system) may add words of his own and the list of modules.
+      const err = await send(u.name || email, link, body.copy_me !== false, extraCc, fohAdmin ? body.extra : null);
       return err ? json({ ok: false, error: "mail: " + err, link }) : json({ ok: true, mailed: true, test: /^zz/.test(email) || /^zz/i.test(u.name || "") });
     }
     if (act === "remove") {

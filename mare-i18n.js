@@ -4,6 +4,15 @@
    Words kept the same everywhere: DOLAZAK/ODLAZAK (clock in/out), šifra (code),
    smjena (shift), raspored (rota), brifing, kontrolna lista (checklist). */
 window.MARE_ME = {
+"This link no longer works.": "Ovaj link više ne radi.",
+"The link in the email works one time only, to choose your password.": "Link iz emaila radi samo jednom, da izaberete lozinku.",
+"Already chose your password? Sign in below with your email and that password.": "Već ste izabrali lozinku? Prijavite se ispod emailom i tom lozinkom.",
+"Not yet? Ask your admin to send you a new link.": "Još niste? Tražite od admina da Vam pošalje novi link.",
+"With your email and your password.": "Vašim emailom i lozinkom.",
+"First time, or forgot your password?": "Prvi put, ili ste zaboravili lozinku?",
+"Open the link in your email and choose a password. If the link does not work any more, ask your admin to send a new one.": "Otvorite link iz emaila i izaberite lozinku. Ako link više ne radi, tražite od admina da pošalje novi.",
+"I have a master code": "Imam glavnu šifru",
+"Master code": "Glavna šifra",
 "This link no longer works. Sign in with your email and password, or ask your admin for a new link.": "Ovaj link više ne radi. Prijavite se emailom i lozinkom, ili tražite novi link od admina.",
 "Choose your password": "Izaberite lozinku",
 "From now on you sign in with your email and this password. At least 8 characters.": "Od sada se prijavljujete emailom i ovom lozinkom. Najmanje 8 karaktera.",
