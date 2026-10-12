@@ -25,7 +25,7 @@
 // So each day is also read from Simphony itself by the weekly reconciliation into `biz_lunch_sim`
 // (FOH db, authenticated read). Once a day is there, its menus, paid vs comped, net, courses and
 // checks on this screen are Simphony's; SevenRooms stays only as the bookings, folded.
-var BL = { week: 0, nights: {}, loading: {}, failed: {}, sim: {}, simph: {}, simKey: '', pick: null, open: {}, kick: 0 };
+var BL = { week: 0, nights: {}, loading: {}, failed: {}, sim: {}, simph: {}, simKey: '', pick: null, open: {}, kick: 0, all: null, allState: 'idle' };
 
 function blEsc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function blToday(){ return (typeof chkToday==='function') ? chkToday().iso : new Date(Date.now()+4*3600000).toISOString().slice(0,10); }
@@ -165,13 +165,45 @@ async function blLoadSim(dates){
   blRepaint();
 }
 
+// Since launch (12 Oct 2026): every day the reconciliation has read from Simphony, in one read.
+// The first row's day IS the launch day, so nothing here is typed in.
+async function blLoadAll(){
+  try {
+    var r = await sb.from('biz_lunch_sim').select('day,menus,menus_comp,menu_net').order('day');
+    if(r.error) throw r.error;
+    BL.all = r.data || []; BL.allState = 'ok';
+  } catch(e){ BL.allState = 'failed'; }
+  blRepaint();
+}
+// The running total: Simphony's checked days, plus the bookings for the days after the last
+// checked one (the "tail"), which are read like any other unchecked day.
+function blToDate(today){
+  var a = BL.all; if(!a || !a.length) return null;
+  var t = { first: String(a[0].day).slice(0,10), last: String(a[a.length-1].day).slice(0,10), menus: 0, comped: 0, net: 0,
+            tail: [], want: [], bad: [], pending: 0, tailMenus: 0, tailNet: 0, capped: false };
+  a.forEach(function(r){ t.menus += Number(r.menus)||0; t.comped += Number(r.menus_comp)||0; t.net += Number(r.menu_net)||0; });
+  for(var d = blAdd(t.last, 1); d <= today; d = blAdd(d, 1)){
+    if(t.tail.length >= 21){ t.capped = true; break; }
+    t.tail.push(d);
+    var n = BL.nights[d];
+    if(n){ t.tailMenus += n.menus; t.tailNet += blNet(n.menuGross, d); }
+    else if(BL.failed[d]) t.bad.push(d);
+    else { t.pending++; if(!BL.loading[d]) t.want.push(d); }
+  }
+  return t;
+}
+
 function blRepaint(){
   if(typeof state === 'object' && state && state.currentTab === 'bizlunch' && typeof renderMain === 'function') renderMain();
 }
 function blStep(n){ BL.week = n === 0 ? 0 : Math.min(0, BL.week + n); BL.pick = null; BL.open = {}; blRepaint(); }
 function blPick(iso){ BL.pick = (BL.pick === iso) ? null : iso; BL.open = {}; blRepaint(); }
 function blToggle(i){ BL.open[i] = !BL.open[i]; blRepaint(); }
-function blRefresh(){ BL.simKey = ''; var d = blWeekDates(BL.week); blLoad(d, true); blLoadSim(d); }
+function blRefresh(){
+  BL.simKey = ''; if(BL.allState !== 'loading') BL.allState = 'idle';
+  var t = blToDate(blToday()); if(t) t.bad.forEach(function(x){ delete BL.failed[x]; });
+  var d = blWeekDates(BL.week); blLoad(d, true); blLoadSim(d);
+}
 
 function blSum(days){
   var s = { menus:0, menuNet:0, extraNet:0, tables:0, guests:0, dishes:{}, sold:0, simCovers:0, simDays:0, menusOnSimDays:0,
@@ -266,6 +298,9 @@ function renderBizLunch(){
   var need = dates.some(function(d){ return d <= today && !BL.loading[d] && (!BL.nights[d] || (d === today && Date.now() - BL.kick > 120000)); });
   if(need){ BL.kick = Date.now(); setTimeout(function(){ blLoad(dates); }, 0); }
   if(BL.simKey !== dates[0]+'|'+dates[6]) setTimeout(function(){ blLoadSim(dates); }, 0);
+  if(BL.allState === 'idle' && typeof sb !== 'undefined'){ BL.allState = 'loading'; setTimeout(blLoadAll, 0); }
+  var TD = blToDate(today);
+  if(TD && TD.want.length) setTimeout(function(){ blLoad(TD.want); }, 0);
 
   var V = {}; dates.forEach(function(d){ V[d] = blView(d); });
   var nights = dates.map(function(d){ return V[d]; });
@@ -303,6 +338,17 @@ function renderBizLunch(){
     return '<span'+(d===today?' class="today"':'')+'>'+blEsc(blDayName(d))+' <b>'+v+'</b>'+(n && n.checked ? ' <i class="bl-ok" title="Checked in Simphony">&#10003;</i>' : '')+'</span>';
   }).join('')+'</div>');
   if(S.uncheckedDays) h.push('<div class="bl-hero-days"><span class="today">'+(S.checkedDays ? 'Days without &#10003; are' : 'This week is')+' not checked in Simphony yet &mdash; until then a comped menu shows here as paid.</span></div>');
+  if(TD){
+    h.push('<div class="bl-todate"><span class="bl-todate-l">Since launch &middot; '+blEsc(blDayName(TD.first))+' '+blDateLabel(TD.first)+'</span>'
+      + '<span><b>'+blN(TD.menus + TD.tailMenus)+'</b> menus</span><span><b>'+blN(TD.comped)+'</b> comped</span>'
+      + (money ? '<span>menu net <b>'+blN(TD.net + TD.tailNet)+'</b></span>' : '')
+      + '<span class="bl-todate-s">'+blN(TD.menus)+' checked in Simphony to '+blEsc(blDayName(TD.last))+' '+blDateLabel(TD.last)+' <i class="bl-ok">&#10003;</i>'
+      + (TD.tailMenus ? ' + '+blN(TD.tailMenus)+' since, from bookings' : '')
+      + (TD.pending ? ' &middot; reading the days since&hellip;' : '')
+      + (TD.bad.length ? ' &middot; <span class="bl-miss">'+TD.bad.length+' day'+(TD.bad.length===1?'':'s')+' since could not be read and '+(TD.bad.length===1?'is':'are')+' NOT in this total</span>' : '')
+      + (TD.capped ? ' &middot; <span class="bl-miss">bookings after '+blDateLabel(TD.tail[TD.tail.length-1])+' are NOT in this total</span>' : '')
+      + '</span></div>');
+  }
   h.push('</div>');
 
   if(failed.length){
@@ -485,6 +531,10 @@ function blCss(){
     '.bl-hero-days b{color:var(--vino);font-weight:600;margin-left:3px;font-variant-numeric:tabular-nums}',
     '.bl-hero-days .today{color:var(--gold-dim)}',
     '.bl-bad{margin:0 0 14px}',
+    '.bl-todate{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 18px;margin-top:14px;padding-top:12px;border-top:1px solid var(--border);font-size:13px;color:var(--text-mid)}',
+    '.bl-todate b{color:var(--vino);font-weight:600;font-variant-numeric:tabular-nums}',
+    '.bl-todate-l{font-size:10px;letter-spacing:.15em;text-transform:uppercase;font-weight:600}',
+    '.bl-todate-s{flex-basis:100%;font-size:12px}',
     '.bl-grid{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:16px;margin-bottom:16px}',
     '.bl-panel{border:1px solid var(--border);background:var(--surface);padding:16px 18px}',
     '.bl-panel .rv2-mix-title{margin-bottom:12px}',
