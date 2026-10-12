@@ -97,9 +97,13 @@
       history.replaceState(null, '', location.pathname + location.hash);
       fetch(M.SB_URL + '/functions/v1/mare-try', { method: 'POST', headers: { 'Content-Type': 'application/json', apikey: M.SB_KEY, Authorization: 'Bearer ' + M.SB_KEY }, body: JSON.stringify({ token: tryTok }) })
         .then(function (r) { return r.json(); })
-        .then(function (x) { if (!x || !x.ok) throw new Error('link'); return sb.auth.verifyOtp({ token_hash: x.token_hash, type: 'magiclink' }); })
-        .then(function (v) { if (v.error || !v.data.session) throw new Error('otp'); App.S.token = v.data.session.access_token; App.S.email = (v.data.session.user.email || '').toLowerCase(); App.boot(); },
-              function () { App.signIn(T('This test link has expired. Sign in with your Roberto’s login, or ask Francesco for a new link.')); });
+        .then(function (x) { if (!x || !x.ok) throw new Error('link'); App.S.setup = !!x.setup; return sb.auth.verifyOtp({ token_hash: x.token_hash, type: 'magiclink' }); })
+        .then(function (v) {
+          if (v.error || !v.data.session) throw new Error('otp');
+          App.S.token = v.data.session.access_token; App.S.email = (v.data.session.user.email || '').toLowerCase();
+          // A Mare-only login chooses its own password before anything opens; then the link stops.
+          if (App.S.setup) App.choosePassword(tryTok); else App.boot();
+        }, function () { App.signIn(T('This link no longer works. Sign in with your email and password, or ask your admin for a new link.')); });
     } else
     sb.auth.getSession().then(function (x) {
       var s = x.data && x.data.session;
@@ -113,7 +117,7 @@
     a.innerHTML = '<div class="hero" style="min-height:100vh;justify-content:center"><div class="hero-top"><span></span>' + M.langSwitch() + '</div>' +
       '<div style="padding:20px 16px 60px"><form class="signin card" id="f" style="color:var(--ink)">' +
       '<div class="row"><img src="mare-logo-teal.svg" alt="" style="width:56px;height:56px"><h2 class="serif">' + E(T('Sign in')) + '</h2></div>' +
-      '<p class="muted" style="margin:0">' + E(T('Use your Roberto\'s app account.')) + ' ' + E(T('No password? Open the link from your email: it signs you in.')) + '</p>' +
+      '<p class="muted" style="margin:0">' + E(T('Use your Roberto\'s app account.')) + ' ' + E(T('First time, or forgot your password? Open the link in your email: it lets you choose a password.')) + '</p>' +
       '<label class="f" for="em">' + E(T('Email')) + '<input id="em" type="email" autocomplete="username" required></label>' +
       '<label class="f" for="pw">' + E(T('Password')) + '<input id="pw" type="password" autocomplete="current-password" required></label>' +
       '<div class="err">' + E(err || '') + '</div><button class="btn" type="submit">' + E(T('Sign in')) + '</button>' +
@@ -134,6 +138,32 @@
       sb.auth.signInWithPassword({ email: document.getElementById('em').value.trim(), password: document.getElementById('pw').value }).then(function (r) {
         if (r.error) { App.signIn(T('Email or password not right.')); return; }
         App.S.token = r.data.session.access_token; App.S.email = (r.data.session.user.email || '').toLowerCase(); App.boot();
+      });
+    };
+  };
+  App.choosePassword = function (tok, err) {
+    var a = document.getElementById('app');
+    a.innerHTML = '<div class="hero" style="min-height:100vh;justify-content:center"><div class="hero-top"><span></span>' + M.langSwitch() + '</div>' +
+      '<div style="padding:20px 16px 60px"><form class="signin card" id="pf" style="color:var(--ink)">' +
+      '<div class="row"><img src="mare-logo-teal.svg" alt="" style="width:56px;height:56px"><h2 class="serif">' + E(T('Choose your password')) + '</h2></div>' +
+      '<p class="muted" style="margin:0">' + E(T('From now on you sign in with your email and this password. At least 8 characters.')) + '</p>' +
+      '<label class="f" for="pe">' + E(T('Email')) + '<input id="pe" type="email" autocomplete="username" readonly value="' + E(App.S.email || '') + '"></label>' +
+      '<label class="f" for="p1">' + E(T('New password')) + '<input id="p1" type="password" autocomplete="new-password" required minlength="8"></label>' +
+      '<label class="f" for="p2">' + E(T('The same password again')) + '<input id="p2" type="password" autocomplete="new-password" required minlength="8"></label>' +
+      '<div class="err" id="perr">' + E(err || '') + '</div><button class="btn" type="submit" id="pgo">' + E(T('Save and open the app')) + '</button></form></div></div>';
+    document.getElementById('pf').onsubmit = function (ev) {
+      ev.preventDefault();
+      var p1 = document.getElementById('p1').value, p2 = document.getElementById('p2').value, er = document.getElementById('perr'), go = document.getElementById('pgo');
+      if (p1.length < 8) { er.textContent = T('The password needs at least 8 characters.'); return; }
+      if (p1 !== p2) { er.textContent = T('The two passwords are not the same.'); return; }
+      go.disabled = true; er.textContent = '';
+      sb.auth.updateUser({ password: p1, data: { mare_pw: true } }).then(function (r) {
+        if (r.error) { go.disabled = false; er.textContent = T('Not saved: {m}', { m: r.error.message }); return; }
+        return sb.auth.getSession().then(function (x) {
+          var s = x.data && x.data.session; if (s) App.S.token = s.access_token;
+          // The link has done its job: it stops. A failure here only leaves the link alive; she is in either way.
+          return fetch(M.SB_URL + '/functions/v1/mare-try', { method: 'POST', headers: { 'Content-Type': 'application/json', apikey: M.SB_KEY, Authorization: 'Bearer ' + App.S.token }, body: JSON.stringify({ done: tok }) }).catch(function () {});
+        }).then(function () { App.S.setup = false; App.say(T('Password saved.')); App.boot(); });
       });
     };
   };

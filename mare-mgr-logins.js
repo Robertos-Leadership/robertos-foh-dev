@@ -28,7 +28,7 @@
     if (m.existing) return '<div class="pconf ok"><span><b>' + E(T('{n} can now open the Mare app.', { n: m.name })) + '</b> ' + E(T('They already have a Roberto\'s login: they sign in with their own email and password.')) + '</span>' +
       '<span class="row"><button class="btn ghost sm" data-ldone="1">' + E(T('Done')) + '</button></span></div>';
     return '<div class="pconf ok" style="flex-direction:column;align-items:stretch"><span><b>' + E(T('{n} can now open the Mare app.', { n: m.name })) + '</b> ' +
-      E(T('This is their own link. It signs them in: no password. It is shown only now, so send it before you leave this page.')) + '</span>' +
+      E(T('This is their own link. They open it once and choose their own password; after that they sign in with email and password. It is shown only now, so send it before you leave this page.')) + '</span>' +
       '<input type="text" readonly id="llink" value="' + E(m.link) + '" aria-label="' + E(T('Their link')) + '" style="width:100%">' +
       '<span class="row"><button class="btn sm" data-lmail="' + E(m.email) + '">' + E(T('Email it to them')) + '</button><button class="btn ghost sm" data-lcopy="1">' + E(T('Copy')) + '</button>' +
       '<a class="btn ghost sm" style="text-decoration:none;display:inline-flex;align-items:center" target="_blank" rel="noopener" href="https://wa.me/?text=' + encodeURIComponent(T('Your Roberto\'s Mare app: {l}', { l: m.link })) + '">' + E(T('Send by WhatsApp')) + '</a>' +
@@ -67,9 +67,9 @@
             (me ? '<span class="tag grey">' + E(T('YOU')) + '</span>' : '') +
             (u.mare_admin ? '<span class="tag teal">' + E(T('ADMIN')) + '</span>' : '<span class="tag ' + (mods ? 'amber' : 'grey') + '">' + E(mods ? T('{a} of {b} modules', { a: mods.length, b: all.length }) : T('All modules')) + '</span>') +
             '<span class="tag grey">' + E(nMail === 1 ? T('1 email') : T('{n} emails', { n: nMail })) + '</span>' +
-            (!u.mare_only ? '<span class="tag blue">' + E(T('DUBAI LOGIN')) + '</span>' : u.has_link ? '<span class="tag grey">' + E(u.last_used ? T('LINK USED {d}', { d: M.shortDate(M.dateKey(u.last_used)) }) : T('LINK NOT OPENED YET')) + '</span>' : '<span class="tag amber">' + E(T('NO LINK')) + '</span>') + '</div>' +
+            (!u.mare_only ? '<span class="tag blue">' + E(T('DUBAI LOGIN')) + '</span>' : u.pw_set ? '<span class="tag green">' + E(T('PASSWORD SET')) + '</span>' : u.has_link ? '<span class="tag amber">' + E(T('LINK SENT · NO PASSWORD YET')) + '</span>' : '<span class="tag red">' + E(T('NO LINK')) + '</span>') + '</div>' +
             '<div class="pacts"><button class="btn ghost sm" data-lacc="' + E(u.email) + '">' + E(L.acc === u.email ? T('Close') : T('Access & emails')) + '</button>' +
-            (canLink ? '<button class="btn ghost sm" data-lnew="' + E(u.email) + '">' + E(T('New link')) + '</button>' : '') +
+            (canLink ? '<button class="btn ghost sm" data-lnew="' + E(u.email) + '">' + E(u.pw_set ? T('Forgot password: new link') : T('New link')) + '</button>' : '') +
             (me || u.is_admin ? '' : '<button class="btn ghost sm" data-ladm="' + E(u.email) + '" data-on="' + (u.mare_admin ? '0' : '1') + '">' + E(u.mare_admin ? T('Not admin') : T('Make admin')) + '</button>' +
               '<button class="btn warn sm" data-lrm="' + E(u.email) + '">' + E(T('Remove')) + '</button>') + '</div>';
           if (L.rm === u.email) h += '<div class="pconf"><span><b>' + E(T('Remove {n}\'s Mare access?', { n: u.name })) + '</b> ' + E(T('Their link stops working at once. You can add them again later.')) + '</span>' +

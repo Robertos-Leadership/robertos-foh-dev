@@ -44,6 +44,7 @@ begin
     select jsonb_agg(jsonb_build_object('email', lower(u.email), 'name', coalesce(u.name, u.email), 'title', u.title, 'is_admin', u.is_admin,
         'mare_admin', coalesce(u.is_admin, false) or 'mare_admin' = any(u.modules),
         'mare_only', not coalesce(u.is_admin, false) and not exists (select 1 from unnest(coalesce(u.modules, '{}')) m where m not in ('mare', 'mare_admin')),
+        'pw_set', exists (select 1 from auth.users au where lower(au.email) = lower(u.email) and (au.raw_user_meta_data ->> 'mare_pw') = 'true'),
         'has_link', exists (select 1 from public.mare_try_links l where lower(l.email) = lower(u.email) and not l.revoked and l.expires_at > now()),
         'last_used', (select max(l.last_used_at) from public.mare_try_links l where lower(l.email) = lower(u.email)))
       order by u.is_admin, u.name)
