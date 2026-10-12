@@ -20,6 +20,8 @@ window.MARE_ME = {
 "Questions are not shown in View as.": "Pitanja se ne prikazuju u pregledu.",
 "Batch recipe": "Osnovni recept",
 "Back to {n}": "Nazad na {n}",
+"Previous": "Prethodni",
+"Next": "Sljedeći",
 "Storage": "Čuvanje",
 "working": "radi",
 "no clock-out": "nema odlaska",

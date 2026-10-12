@@ -933,14 +933,30 @@
     }, function () { main.innerHTML = frame('Recipes', '<div class="card big">' + E(T('Could not reach the Dubai recipe cards. Check the internet.')) + '</div>', TABS); bindFrame(); });
   }
 
+  // Previous / Next on a recipe card (Francesco, 12 Oct 2026): move to the next recipe without
+  // going back to the list. list = the cards in the order the list shows them.
+  function recNav(list, id) {
+    var i = -1; list.forEach(function (d, k) { if (String(d.id) === String(id)) i = k; });
+    if (i < 0 || list.length < 2) return '';
+    function b(d, next) {
+      if (!d) return '<span></span>';
+      return '<button class="btn ghost" data-nav="' + E(d.id) + '" style="min-width:0;display:flex;flex-direction:column;align-items:' + (next ? 'flex-end' : 'flex-start') + ';gap:2px;padding:10px 14px">' +
+        '<span style="font-size:12px;letter-spacing:.08em;text-transform:uppercase">' + (next ? E(T('Next')) + ' ›' : '‹ ' + E(T('Previous'))) + '</span>' +
+        '<b style="max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + E(d.name) + '</b></button>';
+    }
+    return '<div class="rnav" style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px">' + b(list[i - 1], false) + b(list[i + 1], true) + '</div>';
+  }
+  function dubaiFlat() { var a = []; (S.dubai || []).forEach(function (g) { a = a.concat(g.dishes); }); return a; }
+
   function mareCard(rid, then) {
     rpcS('mare_s_recipe', { p_device: dev(), p_token: meToken, p_pin: pinArg(), p_id: rid }).then(function (x) {
       if (!x || !x.ok || !x.recipe) return;
-      var r = x.recipe, ph = M.safeJpeg(r.photo);
-      main.innerHTML = frame(r.name, '<div class="stack">' + (ph ? '<img class="photo" src="' + ph + '" alt="">' : '') +
+      var r = x.recipe, ph = M.safeJpeg(r.photo), nav = recNav(feed().recipes, rid);
+      main.innerHTML = frame(r.name, '<div class="stack">' + nav + (ph ? '<img class="photo" src="' + ph + '" alt="">' : '') +
         '<div class="row">' + (r.category ? '<span class="tag grey">' + E(r.category) + '</span>' : '') + (r.portions ? '<span class="tag grey">' + E(r.portions) + '</span>' : '') + (r.allergens ? '<span class="tag amber">' + E(r.allergens) + '</span>' : '') + '</div>' +
-        dubaiBlk(T('Ingredients'), r.ingredients) + dubaiBlk(T('Method'), r.method) + dubaiBlk(T('Plating and garnish'), r.plating) + askBox() + '</div>');
+        dubaiBlk(T('Ingredients'), r.ingredients) + dubaiBlk(T('Method'), r.method) + dubaiBlk(T('Plating and garnish'), r.plating) + nav + askBox() + '</div>');
       bindFrame(function () { openMod('recipes', 'mare'); });
+      on('[data-nav]', function (b) { mareCard(b.getAttribute('data-nav')); });
       askLoad('mare', rid, r.name, function (t) { S.mod = 'recipes'; S.sub = 'mare'; S.screen = 'mod'; mareCard(rid, t); });
       if (then) then(); else window.scrollTo(0, 0);
     });
@@ -1003,18 +1019,19 @@
     Promise.all([M.dubaiRecipe(id, isBatch), M.dubaiLines(id)]).then(function (x) {
       if (S.mod !== 'recipes' || S.sub !== 'dubai') return;
       var r = x[0], m = (r.method && typeof r.method === 'object') ? r.method : {}, ph = (Array.isArray(r.photos) ? r.photos : []).map(function (p) { return M.safeImg(p && p.u); }).filter(Boolean)[0];
-      var prev = trail[trail.length - 1];
+      var prev = trail[trail.length - 1], nav = (isBatch || prev) ? '' : recNav(dubaiFlat(), id);
       var ing = x[1].length ? '<div class="card"><h2 class="serif">' + E(T('Ingredients')) + '</h2>' + M.dubaiLinesHtml(x[1]) + '</div>' : dubaiBlk(T('Ingredients'), m.ing);
       main.innerHTML = frame(r.name, '<div class="stack">' +
         (prev ? '<button class="btn ghost" data-bk style="align-self:flex-start">‹ ' + E(T('Back to {n}', { n: prev.name })) + '</button>' : '') +
         '<div class="row"><span class="tag blue">' + E(T('ROBERTO\'S DUBAI · READ ONLY')) + '</span>' + (r.kind === 'batch' ? '<span class="tag amber">' + E(T('Batch recipe')) + '</span>' : '') +
         (r.makes_qty ? '<span class="tag grey">' + E(T('Makes {q}', { q: r.makes_qty + ' ' + (r.makes_unit || '') })) + '</span>' : '') + '</div>' +
-        (ph ? '<img class="photo" src="' + ph + '" alt="">' : '') +
+        nav + (ph ? '<img class="photo" src="' + ph + '" alt="">' : '') +
         dubaiBlk(T('What the guest is told'), m.foh) + ing + dubaiBlk(T('Mise en place'), m.mise) + dubaiBlk(T('Method'), m.method) + dubaiBlk(T('Plating'), m.plating) + dubaiBlk(T('Garnish'), m.garnish) + dubaiBlk(T('Storage'), m.store) + dubaiBlk(T('Good to know'), m.more) +
-        ((r.allergens && r.allergens.length) ? '<div class="row">' + r.allergens.map(function (a) { return '<span class="tag amber">' + E(a) + '</span>'; }).join('') + '</div>' : '') + askBox() + '</div>');
+        ((r.allergens && r.allergens.length) ? '<div class="row">' + r.allergens.map(function (a) { return '<span class="tag amber">' + E(a) + '</span>'; }).join('') + '</div>' : '') + nav + askBox() + '</div>');
       function up() { if (prev) dubaiCard(prev.id, prev.isBatch, trail.slice(0, -1)); else openMod('recipes', 'dubai'); }
       bindFrame(function () { openMod('recipes', 'dubai'); });
       on('[data-bk]', up);
+      on('[data-nav]', function (b) { dubaiCard(b.getAttribute('data-nav'), false, []); });
       var here = { id: id, isBatch: isBatch, name: r.name };
       on('[data-b]', function (b) { dubaiCard(b.getAttribute('data-b'), true, trail.concat([here])); });
       askLoad(isBatch ? 'batch' : 'dubai', id, r.name, function (t) { S.mod = 'recipes'; S.sub = 'dubai'; S.screen = 'mod'; dubaiCard(id, isBatch, trail, t); });
