@@ -265,8 +265,20 @@
   }
   App.sec = function (title) { return '<div class="sec"><span>' + E(title) + '</span><i></i></div>'; };
 
+  // Which screens a manager opens (the database keeps one line per screen per 5 minutes).
+  // Never while viewing as someone else, and never in the way: a failure is ignored.
+  App.ping = function () {
+    if (App.S.viewAs || !App.S.token) return;
+    var u = navigator.userAgent || '', os = /iPhone/.test(u) ? 'iPhone' : /iPad/.test(u) ? 'iPad' : /Android/.test(u) ? 'Android' : /Windows/.test(u) ? 'Windows' : /Mac/.test(u) ? 'Mac' : 'Other';
+    var br = /Edg\//.test(u) ? 'Edge' : /CriOS|Chrome\//.test(u) ? 'Chrome' : /FxiOS|Firefox\//.test(u) ? 'Firefox' : /Safari\//.test(u) ? 'Safari' : 'Browser';
+    var k = (App.S.mod || 'today') + (App.S.mod && App.S.sub ? '/' + App.S.sub : '');
+    if (App.ping.last === k && Date.now() - (App.ping.at || 0) < 60000) return;
+    App.ping.last = k; App.ping.at = Date.now();
+    try { M.rpc('mare_m_ping', { p_module: k, p_ua: os + ' · ' + br }, App.S.token); } catch (e) {}
+  };
   App.render = function () {
     if (App.S.mod && !App.allowed(App.S.mod)) App.S.mod = null;
+    App.ping();
     if (!App.S.mod) return App.home();
     var def = App.mods[App.S.mod];
     var sub = App.S.sub || (def.tabs ? def.tabs[0][0] : null);
