@@ -402,7 +402,7 @@ function drawReport(){
       (r.files.length < MAX_FILES ? '<button class="add" type="button" id="addmedia">+ Add<br>photo / video</button>' : '') + '</div>' +
       '<div class="hint">Up to ' + MAX_FILES + '. A video can be up to 50 MB (about 30 seconds on a phone).</div></div>' +
     '<button class="btn wide" type="submit"' + (S.busy ? ' disabled' : '') + '>' + (S.busy ? esc(S.busy === true ? 'Sending…' : S.busy) : 'Send to maintenance') + '</button>' +
-    '<div class="note">' + esc(whoIsTold()) + ' get' + toldVerb() + ' an email as soon as you send, and everyone sees it in this list.</div>' +
+    '<div class="note">' + esc(whoIsTold()) + ' get' + toldVerb() + ' one email with the new cards within about half an hour, and everyone sees it in this list straight away.</div>' +
     '<button class="btn ghost" type="button" id="cancelrep">Cancel</button></form>';
 }
 // "Has it already been reported?" — the open cards for the place being typed, so nobody files the
@@ -487,7 +487,7 @@ function sendReport(){
   }).then(function(res){
     r.files.forEach(function(f){ URL.revokeObjectURL(f.url); });
     S.rep = null; S.busy = false; S.view = 'list'; S.tab = 'cards'; S.filter = 'open';
-    S.ok = jc(res.card_no) + ' sent to maintenance. ' + (res.is_test ? 'TEST card: only Francesco was emailed.' : whoIsTold() + (toldVerb() ? ' has' : ' have') + ' been told.');
+    S.ok = jc(res.card_no) + ' sent to maintenance. ' + (res.is_test ? 'TEST card: only Francesco gets the email.' : whoIsTold() + ' get' + toldVerb() + ' it by email within about half an hour.');
     return loadList().then(draw);
   }).catch(function(e){ S.busy = false; S.err = say(e) + (done.length < r.files.length && /upload/.test(String(e.message)) ? ' Nothing was sent.' : ''); draw(); });
 }
