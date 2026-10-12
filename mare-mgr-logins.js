@@ -1,9 +1,17 @@
-/* Roberto's Mare — "Logins": the Mare admin (Milica) adds and removes the people who can
-   open THIS management app. A new login gets its own no-password link; nothing to type.
+/* Roberto's Mare — "Admin": the Mare admin (Milica) runs access from one page, like the
+   Dubai Admin → Users & Access. Per login: add / remove, which modules they open, which emails
+   they receive. Per team: what their phone shows. A new login gets its own no-password link.
    Only a Mare admin sees the screen, and the mare-logins function checks that again. */
 (function (w) {
   var M = w.Mare, T = M.T, E = M.esc, App = w.MareApp;
-  var L = { made: null, rm: null, busy: false };
+  var L = { made: null, rm: null, acc: null, team: null };
+  // The emails the Mare app sends, and the mare_settings key that holds who receives each.
+  var MAILS = [['kitchen_report_to', 'The kitchen closing report, after every service'],
+               ['recipe_question_to', 'Questions the team asks under a recipe'],
+               ['link_mail_cc', 'A copy when a team member is emailed their phone link']];
+  var TEAM_MODS = [['brief', 'Today\'s briefing'], ['check', 'Checklists'], ['rota', 'Rota'], ['recipes', 'Recipes'],
+                   ['kclose', 'Closing report'], ['learn', 'Learning'], ['breakage', 'Breakage'], ['leave', 'Ask for leave'], ['speak', 'Speak up']];
+  var TEAMS = ['Kitchen', 'Service', 'Bar', 'Other'];
   var ERR = {
     email: 'That email address does not look right.', name: 'Type their name.', admin: 'Only a Mare admin can change logins.',
     self: 'You cannot do this to your own login.', fohadmin: 'This login belongs to the Roberto\'s admin and cannot be changed here.',
@@ -28,10 +36,17 @@
   }
 
   App.register('logins', {
-    title: 'Logins', icon: 'people', group: 'setup', desc: 'Who can open this management app. Add a login or remove one.',
+    title: 'Admin', icon: 'people', group: 'setup', desc: 'Who can open the app, what each person sees, and which emails they receive.',
     render: function (main) {
-      return App.call('mare_m_managers', {}).then(function (mg) {
-        if (!mg) { main.innerHTML = App.empty(T('Could not load.')); return; }
+      return Promise.all([App.call('mare_m_managers', {}), App.fetch(['settings', 'staff'])]).then(function (res) {
+        var mg = res[0], f = res[1];
+        if (!mg || !f) { main.innerHTML = App.empty(T('Could not load.')); return; }
+        var set = {}; f.settings.forEach(function (x) { set[x.key] = x.value; });
+        var mgrMods = set.mgr_modules || {}, teamMods = set.team_modules || {};
+        var GO = ['today', 'team', 'kitchen', 'setup'];
+        var all = App.order.filter(function (k) { return k !== 'viewas' && k !== 'logins'; })
+          .sort(function (a, b) { return GO.indexOf(App.mods[a].group) - GO.indexOf(App.mods[b].group); });
+        function mailList(k) { return (Array.isArray(set[k]) ? set[k] : []).map(function (x) { return String(x).toLowerCase(); }); }
         var h = '<section class="card stack"><h3>' + E(T('Add a login')) + '</h3>' +
           '<div class="row padd"><input type="text" id="lname" placeholder="' + E(T('Name')) + '" aria-label="' + E(T('Name')) + '" style="flex:1 1 180px" maxlength="80">' +
           '<input type="email" id="lemail" placeholder="' + E(T('Their email')) + '" aria-label="' + E(T('Email')) + '" style="flex:2 1 220px" maxlength="250" autocomplete="off">' +
@@ -40,25 +55,88 @@
           '<button class="btn" id="ladd">' + E(T('Add')) + '</button></div>' +
           '<details><summary>' + E(T('What is a login?')) + '</summary><div class="small muted" style="margin-top:8px;line-height:1.6">' +
           E(T('A login opens this management app: attendance, schedule, reports, people, everything. Use it for managers. The team (chefs, waiters, bar) do not need one: add them in People and send them their phone link.')) + '<br>' +
-          E(T('An Admin can also add and remove logins. Choose which modules a login can open in Set-up → View as.')) + '</div></details>' +
+          E(T('An Admin can also add and remove logins. Press “Access & emails” on a person to choose what they open and which emails they get.')) + '</div></details>' +
           (L.made ? linkPanel(L.made) : '') + '</section>';
 
         h += '<section class="stack"><h2 class="serif">' + E(T('Who can open the Mare app')) + ' · ' + mg.managers.length + '</h2><div class="card plist">';
         mg.managers.forEach(function (u) {
-          var me = u.email === mg.me, canLink = (u.mare_only || App.S.fohAdmin) && !u.is_admin;
+          var me = u.email === mg.me, canLink = (u.mare_only || App.S.fohAdmin) && !u.is_admin, everything = u.is_admin || u.mare_admin;
+          var mods = Array.isArray(mgrMods[u.email]) ? mgrMods[u.email].filter(function (k) { return all.indexOf(k) >= 0; }) : null;
+          var nMail = MAILS.filter(function (m) { return mailList(m[0]).indexOf(u.email) >= 0; }).length;
           h += '<div class="prow"><div class="phead" style="cursor:default"><span class="thumb">' + E(u.name.slice(0, 1).toUpperCase()) + '</span><span class="pwho"><b class="serif">' + E(u.name) + '</b><span>' + E(u.email) + (u.title ? ' · ' + E(u.title) : '') + '</span></span>' +
             (me ? '<span class="tag grey">' + E(T('YOU')) + '</span>' : '') +
-            (u.mare_admin ? '<span class="tag teal">' + E(T('ADMIN')) + '</span>' : '') +
+            (u.mare_admin ? '<span class="tag teal">' + E(T('ADMIN')) + '</span>' : '<span class="tag ' + (mods ? 'amber' : 'grey') + '">' + E(mods ? T('{a} of {b} modules', { a: mods.length, b: all.length }) : T('All modules')) + '</span>') +
+            '<span class="tag grey">' + E(nMail === 1 ? T('1 email') : T('{n} emails', { n: nMail })) + '</span>' +
             (!u.mare_only ? '<span class="tag blue">' + E(T('DUBAI LOGIN')) + '</span>' : u.has_link ? '<span class="tag grey">' + E(u.last_used ? T('LINK USED {d}', { d: M.shortDate(M.dateKey(u.last_used)) }) : T('LINK NOT OPENED YET')) + '</span>' : '<span class="tag amber">' + E(T('NO LINK')) + '</span>') + '</div>' +
-            '<div class="pacts">' +
+            '<div class="pacts"><button class="btn ghost sm" data-lacc="' + E(u.email) + '">' + E(L.acc === u.email ? T('Close') : T('Access & emails')) + '</button>' +
             (canLink ? '<button class="btn ghost sm" data-lnew="' + E(u.email) + '">' + E(T('New link')) + '</button>' : '') +
             (me || u.is_admin ? '' : '<button class="btn ghost sm" data-ladm="' + E(u.email) + '" data-on="' + (u.mare_admin ? '0' : '1') + '">' + E(u.mare_admin ? T('Not admin') : T('Make admin')) + '</button>' +
               '<button class="btn warn sm" data-lrm="' + E(u.email) + '">' + E(T('Remove')) + '</button>') + '</div>';
           if (L.rm === u.email) h += '<div class="pconf"><span><b>' + E(T('Remove {n}\'s Mare access?', { n: u.name })) + '</b> ' + E(T('Their link stops working at once. You can add them again later.')) + '</span>' +
             '<span class="row"><button class="btn warn sm" data-lrmyes="' + E(u.email) + '">' + E(T('Yes, remove')) + '</button><button class="btn ghost sm" data-lcancel="1">' + E(T('Cancel')) + '</button></span></div>';
+          if (L.acc === u.email) {
+            h += '<div class="pbody stack" data-acc="' + E(u.email) + '"><div><div class="sec"><span>' + E(T('Can open')) + '</span><i></i></div>' +
+              (everything ? '<div class="small muted">' + E(T('Admin: opens every module.')) + '</div>'
+                : '<div class="ticks2 mods">' + all.map(function (k) { return '<label><input type="checkbox" value="' + k + '"' + (!mods || mods.indexOf(k) >= 0 ? ' checked' : '') + '> ' + E(T(App.mods[k].title)) + '</label>'; }).join('') + '</div>') + '</div>' +
+              '<div><div class="sec"><span>' + E(T('Receives by email')) + '</span><i></i></div><div class="ticks2 mails one">' + MAILS.map(function (m) {
+                return '<label><input type="checkbox" value="' + m[0] + '"' + (mailList(m[0]).indexOf(u.email) >= 0 ? ' checked' : '') + '> ' + E(T(m[1])) + '</label>'; }).join('') + '</div></div>' +
+              '<div class="row"><button class="btn" data-lsave="' + E(u.email) + '">' + E(T('Save')) + '</button><button class="btn ghost" data-lacc="' + E(u.email) + '">' + E(T('Cancel')) + '</button></div></div>';
+          }
+          h += '</div>';
+        });
+        h += '</div></section>';
+
+        // ── the team: what each team's phone shows ──
+        h += '<section class="stack"><h2 class="serif">' + E(T('The team · what their phone shows')) + '</h2><div class="card plist">';
+        TEAMS.forEach(function (team) {
+          var n = f.staff.filter(function (x) { return x.active && x.team === team; }).length;
+          if (!n && team === 'Other') return;
+          var tm = Array.isArray(teamMods[team]) ? teamMods[team] : TEAM_MODS.map(function (x) { return x[0]; });
+          h += '<div class="prow"><div class="phead" style="cursor:default"><span class="thumb">' + n + '</span><span class="pwho"><b class="serif">' + E(T(team)) + '</b><span>' +
+            E(TEAM_MODS.filter(function (x) { return tm.indexOf(x[0]) >= 0; }).map(function (x) { return T(x[1]); }).join(' · ') || T('Nothing yet')) + '</span></span></div>' +
+            '<div class="pacts"><button class="btn ghost sm" data-lteam="' + team + '">' + E(L.team === team ? T('Close') : T('Choose')) + '</button></div>';
+          if (L.team === team) h += '<div class="pbody stack" data-team="' + team + '"><div class="ticks2">' + TEAM_MODS.map(function (x) {
+            return '<label><input type="checkbox" value="' + x[0] + '"' + (tm.indexOf(x[0]) >= 0 ? ' checked' : '') + '> ' + E(T(x[1])) + '</label>'; }).join('') + '</div>' +
+            '<div class="row"><button class="btn" data-ltsave="' + team + '">' + E(T('Save')) + '</button><button class="btn ghost" data-lteam="' + team + '">' + E(T('Cancel')) + '</button></div></div>';
           h += '</div>';
         });
         main.innerHTML = h + '</div></section>';
+
+        App.on(main, '[data-lacc]', function (b) { var em = b.getAttribute('data-lacc'); L.acc = L.acc === em ? null : em; L.rm = null; App.reload(); });
+        App.on(main, '[data-lteam]', function (b) { var t = b.getAttribute('data-lteam'); L.team = L.team === t ? null : t; App.reload(); });
+        App.on(main, '[data-lsave]', function (b) {
+          var em = b.getAttribute('data-lsave'), box = b.closest('.pbody'), jobs = [];
+          var mbox = box.querySelector('.mods');
+          if (mbox) {
+            var picked = Array.prototype.filter.call(mbox.querySelectorAll('input'), function (i) { return i.checked; }).map(function (i) { return i.value; });
+            var v = JSON.parse(JSON.stringify(mgrMods));
+            if (picked.length === all.length) delete v[em]; else v[em] = picked;
+            if (JSON.stringify(v) !== JSON.stringify(mgrMods)) jobs.push({ key: 'mgr_modules', value: v });
+          }
+          var empty = null;
+          Array.prototype.forEach.call(box.querySelectorAll('.mails input'), function (i) {
+            var cur = mailList(i.value), has = cur.indexOf(em) >= 0;
+            if (i.checked === has) return;
+            var next = i.checked ? cur.concat([em]) : cur.filter(function (x) { return x !== em; });
+            if (!next.length) empty = i; else jobs.push({ key: i.value, value: next });
+          });
+          // An email nobody receives is a report that silently goes nowhere: refuse it.
+          if (empty) { App.say(T('Somebody must receive this email. Tick another person first.')); return; }
+          if (!jobs.length) { L.acc = null; App.reload(); return; }
+          b.disabled = true;
+          jobs.reduce(function (p, j) { return p.then(function (ok) { return ok && App.save('mare_settings', j); }); }, Promise.resolve(true)).then(function (ok) {
+            if (!ok) { b.disabled = false; return; }
+            App.say(T('Saved.')); L.acc = null; App.loadMyMods().then(App.reload);
+          });
+        });
+        App.on(main, '[data-ltsave]', function (b) {
+          var team = b.getAttribute('data-ltsave'), box = b.closest('.pbody');
+          var v = JSON.parse(JSON.stringify(teamMods));
+          TEAMS.forEach(function (t) { if (!Array.isArray(v[t])) v[t] = TEAM_MODS.map(function (x) { return x[0]; }); });
+          v[team] = Array.prototype.filter.call(box.querySelectorAll('input'), function (i) { return i.checked; }).map(function (i) { return i.value; });
+          b.disabled = true;
+          App.save('mare_settings', { key: 'team_modules', value: v }).then(function (x) { if (x) { App.say(T('Saved. Tablets and phones show it at their next refresh.')); L.team = null; App.reload(); } else b.disabled = false; });
+        });
 
         function add() {
           var b = main.querySelector('#ladd'), name = App.val(main, '#lname'), email = App.val(main, '#lemail').toLowerCase();
@@ -99,7 +177,7 @@
         App.on(main, '[data-lcancel]', function () { L.rm = null; App.reload(); });
         App.on(main, '[data-lrmyes]', function (b) {
           b.disabled = true;
-          fn({ action: 'remove', email: b.getAttribute('data-lrmyes') }).then(function (r) { L.rm = null; if (r) { App.say(T('Removed. Their link no longer works.')); App.reload(); } else b.disabled = false; });
+          fn({ action: 'remove', email: b.getAttribute('data-lrmyes') }).then(function (r) { L.rm = null; if (r) { App.say(T(r.kept_mail ? 'Removed. They still receive an email nobody else gets: tick another person for it.' : 'Removed. Their link no longer works.')); App.reload(); } else b.disabled = false; });
         });
       });
     }

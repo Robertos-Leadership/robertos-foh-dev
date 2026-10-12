@@ -204,6 +204,10 @@ details summary{cursor:pointer;font-size:12px;letter-spacing:1.5px;font-weight:7
 .rota.week th:first-child,.rota.week td:first-child{width:19%;padding-left:14px;overflow-wrap:anywhere}
 .rota.week th:last-child,.rota.week td:last-child{width:8%;padding-right:10px}
 .rota.week .shift{display:block;width:100%;min-width:0;padding:6px 2px;font-size:13px;line-height:1.3;white-space:normal}
+.ticks2{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:4px 16px}
+.ticks2.one{grid-template-columns:1fr}
+.ticks2 label{display:flex;align-items:center;gap:10px;font-size:16px;min-height:40px}
+.ticks2 input{width:22px;height:22px;flex-shrink:0}
 /* briefing: one box first */
 .bmain{min-height:170px}
 .bmore textarea{min-height:66px}
@@ -300,14 +304,14 @@ table.sheet tfoot th, table.sheet tfoot td{border-top:2px solid var(--gold, #A88
 <div id="app"><div class="wrap muted" style="padding-top:40px">Loading…</div></div>
 <div class="status" id="status" role="status"></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="mare-i18n.js?v=20261012d"></script>
+<script src="mare-i18n.js?v=20261012f"></script>
 <script src="mare-common.js?v=20261009g"></script>
 <script src="mare-media.js?v=20261008d"></script>
 <script src="mare-mgr.js?v=20261012c"></script>
 <script src="mare-mgr-ops.js?v=20261012e"></script>
 <script src="mare-mgr-back.js?v=20261008d"></script>
-<script src="mare-mgr-logins.js?v=20261012c"></script>
-<script src="mare-mgr-viewas.js?v=20261012c"></script>
+<script src="mare-mgr-logins.js?v=20261012f"></script>
+<script src="mare-mgr-viewas.js?v=20261012f"></script>
 <script src="mare-mgr-activity.js?v=20261009i"></script>
 <script>MareApp.start();</script>
 <!-- "Tell us" — the same button as the Kitchen and FOH apps, into the same inbox

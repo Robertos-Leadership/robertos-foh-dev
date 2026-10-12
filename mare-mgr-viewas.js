@@ -40,7 +40,7 @@
             }).join('') + '<button class="btn sm" data-msave="' + E(u.email) + '">' + E(T('Save')) + '</button></div>';
           }
         });
-        h += '<div class="varow"><div class="who"><span>' + E(T('To add or remove a manager, open Set-up → Logins.')) + '</span></div></div>';
+        h += '<div class="varow"><div class="who"><span>' + E(T('To add or remove a manager, open Set-up → Admin.')) + '</span></div></div>';
         h += '</div></section>';
 
         // ── tablet ──

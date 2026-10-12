@@ -151,7 +151,19 @@ Deno.serve(async (req) => {
       const up = await sb.from("app_users").update({ modules: mods, updated_at: new Date().toISOString() }).eq("email", u.email);
       if (up.error) throw new Error(up.error.message);
       await sb.from("mare_try_links").update({ revoked: true }).ilike("email", email).eq("revoked", false);
-      return json({ ok: true });
+      // A removed login stops getting the Mare emails and loses its module ticks. If it is the ONLY
+      // person on an email, it stays there (a report must not go to nobody) and the admin is told.
+      let keptMail = false;
+      const { data: st } = await sb.from("mare_settings").select("key,value").in("key", ["kitchen_report_to", "recipe_question_to", "link_mail_cc", "mgr_modules"]);
+      for (const row of st || []) {
+        if (row.key === "mgr_modules") {
+          if (row.value && typeof row.value === "object" && email in row.value) { const v = { ...row.value }; delete v[email]; await sb.from("mare_settings").update({ value: v }).eq("key", row.key); }
+        } else if (Array.isArray(row.value) && row.value.some((x: unknown) => String(x).toLowerCase() === email)) {
+          const next = row.value.filter((x: unknown) => String(x).toLowerCase() !== email);
+          if (next.length) await sb.from("mare_settings").update({ value: next }).eq("key", row.key); else keptMail = true;
+        }
+      }
+      return json({ ok: true, kept_mail: keptMail });
     }
     if (act === "admin") {
       if (email === me) return json({ ok: false, error: "self" });
