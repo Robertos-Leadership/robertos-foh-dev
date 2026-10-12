@@ -101,15 +101,15 @@
         var h = '<section class="stack"><div class="row between"><h2 class="serif">' + E(T('Rota · week of {d}', { d: M.shortDate(ws) })) + '</h2>' +
           '<div class="row">' + App.weekNav(ws, 'rw') + '<button class="btn ghost" id="copy">' + E(T('Copy last week into this week')) + '</button><button class="btn" id="rx">' + E(T('Excel')) + '</button></div></div>';
         if (!people.length) { main.innerHTML = h + App.empty(T('No people yet. Add the team in People.')) + '</section>'; App.bindWeekNav(main, 'rw', function () { return R.ws; }, function (v) { R.ws = v; }); return; }
-        h += '<div class="box"><table class="rota"><thead><tr><th>' + E(T('Name')) + '</th>' + days.map(function (k, i) { return '<th style="text-align:center">' + E(M.day(i)) + ' ' + (+k.slice(8)) + '</th>'; }).join('') + '<th>' + E(T('Hours')) + '</th></tr></thead><tbody>';
+        h += '<div class="box"><table class="rota week"><thead><tr><th>' + E(T('Name')) + '</th>' + days.map(function (k, i) { return '<th style="text-align:center">' + E(M.day(i)) + ' ' + (+k.slice(8)) + '</th>'; }).join('') + '<th>' + E(T('Hours')) + '</th></tr></thead><tbody>';
         var lastTeam = null;
         people.forEach(function (s) {
           if (s.team !== lastTeam) { h += '<tr><td colspan="9" style="background:#FCFAF7;font-size:12px;letter-spacing:2px;font-weight:700;color:var(--muted)">' + E(T(s.team).toUpperCase()) + '</td></tr>'; lastTeam = s.team; }
           var tot = 0;
-          h += '<tr><td class="nw"><b>' + E(s.name) + '</b></td>' + days.map(function (k) {
+          h += '<tr><td><b>' + E(s.name) + '</b></td>' + days.map(function (k) {
             var x = rota[s.id + '|' + k]; tot += shiftMin(x);
             var pend = pending.some(function (l) { return l.staff_id === s.id && l.date_from <= k && l.date_to >= k; });
-            return '<td><button class="shift ' + (x ? x.kind : 'empty') + '" data-s="' + s.id + '" data-k="' + k + '">' + E(x ? shiftLabel(x) : '+') + '</button>' +
+            return '<td><button class="shift ' + (x ? x.kind : 'empty') + '" data-s="' + s.id + '" data-k="' + k + '">' + E(x ? shiftLabel(x) : '+').replace(' / ', '<br>') + '</button>' +
               (clockOn ? M.actualHtml(act[s.id + '|' + k], x, k, now) : '') +
               (pend ? '<div class="tiny" style="color:var(--blue);font-weight:700">' + E(T('leave asked')) + '</div>' : '') + '</td>';
           }).join('') + '<td class="nw"><b>' + M.durShort(tot) + '</b></td></tr>';

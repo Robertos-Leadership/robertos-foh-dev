@@ -198,6 +198,12 @@ details summary{cursor:pointer;font-size:12px;letter-spacing:1.5px;font-weight:7
 .pbody .grid4{align-items:end}
 .padd > *{min-width:0}
 .pgone > summary{padding:6px 0}
+/* the week's rota fits the screen: seven equal days, a split shift on two lines */
+.rota.week{table-layout:fixed;min-width:680px}
+.rota.week th,.rota.week td{padding:7px 4px;white-space:normal}
+.rota.week th:first-child,.rota.week td:first-child{width:19%;padding-left:14px;overflow-wrap:anywhere}
+.rota.week th:last-child,.rota.week td:last-child{width:8%;padding-right:10px}
+.rota.week .shift{display:block;width:100%;min-width:0;padding:6px 2px;font-size:13px;line-height:1.3;white-space:normal}
 /* briefing: one box first */
 .bmain{min-height:170px}
 .bmore textarea{min-height:66px}
@@ -298,7 +304,7 @@ table.sheet tfoot th, table.sheet tfoot td{border-top:2px solid var(--gold, #A88
 <script src="mare-common.js?v=20261009g"></script>
 <script src="mare-media.js?v=20261008d"></script>
 <script src="mare-mgr.js?v=20261012c"></script>
-<script src="mare-mgr-ops.js?v=20261012d"></script>
+<script src="mare-mgr-ops.js?v=20261012e"></script>
 <script src="mare-mgr-back.js?v=20261008d"></script>
 <script src="mare-mgr-logins.js?v=20261012c"></script>
 <script src="mare-mgr-viewas.js?v=20261012c"></script>
