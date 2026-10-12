@@ -5700,8 +5700,20 @@ async function peBriefTeam(){
     return { emails:emails, failed:!emails.length };
   }catch(err){ return { emails:[], failed:true }; }
 }
+// A brief goes out one message per person, about a second each, so 16 people is a
+// quarter of a minute with the picker already closed. On 12 Oct 2026 that silence
+// read as "nothing happened": the button was pressed again mid-send and a second
+// copy went out. While a brief for a booking is on its way, say so and refuse a
+// second one for that booking.
+var peBriefSending = {};
+function peBriefBusy(id){
+  if(!peBriefSending[id]) return false;
+  peToast('The brief is still going out — wait for the "sent" message before sending again.', true);
+  return true;
+}
 async function peSendCoordEmail(id){
   if(!peCanEdit()){ peToast('View only — ask Sophie, Ouafaa or Francesco to make changes', true); return; }
+  if(peBriefBusy(id)) return;
   var e = peEvById(id); if(!e) return;
   // P0 — the team can't act on a brief that's missing the basics.
   var missing = [];
@@ -5721,6 +5733,13 @@ async function peSendCoordEmail(id){
 }
 async function peDoSendCoord(id, list){
   var e = peEvById(id); if(!e || !list.length) return;
+  if(peBriefBusy(id)) return;
+  peBriefSending[id] = 1;
+  peToast('Sending the event brief to '+list.length+' '+(list.length>1?'people':'person')+' — about '+Math.max(2, list.length)+' seconds. Wait for the "sent" message.');
+  try{ await peDoSendCoordGo(id, e, list); }
+  finally{ delete peBriefSending[id]; }
+}
+async function peDoSendCoordGo(id, e, list){
   // Save a printable copy the team can reopen from the email (its own token so
   // it's never reachable from a guest link).
   if(!e.brief_token){ e.brief_token = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : ('b'+Date.now().toString(36)+Math.round(Math.random()*1e9).toString(36)); }
