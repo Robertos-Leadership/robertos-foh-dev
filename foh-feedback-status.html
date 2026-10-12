@@ -219,7 +219,7 @@ function render(d){
   if(!rows.length && !inbox.length){
     el('card').innerHTML = '<div class="brand">R O B E R T O ’ S</div>'
       + '<div class="sub">Where your feedback got to</div>'
-      + '<div class="msg">Nothing to show yet — anything you send back, or send us with the “Tell us” button in the apps, appears here with where it has got to.</div>';
+      + '<div class="msg">Nothing to show yet — anything you send back, or send us with the “Send feedback” button in the apps, appears here with where it has got to.</div>';
     return;
   }
 
@@ -267,7 +267,7 @@ function render(d){
   // into a round they were asked to answer.
   if(inbox.length){
     h += '<div class="grp"><h3>What you told us</h3>'
-       + '<div class="when">sent with the “Tell us” button</div>';
+       + '<div class="when">sent with the “Send feedback” button</div>';
     inbox.forEach(function(x){
       h += '<div class="it">'
          + '<p class="lab">'+esc(x.i.body)+'</p>'
