@@ -730,7 +730,7 @@ async function loadFohAccess(){
 //  ADMIN MODULE — manage logins + module access (notifications: phase 2). Admin-only.
 // ══════════════════════════════════════════════
 var SUPA_USERS_URL='https://supabase.com/dashboard/project/paoaivwtkzujmrgrfjuq/auth/users';
-var ADMIN_MODULES=[{k:'events',n:'Business Lunch & Moda Night'},{k:'privateevents',n:'Events'},{k:'operations',n:'Closing Report'},{k:'revenue',n:'Revenue'},{k:'stocktake',n:'Stock Take'},{k:'reviews',n:'Guest Reviews'},{k:'reservations',n:'Reservations'},{k:'mare',n:'Mare Attendance'}];
+var ADMIN_MODULES=[{k:'events',n:'Business Lunch & Moda Night'},{k:'privateevents',n:'Events'},{k:'operations',n:'Closing Report'},{k:'revenue',n:'Revenue'},{k:'stocktake',n:'Stock Take'},{k:'reviews',n:'Guest Reviews'},{k:'reservations',n:'Reservations'},{k:'mare',n:'Roberto’s Mare'}];
 // Every automatic email the app sends, and the notify key that decides who gets it.
 // A person is on a list when that key is in their app_users.notify array — ticked
 // here or on the Emails tab, never in code. The edge functions read the same keys,
