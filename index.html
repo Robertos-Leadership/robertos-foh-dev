@@ -195,6 +195,10 @@ if ('serviceWorker' in navigator) {
     <div class="foh-hero-bg"></div>
     <div class="foh-hero-overlay"></div>
     <div class="foh-hero-date" id="foh-date-display"></div>
+    <!-- SWITCH TO ROBERTO'S MARE (Porto Montenegro). Top left of the photo so a phone
+         shows it without scrolling (Francesco, 13 Oct 2026; it was a bar under Kitchen).
+         mare.html asks for the login and checks Mare access itself. -->
+    <a id="foh-mare-switch" href="mare.html" style="position:absolute;top:max(12px,env(safe-area-inset-top));left:12px;z-index:4;display:inline-flex;align-items:center;gap:8px;min-height:44px;box-sizing:border-box;padding:8px 14px;text-decoration:none;background:#00575F;border:1px solid rgba(255,255,255,.8);border-radius:8px;color:#fff;font-family:'Playfair Display',serif;font-size:15px;letter-spacing:.03em;line-height:1.2;">Roberto&rsquo;s Mare <span aria-hidden="true" style="font-family:inherit;">&rarr;</span></a>
     <div class="foh-hero-content">
       <img class="foh-hero-logo" src="robertos-logo-white.svg" alt="Roberto's">
     </div>
@@ -289,12 +293,6 @@ if ('serviceWorker' in navigator) {
       <a href="https://guarracinofamily.github.io/robertos-kitchen/" style="display:flex;align-items:center;justify-content:center;gap:14px;text-decoration:none;background:#6B1F2A;border:1px solid #6B1F2A;border-radius:8px;padding:14px 22px;box-shadow:0 1px 3px rgba(44,24,16,.15);">
         <span style="font-family:'Playfair Display',serif;font-size:15px;letter-spacing:.04em;color:#fff;">Kitchen</span>
         <span style="font-size:12px;font-weight:600;letter-spacing:.06em;color:#C9A84C;border:1px solid #C9A84C;border-radius:5px;padding:5px 10px;">Kitchen &rarr;</span>
-      </a>
-      <!-- SWITCH TO ROBERTO'S MARE (Porto Montenegro) — same doorway as Kitchen.
-           mare.html asks for the login and checks Mare access itself. -->
-      <a href="mare.html" style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:14px;text-decoration:none;background:#00575F;border:1px solid #00575F;border-radius:8px;padding:14px 22px;box-shadow:0 1px 3px rgba(44,24,16,.15);">
-        <span style="font-family:'Playfair Display',serif;font-size:15px;letter-spacing:.04em;color:#fff;">Roberto&rsquo;s Mare</span>
-        <span style="font-size:12px;font-weight:600;letter-spacing:.06em;color:#fff;border:1px solid rgba(255,255,255,.75);border-radius:5px;padding:5px 10px;">Mare &rarr;</span>
       </a>
     </div>
   </div>
