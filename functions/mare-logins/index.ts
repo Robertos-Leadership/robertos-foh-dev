@@ -31,7 +31,7 @@ const cors = {
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") ?? "";
 const FROM = `Roberto's Mare <no-reply@kitchenteam.robertos.ae>`;
 // Mare runs on FOH dev only (12 Oct 2026). Change this when it goes live.
-const APP = "https://robertos-foh-dev.pages.dev/mare.html";
+const APP = "https://robertos-leadership.github.io/robertos-foh/mare.html";
 const TEST_TO = "fguarracino@robertos.ae";
 const MARE = ["mare", "mare_admin"];
 

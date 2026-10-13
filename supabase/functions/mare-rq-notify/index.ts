@@ -9,7 +9,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") ?? "";
 const FROM = `Roberto's Mare <no-reply@kitchenteam.robertos.ae>`;
 // Mare runs on FOH dev only (8 Oct 2026). Change this when it goes live.
-const APP = "https://robertos-foh-dev.pages.dev/mare-answer.html";
+const APP = "https://robertos-leadership.github.io/robertos-foh/mare-answer.html";
 const CORS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
