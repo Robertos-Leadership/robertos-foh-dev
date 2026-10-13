@@ -116,7 +116,7 @@
   // do next; the rare things (first time, master code) are folded under a tap.
   App.signIn = function (err, dead) {
     var a = document.getElementById('app');
-    a.innerHTML = '<div class="hero" style="min-height:100vh;justify-content:center"><div class="hero-top"><span></span>' + M.langSwitch() + '</div>' +
+    a.innerHTML = '<div class="hero" style="min-height:100vh;justify-content:center"><div class="hero-top">' + ((w.MareInstall && w.MareInstall.html('top')) || '<span></span>') + M.langSwitch() + '</div>' +
       '<div style="padding:20px 16px 60px"><form class="signin card" id="f" style="color:var(--ink)">' +
       '<div class="row"><img src="mare-logo-teal.svg" alt="" style="width:56px;height:56px"><h2 class="serif">' + E(T('Sign in')) + '</h2></div>' +
       (dead ? '<div class="notice"><b>' + E(T('This link no longer works.')) + '</b>' +
@@ -233,7 +233,7 @@
   App.S.counts = {};
   App.side = function () {
     var cur = App.S.mod || '';
-    var h = '<aside class="side" id="side"><div class="side-top"><img src="mare-logo-white.svg" alt="Roberto\'s Mare"><div class="side-k">PORTO MONTENEGRO</div></div>' +
+    var h = '<aside class="side" id="side"><div class="side-top"><img src="mare-logo-white.svg" alt="Roberto\'s Mare"><div class="side-k">PORTO MONTENEGRO</div>' + (w.MareInstall ? w.MareInstall.html('top') : '') + '</div>' +
       '<nav class="side-nav" aria-label="' + E(T('Modules')) + '"><button class="sn' + (!cur ? ' on' : '') + '" data-nav="">' + E(T('Today')) + '</button>';
     GROUPS.forEach(function (g) {
       var ms = App.order.filter(function (k) { return App.mods[k].group === g[0] && App.allowed(k); });
@@ -252,7 +252,7 @@
     var a = document.getElementById('app');
     a.innerHTML = App.banner() + '<div class="shell">' + App.side() +
       '<div class="page"><div class="mtop"><button class="burger" id="burger" aria-label="' + E(T('Menu')) + '"><span></span><span></span><span></span></button>' +
-      '<img src="mare-logo-white.svg" alt=""><span class="mtop-t serif">Roberto\'s Mare</span></div>' + inner + '</div><div class="scrim" id="scrim"></div></div>';
+      '<img src="mare-logo-white.svg" alt=""><span class="mtop-t serif">Roberto\'s Mare</span>' + (w.MareInstall ? w.MareInstall.html('short') : '') + '</div>' + inner + '</div><div class="scrim" id="scrim"></div></div>';
     App.on(a, '[data-nav]', function (b) { document.body.classList.remove('menu-open'); App.go(b.getAttribute('data-nav') || null); });
     a.querySelector('#so').onclick = App.signOut;
     App.on(a, '[data-ask]', function () { document.body.classList.remove('menu-open'); if (w.FBI) w.FBI.open(); });

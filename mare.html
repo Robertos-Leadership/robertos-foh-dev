@@ -7,6 +7,13 @@
 <meta name="theme-color" content="#00575F">
 <title>Roberto's Mare</title>
 <link rel="icon" href="mare-logo-teal.svg" type="image/svg+xml">
+<!-- So the app can sit on a phone or a laptop with its own icon (mare-install.js has the button). -->
+<link rel="manifest" href="mare.webmanifest">
+<link rel="apple-touch-icon" href="mare-apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Mare">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,400;1,500&family=Karla:wght@400;500;600;700&display=swap" rel="stylesheet">
 <!-- Roberto's Mare — the management app (Milica, Andrea, Francesco).
@@ -306,10 +313,11 @@ table.sheet tfoot th, table.sheet tfoot td{border-top:2px solid var(--gold, #A88
 <div id="app"><div class="wrap muted" style="padding-top:40px">Loading…</div></div>
 <div class="status" id="status" role="status"></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="mare-i18n.js?v=20261012h"></script>
+<script src="mare-i18n.js?v=20261013a"></script>
 <script src="mare-common.js?v=20261009g"></script>
 <script src="mare-media.js?v=20261008d"></script>
-<script src="mare-mgr.js?v=20261012i"></script>
+<script src="mare-install.js?v=20261013a"></script>
+<script src="mare-mgr.js?v=20261013a"></script>
 <script src="mare-mgr-ops.js?v=20261012e"></script>
 <script src="mare-mgr-back.js?v=20261008d"></script>
 <script src="mare-mgr-logins.js?v=20261012g"></script>
