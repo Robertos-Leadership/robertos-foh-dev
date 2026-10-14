@@ -156,13 +156,25 @@ var FB_ROUNDS = {
   'mare-ordering': {
     name: 'Roberto\'s Mare — ordering, suppliers and prices (Milica)',
     email: {
-      subject: 'Roberto\'s Mare — ordering, suppliers and prices: please try it',
-      body: ['You asked for the ingredient list, the suppliers and their prices in the app, with prices you update by upload, and the kitchen and bar ordering from the app. It is built, for you to try first.',
-             'Your two stock lists are already in: <b>224 kitchen and 268 bar articles</b>, with the price from your files. No supplier is set yet: you add them yourself, when you want.',
-             'The link below walks you through it in <b>13 short steps</b>. For each one tap <b>Yes, like this</b> or <b>I want it differently</b> and tell us how in the note.',
-             'Nothing reaches the kitchen or the bar until you switch it on.'],
+      subject: 'Roberto\'s Mare — ordering, suppliers and prices are in the app',
+      body: ['The ordering you asked for is now in the Mare app, the one you installed. Open the menu: <b>Kitchen &amp; cost → Ordering</b>.',
+             '<b>How it works</b><br>'
+             + '• <b>Articles:</b> your two stock lists are in, 224 kitchen and 268 bar articles, with the price from your files. No supplier is set yet.<br>'
+             + '• <b>Suppliers:</b> add each supplier with phone, Viber and email, and any other field you want. Then give the articles their supplier: tick several and set it in one go.<br>'
+             + '• <b>Prices:</b> export the same stock list (Lager artikala) and upload it in <b>Price upload</b>. You see every change before it is saved.<br>'
+             + '• <b>Orders:</b> the kitchen and the bar order on their phone, and every order comes to you first. You check it and send it to the supplier on Viber, WhatsApp or email.<br>'
+             + '• The team does not see it yet. You switch it on in <b>Admin</b> when you are ready.',
+             '<b>What we still need from you</b><br>'
+             + '• Are the prices with or without PDV?<br>'
+             + '• Is the average price from the stock list the right one, or do you want the supplier\'s price list?<br>'
+             + '• Should the bar order in bottles and boxes instead of litres?<br>'
+             + '• Who should be able to order, in the kitchen and in the bar?<br>'
+             + '• Should the order to the supplier be written in Montenegrin or English?<br>'
+             + '• Does <b>Send on Viber</b> open Viber on your phone and your Mac with the order already written?',
+             'The button below takes you through it in 13 short steps. On each one tap <b>Yes, like this</b> or <b>I want it differently</b> and write your way in the note.',
+             'Thanks,<br>Francesco'],
       cta: 'Try the ordering',
-      wa: 'Milica, the ordering you asked for is in the Mare app: your 224 kitchen and 268 bar articles with their prices, suppliers you add yourself, price upload, and orders that come to you first. The link walks you through it in 13 short steps: tap Yes, like this or tell us your way in the note. Nothing reaches the team until you switch it on.'
+      wa: 'The ordering you asked for is in the Mare app (Kitchen & cost → Ordering): your 224 kitchen and 268 bar articles with prices, suppliers you add yourself, price upload, and orders that come to you first. The team does not see it until you switch it on. The link walks you through it in 13 short steps and asks what we still need: PDV, which price, bottles or litres, who orders, Viber.'
     },
     title: 'Ordering, suppliers and prices',
     ask: FB_ASK.DESIGN,
