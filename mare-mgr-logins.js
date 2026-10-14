@@ -10,7 +10,7 @@
                ['recipe_question_to', 'Questions the team asks under a recipe'],
                ['link_mail_cc', 'A copy when a team member is emailed their phone link']];
   var TEAM_MODS = [['brief', 'Today\'s briefing'], ['check', 'Checklists'], ['rota', 'Rota'], ['recipes', 'Recipes'],
-                   ['kclose', 'Closing report'], ['learn', 'Learning'], ['breakage', 'Breakage'], ['leave', 'Ask for leave'], ['speak', 'Speak up']];
+                   ['kclose', 'Closing report'], ['learn', 'Learning'], ['breakage', 'Breakage'], ['leave', 'Ask for leave'], ['speak', 'Speak up'], ['order', 'Order']];
   var TEAMS = ['Kitchen', 'Service', 'Bar', 'Other'];
   var ERR = {
     email: 'That email address does not look right.', name: 'Type their name.', admin: 'Only a Mare admin can change logins.',

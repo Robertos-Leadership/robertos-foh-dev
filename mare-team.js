@@ -123,7 +123,7 @@
   };
   var MODS = [
     ['brief', 'brief', 'Today\'s briefing'], ['check', 'check', 'Checklists'], ['rota', 'rota', 'Schedule'], ['recipes', 'recipe', 'Recipes'],
-    ['kclose', 'closing', 'Closing report'], ['learn', 'check', 'Learning'], ['breakage', 'breakage', 'Breakage'], ['leave', 'leave', 'Ask for leave'], ['speak', 'speak', 'Speak up']
+    ['kclose', 'closing', 'Closing report'], ['learn', 'check', 'Learning'], ['breakage', 'breakage', 'Breakage'], ['leave', 'leave', 'Ask for leave'], ['speak', 'speak', 'Speak up'], ['order', 'stock', 'Order']
   ];
   function teamMods() {
     var tm = S.feed && S.feed.team_modules; if (!tm) return MODS;
@@ -140,6 +140,7 @@
     if (k === 'recipes') return [T('Mare + Dubai'), false];
     if (k === 'kclose') return [T('Send it at the end of service'), false];
     if (k === 'learn') return [T('Health and safety'), false];
+    if (k === 'order') return [T('To Milica first'), false];
     return ['', false];
   }
   function home() {
@@ -305,6 +306,8 @@
   function rpcS(name, args) {
     if (PREVIEW) {
       if (name === 'mare_s_recipe') return M.rpc('mare_m_recipe', { p_id: args.p_id }, PV_TOKEN).then(function (r) { return r.data || { ok: false }; });
+      if (name === 'mare_s_ord_data') return M.rpc('mare_m_ord_data', { p_days: 14 }, PV_TOKEN).then(function (r) { var d = r.data; if (!d || !d.ok) return { ok: false };
+        return { ok: true, today: d.today, my_team: null, articles: d.articles.filter(function (a) { return a.active; }), suppliers: d.suppliers.filter(function (x) { return x.active; }), orders: [] }; });
       if (name === 'mare_s_media_get') return M.rpc('mare_m_media_get', { p_id: args.p_id }, PV_TOKEN).then(function (r) { return r.data || { ok: false }; });
       M.toast(T('Read only: you are viewing as someone else. Nothing is saved.')); return Promise.resolve({ ok: false, error: 'preview' });
     }
@@ -390,7 +393,7 @@
   function openMod(k, sub) {
     ping(k);
     S.mod = k; S.screen = 'mod'; if (sub) S.sub = sub; else if (k !== S.lastMod) S.sub = null; S.lastMod = k;
-    ({ brief: modBrief, check: modCheck, rota: modRota, recipes: modRecipes, kclose: modKclose, learn: modLearn, breakage: modBreakage, leave: modLeave, speak: modSpeak, hours: modHours, more: modMore })[k]();
+    ({ brief: modBrief, check: modCheck, rota: modRota, recipes: modRecipes, kclose: modKclose, learn: modLearn, breakage: modBreakage, leave: modLeave, speak: modSpeak, hours: modHours, more: modMore, order: modOrder })[k]();
     if (meToken) bnav(k === 'rota' || k === 'recipes' || k === 'kclose' ? k : 'more');
   }
   function feed() { return S.feed || { briefing: null, reads: [], staff: [], shifts: [], check_items: [], ticks: [], recipes: [], actions: [], today: M.today() }; }
@@ -1061,6 +1064,111 @@
     };
   }
 
+  // ── order (14 Oct 2026) ──
+  // Pick articles and quantities; the app splits the order by supplier. Everything goes to
+  // Milica first, except a supplier she has ticked "send straight": then THIS person sends it,
+  // from their own Viber / WhatsApp / email, with the order already written in.
+  var OR = { d: null, b: {}, q: '', store: null, made: null };
+  if (!document.getElementById('mo-tcss')) {
+    var ocss = document.createElement('style'); ocss.id = 'mo-tcss';
+    ocss.textContent = '.or-row{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid rgba(168,131,75,.18)}.or-row:last-child{border-bottom:0}' +
+      '.or-row .tx{flex:1;min-width:0}.or-row .tx b{display:block;font-size:18px;overflow-wrap:anywhere}.or-row .tx span{font-size:14px;color:var(--muted)}' +
+      '.or-q{display:flex;align-items:center;gap:6px}.or-q button{width:46px;height:46px;border-radius:10px;border:1px solid rgba(168,131,75,.4);background:#fff;font-size:24px;color:var(--teal)}' +
+      '.or-q input{width:64px;text-align:center;font-size:18px}.or-list{padding:0!important}' +
+      '.or-bar{position:sticky;bottom:0;background:var(--rail,#0E3B3F);color:#fff;border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:10px;z-index:5}' +
+      '.or-bar label{color:#C9D8D6}.or-send{display:flex;gap:8px;flex-wrap:wrap}.or-send .btn{text-decoration:none}';
+    document.head.appendChild(ocss);
+  }
+  function orName(a) {
+    var n = String(a.name || ''), i = n.lastIndexOf(' / '), sp = i > 0 ? [n.slice(0, i).trim(), n.slice(i + 3).trim()] : null;
+    if (!sp) { var m = n.match(/^([^/]*[^/\d\s])\s*\/\s*([^/\d\s][^/]*)$/); sp = m ? [m[1].trim(), m[2].trim()] : [n, n]; }
+    return M.lang() === 'me' ? (a.name_me || sp[0]) : (a.name_en || sp[1]);
+  }
+  function orUnit(u) { return T({ kom: 'pcs', KG: 'kg', L: 'L' }[u] || u || ''); }
+  function orQty(q) { q = Math.round(+q * 1000) / 1000; return M.lang() === 'me' ? String(q).replace('.', ',') : String(q); }
+  function orText(o) {
+    var me = M.lang() === 'me';
+    return (me ? 'Narudžba' : 'Order') + ' — Roberto\'s Mare (' + (me ? 'br.' : 'no.') + ' ' + o.no + ')\n' + (o.deliver_on ? (me ? 'Isporuka: ' : 'Delivery: ') + M.niceDate(o.deliver_on) + '\n' : '') + '\n' +
+      o.lines.map(function (l) { return '• ' + l.name + ' — ' + orQty(l.qty) + ' ' + orUnit(l.unit); }).join('\n') + (o.note ? '\n\n' + (me ? 'Napomena: ' : 'Note: ') + o.note : '') +
+      '\n\n' + (me ? 'Hvala,' : 'Thank you,') + '\nRoberto\'s Mare, Porto Montenegro';
+  }
+  function modOrder() {
+    OR.store = S.sub || OR.store || ((S.meData && S.meData.team === 'Bar') ? 'bar' : 'kitchen');
+    var TABS = [['kitchen', 'Kitchen'], ['bar', 'Bar']];
+    S.sub = OR.store;
+    if (OR.made) return orDone();
+    main.innerHTML = frame('Order', '<div class="muted big">' + E(T('Loading…')) + '</div>', TABS);
+    bindFrame();
+    rpcS('mare_s_ord_data', { p_device: dev(), p_token: meToken === '__preview__' ? null : meToken, p_staff: null, p_pin: pinArg() }).then(function (d) {
+      if (S.mod !== 'order') return;
+      if (!d || !d.ok) { main.innerHTML = frame('Order', '<div class="card muted big">' + E(T('Could not load. Try again in a moment.')) + '</div>', TABS); bindFrame(); return; }
+      OR.d = d; orPaint();
+    });
+  }
+  function orPaint() {
+    var TABS = [['kitchen', 'Kitchen'], ['bar', 'Bar']], d = OR.d, q = OR.q.toLowerCase();
+    var sups = {}; d.suppliers.forEach(function (x) { sups[x.id] = x; });
+    var arts = d.articles.filter(function (a) { return a.store === OR.store; });
+    var list = arts.filter(function (a) { return !q || (a.name + ' ' + (a.name_me || '') + ' ' + (a.name_en || '') + ' ' + a.code).toLowerCase().indexOf(q) >= 0; });
+    var inB = arts.filter(function (a) { return OR.b[a.id] > 0; });
+    var tot = inB.reduce(function (s, a) { return s + (a.price != null ? a.price * OR.b[a.id] : 0); }, 0), ns = {};
+    inB.forEach(function (a) { ns[a.supplier_id || 'none'] = 1; });
+    function rows(l) {
+      return '<div class="card or-list">' + l.map(function (a) {
+        var s = a.supplier_id && sups[a.supplier_id];
+        return '<div class="or-row"><div class="tx"><b>' + E(orName(a)) + '</b><span>' + (a.price != null ? M.money(+a.price) + ' / ' + E(orUnit(a.unit)) : E(T('no price'))) + ' · ' + E(s ? s.name : T('Supplier to choose')) + '</span></div>' +
+          '<div class="or-q"><button data-dq="' + a.id + '" aria-label="' + E(T('Less')) + '">−</button><input type="text" inputmode="decimal" data-num="1" data-oq="' + a.id + '" value="' + (OR.b[a.id] ? E(orQty(OR.b[a.id])) : '') + '" aria-label="' + E(T('Quantity')) + '"><button data-iq="' + a.id + '" aria-label="' + E(T('More')) + '">+</button></div></div>';
+      }).join('') + '</div>';
+    }
+    var h = '<div class="stack"><input type="text" id="oq" value="' + E(OR.q) + '" placeholder="' + E(T('Search: vongole, spinach, Heineken…')) + '" aria-label="' + E(T('Search')) + '">';
+    if (!q && inB.length) h += '<h3 class="muted" style="letter-spacing:2px;font-size:13px;text-transform:uppercase;margin:4px 0 0">' + E(T('In this order')) + '</h3>' + rows(inB);
+    h += list.length ? rows(q ? list : list.slice(0, 40)) : '<div class="muted">' + E(T('Nothing matches.')) + '</div>';
+    if (!q && list.length > 40) h += '<div class="muted">' + E(T('Search to find the other {n}.', { n: list.length - 40 })) + '</div>';
+    if (inB.length) h += '<div class="or-bar"><div class="row between" style="display:flex;justify-content:space-between;align-items:center;gap:10px"><span>' + E(T('{n} lines · suppliers: {s}', { n: inB.length, s: Object.keys(ns).length })) + '</span><b style="font-size:22px">' + M.money(tot) + '</b></div>' +
+      '<label class="f">' + E(T('Delivery day')) + '<input type="date" id="od" value="' + E(OR.dd || M.addDays(M.today(), 1)) + '"></label>' +
+      '<label class="f">' + E(T('Note for the supplier (optional)')) + '<input type="text" id="on" value="' + E(OR.nn || '') + '"></label>' +
+      '<button class="btn" id="ogo" style="background:var(--gold-2,#C9A46A);color:#0E3B3F;border-color:var(--gold-2,#C9A46A)">' + E(T('Send the order')) + '</button></div>';
+    if (d.orders && d.orders.length) h += '<details><summary>' + E(T('Orders of the last two weeks · {n}', { n: d.orders.length })) + '</summary><div class="stack" style="margin-top:8px">' + d.orders.map(function (o) {
+      var st = { waiting: ['With Milica', 'amber'], direct: ['To send', 'amber'], sent: ['Sent', 'green'], cancelled: ['Cancelled', 'grey'] }[o.status] || [o.status, 'grey'];
+      return '<div class="day"><div><b>' + E(T('Order {n}', { n: o.no })) + ' · ' + E(o.supplier || T('Supplier to choose')) + '</b><div class="small muted">' + E(M.shortDate(M.dateKey(o.created_at))) + ' · ' + E(o.by_name || '') + ' · ' + E(T('{n} lines', { n: o.lines.length })) + '</div></div><span class="tag ' + st[1] + '">' + E(T(st[0])) + '</span></div>';
+    }).join('') + '</div></details>';
+    main.innerHTML = frame('Order', h + '</div>', TABS);
+    bindFrame(); idle(300000);
+    var oq = document.getElementById('oq'); oq.oninput = function () { OR.q = oq.value; var p = oq.selectionStart; orPaint(); var n = document.getElementById('oq'); n.focus(); n.setSelectionRange(p, p); };
+    on('[data-iq]', function (b) { var id = b.getAttribute('data-iq'); OR.b[id] = (OR.b[id] || 0) + 1; orPaint(); });
+    on('[data-dq]', function (b) { var id = b.getAttribute('data-dq'); OR.b[id] = Math.max(0, (OR.b[id] || 0) - 1); orPaint(); });
+    on('[data-oq]', function (inp) { var v = M.numSafe(inp.value); if (v == null && inp.value.trim()) return; OR.b[inp.getAttribute('data-oq')] = v || 0; orPaint(); }, 'change');
+    ['od', 'on'].forEach(function (k) { var el = document.getElementById(k); if (el) el.onchange = function () { OR[k === 'od' ? 'dd' : 'nn'] = el.value; }; });
+    var go = document.getElementById('ogo'); if (go) go.onclick = function () {
+      var lines = inB.map(function (a) { return { id: a.id, qty: OR.b[a.id] }; }), note = document.getElementById('on').value, dd = document.getElementById('od').value || null;
+      askWho(T('Send the order ({n} lines)', { n: lines.length }), function (staff, pin) {
+        return rpcS('mare_s_ord_send', { p_device: dev(), p_token: meToken, p_staff: staff, p_pin: pin || pinArg(), p_store: OR.store, p_lines: lines, p_note: note, p_deliver: dd });
+      }).then(function (x) { if (x && x.ok) { OR.b = {}; OR.nn = ''; OR.made = x.orders; orDone(); } });
+    };
+  }
+  function orDone() {
+    var made = OR.made || [], direct = made.filter(function (o) { return o.status === 'direct'; });
+    var h = '<div class="stack"><div class="card"><b class="serif" style="font-size:26px">' + E(T('Thank you.')) + '</b><p class="big" style="margin:8px 0 0">' +
+      E(made.length - direct.length === 1 ? T('Your order went to Milica. She checks it and sends it to the supplier.') : made.length - direct.length > 1 ? T('Orders sent to Milica: {n}. She checks them and sends them to the suppliers.', { n: made.length - direct.length }) : '') + '</p></div>';
+    direct.forEach(function (o) {
+      var s = o.supplier || {}, txt = orText(o), enc = encodeURIComponent(txt);
+      h += '<div class="card stack" data-do="' + o.id + '"><b class="serif" style="font-size:24px">' + E(T('Send it to {n}', { n: s.name || '' })) + '</b><p class="muted" style="margin:0">' + E(T('Milica set this supplier to receive orders straight from you. Send it on Viber, then tap It went.')) + '</p>' +
+        '<div class="or-send"><a class="btn" href="viber://forward?text=' + enc + '">' + E(T('Send on Viber')) + '</a>' +
+        (s.whatsapp ? '<a class="btn ghost" target="_blank" rel="noopener" href="https://wa.me/' + String(s.whatsapp).replace(/[^\d]/g, '').replace(/^00/, '') + '?text=' + enc + '">WhatsApp</a>' : '') +
+        (s.email ? '<a class="btn ghost" href="mailto:' + encodeURIComponent(s.email) + '?subject=' + encodeURIComponent('Roberto\'s Mare ' + o.no) + '&body=' + enc + '">' + E(T('Email')) + '</a>' : '') +
+        '</div><button class="btn" data-went="' + o.id + '">' + E(T('It went')) + '</button></div>';
+    });
+    h += '<button class="btn ghost" id="onew">' + E(T('New order')) + '</button></div>';
+    main.innerHTML = frame('Order', h);
+    bindFrame();
+    document.getElementById('onew').onclick = function () { OR.made = null; modOrder(); };
+    on('[data-went]', function (b) {
+      var id = b.getAttribute('data-went');
+      askWho(T('The order went'), function (staff, pin) { return rpcS('mare_s_ord_mark', { p_device: dev(), p_token: meToken, p_staff: staff, p_pin: pin || pinArg(), p_id: id, p_via: 'app' }); })
+        .then(function (x) { if (x && x.ok) { OR.made = OR.made.filter(function (o) { return o.id !== id; }); if (!OR.made.filter(function (o) { return o.status === 'direct'; }).length) OR.made = null; afterAction(T('Thank you.'), T('Marked as sent.')); } });
+    });
+  }
+
   // ── leave ──
   var KINDS = { annual: 'Annual', unpaid: 'Unpaid', sick: 'Sick', other: 'Other' };
   function modLeave() {
@@ -1202,7 +1310,7 @@
     var hasClock = (me.punches || []).length > 0, hasLeave = tm.indexOf('leave') >= 0;
     if (hasClock || hasLeave) h += '<div class="tot">' + (hasClock ? '<div><span>' + E(T('Hours this week')) + '</span><b>' + M.durShort(weekMin(sh, M.weekStart(f.today))) + '</b></div>' : '') +
       (hasLeave ? '<div><span>' + E(T('Leave days left')) + '</span><b>' + ((me.annual_days != null ? me.annual_days : 21) - used) + '</b></div>' : '') + '</div>';
-    var cards = teamMods().filter(function (m) { return m[0] === 'rota' || m[0] === 'recipes' || m[0] === 'kclose' || m[0] === 'learn'; });
+    var cards = teamMods().filter(function (m) { return m[0] === 'rota' || m[0] === 'recipes' || m[0] === 'kclose' || m[0] === 'learn' || m[0] === 'order'; });
     if (cards.length) h += '<div class="mods">' + cards.map(function (m) { var st = modStat(m[0]);
       return '<button class="mod" data-open="' + m[0] + '"><span class="ic">' + M.icon(m[1], 22) + '</span><b>' + E(T(m[2])) + '</b><span class="s' + (st[1] ? ' alert' : '') + '">' + E(st[0]) + '</span></button>'; }).join('') + '</div>';
     if (hasClock) h += '<div class="small muted" style="text-align:center;font-family:\'Cormorant Garamond\',serif;font-style:italic;font-size:17px">' + E(T('Clock in at the tablet by the staff entrance.')) + '</div>';
@@ -1213,7 +1321,7 @@
   // "More" holds what the bottom bar does not: My hours once the person has clock-ins, and any other module switched on.
   function moreTiles() {
     var hasClock = !!(S.meData && (S.meData.punches || []).length);
-    return (hasClock ? [['hours', 'hours', 'My hours']] : []).concat(teamMods().filter(function (m) { return m[0] !== 'rota' && m[0] !== 'recipes' && m[0] !== 'kclose'; }));
+    return (hasClock ? [['hours', 'hours', 'My hours']] : []).concat(teamMods().filter(function (m) { return m[0] !== 'rota' && m[0] !== 'recipes' && m[0] !== 'kclose' && m[0] !== 'order'; }));
   }
   function modMore() {
     var tiles = moreTiles();

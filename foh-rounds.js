@@ -147,6 +147,88 @@ FB_WORK_ANSWERS[FB_A.ADDS] = 1;
 
 // ── The rounds. Newest first. ───────────────────────────────────────────────
 var FB_ROUNDS = {
+  // ── Roberto's Mare Ordering — for Milica (14 Oct 2026) ───────────────────
+  // Her request: the kitchen and bar article lists with suppliers and prices in the app, prices
+  // updated by uploading the stock list, kitchen and bar ordering from the app. Built on FOH DEV
+  // with her two real files (224 kitchen + 268 bar articles, no suppliers yet). Each item says how
+  // we built it; she answers "like this" or "my way". The Order screen is NOT switched on for the
+  // team: she does that herself (Admin → what each team's phone shows → Order). SEND FROM THE DEV ADMIN.
+  'mare-ordering': {
+    name: 'Roberto\'s Mare — ordering, suppliers and prices (Milica)',
+    email: {
+      subject: 'Roberto\'s Mare — ordering, suppliers and prices: please try it',
+      body: ['You asked for the ingredient list, the suppliers and their prices in the app, with prices you update by upload, and the kitchen and bar ordering from the app. It is built, for you to try first.',
+             'Your two stock lists are already in: <b>224 kitchen and 268 bar articles</b>, with the price from your files. No supplier is set yet: you add them yourself, when you want.',
+             'The link below walks you through it in <b>13 short steps</b>. For each one tap <b>Yes, like this</b> or <b>I want it differently</b> and tell us how in the note.',
+             'Nothing reaches the kitchen or the bar until you switch it on.'],
+      cta: 'Try the ordering',
+      wa: 'Milica, the ordering you asked for is in the Mare app: your 224 kitchen and 268 bar articles with their prices, suppliers you add yourself, price upload, and orders that come to you first. The link walks you through it in 13 short steps: tap Yes, like this or tell us your way in the note. Nothing reaches the team until you switch it on.'
+    },
+    title: 'Ordering, suppliers and prices',
+    ask: FB_ASK.DESIGN,
+    intro: [
+      '<b>What you asked for.</b> The ingredient list and the suppliers with the prices Roberto\'s Mare pays today, prices you can update yourself by uploading a file, and the kitchen and the bar ordering from the app.',
+      '<b>Where it is.</b> Open the <a href="https://robertos-foh-dev.pages.dev/mare.html#ordering/articles">Mare app</a> and sign in with your email and password. In the menu on the left: <b>Kitchen &amp; cost → Ordering</b>. Five tabs: <b>Orders</b>, <b>New order</b>, <b>Articles</b>, <b>Suppliers</b>, <b>Price upload</b>. <b>EN | ME</b> at the bottom of the menu switches the language.',
+      '<b>Press anything.</b> Make a supplier, give it articles, make an order and send it to yourself. Tell Francesco when you are done and we remove your test suppliers and orders, so the real ones start clean.',
+      '<b>The rule we followed:</b> every order comes to you first. You decide later, supplier by supplier, if one can receive orders directly.'
+    ],
+    howto: 'Tap <b>Yes, like this</b> if it is right, or <b>I want it differently</b> and write how in the note. The note is the most useful part.<br><br>Your answers are kept on this phone as you go, so you can stop and come back. Tap <b>Send my answers</b> when you are done.',
+    lastQ: 'What is missing? For example: checking the delivery against the order, a minimum stock that suggests what to order, a weekly order day per supplier, the orders feeding Sales vs purchase. Anything you need to run ordering at Mare.',
+    items: [
+      { id:'o-list',
+        said: 'Your article list',
+        today: 'Ordering → <b>Articles</b>. Your two files are in: <b>224 kitchen</b> and <b>268 bar</b> articles, with code (šifra), unit and price. The buttons on top filter: Kitchen, Bar, <b>No supplier yet</b>, <b>No price</b> (40 articles have price 0 in your files), Off the list. Tap an article to change it. Is this the list you want to order from?',
+        label: 'Article list' },
+      { id:'o-names',
+        said: 'Names in English and Montenegrin',
+        today: 'The names come from your stock list. <b>146 of the 492</b> already have both languages (“krastavac / cucumber local”): the app splits them, so each language shows its own name. The other 346 show the same name in both, until someone types the second name in the article. We did <b>not</b> machine-translate them, because a wrong name on an order costs money. Is that right, or do you want us to fill them and you check?',
+        label: 'Two languages' },
+      { id:'o-supplier',
+        said: 'The supplier page',
+        today: 'Ordering → <b>Suppliers → New supplier</b>. Name, how they take orders (Viber, WhatsApp, email, phone), contact, phone, Viber, WhatsApp, email, delivery days, order before, notes. <b>+ Add a field</b> adds any field you want (minimum order, PIB, bank account…), and it appears on every supplier. Which fields do you want?',
+        label: 'Supplier page' },
+      { id:'o-assign',
+        said: 'Giving the articles their supplier',
+        today: 'Articles → <b>No supplier yet</b>: tick several (or <b>Tick all shown</b> after a search) and <b>Set supplier</b> once. Or tap <b>+ Choose supplier</b> on one article. An article without a supplier can still be ordered: you choose the supplier when the order reaches you. Would you rather send us an Excel with a supplier column, and we load it for you?',
+        label: 'Set suppliers' },
+      { id:'o-upload',
+        said: 'Updating the prices',
+        today: 'Ordering → <b>Price upload</b>. Export the same file you sent us (<i>Lager artikala</i>) for the kitchen or the bar and upload it. The app matches each line on the <b>šifra</b>, never the name, and first <b>shows you</b> every price that changed (old, new, %), the new articles and the ones missing from the file. Nothing is saved until you press <b>Update the prices</b>; nothing is ever deleted. Every price change is kept in the article’s <b>Price history</b>. How often would you upload?',
+        label: 'Price upload' },
+      { id:'o-price',
+        said: 'Which price is it?',
+        today: 'The price is the column <b>Sr.nab.cij.</b> of your file: the <b>average purchase price</b> per kg, litre or piece, separately for kitchen and bar (carrots are €0.83 in the kitchen file and €1.10 in the bar file). Is this the price you want to see when ordering, or the supplier’s current price list? And is it <b>with or without PDV</b>?',
+        label: 'Price & PDV' },
+      { id:'o-units',
+        said: 'Bottles, boxes and litres',
+        today: 'In the bar file <b>128 articles are in litres</b> (spirits, wine), but the bar orders bottles. Each article has a box <b>How it is bought</b> (e.g. “box of 6 bottles”). Should the order be in bottles and boxes instead of litres? Tell us how the bar orders today.',
+        label: 'Units' },
+      { id:'o-new',
+        said: 'Making an order',
+        today: 'Ordering → <b>New order</b>: Kitchen or Bar, search, + / − or type the quantity, delivery day, a note. <b>Create the order</b> splits it by supplier by itself. The chefs and the bar get the same screen on their phone (a big <b>Order</b> button on the home page).',
+        label: 'New order' },
+      { id:'o-approve',
+        said: 'Every order comes to you first',
+        today: 'Ordering → <b>Orders</b>: what waits for you, oldest first, with the total. You can change a quantity, choose the supplier when there is none (and give those articles that supplier from now on), cancel, or send.',
+        label: 'Your check' },
+      { id:'o-send',
+        said: 'Sending to the supplier: Viber, WhatsApp, email',
+        today: '<b>Send on Viber</b> opens Viber on your phone or laptop with the order already written (number, delivery day, every line, the note); you choose the supplier and press send. WhatsApp and email open the same way when the supplier has them. <b>Copy the order</b> works for anything else. Then <b>Yes, mark as sent</b>. The app never sends to a supplier by itself. Should the message be in Montenegrin or English?',
+        label: 'Viber & co.' },
+      { id:'o-direct',
+        said: 'Orders straight to a supplier (later)',
+        today: 'On each supplier: <b>Send orders straight to this supplier</b>. Off for all of them. Only you can switch it on: then the person who orders sends it on Viber from their own phone, and you still see it in Orders. Articles without a supplier always come to you. Do you want this, and for which suppliers?',
+        label: 'Direct suppliers' },
+      { id:'o-team',
+        said: 'Switching it on for the kitchen and the bar',
+        today: 'It is <b>not on</b> for the team yet. When you are happy: Menu → <b>Admin</b> → what each team’s phone shows → tick <b>Order</b> for Kitchen and/or Bar. Today only the five kitchen chefs are in the app; the bar has nobody yet. Who should be able to order?',
+        label: 'Who orders' },
+      { id:'o-lang',
+        said: 'The words',
+        today: 'Every new screen is in English and Montenegrin. The Montenegrin was written by us: tell us any word that reads wrong.',
+        label: 'Montenegrin' }
+    ]
+  },
   // ── FOH Learning section, for Alessandro Longhi (Restaurant Manager) ──────
   // Born from his "Tell us" idea of 7 Oct 2026 (inbox 0f27d406): a Learning
   // section in the FOH app "same as the BOH" — Food Bible, wine bible by the
