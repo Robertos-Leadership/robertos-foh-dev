@@ -51,6 +51,12 @@ var eqHelp    = false;
 try { if (sessionStorage.getItem('eq-mode') === 'equipment') eqMode = 'equipment'; } catch(e){}
 
 function eqSuper(){ return !!(eqUser && typeof STOCK_SUPER === 'object' && STOCK_SUPER[eqUser.emp_id]); }
+// Starting and closing a count is on any employee ID (asked through "Send
+// feedback", 14 Oct 2026) — the person who runs the count opens and closes it.
+// Reopening is on an employee ID only for THIS month's count: reopening an earlier
+// month would put last month's figures in front of a counter (the anchoring rule).
+function eqCanOpenClose(){ return !!eqUser; }
+function eqCanReopen(){ return eqSuper() || !!(eqUser && eqTake && eqTake.month === eqMonthEnd()); }
 function eqEsc(s){ return String(s==null?'':s)
   .replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
 function eqOpen(){ return !!(eqTake && eqTake.status !== 'closed'); }
@@ -228,7 +234,7 @@ function eqDone(){
 // the month: start one, close one, reopen one
 // ══════════════════════════════════════════════════════════════════════════
 async function eqStartMonth(){
-  if (!eqSuper()){ eqToast('Only an admin code (1212 / 0000 / 2468) can start a count.', true); return; }
+  if (!eqCanOpenClose()){ eqToast('Enter your employee ID first, then start the count.', true); return; }
   var m = eqMonthEnd();
   if (eqTakes.filter(function(t){ return t.month === m; }).length){ await eqOpenMonth(m); eqTab='count'; eqRender(); return; }
   eqBusy = true; eqRender();
@@ -240,8 +246,9 @@ async function eqStartMonth(){
   eqToast(eqSecLabel()+' — '+eqMonthName(m)+' is open for counting.');
 }
 async function eqCloseMonth(reopen){
-  if (!eqSuper()){ eqToast('Only an admin code (1212 / 0000 / 2468) can close or reopen a count.', true); return; }
+  if (!eqCanOpenClose()){ eqToast('Enter your employee ID first.', true); return; }
   if (!eqTake) return;
+  if (reopen && !eqCanReopen()){ eqToast('Only an admin code (1212 / 0000 / 2468) can reopen an earlier month.', true); return; }
   eqBusy = true; eqRender();
   var r = await sb.from('foh_equipment_takes').update({
       status: reopen ? 'counting' : 'closed',
@@ -747,25 +754,25 @@ function eqRender(){
     '<button class="eqfold" onclick="eqHelp=!eqHelp;eqRender()">'+(eqHelp?'Hide how this works':'How this works')+'</button>'+
     (eqHelp ? '<p class="eqhelp">Every line has its photograph, so nobody counts the wrong glass. Type what is in the store '+
       'and what is in use; the total adds itself up. Leave a box empty if you have not counted it — empty is not zero. '+
-      'An admin code starts and closes the month, enters what was received, and sees last month and what is short.</p>' : '')+
+      'Anyone with an employee ID can start and close the count. An admin code enters what was received, and sees last month and what is short.</p>' : '')+
     '</div>';
   var tools = '<div class="eqtools">'+eqMonthPicker()+
     '<button class="eqb2'+(eqTab==='count'?' on':'')+'" onclick="eqTab=\'count\';eqRender()">Count</button>'+
     '<button class="eqb2'+(eqTab==='summary'?' on':'')+'" onclick="eqTab=\'summary\';eqRender()">Summary</button>'+
     (sup ? '<button class="eqb2'+(eqTab==='manage'?' on':'')+'" onclick="eqTab=\'manage\';eqRender()">Manage</button>' : '')+
-    (sup && eqTake ? '<button class="eqb2" onclick="eqCloseMonth('+(open?'false':'true')+')"'+(eqBusy?' disabled':'')+'>'+(open?'Close this count':'Reopen it')+'</button>' : '')+
-    (sup && !hasCur ? '<button class="eqb" onclick="eqStartMonth()"'+(eqBusy?' disabled':'')+'>Start '+eqEsc(eqMonthName(cur))+'</button>' : '')+
+    (eqCanOpenClose() && eqTake && (open || eqCanReopen()) ? '<button class="eqb2" onclick="eqCloseMonth('+(open?'false':'true')+')"'+(eqBusy?' disabled':'')+'>'+(open?'Close this count':'Reopen it')+'</button>' : '')+
+    (eqCanOpenClose() && !hasCur ? '<button class="eqb" onclick="eqStartMonth()"'+(eqBusy?' disabled':'')+'>Start '+eqEsc(eqMonthName(cur))+'</button>' : '')+
     (sup ? '<button class="eqb2" onclick="eqExcel()">Excel</button>' : '')+
     '<button class="eqb2" onclick="window.print()">Print</button>'+
   '</div>';
   var state = '';
   if (!eqTake){
     state = '<div class="eqnote warn"><b>No count is open for '+eqEsc(eqSecLabel())+'.</b> '+
-      (sup ? 'Press <b>Start '+eqEsc(eqMonthName(cur))+'</b> and the whole list appears, ready to count.' : 'An admin code (1212 / 0000 / 2468) starts one.')+'</div>';
+      (eqCanOpenClose() ? 'Press <b>Start '+eqEsc(eqMonthName(cur))+'</b> and the whole list appears, ready to count.' : 'Enter your employee ID above to start one.')+'</div>';
   } else if (!open){
     state = '<div class="eqnote"><b>'+eqEsc(eqMonthName(eqMonth))+' is closed.</b> '+(eqTake.note ? eqEsc(eqTake.note)+' ' : '')+
       'Nothing on it can change until it is reopened.'+
-      (!hasCur ? (sup ? '' : ' The next count starts when an admin code opens '+eqEsc(eqMonthName(cur))+'.') : '')+'</div>';
+      (!hasCur ? (eqCanOpenClose() ? '' : ' Enter your employee ID to start '+eqEsc(eqMonthName(cur))+'.') : '')+'</div>';
   } else {
     state = '<div class="eqnote"><b id="eq-done">'+eqDone()+' of '+eqShelf.length+' counted</b> · '+eqEsc(eqMonthName(eqMonth))+' is open. '+
       'Empty is not the same as zero.</div>';
