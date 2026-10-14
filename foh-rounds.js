@@ -168,7 +168,7 @@ var FB_ROUNDS = {
     ask: FB_ASK.DESIGN,
     intro: [
       '<b>What you asked for.</b> The ingredient list and the suppliers with the prices Roberto\'s Mare pays today, prices you can update yourself by uploading a file, and the kitchen and the bar ordering from the app.',
-      '<b>Where it is.</b> Open the <a href="https://robertos-foh-dev.pages.dev/mare.html#ordering/articles">Mare app</a> and sign in with your email and password. In the menu on the left: <b>Kitchen &amp; cost → Ordering</b>. Five tabs: <b>Orders</b>, <b>New order</b>, <b>Articles</b>, <b>Suppliers</b>, <b>Price upload</b>. <b>EN | ME</b> at the bottom of the menu switches the language.',
+      '<b>Where it is.</b> Open the <a href="https://robertos-leadership.github.io/robertos-foh/mare.html#ordering/articles">Mare app</a> (the one you installed) and sign in with your email and password. In the menu on the left: <b>Kitchen &amp; cost → Ordering</b>. Five tabs: <b>Orders</b>, <b>New order</b>, <b>Articles</b>, <b>Suppliers</b>, <b>Price upload</b>. <b>EN | ME</b> at the bottom of the menu switches the language.',
       '<b>Press anything.</b> The suppliers you add are real and stay: start with the ones you use most. Make an order and send it to yourself to see how it works, then cancel it (or tell Francesco and we remove the test orders).',
       '<b>The rule we followed:</b> every order comes to you first. You decide later, supplier by supplier, if one can receive orders directly.'
     ],
