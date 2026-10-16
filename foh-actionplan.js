@@ -77,6 +77,8 @@ async function apLoad(){
       sb.from('ap_weeks').select('*').order('week_start', { ascending: false })
     ]);
     var bad = r.filter(function(x){ return x.error; })[0];
+    // Signed out (anon key) the tables refuse outright; that is the same answer.
+    if(bad && (bad.error.code === '42501' || /permission denied/i.test(bad.error.message || ''))){ AP.noAccess = true; AP.loaded = true; return; }
     if(bad) throw new Error(bad.error.message);
     // RLS returns zero rows (not an error) to anyone not on the list.
     if(!r[0].data || !r[0].data.length){ AP.noAccess = true; AP.loaded = true; return; }
