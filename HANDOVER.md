@@ -78,3 +78,10 @@ org-wide (FOH staff included); clock-in/out reaches FOH via the shared Kitchen `
 **Start by** confirming with Francesco which task to pick up (likely: verify the pending Revenue SQL is
 run, or build the Closing Report). Read `revenue-module-spec.md` and the FOH `index.html` revenue
 section first.
+
+## Roberto's 3.0 Action Plan (module `actionplan`, Phase 1, built 16 Oct 2026)
+- **Screen:** `foh-actionplan.js`, a card under "Executive" on the Manager landing. Overview (plan %, steps, late, relaunch, 10 points in 4 groups, filters), a page per point (steps with owner and date, How we check, weekly results, proposed changes, comments), and Amin's weekly approval.
+- **Who:** `ap_settings.members` = fguarracino@robertos.ae, onafid@robertos.ae, akadrie@skelmore.com, justin@skelmore.com. **RLS on every `ap_*` table is the lock.** The `actionplan` key in `app_users.modules` only shows the card. Anyone else reads zero rows and sees "No access". `ap_settings.approver` (Amin) is the only one who can approve changes or the week (enforced by RLS and a trigger). An app Admin can edit `ap_settings`.
+- **Tables:** `ap_settings`, `ap_points`, `ap_steps`, `ap_measures`, `ap_snapshots` (weekly stored numbers), `ap_results` (what worked, per week), `ap_comments`, `ap_changes`, `ap_weeks`, `ap_cron` (scheduler secret, service only), `ap_sr_nights` (cache of settled SevenRooms nights, service only). SQL: `actionplan-001…004*.sql`.
+- **Rules:** a late step's date only moves through `ap_move_date(step, date, reason)`, which saves the reason as a comment. A direct update is refused by the `ap_steps_guard` trigger.
+- **Function `ap-weekly`** (verify_jwt on): `refresh` (any member), `preview`, and `send` (pg_cron job `ap-weekly-email`, Wed 04:00 UTC = 08:00 Dubai, or an Admin). It computes walk-in share, channels, 90-day return (SevenRooms through Kitchen `sevenrooms-sync`, same rules as Reservation Reports), Monday and Sunday guests (`rev_daily`; a missing night shows "No data", never 0) and the Google rating. It stores them in `ap_measures` + `ap_snapshots`. **The email goes only to `ap_settings.recipients`**, which is Francesco while testing.
