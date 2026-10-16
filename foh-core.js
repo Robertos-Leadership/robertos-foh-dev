@@ -297,7 +297,7 @@ function renderNav(){
   const active = resolveTab(state.currentTab);
   // Module-scoped nav: Revenue and Operations are single pages reached from the Manager
   // landing — no cross-module links there. Only the Events module keeps its own sub-tabs.
-  if(active==='revenue' || active==='operations' || active==='stocktake' || active==='admin' || active==='privateevents' || active==='reviews' || active==='reservations' || active==='resreports' || active==='bizlunch' || active==='modanight'){ nav.innerHTML=''; return; }
+  if(active==='revenue' || active==='operations' || active==='stocktake' || active==='admin' || active==='privateevents' || active==='reviews' || active==='reservations' || active==='resreports' || active==='bizlunch' || active==='modanight' || active==='actionplan'){ nav.innerHTML=''; return; }
   const eventTabs = state.events.slice().sort(eventSort).map(ev=>
     `<div class="nav-tab ${active===eventTab(ev)?'active':''}" data-tab="${eventTab(ev)}" onclick="switchTab('${eventTab(ev)}')">${ev.name}</div>`
   ).join('');
@@ -338,6 +338,9 @@ function moduleOf(t){
   // permission, so nobody gains or loses access the day it ships.
   if(t==='bizlunch') return 'events';
   if(t==='modanight') return 'events';   // Moda Night: same permission, 7 Oct 2026
+  // Roberto's 3.0 Action Plan (16 Oct 2026): its own grant. The card follows it;
+  // the lock is RLS on the ap_* tables (ap_settings.members) — see foh-actionplan.js.
+  if(t==='actionplan') return 'actionplan';
   if(t==='revenue'||t==='operations'||t==='stocktake'||t==='admin'||t==='privateevents'||t==='reviews'||t==='reservations') return t;
   return 'events';   // dashboard, event_*, events => the Events module
 }
@@ -411,6 +414,10 @@ function applyFohAccess(){
   if(rrc) rrc.style.display = fohBlocked('resreports') ? 'none' : '';
   var rrn=document.getElementById('mod-new-resreports');
   if(rrn) rrn.style.display = fohNewSeen('reservations') ? 'none' : '';
+  var apc=document.getElementById('mod-card-actionplan');
+  if(apc) apc.style.display = fohBlocked('actionplan') ? 'none' : '';
+  var ape=document.getElementById('sec-exec');
+  if(ape) ape.style.display = fohBlocked('actionplan') ? 'none' : '';
   var ad=document.getElementById('mod-card-admin');
   if(ad) ad.style.display = fohCanAdmin() ? '' : 'none';
   // Roberto's Mare attendance (Porto Montenegro) lives on its own page,
@@ -4647,7 +4654,7 @@ function enterApp(module){
   // Land in the chosen module — Revenue/Operations go straight there; Events keeps the
   // current Events-family tab (Leaders or an event) but NEVER another module's tab.
   var cur=state.currentTab;
-  var target=(module==='revenue'||module==='operations'||module==='stocktake'||module==='admin'||module==='privateevents'||module==='reviews'||module==='reservations'||module==='resreports'||module==='bizlunch'||module==='modanight') ? module
+  var target=(module==='revenue'||module==='operations'||module==='stocktake'||module==='admin'||module==='privateevents'||module==='reviews'||module==='reservations'||module==='resreports'||module==='bizlunch'||module==='modanight'||module==='actionplan') ? module
     : ((cur==='dashboard' || (cur && cur.indexOf('event_')===0)) ? cur : 'dashboard');
   switchTab(target);
 }
@@ -8256,6 +8263,7 @@ function showManagerLanding(){
   document.getElementById('app').style.display = 'none';
   document.getElementById('login').classList.remove('open');
   applyFohAccess();
+  if(typeof apHashOpen==='function') apHashOpen();   // the Wednesday email's "Open the plan" link
 }
 
 function fohSignOut(){

@@ -425,6 +425,20 @@ if ('serviceWorker' in navigator) {
             <div class="module-stat" id="hubstat-stocktake"></div>
           </div>
         </div>
+        <!-- Roberto's 3.0 Action Plan (16 Oct 2026). Shown only with the 'actionplan'
+             grant; the data itself is locked by RLS to ap_settings.members. -->
+        <div class="module-section" id="sec-exec" style="display:none;">Executive</div>
+        <div class="module-card" id="mod-card-actionplan" onclick="enterApp('actionplan')" style="--acc:#6B1F2A; display:none;">
+          <div class="module-band">
+            <span class="module-ico"><span class="module-mono">3.0</span></span>
+            <div class="module-name">Roberto's 3.0 Plan</div>
+          </div>
+          <div class="module-accent"></div>
+          <div class="module-body">
+            <div class="module-desc">Amin's 10 points &mdash; steps, owners, dates &amp; the weekly numbers.</div>
+            <div class="module-stat" id="hubstat-actionplan"></div>
+          </div>
+        </div>
       </div>
       <div class="module-col" id="col-guests">
       <div class="module-section" id="sec-guests" style="display:none;">Guests</div>
@@ -550,6 +564,7 @@ if ('serviceWorker' in navigator) {
 <script src="foh-reservations.js?v=20261006week"></script>
 <script src="foh-bizlunch.js?v=20261012bltodate"></script>
 <script src="foh-modanight.js?v=20261009checks"></script>
+<script src="foh-actionplan.js?v=20261016ap"></script>
 <script src="foh-resreports.js?v=20261006time"></script>
 
 <!-- "Tell us" — the button the team press when THEY have something to say.
@@ -593,7 +608,7 @@ window.FB_INBOX = {
         var t = (typeof state === 'object' && state.currentTab) || '';
         var NAME = { dashboard:'Leaders', revenue:'Revenue', operations:'Operations',
                      stocktake:'Stock take', privateevents:'Private events', reviews:'Guest reviews',
-                     reservations:'Reservations', resreports:'Reservation reports', bizlunch:'Business lunch', modanight:'Moda Night', admin:'Admin' };
+                     reservations:'Reservations', resreports:'Reservation reports', bizlunch:'Business lunch', modanight:'Moda Night', actionplan:'Action plan', admin:'Admin' };
         if (t === 'admin') return 'Admin → ' + ((state.adminView||'people').charAt(0).toUpperCase() + (state.adminView||'people').slice(1));
         if (String(t).indexOf('event_') === 0) {
           var ev = (state.events||[]).filter(function(x){ return 'event_'+x.id === t; })[0];
