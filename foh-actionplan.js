@@ -98,6 +98,7 @@ async function apLoad(silent){
     AP.settings = r[0].data[0]; AP.points = r[1].data; AP.steps = r[2].data; AP.measures = r[3].data;
     AP.snaps = r[4].data; AP.results = r[5].data; AP.comments = r[6].data; AP.changes = r[7].data; AP.weeks = r[8].data;
     AP.loaded = true;
+    setTimeout(apMaybeRefresh, 0);
   }catch(e){
     if(!silent || !AP.loaded) AP.err = (e && e.message) ? e.message : String(e);   // a failed background refresh keeps what is on screen
   }finally{
@@ -176,18 +177,42 @@ async function apWeek(status){
   if(r.error || !r.data || !r.data.length) return apFail('Could not record the week', r.error || 'only Amin can approve the week');
   AP.weeks = AP.weeks.filter(function(w){ return w.week_start !== r.data[0].week_start; }); AP.weeks.unshift(r.data[0]); apRepaint();
 }
-async function apCallWeekly(mode){
+// opts.olderThan: only re-read the sources if the numbers are older than this
+// many minutes (the function enforces it, floor 2). opts.quiet: no toast unless
+// it fails — used when the plan opens and refreshes itself.
+async function apCallWeekly(mode, opts){
+  opts = opts || {};
   if(AP.refreshing) return;
   AP.refreshing = mode; apRepaint();
   try{
-    var r = await sb.functions.invoke('ap-weekly', { body: { mode: mode } });
+    var body = { mode: mode };
+    if(opts.olderThan) body.ifOlderThanMinutes = opts.olderThan;
+    var r = await sb.functions.invoke('ap-weekly', { body: body });
     if(r.error) throw r.error;
     if(!r.data || !r.data.ok) throw new Error((r.data && r.data.error) || 'no answer');
-    if(mode === 'send') apSay('Weekly email sent to ' + (r.data.to || []).join(', ') + '.');
-    else apSay('Numbers updated.');
-    await apLoad();
+    if(mode === 'send') apSay('Weekly email sent to ' + (r.data.to || []).join(', ') + '.', 5000);
+    else if(r.data.skipped){ if(!opts.quiet) apSay('Numbers are already up to date (read ' + apAgo(r.data.updated_at) + ').'); }
+    else if(!opts.quiet) apSay('Numbers updated from the sources.');
+    if(!r.data.skipped) await apLoad(true);
   }catch(e){ apFail(mode === 'send' ? 'Email not sent' : 'Numbers not updated', e); }
   finally{ AP.refreshing = false; apRepaint(); }
+}
+function apAgo(ts){
+  if(!ts) return 'never';
+  var m = Math.round((Date.now() - new Date(ts).getTime()) / 60000);
+  if(m < 1) return 'just now'; if(m < 60) return m + ' min ago';
+  var h = Math.round(m / 60); if(h < 24) return h + ' h ago';
+  return apDoneDate(ts) + ' ' + new Date(ts).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Dubai' });
+}
+// Newest moment the automatic numbers were read from their sources.
+function apAutoRead(){ return AP.measures.filter(function(m){ return m.input === 'auto' && m.updated_at; }).map(function(m){ return m.updated_at; }).sort().pop() || null; }
+// Opening the plan pulls fresh automatic numbers if they are over 3 hours old.
+var AP_STALE_MIN = 180;
+function apMaybeRefresh(){
+  if(AP.autoAsked || AP.noAccess || AP.refreshing) return;
+  AP.autoAsked = true;
+  var t = apAutoRead();
+  if(!t || Date.now() - new Date(t).getTime() > AP_STALE_MIN * 60000) apCallWeekly('refresh', { olderThan: AP_STALE_MIN, quiet: true });
 }
 function apOpen(pid){ AP.open = pid; AP.moving = null; AP.msg = null; apRepaint(); try{ window.scrollTo(0, 0); }catch(e){} }
 function apFilter(f){ AP.filter = f; apRepaint(); }
@@ -234,7 +259,7 @@ function apOverview(msg){
     + '</div>');
   h.push(apWeekPanel());
   var f = AP.filter;
-  h.push('<div class="ap-filters">' + [['all', 'All'], ['mine', 'My steps'], ['late', 'Late'], ['week', 'This week'], ['plan', 'Owners & dates']].map(function(x){
+  h.push('<div class="ap-filters">' + [['all', 'All'], ['mine', 'My steps'], ['late', 'Late'], ['week', 'This week'], ['plan', 'Owners & dates'], ['numbers', 'Numbers']].map(function(x){
     return '<button class="ap-chip' + (f === x[0] ? ' on' : '') + '" onclick="apFilter(\'' + x[0] + '\')">' + x[1] + '</button>'; }).join('') + '</div>');
   if(f === 'all'){
     // Straight 1-10, in Amin's order (his email of 16 Oct). Listed by group the
@@ -248,6 +273,8 @@ function apOverview(msg){
         + '<span class="ap-rowbar">' + apBar(pc) + '</span><span class="ap-pct">' + pc + '%</span>' + apPill(apPointStatus(st)) + '</button>');
     });
     h.push('</div>');
+  } else if(f === 'numbers'){
+    h.push(apNumbersView());
   } else if(f === 'plan'){
     h.push(apPlanList());
   } else {
@@ -348,6 +375,42 @@ function apAdminStrip(){
   return h + '</div></details>';
 }
 
+// How a number gets onto the screen. Automatic = read by the app from the
+// source named; Typed in = a person typed it here (and who, and when).
+function apInputBadge(m){
+  if(m.input === 'auto'){
+    var read = m.updated_at ? 'read ' + apAgo(m.updated_at) : 'not read yet';
+    return '<span class="ap-badge ap-auto">Automatic</span><div class="ap-small">' + apEsc(m.source || '') + ' &middot; ' + read + '</div>';
+  }
+  return '<span class="ap-badge ap-man">Typed in</span><div class="ap-small">'
+    + (m.updated_by ? 'by ' + apEsc(apName(m.updated_by)) + ' &middot; ' + apAgo(m.updated_at) : 'nobody has typed it yet') + '</div>';
+}
+function apManualInput(m){
+  return '<input class="ap-in ap-num-in" inputmode="decimal" value="' + (m.current == null ? '' : m.current) + '" placeholder="&mdash;" onchange="apSetManual(\'' + m.id + '\',this.value)">'
+    + (m.current_label ? '<div class="ap-small">' + apEsc(m.current_label) + '</div>' : '');
+}
+// Every number in the plan on one page, so it can be pulled any time.
+function apNumbersView(){
+  var t = apAutoRead();
+  var h = ['<div class="ap-card ap-numhead"><div><b>Automatic numbers read ' + apAgo(t) + '.</b>'
+    + '<div class="ap-small">They refresh themselves when the plan opens if they are over 3 hours old, and every Wednesday before the email. Tap Refresh to read the sources now.</div></div>'
+    + '<button class="ap-btn ap-btn-main" ' + (AP.refreshing ? 'disabled' : '') + ' onclick="apCallWeekly(\'refresh\')">' + (AP.refreshing === 'refresh' ? 'Reading the sources&hellip;' : 'Refresh now') + '</button></div>'];
+  h.push('<div class="ap-card ap-tablewrap"><table class="ap-table ap-numtable"><thead><tr><th>Point</th><th>Measure</th><th>Today</th><th>Target</th><th>Baseline</th><th>How it gets its number</th><th>How often</th></tr></thead><tbody>');
+  AP.points.slice().sort(function(a, b){ return a.num - b.num; }).forEach(function(p){
+    AP.measures.filter(function(m){ return m.point_id === p.id; }).forEach(function(m){
+      h.push('<tr><td><button class="ap-linkbtn" onclick="apOpen(\'' + p.id + '\')">' + p.num + '. ' + apEsc(p.title) + '</button></td><td>' + apEsc(m.label) + '</td>'
+        + '<td>' + (m.input === 'auto' ? apFmt(m) : apManualInput(m)) + '</td><td>' + apEsc(m.target || '') + '</td><td>' + apEsc(m.baseline || '') + '</td>'
+        + '<td>' + apInputBadge(m) + '</td><td>' + apEsc(m.frequency || '') + '</td></tr>');
+    });
+  });
+  h.push('</tbody></table></div>');
+  h.push('<details class="ap-more" open><summary>What is automatic and what is typed in</summary><div class="ap-small">'
+    + '<b>Automatic</b>: the app reads it itself &mdash; SevenRooms (walk-ins, channels, guests coming back, relaunch bookings), the closing report (Monday and Sunday guests), Google (rating) and, as each module arrives, the FOH App (SOP sign-off, training, mystery shopper, guest survey). Nobody types these.<br>'
+    + '<b>Typed in</b>: roles filled and catering requests &mdash; there is no system that holds them, so a plan member types the number and the app records who and when.<br>'
+    + '<b>Steps, owners, dates, comments and approvals</b> are always people: they tick, type and approve in the plan.</div></details>');
+  return h.join('');
+}
+
 function apFmt(m){
   if(m.current == null) return '<span class="ap-nodata">' + apEsc(m.current_label || 'No data') + '</span>';
   var v = Number(m.current), u = m.unit;
@@ -381,11 +444,10 @@ function apPointPage(pid, msg){
 
   // How we check
   var ms = AP.measures.filter(function(m){ return m.point_id === pid; });
-  h.push('<div class="ap-sec">How we check</div><div class="ap-card ap-tablewrap"><table class="ap-table"><thead><tr><th>Measure</th><th>Today</th><th>Target</th><th>Baseline</th><th>Source</th><th>How often</th></tr></thead><tbody>');
+  h.push('<div class="ap-sec">How we check</div><div class="ap-card ap-tablewrap"><table class="ap-table"><thead><tr><th>Measure</th><th>Today</th><th>Target</th><th>Baseline</th><th>How it gets its number</th><th>How often</th></tr></thead><tbody>');
   ms.forEach(function(m){
-    var today = m.key ? apFmt(m) : '<input class="ap-in ap-num-in" inputmode="decimal" value="' + (m.current == null ? '' : m.current) + '" placeholder="&mdash;" onchange="apSetManual(\'' + m.id + '\',this.value)">'
-      + (m.current_label ? '<div class="ap-small">' + apEsc(m.current_label) + '</div>' : '');
-    h.push('<tr><td>' + apEsc(m.label) + '</td><td>' + today + '</td><td>' + apEsc(m.target || '') + '</td><td>' + apEsc(m.baseline || '') + '</td><td>' + apEsc(m.source || '') + '</td><td>' + apEsc(m.frequency || '') + '</td></tr>');
+    var today = m.input === 'auto' ? apFmt(m) : apManualInput(m);
+    h.push('<tr><td>' + apEsc(m.label) + '</td><td>' + today + '</td><td>' + apEsc(m.target || '') + '</td><td>' + apEsc(m.baseline || '') + '</td><td>' + apInputBadge(m) + '</td><td>' + apEsc(m.frequency || '') + '</td></tr>');
   });
   h.push('</tbody></table></div>');
 
@@ -531,6 +593,10 @@ function apCss(){
     '.ap-toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:9000;max-width:min(560px,calc(100vw - 32px));border:1px solid;border-radius:12px;padding:12px 18px;font-size:15px;box-shadow:0 6px 24px rgba(44,24,16,.18);display:flex;gap:12px;align-items:center}',
     '.ap-x{background:none;border:0;font-size:22px;line-height:1;color:inherit;cursor:pointer;min-width:32px;min-height:32px}',
     '.ap-plan-head{font-size:15px}',
+    '.ap-badge{display:inline-block;border-radius:6px;padding:2px 8px;font-size:12px;font-weight:600;letter-spacing:.02em}',
+    '.ap-auto{background:#E3EEF5;color:#1F4E6B}.ap-man{background:#FBEFD5;color:#7A4B00}',
+    '.ap-numhead{display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap}',
+    '.ap-numtable{min-width:900px}.ap-linkbtn{background:none;border:0;padding:0;font:inherit;color:var(--vino);cursor:pointer;text-align:left}',
     '.ap-more{margin-top:18px;padding:0 4px}.ap-more summary{cursor:pointer;color:var(--text-light);font-size:14px;min-height:40px;display:flex;align-items:center}',
     '@media (max-width:820px){.ap-cards{grid-template-columns:repeat(2,minmax(0,1fr))}.ap-row{grid-template-columns:32px 1fr auto;grid-template-areas:"n t p" "n b s"}.ap-num{grid-area:n}.ap-ptitle{grid-area:t}.ap-pct{grid-area:p;text-align:right}.ap-rowbar{grid-area:b}.ap-row .ap-pill{grid-area:s;justify-self:end}.ap-title{font-size:26px}}',
     '@media (max-width:480px){.ap-head{padding:18px}.ap-card{padding:14px 16px}.ap-big{font-size:28px}.ap-row{padding:12px 14px;grid-template-columns:28px 1fr auto}.ap-steps{padding:4px 14px}}'

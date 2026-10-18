@@ -290,7 +290,16 @@ Deno.serve(async (req) => {
 
   try {
     // 1. Refresh the live measures and store this week's snapshot.
-    const { data: ms } = await sb.from("ap_measures").select("id,key,current,detail").not("key", "is", null);
+    const { data: ms } = await sb.from("ap_measures").select("id,key,current,detail,updated_at").not("key", "is", null);
+    // On-demand pulls (opening the plan, the Refresh button) skip the SevenRooms
+    // read when the numbers are fresher than the caller's limit, so five people
+    // opening the plan in the same minute cost one read, not five. Floor 2 min.
+    // The Wednesday send always refreshes.
+    if (!isCron && mode === "refresh") {
+      const limitMin = Math.max(2, Number(body.ifOlderThanMinutes) || 2);
+      const newest = (ms || []).map((m: { updated_at: string | null }) => m.updated_at ? Date.parse(m.updated_at) : 0).reduce((a: number, b: number) => Math.max(a, b), 0);
+      if (newest && Date.now() - newest < limitMin * 60e3) return json({ ok: true, skipped: true, updated_at: new Date(newest).toISOString() });
+    }
     const byKey: Record<string, { id: string; current: number | null; detail: { month?: string } | null }> = {};
     (ms || []).forEach((m: { id: string; key: string; current: number | null; detail: { month?: string } | null }) => { byKey[m.key] = m; });
     const { res, wkStart } = await computeMeasures(sb, byKey);
