@@ -1262,12 +1262,22 @@ function rrRepThreeVisits(pull, opt){
     var mEnd = rrMonthEnd(ym);
     var secondReady = rrAddDays(mEnd, W) <= readTo;
     var thirdReady  = rrAddDays(mEnd, rule === 'prev' ? 2 * W : W) <= readTo;
+    // FIRST-TIME is judged on exactly `back` months before THIS month, for every
+    // month alike. (18 Oct 2026: judging it on "anything earlier in what we read"
+    // gave later months a longer look-back than the report states — July looked
+    // back four months when June-July was picked — and July came out 6 short.)
+    var y0 = Number(ym.slice(0,4)), m0 = Number(ym.slice(5,7));
+    var lookStart = rrIsoOf(new Date(y0, m0 - 1 - back, 1)), mStart = ym + '-01';
     var n = 0, s2 = 0, s3 = 0;
     Object.keys(L.guests).forEach(function(id){
       var g = L.guests[id];
-      if(g.placeholder || rrMonth(g.dates[0]) !== ym) return;   // first night anywhere in what we read
+      if(g.placeholder) return;
+      var i = -1;
+      for(var k = 0; k < g.dates.length; k++){ if(rrMonth(g.dates[k]) === ym){ i = k; break; } }
+      if(i < 0) return;                                              // not here this month
+      if(i > 0 && g.dates[i - 1] >= lookStart) return;               // seen in the look-back: returning
       n++;
-      var d1 = g.dates[0], d2 = g.dates[1], d3 = g.dates[2];
+      var d1 = g.dates[i], d2 = g.dates[i + 1], d3 = g.dates[i + 2];
       var second = !!d2 && rrDaysBetween(d1, d2) <= W;
       var third = second && !!d3 && (rule === 'prev' ? rrDaysBetween(d2, d3) <= W : rrDaysBetween(d1, d3) <= W);
       if(second) s2++;

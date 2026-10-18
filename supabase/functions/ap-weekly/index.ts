@@ -84,98 +84,191 @@ async function nights(dates: string[], par = 4) {
 }
 
 // ── The measures ────────────────────────────────────────────────────────
-type M = { value: number | null; label: string | null; detail?: unknown };
+// `at` = the date the snapshot is filed under (Monday of the week; the 1st of
+// the month for a monthly figure). Defaults to the week being reported.
+type M = { value: number | null; label: string | null; detail?: unknown; at?: string };
 
-async function computeMeasures(sb: SB, existing: Record<string, { detail?: { month?: string } | null; current?: number | null }>) {
-  const today = dubaiToday();
-  const yday = addDays(today, -1);
-  const wkStart = addDays(mondayOf(today), -7);          // last full Mon–Sun
-  const wkEnd = addDays(wkStart, 6);
+// ── The SevenRooms night cache (ap_sr_nights) ──────────────────────────────
+// Every SevenRooms figure in the plan — this week's and its history — is
+// counted from the same cached nights, so a trend line and today's number can
+// never disagree. Only SETTLED nights (before yesterday) are cached; at most
+// `max` missing ones are read per call (the Kitchen proxy throttles bursts and
+// an edge function has 150 s).
+type Night = { clients: string[]; bookings: number; walkin_bookings: number | null; covers: number | null; walkin_covers: number | null };
+async function ensureNights(sb: SB, dates: string[], max = 40) {
+  const cached: Record<string, Night> = {};
+  if (dates.length) {
+    const { data } = await sb.from("ap_sr_nights").select("night,clients,bookings,walkin_bookings,covers,walkin_covers")
+      .gte("night", dates[0]).lte("night", dates[dates.length - 1]);
+    (data || []).forEach((r: Night & { night: string }) => { cached[r.night] = r; });
+  }
+  // a night cached before 18 Oct has no walk-in counts yet: read it again
+  const missing = dates.filter((d) => !cached[d] || cached[d].walkin_bookings == null).slice(0, max);
+  if (missing.length) {
+    const got = await nights(missing, 4);
+    const rows = Object.entries(got.out).map(([d, rs]) => {
+      const live = rs.filter((r) => !gone(r));
+      const row = {
+        night: d,
+        clients: [...new Set(live.filter((r) => r.client && !placeholder(r.name)).map((r) => String(r.client)))],
+        bookings: live.length,
+        walkin_bookings: live.filter(isWalkin).length,
+        covers: live.reduce((s, r) => s + (Number(r.pax) || 0), 0),
+        walkin_covers: live.filter(isWalkin).reduce((s, r) => s + (Number(r.pax) || 0), 0),
+        read_at: new Date().toISOString(),
+      };
+      cached[d] = row;
+      return row;
+    });
+    if (rows.length) await sb.from("ap_sr_nights").upsert(rows, { onConflict: "night" });
+  }
+  const still = dates.filter((d) => !cached[d] || cached[d].walkin_bookings == null).length;
+  return { cached, still };
+}
+
+// Walk-in share for one Mon–Sun week, from the cache. null = not all 7 nights read.
+function walkinWeek(cached: Record<string, Night>, wkStart: string) {
+  let b = 0, w = 0, c = 0, wc = 0;
+  for (const d of range(wkStart, addDays(wkStart, 6))) {
+    const n = cached[d]; if (!n || n.walkin_bookings == null) return null;
+    b += n.bookings; w += n.walkin_bookings; c += n.covers || 0; wc += n.walkin_covers || 0;
+  }
+  return { b, w, c, wc };
+}
+
+// The 3-visit ladder for first-time guests of month `ym`, rule A: 2nd visit
+// within 30 days of the 1st, 3rd within 30 days of the 2nd. First-time = no
+// visit in the 3 months before. Same rule as the "3 visits" report.
+const VISIT_W = 30;
+function visitsLadder(cached: Record<string, Night>, ym: string) {
+  const [y, m] = ym.split("-").map(Number);
+  const lookFrom = new Date(Date.UTC(y, m - 4, 1)).toISOString().slice(0, 10);
+  const to = addDays(monthEnd(ym), 2 * VISIT_W);
+  const G: Record<string, string[]> = {};
+  for (const d of range(lookFrom, to)) { const n = cached[d]; if (!n) return null; n.clients.forEach((id) => { (G[id] || (G[id] = [])).push(d); }); }
+  const days = (a: string, b: string) => Math.round((Date.parse(b) - Date.parse(a)) / 864e5);
+  let n = 0, s2 = 0, s3 = 0;
+  Object.values(G).forEach((ds) => {
+    if (ds[0].slice(0, 7) !== ym) return;
+    n++;
+    const second = ds.length > 1 && days(ds[0], ds[1]) <= VISIT_W;
+    if (second) { s2++; if (ds.length > 2 && days(ds[1], ds[2]) <= VISIT_W) s3++; }
+  });
+  return { n, s2, s3 };
+}
+// Latest month whose whole rule-A window (month end + 60 days) has passed.
+function lastLadderMonth(yday: string) {
+  let ym = yday.slice(0, 7);
+  while (addDays(monthEnd(ym), 2 * VISIT_W) > yday) { const [y, m] = ym.split("-").map(Number); ym = new Date(Date.UTC(y, m - 2, 1)).toISOString().slice(0, 7); }
+  return ym;
+}
+function ladderValue(L: { n: number; s2: number; s3: number }, ym: string): M {
+  return { value: pct1(L.s2, L.n), label: `${L.s2} of ${L.n.toLocaleString("en-GB")} came a 2nd time · ${L.s3} a 3rd (${pct1(L.s3, L.n)}%) — ${monthName(ym)} first-timers`,
+    detail: { month: ym, first_timers: L.n, second: L.s2, third: L.s3, third_pct: pct1(L.s3, L.n), rule: "2nd within 30 days of the 1st, 3rd within 30 days of the 2nd" }, at: ym + "-01" };
+}
+
+// Guests on a given night from the closing report. No row = No data, never zero.
+async function guestsOn(sb: SB, d: string): Promise<M> {
+  const { data } = await sb.from("rev_daily").select("service_date,rest_covers_actual,lounge_covers_actual").eq("venue_id", "robertos-difc").eq("service_date", d).limit(1);
+  const r = data?.[0];
+  const cov = r ? (Number(r.rest_covers_actual) || 0) + (Number(r.lounge_covers_actual) || 0) : null;
+  // Filed under the Mon–Sun week the night belongs to (a Sunday closes its week).
+  const at = mondayOf(d);
+  if (r && cov) return { value: cov, label: label(d), detail: { date: d }, at };
+  // Roberto's opened on Sundays from October 2026 (Decision Log, 1 Oct); an
+  // earlier Sunday is a closed night, not a missing report.
+  if (dow(d) === 0 && d < SUNDAYS_FROM) return { value: null, label: "Closed on Sundays until October", detail: { date: d, closed: true }, at };
+  return { value: null, label: "No data — no closing report for " + label(d), detail: { date: d }, at };
+}
+const SUNDAYS_FROM = "2026-10-01";
+
+// The week a weekly figure reports: the last full Mon–Sun, but never a week
+// whose Sunday is yesterday or later (that night is not settled yet).
+function reportWeek(today: string) {
+  let wk = addDays(mondayOf(today), -7);
+  if (addDays(wk, 6) >= addDays(today, -1)) wk = addDays(wk, -7);
+  return wk;
+}
+
+async function computeMeasures(sb: SB) {
+  const today = dubaiToday(), yday = addDays(today, -1);
+  const wkStart = reportWeek(today), wkEnd = addDays(wkStart, 6);
   const res: Record<string, M> = {};
 
-  // Walk-in share + channels, last full week
-  const wk = await nights(range(wkStart, wkEnd));
-  if (wk.failed.length) {
-    res.walkin_share = { value: null, label: "SevenRooms did not answer for " + wk.failed.length + " night(s) — not counted" };
-    res.channels = res.walkin_share;
+  // Point 5 — walk-in share, last settled week, bookings AND covers
+  const wk = await ensureNights(sb, range(wkStart, wkEnd), 7);
+  const W = walkinWeek(wk.cached, wkStart);
+  if (!W) {
+    const why = { value: null, label: "SevenRooms did not answer for every night of " + label(wkStart) + " week — not counted" };
+    res.walkin_share = why; res.walkin_covers = why;
   } else {
-    let b = 0, w = 0, c = 0, wc = 0; const ch: Record<string, number> = {};
-    Object.values(wk.out).forEach((rows) => rows.forEach((r) => {
-      if (gone(r)) return; const p = Number(r.pax) || 0; b++; c += p;
-      const k = String(r.booked_by || "").trim() || "Not recorded"; ch[k] = (ch[k] || 0) + 1;
-      if (isWalkin(r)) { w++; wc += p; }
-    }));
-    const top = Object.entries(ch).sort((x, y) => y[1] - x[1]).slice(0, 8);
-    res.walkin_share = { value: pct1(w, b), label: `${w} of ${b} bookings · ${pct1(wc, c)}% of covers`, detail: { week: wkStart, walkins: w, bookings: b, covers: c, walkin_covers: wc } };
-    res.channels = { value: b - w, label: `booked ahead (${b} bookings, ${w} walk-ins)`, detail: { week: wkStart, top } };
+    const det = { week: wkStart, bookings: W.b, walkins: W.w, covers: W.c, walkin_covers: W.wc };
+    res.walkin_share = { value: pct1(W.w, W.b), label: `${W.w} of ${W.b} bookings · week of ${label(wkStart)}`, detail: det };
+    res.walkin_covers = { value: pct1(W.wc, W.c), label: `${W.wc} of ${W.c} covers · week of ${label(wkStart)}`, detail: det };
   }
 
-  // First-time guests back within 90 days — the latest month whose window is complete.
-  let ym = today.slice(0, 7);
-  while (addDays(monthEnd(ym), 90) > yday) { const [y, m] = ym.split("-").map(Number); ym = new Date(Date.UTC(y, m - 2, 1)).toISOString().slice(0, 7); }
-  const prev = existing.return90;
-  if (prev?.detail?.month === ym && prev.current != null) {
-    const pd = prev.detail as { month: string; first_timers?: number; back?: number };   // already measured this month
-    res.return90 = { value: prev.current, label: `${pd.back} of ${pd.first_timers} first-time guests in ${monthName(pd.month)}`, detail: prev.detail };
-  } else {
-    const [y, m] = ym.split("-").map(Number);
-    const lookFrom = new Date(Date.UTC(y, m - 4, 1)).toISOString().slice(0, 10);   // 3 months before
-    const to = addDays(monthEnd(ym), 90);
-    // ~7 months of nights is too many SevenRooms calls for one run (150 s limit),
-    // so settled nights are cached in ap_sr_nights (client ids only) and at most
-    // NIGHTS_PER_RUN missing ones are read per call. Until the cache covers the
-    // window the measure says so instead of printing a partial number.
-    const NIGHTS_PER_RUN = 40;
-    const need = range(lookFrom, to);
-    const { data: have } = await sb.from("ap_sr_nights").select("night,clients").gte("night", lookFrom).lte("night", to);
-    const cached: Record<string, string[]> = {};
-    (have || []).forEach((h: { night: string; clients: string[] }) => { cached[h.night] = h.clients || []; });
-    const missing = need.filter((d) => !cached[d]).slice(0, NIGHTS_PER_RUN);
-    if (missing.length) {
-      const got = await nights(missing, 4);
-      const rows = Object.entries(got.out).map(([d, rs]) => {
-        const ids = [...new Set(rs.filter((r) => !gone(r) && r.client && !placeholder(r.name)).map((r) => String(r.client)))];
-        cached[d] = ids;
-        return { night: d, clients: ids, bookings: rs.filter((r) => !gone(r)).length };
-      });
-      if (rows.length) await sb.from("ap_sr_nights").upsert(rows, { onConflict: "night" });
-    }
-    const still = need.filter((d) => !cached[d]).length;
-    if (still) {
-      res.return90 = { value: prev?.current ?? null, label: `Building the 90-day history: ${need.length - still} of ${need.length} nights read`, detail: prev?.detail ?? null };
-    } else {
-      const G: Record<string, string[]> = {};
-      need.forEach((d) => cached[d].forEach((id) => { (G[id] || (G[id] = [])).push(d); }));
-      let n = 0, back = 0;
-      Object.values(G).forEach((ds) => { const f = ds[0]; if (f.slice(0, 7) !== ym) return; n++; if (ds.some((d) => d > f && d <= addDays(f, 90))) back++; });
-      res.return90 = { value: pct1(back, n), label: `${back} of ${n} first-time guests in ${monthName(ym)}`, detail: { month: ym, first_timers: n, back } };
-    }
-  }
+  // Point 6 — 3-visit ladder for the latest month whose window has closed
+  const ym = lastLadderMonth(yday);
+  const [y, m] = ym.split("-").map(Number);
+  const need = range(new Date(Date.UTC(y, m - 4, 1)).toISOString().slice(0, 10), addDays(monthEnd(ym), 2 * VISIT_W));
+  const lad = await ensureNights(sb, need, 40);
+  const L = lad.still ? null : visitsLadder(lad.cached, ym);
+  res.visits3 = L ? ladderValue(L, ym) : { value: null, label: `Reading SevenRooms: ${need.length - lad.still} of ${need.length} nights so far` };
 
-  // Monday / Sunday guests — closing report (rev_daily). No row = No data, never zero.
+  // Point 7 — Monday and Sunday guests (closing report)
   const lastDow = (want: number) => { let d = yday; while (dow(d) !== want) d = addDays(d, -1); return d; };
-  for (const [key, want] of [["monday_guests", 1], ["sunday_guests", 0]] as const) {
-    const d = lastDow(want);
-    const { data } = await sb.from("rev_daily").select("service_date,rest_covers_actual,lounge_covers_actual").eq("venue_id", "robertos-difc").eq("service_date", d).limit(1);
-    const r = data?.[0];
-    const cov = r ? (Number(r.rest_covers_actual) || 0) + (Number(r.lounge_covers_actual) || 0) : null;
-    res[key] = (r && cov) ? { value: cov, label: label(d), detail: { date: d } } : { value: null, label: "No data — no closing report for " + label(d), detail: { date: d } };
-  }
+  res.monday_guests = await guestsOn(sb, lastDow(1));
+  res.sunday_guests = await guestsOn(sb, lastDow(0));
 
-  // Google rating
-  const { data: g } = await sb.from("google_reviews_daily").select("snapshot_date,rating,user_rating_count").eq("venue_key", "robertos").order("snapshot_date", { ascending: false }).limit(1);
-  if (g?.[0]) res.google_rating = { value: Number(g[0].rating), label: `${g[0].user_rating_count} reviews · ${label(g[0].snapshot_date)}` };
-
-  // Relaunch: bookings 2–15 Nov vs 19 Oct–1 Nov (SevenRooms), once the after-window has closed.
+  // Point 8 — bookings 2–15 Nov vs 19 Oct–1 Nov, once the after-window has closed
   if (yday >= "2026-11-15") {
-    const a = await nights(range("2026-10-19", "2026-11-15"));
-    if (!a.failed.length) {
-      const cnt = (f: string, t: string) => range(f, t).reduce((s, d) => s + (a.out[d] || []).filter((r) => !gone(r)).length, 0);
+    const a = await ensureNights(sb, range("2026-10-19", "2026-11-15"), 40);
+    if (!a.still) {
+      const cnt = (f: string, t: string) => range(f, t).reduce((s, d) => s + (a.cached[d]?.bookings || 0), 0);
       const before = cnt("2026-10-19", "2026-11-01"), after = cnt("2026-11-02", "2026-11-15");
       res.relaunch_bookings = { value: after, label: `${after} after vs ${before} before (${after >= before ? "+" : ""}${after - before})`, detail: { before, after } };
     }
   }
   return { res, wkStart };
+}
+
+// ── History: weekly figures back to the start of the baselines (3 Aug) ─────
+// Fills ap_snapshots so every figure opens with a trend line. Same cache and
+// the same counting as the live figure. Reads at most 40 missing nights per
+// call; call again until `remaining` is 0.
+const HISTORY_FROM = "2026-08-03";   // first Monday of the baseline period
+async function fillHistory(sb: SB, byKey: Record<string, { id: string }>) {
+  const today = dubaiToday(), yday = addDays(today, -1);
+  const lastWk = reportWeek(today);
+  const weeks: string[] = []; for (let w = HISTORY_FROM; w <= lastWk; w = addDays(w, 7)) weeks.push(w);
+  const all = range(HISTORY_FROM, addDays(lastWk, 6));
+  const nc = await ensureNights(sb, all, 40);
+  const now = new Date().toISOString(); let written = 0;
+  const put = async (key: string, at: string, v: M) => {
+    const m = byKey[key]; if (!m) return;
+    await sb.from("ap_snapshots").upsert({ measure_id: m.id, week_start: at, value: v.value, label: v.label, detail: v.detail ?? null, recorded_at: now }, { onConflict: "measure_id,week_start" });
+    written++;
+  };
+  for (const w of weeks) {
+    const W = walkinWeek(nc.cached, w);
+    if (W) {
+      const det = { week: w, bookings: W.b, walkins: W.w, covers: W.c, walkin_covers: W.wc };
+      await put("walkin_share", w, { value: pct1(W.w, W.b), label: `${W.w} of ${W.b} bookings`, detail: det });
+      await put("walkin_covers", w, { value: pct1(W.wc, W.c), label: `${W.wc} of ${W.c} covers`, detail: det });
+    }
+    // Monday and Sunday of that week, from the closing report
+    await put("monday_guests", w, await guestsOn(sb, w));
+    if (addDays(w, 6) <= yday) await put("sunday_guests", w, await guestsOn(sb, addDays(w, 6)));
+  }
+  // 3-visit ladder: every month from June whose window has closed
+  const lastYm = lastLadderMonth(yday);
+  for (let ym = "2026-06"; ym <= lastYm; ym = new Date(Date.UTC(+ym.slice(0, 4), +ym.slice(5, 7), 1)).toISOString().slice(0, 7)) {
+    const [y, m] = ym.split("-").map(Number);
+    const need = range(new Date(Date.UTC(y, m - 4, 1)).toISOString().slice(0, 10), addDays(monthEnd(ym), 2 * VISIT_W));
+    const lad = await ensureNights(sb, need, nc.still ? 0 : 40);
+    if (!lad.still) { const L = visitsLadder(lad.cached, ym); if (L) await put("visits3", ym + "-01", ladderValue(L, ym)); }
+  }
+  return { weeks: weeks.length, written, remaining: nc.still };
 }
 
 // ── Plan status (same rules as the screen) ──────────────────────────────
@@ -290,7 +383,7 @@ Deno.serve(async (req) => {
 
   try {
     // 1. Refresh the live measures and store this week's snapshot.
-    const { data: ms } = await sb.from("ap_measures").select("id,key,current,detail,updated_at").not("key", "is", null);
+    const { data: ms } = await sb.from("ap_measures").select("id,key,current,detail,updated_at,hidden").not("key", "is", null).eq("hidden", false);
     // On-demand pulls (opening the plan, the Refresh button) skip the SevenRooms
     // read when the numbers are fresher than the caller's limit, so five people
     // opening the plan in the same minute cost one read, not five. Floor 2 min.
@@ -302,12 +395,20 @@ Deno.serve(async (req) => {
     }
     const byKey: Record<string, { id: string; current: number | null; detail: { month?: string } | null }> = {};
     (ms || []).forEach((m: { id: string; key: string; current: number | null; detail: { month?: string } | null }) => { byKey[m.key] = m; });
-    const { res, wkStart } = await computeMeasures(sb, byKey);
+    // History back to August — the scheduler or an Admin; call until remaining = 0.
+    if (mode === "history") {
+      if (!isCron) {
+        const { data: u } = await sb.from("app_users").select("is_admin").ilike("email", caller).limit(1);
+        if (!u?.[0]?.is_admin) return json({ ok: false, error: "Only an Admin can rebuild the history." }, 403);
+      }
+      return json({ ok: true, ...(await fillHistory(sb, byKey)) });
+    }
+    const { res, wkStart } = await computeMeasures(sb);
     const now = new Date().toISOString();
     for (const [key, v] of Object.entries(res)) {
       const m = byKey[key]; if (!m) continue;
       await sb.from("ap_measures").update({ current: v.value, current_label: v.label, detail: v.detail ?? null, updated_at: now }).eq("id", m.id);
-      await sb.from("ap_snapshots").upsert({ measure_id: m.id, week_start: wkStart, value: v.value, label: v.label, detail: v.detail ?? null, recorded_at: now }, { onConflict: "measure_id,week_start" });
+      await sb.from("ap_snapshots").upsert({ measure_id: m.id, week_start: v.at || wkStart, value: v.value, label: v.label, detail: v.detail ?? null, recorded_at: now }, { onConflict: "measure_id,week_start" });
     }
     if (mode === "refresh") return json({ ok: true, refreshed: Object.keys(res), week: wkStart });
 
