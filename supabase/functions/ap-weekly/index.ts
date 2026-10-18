@@ -205,7 +205,7 @@ function planFacts(points: { id: string; num: number; title: string }[], steps: 
 // ignores padding/height/radius on <div> (16 Oct: the first version arrived as
 // torn colour strips with no bar and a purple-on-wine button). Padding lives on
 // <td>; the bar is two cells; the button is a filled cell around the link.
-const NAMES: Record<string, string> = { "fguarracino@robertos.ae": "Francesco", "onafid@robertos.ae": "Ouafaa", "akadrie@skelmore.com": "Amin", "justin@skelmore.com": "Justin" };
+const NAMES: Record<string, string> = { "fguarracino@robertos.ae": "Francesco", "onafid@robertos.ae": "Ouafaa", "akadrie@skelmore.com": "Amin", "justin@skelmore.com": "Justin", "asacchi@skelmore.com": "Andrea" };
 const SANS = "Arial,Helvetica,sans-serif";
 function emailHtml(f: ReturnType<typeof planFacts>, weekNo: number, pending: { point?: { num: number; title: string }; proposal: string }[],
   comments: { point?: { num: number; title: string }; author_email: string; body: string }[], weekLabel: string, toLabel: string) {

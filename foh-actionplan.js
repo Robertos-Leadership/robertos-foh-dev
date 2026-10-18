@@ -29,7 +29,7 @@ var AP = { loaded: false, loading: false, noAccess: false, err: null, open: null
            settings: null, points: [], steps: [], measures: [], snaps: [], results: [], comments: [], changes: [], weeks: [],
            busy: {}, moving: null, msg: null, refreshing: false };
 
-var AP_NAMES = { 'fguarracino@robertos.ae': 'Francesco', 'onafid@robertos.ae': 'Ouafaa', 'akadrie@skelmore.com': 'Amin', 'justin@skelmore.com': 'Justin' };
+var AP_NAMES = { 'fguarracino@robertos.ae': 'Francesco', 'onafid@robertos.ae': 'Ouafaa', 'akadrie@skelmore.com': 'Amin', 'justin@skelmore.com': 'Justin', 'asacchi@skelmore.com': 'Andrea' };
 var AP_GROUPS = ['Standards', 'People', 'Business growth', 'Relaunch'];
 
 function apEsc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]; }); }
@@ -41,7 +41,19 @@ function apMonday(d){ var w = new Date(d + 'T12:00:00Z').getUTCDay(); return apA
 function apDate(d){ if(!d) return ''; return new Date(String(d).slice(0, 10) + 'T12:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' }); }
 function apDoneDate(ts){ return ts ? apDate(new Date(new Date(ts).getTime() + 4 * 3600e3).toISOString().slice(0, 10)) : ''; }
 function apIsApprover(){ return !!(AP.settings && String(AP.settings.approver || '').toLowerCase() === apMe()); }
-function apRepaint(){ if(typeof state === 'object' && state.currentTab === 'actionplan' && typeof renderMain === 'function') renderMain(); }
+// A repaint rewrites the whole screen (renderMain). Anything half-typed would be
+// lost — a comment draft, or an owner being typed when the auto-refresh lands —
+// so every textarea draft, and the field that has focus, is carried across.
+function apRepaint(){
+  if(!(typeof state === 'object' && state.currentTab === 'actionplan' && typeof renderMain === 'function')) return;
+  var keep = {}, act = document.activeElement, focusId = (act && act.id && act.id.indexOf('ap-') === 0) ? act.id : null, caret = null;
+  document.querySelectorAll('.ap-wrap textarea[id^="ap-"]').forEach(function(el){ if(el.value) keep[el.id] = el.value; });
+  if(focusId && act.tagName === 'INPUT'){ keep[focusId] = act.value; try{ caret = act.selectionStart; }catch(e){} }
+  if(focusId && act.tagName === 'TEXTAREA'){ try{ caret = act.selectionStart; }catch(e){} }
+  renderMain();
+  Object.keys(keep).forEach(function(id){ var el = document.getElementById(id); if(el) el.value = keep[id]; });
+  if(focusId){ var f = document.getElementById(focusId); if(f){ try{ f.focus(); if(caret != null && f.setSelectionRange) f.setSelectionRange(caret, caret); }catch(e){} } }
+}
 
 // ── status ────────────────────────────────────────────────────────────────
 function apStepLate(s){ return !s.done_at && s.due_date && s.due_date < apToday(); }
@@ -61,9 +73,9 @@ function apPct(steps){ return steps.length ? Math.round(steps.filter(function(s)
 function apBar(pct){ return '<div class="ap-bar"><div style="width:' + pct + '%"></div></div>'; }
 
 // ── load ──────────────────────────────────────────────────────────────────
-async function apLoad(){
+async function apLoad(silent){
   if(AP.loading) return;
-  AP.loading = true; AP.err = null;
+  AP.loading = true; if(!silent) AP.err = null;
   try{
     var r = await Promise.all([
       sb.from('ap_settings').select('*').eq('id', 1),
@@ -87,13 +99,14 @@ async function apLoad(){
     AP.snaps = r[4].data; AP.results = r[5].data; AP.comments = r[6].data; AP.changes = r[7].data; AP.weeks = r[8].data;
     AP.loaded = true;
   }catch(e){
-    AP.err = (e && e.message) ? e.message : String(e);
+    if(!silent || !AP.loaded) AP.err = (e && e.message) ? e.message : String(e);   // a failed background refresh keeps what is on screen
   }finally{
     AP.loading = false; apRepaint();
   }
 }
 function apFail(where, error){ AP.msg = { bad: true, text: where + ': ' + (error && error.message ? error.message : error) }; apRepaint(); }
-function apSay(text){ AP.msg = { bad: false, text: text }; apRepaint(); setTimeout(function(){ if(AP.msg && AP.msg.text === text){ AP.msg = null; apRepaint(); } }, 6000); }
+function apDismiss(){ AP.msg = null; apRepaint(); }
+function apSay(text, ms){ var m = { bad: false, text: text }; AP.msg = m; apRepaint(); setTimeout(function(){ if(AP.msg === m){ AP.msg = null; apRepaint(); } }, ms || 2500); }
 
 // ── writes ────────────────────────────────────────────────────────────────
 // Every write goes to the database first and the screen follows what it says.
@@ -101,19 +114,19 @@ async function apTick(id, on){
   var s = AP.steps.filter(function(x){ return x.id === id; })[0]; if(!s) return;
   var r = await sb.from('ap_steps').update({ done_at: on ? new Date().toISOString() : null }).eq('id', id).select();
   if(r.error || !r.data || !r.data.length) return apFail('Could not save the tick', r.error || 'no row changed');
-  Object.assign(s, r.data[0]); apRepaint();
+  Object.assign(s, r.data[0]); apSay(on ? 'Marked done' : 'Marked not done');
 }
 async function apSetOwner(id, v){
   var r = await sb.from('ap_steps').update({ owner: String(v || '').trim() || null }).eq('id', id).select();
   if(r.error || !r.data || !r.data.length) return apFail('Could not save the owner', r.error || 'no row changed');
-  var s = AP.steps.filter(function(x){ return x.id === id; })[0]; Object.assign(s, r.data[0]); apRepaint();
+  var s = AP.steps.filter(function(x){ return x.id === id; })[0]; Object.assign(s, r.data[0]); apSay('Owner saved');
 }
 async function apSetDate(id, v){
   var s = AP.steps.filter(function(x){ return x.id === id; })[0]; if(!s) return;
   if(apStepLate(s)){ AP.moving = { id: id, date: v || '' }; apRepaint(); return; }   // late → needs a reason
   var r = await sb.from('ap_steps').update({ due_date: v || null }).eq('id', id).select();
   if(r.error || !r.data || !r.data.length) return apFail('Could not save the date', r.error || 'no row changed');
-  Object.assign(s, r.data[0]); apRepaint();
+  Object.assign(s, r.data[0]); apSay('Date saved');
 }
 async function apMoveLate(){
   var m = AP.moving; if(!m) return;
@@ -130,13 +143,13 @@ async function apAddComment(pid){
   var el = document.getElementById('ap-c-' + pid); var body = el ? el.value.trim() : ''; if(!body) return;
   var r = await sb.from('ap_comments').insert({ point_id: pid, author_email: apMe(), body: body }).select();
   if(r.error || !r.data || !r.data.length) return apFail('Could not save the comment', r.error || 'nothing saved');
-  AP.comments.unshift(r.data[0]); apRepaint();
+  if(el) el.value = ''; AP.comments.unshift(r.data[0]); apSay('Comment added');
 }
 async function apPropose(pid){
   var el = document.getElementById('ap-x-' + pid); var p = el ? el.value.trim() : ''; if(!p) return;
   var r = await sb.from('ap_changes').insert({ point_id: pid, proposal: p, proposed_by: apMe() }).select();
   if(r.error || !r.data || !r.data.length) return apFail('Could not save the proposal', r.error || 'nothing saved');
-  AP.changes.unshift(r.data[0]); apRepaint();
+  if(el) el.value = ''; AP.changes.unshift(r.data[0]); apSay('Sent to Amin for his OK');
 }
 async function apDecide(id, status){
   var r = await sb.from('ap_changes').update({ status: status }).eq('id', id).select();
@@ -147,14 +160,14 @@ async function apAddResult(pid){
   var el = document.getElementById('ap-r-' + pid); var note = el ? el.value.trim() : ''; if(!note) return;
   var r = await sb.from('ap_results').insert({ point_id: pid, week_start: apMonday(apToday()), note: note, author_email: apMe() }).select();
   if(r.error || !r.data || !r.data.length) return apFail('Could not save the note', r.error || 'nothing saved');
-  AP.results.unshift(r.data[0]); apRepaint();
+  if(el) el.value = ''; AP.results.unshift(r.data[0]); apSay('Added to this week');
 }
 async function apSetManual(mid, v){
   var n = String(v).trim() === '' ? null : Number(v);
   if(n !== null && !isFinite(n)) return apFail('Number', 'that is not a number');
   var r = await sb.from('ap_measures').update({ current: n, updated_at: new Date().toISOString() }).eq('id', mid).select();
   if(r.error || !r.data || !r.data.length) return apFail('Could not save the number', r.error || 'only manual measures can be typed');
-  var m = AP.measures.filter(function(x){ return x.id === mid; })[0]; Object.assign(m, r.data[0]); apRepaint();
+  var m = AP.measures.filter(function(x){ return x.id === mid; })[0]; Object.assign(m, r.data[0]); apSay('Number saved');
 }
 async function apWeek(status){
   var el = document.getElementById('ap-week-note'); var note = el ? el.value.trim() : '';
@@ -186,9 +199,11 @@ function renderActionPlan(){
   if(AP.err) return '<div class="ap-wrap"><div class="ap-card ap-msg-bad">The plan could not be read: ' + apEsc(AP.err) + ' <button class="ap-btn" onclick="AP.err=null;apLoad()">Try again</button></div></div>';
   if(!AP.loaded) return '<div class="ap-wrap"><div class="loading">Reading the plan&hellip;</div></div>';
   if(AP.noAccess) return '<div class="ap-wrap"><div class="ap-head"><div class="ap-kick">FOH App &middot; Executive</div><div class="ap-title">No access</div>'
-    + '<div class="ap-sub">The Roberto\'s 3.0 action plan is private to four people. Your login is not one of them.</div></div></div>';
-  var msg = AP.msg ? '<div class="ap-card ' + (AP.msg.bad ? 'ap-msg-bad' : 'ap-msg-ok') + '">' + apEsc(AP.msg.text) + '</div>' : '';
-  return '<div class="ap-wrap">' + (AP.open ? apPointPage(AP.open, msg) : apOverview(msg)) + '</div>';
+    + '<div class="ap-sub">The Roberto\'s 3.0 action plan is private. Your login is not on its list &mdash; ask Francesco if you should be.</div></div></div>';
+  // Errors stay until closed; a "Saved" goes by itself.
+  var msg = AP.msg ? '<div class="ap-toast ' + (AP.msg.bad ? 'ap-msg-bad' : 'ap-msg-ok') + '" role="status">' + apEsc(AP.msg.text)
+    + (AP.msg.bad ? ' <button class="ap-x" onclick="apDismiss()" aria-label="Close">&times;</button>' : '') + '</div>' : '';
+  return '<div class="ap-wrap">' + apOwnersList() + (AP.open ? apPointPage(AP.open, '') : apOverview('')) + msg + '</div>';
 }
 
 function apWeekPill(){
@@ -219,7 +234,7 @@ function apOverview(msg){
     + '</div>');
   h.push(apWeekPanel());
   var f = AP.filter;
-  h.push('<div class="ap-filters">' + [['all', 'All'], ['mine', 'My steps'], ['late', 'Late'], ['week', 'This week']].map(function(x){
+  h.push('<div class="ap-filters">' + [['all', 'All'], ['mine', 'My steps'], ['late', 'Late'], ['week', 'This week'], ['plan', 'Owners & dates']].map(function(x){
     return '<button class="ap-chip' + (f === x[0] ? ' on' : '') + '" onclick="apFilter(\'' + x[0] + '\')">' + x[1] + '</button>'; }).join('') + '</div>');
   if(f === 'all'){
     AP_GROUPS.forEach(function(g){
@@ -232,10 +247,54 @@ function apOverview(msg){
       });
       h.push('</div>');
     });
+  } else if(f === 'plan'){
+    h.push(apPlanList());
   } else {
     h.push(apStepList(f));
   }
   h.push(apAdminStrip());
+  return h.join('');
+}
+
+// Owner is free text (a step can belong to anyone), but typing the same person
+// three ways breaks "My steps", so the box suggests the plan's people and every
+// name already used.
+function apOwnersList(){
+  var seen = {}, out = [];
+  ((AP.settings && AP.settings.members) || []).map(apName).concat(AP.steps.map(function(s){ return s.owner; }))
+    .forEach(function(n){ n = String(n || '').trim(); if(n && !seen[n.toLowerCase()]){ seen[n.toLowerCase()] = 1; out.push(n); } });
+  return '<datalist id="ap-owners">' + out.map(function(n){ return '<option value="' + apEsc(n) + '">'; }).join('') + '</datalist>';
+}
+function apEditors(s){
+  return '<div class="ap-sedit"><label>Owner <input id="ap-o-' + s.id + '" class="ap-in" list="ap-owners" autocomplete="off" value="' + apEsc(s.owner || '') + '" placeholder="Who" onchange="apSetOwner(\'' + s.id + '\',this.value)"></label>'
+    + '<label>Date <input id="ap-d-' + s.id + '" class="ap-in" type="date" value="' + apEsc(s.due_date || '') + '" onchange="apSetDate(\'' + s.id + '\',this.value)"></label></div>';
+}
+function apMovePanel(s){
+  if(!(AP.moving && AP.moving.id === s.id)) return '';
+  return '<div class="ap-move"><div class="ap-small"><b>This step is late.</b> Give it a new date and say why. The reason is saved as a comment.</div>'
+    + '<label>New date <input id="ap-move-date" class="ap-in" type="date" value="' + apEsc(AP.moving.date) + '"></label>'
+    + '<textarea id="ap-move-why" class="ap-in ap-ta" rows="2" placeholder="Why it moved"></textarea>'
+    + '<div class="ap-btns"><button class="ap-btn ap-btn-main" onclick="apMoveLate()">Move the date</button><button class="ap-btn" onclick="apCancelMove()">Cancel</button></div></div>';
+}
+// Every step on one page, so owners and dates can be filled in one sitting.
+function apPlanList(){
+  var open = AP.steps.filter(function(s){ return !s.done_at; });
+  var set = open.filter(function(s){ return s.owner && s.due_date; }).length;
+  var h = ['<div class="ap-card ap-plan-head"><b>' + set + ' of ' + open.length + '</b> open steps have an owner and a date.'
+    + (set < open.length ? ' <span class="ap-small">Each box saves as soon as you leave it.</span>' : '') + '</div>'];
+  AP_GROUPS.forEach(function(g){
+    AP.points.filter(function(p){ return p.group === g; }).forEach(function(p){
+      h.push('<div class="ap-group">' + p.num + '. ' + apEsc(p.title) + '</div><div class="ap-card ap-steps">');
+      apPointSteps(p.id).forEach(function(s){
+        var late = apStepLate(s);
+        h.push('<div class="ap-step"><div class="ap-sbody"><div class="ap-stitle">' + apEsc(s.title) + (s.is_app ? ' <span class="ap-app">App</span>' : '') + '</div>'
+          + (s.done_at ? '<div class="ap-ssub">Done ' + apDoneDate(s.done_at) + '</div>'
+                       : (late ? '<div class="ap-ssub"><b class="ap-red">Late &middot; was due ' + apDate(s.due_date) + '</b></div>' : '') + apEditors(s) + apMovePanel(s))
+          + '</div></div>');
+      });
+      h.push('</div>');
+    });
+  });
   return h.join('');
 }
 
@@ -314,14 +373,7 @@ function apPointPage(pid, msg){
       : (s.due_date ? (late ? '<b class="ap-red">Late &middot; was due ' + apDate(s.due_date) + '</b>' : 'Due ' + apDate(s.due_date)) : 'No date yet');
     h.push('<div class="ap-step"><input type="checkbox" class="ap-check" ' + (s.done_at ? 'checked ' : '') + 'onchange="apTick(\'' + s.id + '\',this.checked)" aria-label="Done">'
       + '<div class="ap-sbody"><div class="ap-stitle">' + apEsc(s.title) + (s.is_app ? ' <span class="ap-app">App</span>' : '') + '</div><div class="ap-ssub">' + sub + '</div>'
-      + '<div class="ap-sedit"><label>Owner <input class="ap-in" value="' + apEsc(s.owner || '') + '" placeholder="Who" onchange="apSetOwner(\'' + s.id + '\',this.value)"></label>'
-      + '<label>Date <input class="ap-in" type="date" value="' + apEsc(s.due_date || '') + '" onchange="apSetDate(\'' + s.id + '\',this.value)"></label></div>');
-    if(AP.moving && AP.moving.id === s.id){
-      h.push('<div class="ap-move"><div class="ap-small"><b>This step is late.</b> Give it a new date and say why. The reason is saved as a comment.</div>'
-        + '<label>New date <input id="ap-move-date" class="ap-in" type="date" value="' + apEsc(AP.moving.date) + '"></label>'
-        + '<textarea id="ap-move-why" class="ap-in ap-ta" rows="2" placeholder="Why it moved"></textarea>'
-        + '<div class="ap-btns"><button class="ap-btn ap-btn-main" onclick="apMoveLate()">Move the date</button><button class="ap-btn" onclick="apCancelMove()">Cancel</button></div></div>');
-    }
+      + apEditors(s) + apMovePanel(s));
     h.push('</div></div>');
   });
   h.push('</div>');
@@ -375,15 +427,43 @@ function apPointPage(pid, msg){
   return h.join('');
 }
 
-// The email's "Open the plan" button lands on …/#actionplan. Called once the
-// manager landing is showing (see showManagerLanding in foh-core.js).
+// ── The Wednesday email's "Open the plan" button: …/robertos-foh/#actionplan ──
+// The app normally opens on the staff page, even when signed in, and a fresh
+// sign-in lands on the module grid. So: remember the link here; if nobody is
+// signed in, open the sign-in box straight away; once access has loaded
+// (loadFohAccess calls apHashOpen) go straight into the plan.
+var AP_WANT = false;
+try{ AP_WANT = location.hash === '#actionplan'; }catch(e){}
 function apHashOpen(){
-  try{
-    if(location.hash !== '#actionplan') return;
-    history.replaceState(null, '', location.pathname + location.search);
-    if(typeof fohBlocked === 'function' && !fohBlocked('actionplan')) enterApp('actionplan');
-  }catch(e){}
+  if(!AP_WANT || !state || !state.access) return;
+  AP_WANT = false;
+  try{ history.replaceState(null, '', location.pathname + location.search); }catch(e){}
+  ['foh-public', 'foh-nav'].forEach(function(id){ var el = document.getElementById(id); if(el) el.style.display = 'none'; });
+  var lg = document.getElementById('login'); if(lg) lg.classList.remove('open');
+  if(typeof fohBlocked === 'function' && fohBlocked('actionplan')){ showManagerLanding(); return; }
+  enterApp('actionplan');
 }
+(function apHashBoot(){
+  if(!AP_WANT) return;
+  var go = async function(){
+    try{
+      var r = await sb.auth.getSession();
+      if(!(r && r.data && r.data.session) && typeof showLogin === 'function') showLogin();
+    }catch(e){}
+  };
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function(){ setTimeout(go, 0); }, { once: true });
+  else setTimeout(go, 0);
+})();
+
+// ── Keep the screen current while it is open ──
+// Five people edit the same plan. While the plan is on screen and the tab is
+// visible it re-reads every minute and whenever the tab comes back to the front.
+// A failed refresh leaves the screen as it was (apLoad silent).
+function apAutoRefresh(){
+  if(typeof state === 'object' && state.currentTab === 'actionplan' && !document.hidden && AP.loaded && !AP.noAccess && !AP.loading) apLoad(true);
+}
+setInterval(apAutoRefresh, 60000);
+document.addEventListener('visibilitychange', apAutoRefresh);
 
 function apCss(){
   if(document.getElementById('ap-css')) return;
@@ -446,6 +526,9 @@ function apCss(){
     '.ap-slink{background:none;border:0;text-align:left;font:inherit;color:inherit;cursor:pointer;padding:0;display:flex;flex-direction:column}',
     '.ap-empty{color:var(--text-light)}',
     '.ap-msg-bad{background:#F8E1E0;color:#7E1A14;border-color:#EBC0BC}.ap-msg-ok{background:#E3F0E6;color:#1E5B33;border-color:#BFDCC8}',
+    '.ap-toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:9000;max-width:min(560px,calc(100vw - 32px));border:1px solid;border-radius:12px;padding:12px 18px;font-size:15px;box-shadow:0 6px 24px rgba(44,24,16,.18);display:flex;gap:12px;align-items:center}',
+    '.ap-x{background:none;border:0;font-size:22px;line-height:1;color:inherit;cursor:pointer;min-width:32px;min-height:32px}',
+    '.ap-plan-head{font-size:15px}',
     '.ap-more{margin-top:18px;padding:0 4px}.ap-more summary{cursor:pointer;color:var(--text-light);font-size:14px;min-height:40px;display:flex;align-items:center}',
     '@media (max-width:820px){.ap-cards{grid-template-columns:repeat(2,minmax(0,1fr))}.ap-row{grid-template-columns:32px 1fr auto;grid-template-areas:"n t p" "n b s"}.ap-num{grid-area:n}.ap-ptitle{grid-area:t}.ap-pct{grid-area:p;text-align:right}.ap-rowbar{grid-area:b}.ap-row .ap-pill{grid-area:s;justify-self:end}.ap-title{font-size:26px}}',
     '@media (max-width:480px){.ap-head{padding:18px}.ap-card{padding:14px 16px}.ap-big{font-size:28px}.ap-row{padding:12px 14px;grid-template-columns:28px 1fr auto}.ap-steps{padding:4px 14px}}'

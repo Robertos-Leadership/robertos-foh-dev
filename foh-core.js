@@ -732,6 +732,7 @@ async function loadFohAccess(){
   }
   applyFohAccess();
   if(state.currentTab && fohBlocked(state.currentTab)){ try{ switchTab('dashboard'); }catch(e3){} }
+  if(typeof apHashOpen==='function') apHashOpen();   // "Open the plan" link from the Wednesday email (foh-actionplan.js)
 }
 // ══════════════════════════════════════════════
 //  ADMIN MODULE — manage logins + module access (notifications: phase 2). Admin-only.
