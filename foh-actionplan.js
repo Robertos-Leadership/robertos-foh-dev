@@ -308,7 +308,7 @@ function apStepList(f){
     return true;
   });
   if(!pick.length){
-    var none = { late: 'Nothing is late.', week: 'No open step is due in the next 7 days.', mine: 'No step has your name as owner yet. Owners are typed on each point page.' }[f];
+    var none = { late: 'Nothing is late.', week: 'No open step is due in the next 7 days.', mine: 'No step has your name as owner yet. Owners are set in <b>Owners &amp; dates</b>.' }[f];
     return '<div class="ap-card ap-empty">' + none + '</div>';
   }
   var h = ['<div class="ap-card ap-list">'];
