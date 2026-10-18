@@ -611,7 +611,7 @@ function apDelta(m){
   var lowerBetter = (t != null) ? t < b : false;
   var good = diff === 0 ? null : (lowerBetter ? diff < 0 : diff > 0);
   var unit = m.unit === '%' ? ' pts' : '';
-  return { diff: diff, good: good, text: (diff > 0 ? '▲ ' : diff < 0 ? '▼ ' : '') + Math.abs(diff) + unit + ' vs baseline' };
+  return { diff: diff, good: good, text: diff === 0 ? 'same as baseline' : (diff > 0 ? '▲ ' : '▼ ') + Math.abs(diff) + unit + ' vs baseline' };
 }
 function apChartGeom(m, W, H){
   var hs = apHist(m), vals = hs.filter(function(p){ return p.v != null; }).map(function(p){ return p.v; });
@@ -753,7 +753,8 @@ async function apExcel(){
       if(m.unit === '%' && m.current != null){ r.getCell(4).value = Number(m.current) / 100; r.getCell(4).numFmt = '0.0%'; }
     }); });
     // 4. History
-    ws = mk('History', 'Weekly (and monthly) history of every figure', ['#', 'Point', 'Figure', 'Week / month', 'Value', 'Detail'], [5, 28, 34, 14, 10, 50]);
+    ws = mk('Weekly history', 'Weekly (and monthly) history of every figure',   // "History" is a reserved sheet name in Excel
+    ['#', 'Point', 'Figure', 'Week / month', 'Value', 'Detail'], [5, 28, 34, 14, 10, 50]);
     pts.forEach(function(p){ AP.measures.filter(function(m){ return m.point_id === p.id; }).forEach(function(m){ apHist(m).forEach(function(h){
       var r = add(ws, [p.num, p.title, m.label, apMonthly(m) ? new Date(h.d + 'T12:00:00').toLocaleDateString('en-GB', { month: 'long', year: 'numeric' }) : 'w/c ' + apDate(h.d),
         h.v == null ? '' : (m.unit === '%' ? h.v / 100 : h.v), h.closed ? 'Closed (Sundays until October)' : h.label]);
