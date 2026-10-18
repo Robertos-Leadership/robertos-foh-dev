@@ -237,16 +237,17 @@ function apOverview(msg){
   h.push('<div class="ap-filters">' + [['all', 'All'], ['mine', 'My steps'], ['late', 'Late'], ['week', 'This week'], ['plan', 'Owners & dates']].map(function(x){
     return '<button class="ap-chip' + (f === x[0] ? ' on' : '') + '" onclick="apFilter(\'' + x[0] + '\')">' + x[1] + '</button>'; }).join('') + '</div>');
   if(f === 'all'){
-    AP_GROUPS.forEach(function(g){
-      var pts = AP.points.filter(function(p){ return p.group === g; }); if(!pts.length) return;
-      h.push('<div class="ap-group">' + apEsc(g) + '</div><div class="ap-card ap-list">');
-      pts.forEach(function(p){
-        var st = apPointSteps(p.id), pc = apPct(st);
-        h.push('<button class="ap-row" onclick="apOpen(\'' + p.id + '\')"><span class="ap-num">' + p.num + '</span><span class="ap-ptitle">' + apEsc(p.title) + '</span>'
-          + '<span class="ap-rowbar">' + apBar(pc) + '</span><span class="ap-pct">' + pc + '%</span>' + apPill(apPointStatus(st)) + '</button>');
-      });
-      h.push('</div>');
+    // Straight 1-10, in Amin's order (his email of 16 Oct). Listed by group the
+    // numbers ran 1, 2, 3, 6, 4, 5, 7, 10, 8, 9 and read as if points were
+    // missing (Francesco, 18 Oct), so the group is a label on each row instead.
+    h.push('<div class="ap-card ap-list">');
+    AP.points.slice().sort(function(a, b){ return a.num - b.num; }).forEach(function(p){
+      var st = apPointSteps(p.id), pc = apPct(st);
+      h.push('<button class="ap-row" onclick="apOpen(\'' + p.id + '\')"><span class="ap-num">' + p.num + '</span><span class="ap-ptitle">' + apEsc(p.title)
+        + '<span class="ap-gtag">' + apEsc(p.group) + '</span></span>'
+        + '<span class="ap-rowbar">' + apBar(pc) + '</span><span class="ap-pct">' + pc + '%</span>' + apPill(apPointStatus(st)) + '</button>');
     });
+    h.push('</div>');
   } else if(f === 'plan'){
     h.push(apPlanList());
   } else {
@@ -282,8 +283,8 @@ function apPlanList(){
   var set = open.filter(function(s){ return s.owner && s.due_date; }).length;
   var h = ['<div class="ap-card ap-plan-head"><b>' + set + ' of ' + open.length + '</b> open steps have an owner and a date.'
     + (set < open.length ? ' <span class="ap-small">Each box saves as soon as you leave it.</span>' : '') + '</div>'];
-  AP_GROUPS.forEach(function(g){
-    AP.points.filter(function(p){ return p.group === g; }).forEach(function(p){
+  [0].forEach(function(){   // one pass, points in 1-10 order (same as the overview)
+    AP.points.slice().sort(function(a, b){ return a.num - b.num; }).forEach(function(p){
       h.push('<div class="ap-group">' + p.num + '. ' + apEsc(p.title) + '</div><div class="ap-card ap-steps">');
       apPointSteps(p.id).forEach(function(s){
         var late = apStepLate(s);
@@ -495,6 +496,7 @@ function apCss(){
     '.ap-row:last-child{border-bottom:0}.ap-row:hover{background:var(--surface2)}',
     '.ap-num{font-family:var(--font-serif);font-size:22px;color:var(--vino)}',
     '.ap-ptitle{font-size:17px}.ap-pct{font-size:15px;color:var(--text-light)}',
+    '.ap-gtag{display:block;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--text-light);margin-top:3px}',
     '.ap-pill{display:inline-block;border-radius:999px;padding:5px 12px;font-size:13px;font-weight:600;white-space:nowrap;text-align:center}',
     '.ap-p-ok{background:#E3F0E6;color:#1E6B3A}.ap-p-done{background:#1E6B3A;color:#fff}.ap-p-soon{background:#FBEFD5;color:#8A5300}.ap-p-late{background:#F8E1E0;color:#A1231B}.ap-p-none{background:#EEE8DE;color:#5C4A36}',
     '.ap-week textarea{margin-top:10px}',
