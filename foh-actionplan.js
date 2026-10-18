@@ -25,7 +25,7 @@
 // ap_snapshots, so the screen and the email always show the same figure.
 // ──────────────────────────────────────────────────────────────────────────
 
-var AP = { loaded: false, loading: false, noAccess: false, err: null, open: null, filter: 'all',
+var AP = { loaded: false, loading: false, noAccess: false, err: null, open: null, filter: 'dash',
            settings: null, points: [], steps: [], measures: [], snaps: [], results: [], comments: [], changes: [], weeks: [],
            busy: {}, moving: null, msg: null, refreshing: false };
 
@@ -95,7 +95,7 @@ async function apLoad(silent){
     // RLS returns zero rows (not an error) to anyone not on the list.
     if(!r[0].data || !r[0].data.length){ AP.noAccess = true; AP.loaded = true; return; }
     AP.noAccess = false;
-    AP.settings = r[0].data[0]; AP.points = r[1].data; AP.steps = r[2].data; AP.measures = r[3].data;
+    AP.settings = r[0].data[0]; AP.points = r[1].data; AP.steps = r[2].data; AP.measures = r[3].data.filter(function(m){ return !m.hidden; });   // hidden = taken off the plan, kept in the table
     AP.snaps = r[4].data; AP.results = r[5].data; AP.comments = r[6].data; AP.changes = r[7].data; AP.weeks = r[8].data;
     AP.loaded = true;
     setTimeout(apMaybeRefresh, 0);
@@ -259,7 +259,7 @@ function apOverview(msg){
     + '</div>');
   h.push(apWeekPanel());
   var f = AP.filter;
-  h.push('<div class="ap-filters">' + [['all', 'All'], ['mine', 'My steps'], ['late', 'Late'], ['week', 'This week'], ['plan', 'Owners & dates'], ['numbers', 'Data']].map(function(x){
+  h.push('<div class="ap-filters">' + [['dash', 'Dashboard'], ['all', 'All points'], ['mine', 'My steps'], ['late', 'Late'], ['week', 'This week'], ['plan', 'Owners & dates'], ['numbers', 'Data']].map(function(x){
     return '<button class="ap-chip' + (f === x[0] ? ' on' : '') + '" onclick="apFilter(\'' + x[0] + '\')">' + x[1] + '</button>'; }).join('') + '</div>');
   if(f === 'all'){
     // Straight 1-10, in Amin's order (his email of 16 Oct). Listed by group the
@@ -273,6 +273,8 @@ function apOverview(msg){
         + '<span class="ap-rowbar">' + apBar(pc) + '</span><span class="ap-pct">' + pc + '%</span>' + apPill(apPointStatus(st)) + '</button>');
     });
     h.push('</div>');
+  } else if(f === 'dash'){
+    h.push(apDashboard());
   } else if(f === 'numbers'){
     h.push(apNumbersView());
   } else if(f === 'plan'){
@@ -572,6 +574,255 @@ function apAutoRefresh(){
 setInterval(apAutoRefresh, 60000);
 document.addEventListener('visibilitychange', apAutoRefresh);
 
+// ── DASHBOARD (18 Oct 2026) ─────────────────────────────────────────────────
+// Francesco: Amin is data-driven — one screen, everything about THIS plan and
+// its 10 points, easy to pull and download, with graphs and notes. Nothing
+// here is a business-wide figure: every number belongs to one of the points.
+// Each point: progress, status, next step, its figures with a trend line
+// against target and baseline, what is still coming, and the latest note.
+// The same chart geometry draws the screen (SVG), the PDF (SVG) and the Excel
+// images (canvas), so the three can never show different lines.
+
+// A figure's target and baseline as numbers, read from their own text, so
+// nothing is typed twice. null when the target is words ("Up every week").
+function apTargetNum(m){
+  var t = String(m.target || ''), r = t.match(/^\s*([\d.]+)\s*%?\s*$/);
+  if(r) return Number(r[1]);
+  r = t.match(/\(([^)]*?)([\d.]+)%?\)/);
+  return r ? Number(r[2]) : null;
+}
+function apBaseNum(m){ var r = String(m.baseline || '').match(/(\d+(?:\.\d+)?)/); return r ? Number(r[1]) : null; }
+// Stored weekly (or monthly) figures, oldest first. Closed nights stay in as gaps.
+function apHist(m){
+  return AP.snaps.filter(function(s){ return s.measure_id === m.id && !(s.detail && s.detail.superseded); })
+    .sort(function(a, b){ return a.week_start < b.week_start ? -1 : 1; })
+    .map(function(s){ return { d: s.week_start, v: s.value == null ? null : Number(s.value), closed: !!(s.detail && s.detail.closed), label: s.label || '' }; });
+}
+function apMonthly(m){ return /month/i.test(m.frequency || ''); }
+function apPointLabel(m, d){
+  var x = new Date(d + 'T12:00:00Z');
+  return apMonthly(m) ? x.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' }) : apDate(d);
+}
+// Better = moving towards the target from the baseline.
+function apDelta(m){
+  var v = m.current == null ? null : Number(m.current), b = apBaseNum(m), t = apTargetNum(m);
+  if(v == null || b == null || m.unit === 'text') return null;
+  var diff = Math.round((v - b) * 10) / 10;
+  var lowerBetter = (t != null) ? t < b : false;
+  var good = diff === 0 ? null : (lowerBetter ? diff < 0 : diff > 0);
+  var unit = m.unit === '%' ? ' pts' : '';
+  return { diff: diff, good: good, text: (diff > 0 ? '▲ ' : diff < 0 ? '▼ ' : '') + Math.abs(diff) + unit + ' vs baseline' };
+}
+function apChartGeom(m, W, H){
+  var hs = apHist(m), vals = hs.filter(function(p){ return p.v != null; }).map(function(p){ return p.v; });
+  if(vals.length < 2) return null;
+  var t = apTargetNum(m), b = apBaseNum(m), all = vals.slice();
+  if(t != null) all.push(t); if(b != null) all.push(b);
+  var lo = Math.min.apply(null, all), hi = Math.max.apply(null, all), pad = (hi - lo) * 0.12 || 1;
+  lo = Math.max(0, lo - pad); hi = hi + pad;
+  var L = 8, R = 8, T = 12, B = 18, n = hs.length;
+  var X = function(i){ return L + (n === 1 ? (W - L - R) / 2 : i * (W - L - R) / (n - 1)); };
+  var Y = function(v){ return T + (H - T - B) * (1 - (v - lo) / (hi - lo)); };
+  return { pts: hs.map(function(p, i){ return { x: X(i), y: p.v == null ? null : Y(p.v), v: p.v, d: p.d, closed: p.closed }; }),
+           tY: t == null ? null : Y(t), bY: b == null ? null : Y(b), W: W, H: H, B: B, first: hs[0].d, last: hs[n - 1].d };
+}
+function apChartSVG(m){
+  var g = apChartGeom(m, 320, 96); if(!g) return '';
+  var seg = [], cur = [];
+  g.pts.forEach(function(p){ if(p.y == null){ if(cur.length) seg.push(cur); cur = []; } else cur.push(p.x.toFixed(1) + ',' + p.y.toFixed(1)); });
+  if(cur.length) seg.push(cur);
+  var last = null; g.pts.forEach(function(p){ if(p.y != null) last = p; });
+  var s = '<svg class="ap-chart" viewBox="0 0 ' + g.W + ' ' + g.H + '" preserveAspectRatio="none" role="img" aria-label="' + apEsc(m.label) + ' trend">';
+  if(g.bY != null) s += '<line x1="8" x2="' + (g.W - 8) + '" y1="' + g.bY.toFixed(1) + '" y2="' + g.bY.toFixed(1) + '" class="ap-ch-base"/>';
+  if(g.tY != null) s += '<line x1="8" x2="' + (g.W - 8) + '" y1="' + g.tY.toFixed(1) + '" y2="' + g.tY.toFixed(1) + '" class="ap-ch-target"/>';
+  seg.forEach(function(pp){ s += pp.length > 1 ? '<polyline points="' + pp.join(' ') + '" class="ap-ch-line"/>' : ''; });
+  g.pts.forEach(function(p){ if(p.y != null) s += '<circle cx="' + p.x.toFixed(1) + '" cy="' + p.y.toFixed(1) + '" r="' + (p === last ? 3.4 : 2) + '" class="' + (p === last ? 'ap-ch-last' : 'ap-ch-dot') + '"/>'; });
+  s += '<text x="8" y="' + (g.H - 4) + '" class="ap-ch-x">' + apEsc(apPointLabel(m, g.first)) + '</text>';
+  s += '<text x="' + (g.W - 8) + '" y="' + (g.H - 4) + '" text-anchor="end" class="ap-ch-x">' + apEsc(apPointLabel(m, g.last)) + '</text></svg>';
+  return s + '<div class="ap-ch-key"><span class="k-line"></span>actual' + (g.tY != null ? '<span class="k-target"></span>target' : '') + (g.bY != null ? '<span class="k-base"></span>baseline' : '') + '</div>';
+}
+function apNextStep(p){
+  var open = apPointSteps(p.id).filter(function(s){ return !s.done_at; });
+  var dated = open.filter(function(s){ return s.due_date; }).sort(function(a, b){ return a.due_date < b.due_date ? -1 : 1; });
+  return dated[0] || open[0] || null;
+}
+function apFigureBlock(m){
+  var kind = apMeasureKind(m), v = apValue(m), dl = apDelta(m);
+  return '<div class="ap-dfig"><div class="ap-dfig-top"><div class="ap-dfig-label">' + apEsc(m.label) + '</div>'
+    + (kind === 'manual' ? '<span class="ap-mtag ap-tag-man">Typed in</span>' : '') + '</div>'
+    + '<div class="ap-dfig-row"><div class="ap-dfig-val' + (v == null ? ' ap-mval-none' : '') + '">' + (v == null ? (kind === 'manual' ? '&mdash;' : 'No data') : v) + '</div>'
+    + (dl ? '<div class="ap-delta ' + (dl.good === true ? 'good' : dl.good === false ? 'bad' : '') + '">' + dl.text + '</div>' : '') + '</div>'
+    + (m.current_label ? '<div class="ap-mctx">' + apEsc(m.current_label) + '</div>' : '')
+    + apChartSVG(m)
+    + '<div class="ap-dfig-foot">Target <b>' + apEsc(m.target || '—') + '</b> &middot; Baseline <b>' + apEsc(m.baseline || '—') + '</b></div>'
+    + '<div class="ap-msrc">' + (kind === 'manual' ? (m.updated_by ? 'Typed in by ' + apEsc(apName(m.updated_by)) + ' &middot; ' + apAgo(m.updated_at) : 'Not typed in yet')
+        : apEsc(m.source || '') + ' &middot; ' + apEsc((m.frequency || '').toLowerCase()) + ' &middot; read ' + apAgo(m.updated_at)) + '</div></div>';
+}
+function apDashTile(p){
+  var st = apPointSteps(p.id), pc = apPct(st), done = st.filter(function(s){ return s.done_at; }).length;
+  var nx = apNextStep(p), late = st.filter(apStepLate).length;
+  var ms = AP.measures.filter(function(m){ return m.point_id === p.id; });
+  var figs = ms.filter(function(m){ return apMeasureKind(m) !== 'coming'; });
+  var coming = ms.filter(function(m){ return apMeasureKind(m) === 'coming'; });
+  var note = AP.results.filter(function(r){ return r.point_id === p.id; })[0];
+  var cm = AP.comments.filter(function(c){ return c.point_id === p.id; })[0];
+  var h = '<div class="ap-tile"><div class="ap-tile-head"><button class="ap-tile-title" onclick="apOpen(\'' + p.id + '\')"><span class="ap-num">' + p.num + '</span>' + apEsc(p.title) + '</button>' + apPill(apPointStatus(st)) + '</div>'
+    + '<div class="ap-tile-prog">' + apBar(pc) + '<span>' + pc + '% &middot; ' + done + ' of ' + st.length + ' steps' + (late ? ' &middot; <b class="ap-red">' + late + ' late</b>' : '') + '</span></div>'
+    + '<div class="ap-tile-next">' + (nx ? 'Next: <b>' + apEsc(nx.title) + '</b>' + (nx.owner ? ' &middot; ' + apEsc(nx.owner) : ' &middot; <i>no owner</i>') + (nx.due_date ? ' &middot; ' + (apStepLate(nx) ? '<b class="ap-red">was due ' + apDate(nx.due_date) + '</b>' : 'due ' + apDate(nx.due_date)) : ' &middot; <i>no date</i>') : 'All steps done') + '</div>';
+  if(figs.length) h += '<div class="ap-tile-figs">' + figs.map(apFigureBlock).join('') + '</div>';
+  if(coming.length) h += '<div class="ap-tile-coming">Coming: ' + coming.map(function(m){ return apEsc(m.label) + ' <i>(' + apEsc(m.current_label || 'not available yet') + ')</i>'; }).join(' &middot; ') + '</div>';
+  if(note) h += '<div class="ap-tile-note"><span>Week of ' + apDate(note.week_start) + ' &middot; ' + apEsc(apName(note.author_email)) + '</span>' + apEsc(note.note) + '</div>';
+  else if(cm) h += '<div class="ap-tile-note"><span>Comment &middot; ' + apEsc(apName(cm.author_email)) + ' &middot; ' + apDoneDate(cm.created_at) + '</span>' + apEsc(cm.body) + '</div>';
+  return h + '</div>';
+}
+function apDashboard(){
+  var pts = AP.points.slice().sort(function(a, b){ return a.num - b.num; });
+  var h = ['<div class="ap-datahead"><div><div class="ap-dtitle">Dashboard</div><div class="ap-small">The 10 points, their figures against target, and the latest notes &middot; figures read ' + apAgo(apAutoRead()) + '</div></div>'
+    + '<div class="ap-btns ap-dl"><button class="ap-btn" ' + (AP.busyDl ? 'disabled' : '') + ' onclick="apExcel()">' + (AP.busyDl === 'xlsx' ? 'Building&hellip;' : 'Download Excel') + '</button>'
+    + '<button class="ap-btn" onclick="apPdf()">PDF / Print</button></div></div>'];
+  h.push('<div class="ap-tiles">' + pts.map(apDashTile).join('') + '</div>');
+  return h.join('');
+}
+
+// ── Excel: summary, steps, figures, history, charts and notes ──────────────
+function apStepStatus(s){ return s.done_at ? 'Done' : apStepLate(s) ? 'Late' : apStepSoon(s) ? 'Due this week' : s.due_date ? 'Open' : 'No date'; }
+function apChartPNG(m){
+  var g = apChartGeom(m, 640, 240); if(!g) return null;
+  var c = document.createElement('canvas'); c.width = 640; c.height = 270;
+  var x = c.getContext('2d'); x.fillStyle = '#FFFFFF'; x.fillRect(0, 0, 640, 270);
+  x.font = 'bold 15px Arial'; x.fillStyle = '#6B1F2A'; x.fillText(m.label, 10, 20);
+  x.save(); x.translate(0, 26);
+  var line = function(y, col, dash){ if(y == null) return; x.setLineDash(dash || []); x.strokeStyle = col; x.lineWidth = 1.5; x.beginPath(); x.moveTo(8, y); x.lineTo(632, y); x.stroke(); x.setLineDash([]); };
+  line(g.bY, '#B9A58C', [3, 4]); line(g.tY, '#C9A84C', [7, 5]);
+  x.strokeStyle = '#6B1F2A'; x.lineWidth = 2.5; x.beginPath(); var on = false;
+  g.pts.forEach(function(p){ if(p.y == null){ on = false; return; } if(!on){ x.moveTo(p.x, p.y); on = true; } else x.lineTo(p.x, p.y); });
+  x.stroke(); x.fillStyle = '#6B1F2A';
+  g.pts.forEach(function(p){ if(p.y != null){ x.beginPath(); x.arc(p.x, p.y, 3, 0, 7); x.fill(); } });
+  x.font = '11px Arial'; x.fillStyle = '#8B7355';
+  g.pts.forEach(function(p, i){ if(i === 0 || i === g.pts.length - 1 || g.pts.length <= 12){ x.textAlign = 'center'; x.fillText(apPointLabel(m, p.d), Math.min(612, Math.max(28, p.x)), 236); } });
+  x.restore(); x.textAlign = 'left'; x.font = '11px Arial'; x.fillStyle = '#8B7355';
+  x.fillText('Line: actual   Dashed gold: target ' + (m.target || '') + '   Dotted: baseline', 10, 266);
+  return c.toDataURL('image/png');
+}
+async function apExcel(){
+  if(AP.busyDl) return;
+  AP.busyDl = 'xlsx'; apRepaint();
+  try{
+    if(typeof resLoadExcelJS !== 'function') throw new Error('the spreadsheet helper is not loaded');
+    await resLoadExcelJS();
+    var X = (typeof RES_XL === 'object') ? RES_XL : { VINO: '6B1F2A', SABBIA: 'F5F0E8', GOLD: 'C9A84C' };
+    var wb = new ExcelJS.Workbook(); wb.creator = "Roberto's FOH App";
+    var asOf = 'As of ' + apDate(apToday()) + ' ' + new Date().getFullYear() + ' · figures read ' + apAgo(apAutoRead());
+    var mk = function(name, title, head, widths){
+      var ws = wb.addWorksheet(name, { views: [{ state: 'frozen', ySplit: 3 }] });
+      ws.columns = widths.map(function(w){ return { width: w }; });
+      ws.getCell('A1').value = title; ws.getCell('A1').font = { bold: true, size: 14, color: { argb: 'FF' + X.VINO } };
+      ws.getCell('A2').value = asOf; ws.getCell('A2').font = { size: 9, color: { argb: 'FF8B7355' } };
+      var hr = ws.getRow(3); hr.values = head; hr.height = 20;
+      hr.eachCell(function(c){ c.font = { bold: true, color: { argb: 'FFFFFFFF' } }; c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + X.VINO } }; c.alignment = { vertical: 'middle', wrapText: true }; });
+      return ws;
+    };
+    var add = function(ws, vals){ var r = ws.addRow(vals); r.eachCell({ includeEmpty: true }, function(c){ c.alignment = { vertical: 'top', wrapText: true }; c.border = { bottom: { style: 'thin', color: { argb: 'FFE6DED2' } } }; }); return r; };
+    var pts = AP.points.slice().sort(function(a, b){ return a.num - b.num; });
+    var pt = function(id){ return AP.points.filter(function(p){ return p.id === id; })[0] || {}; };
+    // 1. Summary
+    var all = AP.steps, done = all.filter(function(s){ return s.done_at; }).length;
+    var ws = mk('Summary', "Roberto's 3.0 action plan — summary", ['#', 'Point', 'Status', 'Progress', 'Steps done', 'Late', 'Next step', 'Owner', 'Due', 'Latest note'], [5, 32, 14, 10, 11, 7, 34, 14, 12, 50]);
+    pts.forEach(function(p){
+      var st = apPointSteps(p.id), nx = apNextStep(p), note = AP.results.filter(function(r){ return r.point_id === p.id; })[0];
+      var r = add(ws, [p.num, p.title, AP_PILL[apPointStatus(st)][0], apPct(st) / 100, st.filter(function(s){ return s.done_at; }).length + ' of ' + st.length, st.filter(apStepLate).length,
+        nx ? nx.title : 'All done', nx && nx.owner || '', nx && nx.due_date ? new Date(nx.due_date + 'T12:00:00') : '', note ? note.note : '']);
+      r.getCell(4).numFmt = '0%'; r.getCell(9).numFmt = 'd mmm';
+    });
+    var tr = add(ws, ['', 'Whole plan', '', all.length ? done / all.length : 0, done + ' of ' + all.length, all.filter(apStepLate).length, '', '', '', '']);
+    tr.font = { bold: true }; tr.getCell(4).numFmt = '0%';
+    // 2. Steps
+    ws = mk('Steps', 'Every step, with owner, date and status', ['#', 'Point', 'Step', 'Owner', 'Due', 'Status', 'Done on', 'Done by'], [5, 30, 44, 16, 12, 14, 12, 16]);
+    pts.forEach(function(p){ apPointSteps(p.id).forEach(function(s){
+      var r = add(ws, [p.num, p.title, s.title, s.owner || '', s.due_date ? new Date(s.due_date + 'T12:00:00') : '', apStepStatus(s), s.done_at ? new Date(s.done_at) : '', s.done_by && s.done_by !== 'seed' ? apName(s.done_by) : '']);
+      r.getCell(5).numFmt = 'd mmm'; r.getCell(7).numFmt = 'd mmm';
+      if(apStepLate(s)) r.getCell(6).font = { bold: true, color: { argb: 'FFB3261E' } };
+    }); });
+    // 3. Figures
+    ws = mk('Figures', 'Figures: today, target, baseline and where each comes from', ['#', 'Point', 'Figure', 'Today', 'Detail', 'Target', 'Baseline', 'Change vs baseline', 'How it gets its number', 'Source', 'How often', 'Read / typed'], [5, 28, 34, 10, 40, 22, 30, 18, 16, 20, 12, 20]);
+    pts.forEach(function(p){ AP.measures.filter(function(m){ return m.point_id === p.id; }).forEach(function(m){
+      var kind = apMeasureKind(m), dl = apDelta(m);
+      var r = add(ws, [p.num, p.title, m.label, m.current == null ? '' : Number(m.current), m.current_label || '', m.target || '', m.baseline || '', dl ? dl.text : '',
+        kind === 'manual' ? 'Typed in' : kind === 'coming' ? 'Automatic — coming' : 'Automatic', m.source || '', m.frequency || '',
+        kind === 'manual' ? (m.updated_by ? apName(m.updated_by) + ', ' + apAgo(m.updated_at) : 'not typed yet') : (m.updated_at ? apAgo(m.updated_at) : 'not read yet')]);
+      if(m.unit === '%' && m.current != null){ r.getCell(4).value = Number(m.current) / 100; r.getCell(4).numFmt = '0.0%'; }
+    }); });
+    // 4. History
+    ws = mk('History', 'Weekly (and monthly) history of every figure', ['#', 'Point', 'Figure', 'Week / month', 'Value', 'Detail'], [5, 28, 34, 14, 10, 50]);
+    pts.forEach(function(p){ AP.measures.filter(function(m){ return m.point_id === p.id; }).forEach(function(m){ apHist(m).forEach(function(h){
+      var r = add(ws, [p.num, p.title, m.label, apMonthly(m) ? new Date(h.d + 'T12:00:00').toLocaleDateString('en-GB', { month: 'long', year: 'numeric' }) : 'w/c ' + apDate(h.d),
+        h.v == null ? '' : (m.unit === '%' ? h.v / 100 : h.v), h.closed ? 'Closed (Sundays until October)' : h.label]);
+      if(m.unit === '%') r.getCell(5).numFmt = '0.0%';
+    }); }); });
+    // 5. Charts
+    ws = wb.addWorksheet('Charts'); ws.getCell('A1').value = 'Trend charts — actual against target and baseline'; ws.getCell('A1').font = { bold: true, size: 14, color: { argb: 'FF' + X.VINO } };
+    ws.getCell('A2').value = asOf; ws.getCell('A2').font = { size: 9, color: { argb: 'FF8B7355' } };
+    var row = 3;
+    pts.forEach(function(p){ AP.measures.filter(function(m){ return m.point_id === p.id; }).forEach(function(m){
+      var png = apChartPNG(m); if(!png) return;
+      ws.getCell('A' + (row + 1)).value = p.num + '. ' + p.title; ws.getCell('A' + (row + 1)).font = { bold: true, color: { argb: 'FF8B7355' } };
+      var id = wb.addImage({ base64: png, extension: 'png' });
+      ws.addImage(id, { tl: { col: 0, row: row + 1 }, ext: { width: 640, height: 270 } });
+      row += 16;
+    }); });
+    // 6. Notes
+    ws = mk('Notes', 'Weekly notes, comments, proposed changes and approvals', ['#', 'Point', 'Type', 'Date', 'Who', 'Text', 'Status'], [5, 28, 16, 12, 14, 70, 22]);
+    var notes = [];
+    AP.results.forEach(function(r){ notes.push([r.point_id, 'Weekly note', r.week_start, r.author_email, r.note, '']); });
+    AP.comments.forEach(function(c){ notes.push([c.point_id, 'Comment', String(c.created_at).slice(0, 10), c.author_email, c.body, '']); });
+    AP.changes.forEach(function(c){ notes.push([c.point_id, 'Proposed change', String(c.created_at).slice(0, 10), c.proposed_by, c.proposal, c.status + (c.decided_by ? ' by ' + apName(c.decided_by) : '')]); });
+    AP.weeks.forEach(function(w){ notes.push([null, 'Week ' + w.status, w.week_start, w.approved_by, w.note || '', '']); });
+    notes.sort(function(a, b){ return (pt(a[0]).num || 0) - (pt(b[0]).num || 0) || (a[2] < b[2] ? -1 : 1); });
+    if(!notes.length) add(ws, ['', '', '', '', '', 'Nothing written yet', '']);
+    notes.forEach(function(n){ var p = pt(n[0]); var r = add(ws, [p.num || '', p.title || 'Whole plan', n[1], n[2] ? new Date(n[2] + 'T12:00:00') : '', apName(n[3]), n[4], n[5]]); r.getCell(4).numFmt = 'd mmm'; });
+    var buf = await wb.xlsx.writeBuffer();
+    var blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    var url = URL.createObjectURL(blob), a = document.createElement('a');
+    a.href = url; a.download = "Roberto's 3.0 action plan " + apToday() + '.xlsx';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 1500);
+    apSay('Excel downloaded.');
+  }catch(e){ apFail('Excel not built', e); }
+  finally{ AP.busyDl = false; apRepaint(); }
+}
+
+// ── PDF / Print: the dashboard, then one page per point ────────────────────
+// Printed from a dedicated block so the app's bars, chips and buttons never
+// reach the paper. "Save as PDF" in the print dialog gives the PDF.
+function apPdf(){
+  try{
+    apCss();
+    var pts = AP.points.slice().sort(function(a, b){ return a.num - b.num; });
+    var all = AP.steps, done = all.filter(function(s){ return s.done_at; }).length;
+    var h = '<div class="ap-print-head"><div class="ap-kick">Roberto\'s DIFC &middot; Executive</div><h1>Roberto\'s 3.0 action plan</h1>'
+      + '<div>As of ' + apDate(apToday()) + ' ' + new Date().getFullYear() + ' &middot; plan progress <b>' + apPct(all) + '%</b> &middot; ' + done + ' of ' + all.length + ' steps done &middot; ' + all.filter(apStepLate).length + ' late</div></div>';
+    h += '<div class="ap-tiles">' + pts.map(apDashTile).join('') + '</div>';
+    pts.forEach(function(p){
+      h += '<div class="ap-print-point"><h2>' + p.num + '. ' + apEsc(p.title) + '</h2><div class="ap-small">' + apEsc(p.goal || '') + '</div>'
+        + '<table class="ap-print-table"><thead><tr><th>Step</th><th>Owner</th><th>Due</th><th>Status</th></tr></thead><tbody>'
+        + apPointSteps(p.id).map(function(s){ return '<tr><td>' + apEsc(s.title) + '</td><td>' + apEsc(s.owner || '') + '</td><td>' + (s.due_date ? apDate(s.due_date) : '') + '</td><td>' + apStepStatus(s) + (s.done_at ? ' ' + apDoneDate(s.done_at) : '') + '</td></tr>'; }).join('')
+        + '</tbody></table>';
+      var ns = AP.results.filter(function(r){ return r.point_id === p.id; }).map(function(r){ return '<li><b>Week of ' + apDate(r.week_start) + ', ' + apEsc(apName(r.author_email)) + ':</b> ' + apEsc(r.note) + '</li>'; })
+        .concat(AP.comments.filter(function(c){ return c.point_id === p.id; }).map(function(c){ return '<li><b>' + apEsc(apName(c.author_email)) + ', ' + apDoneDate(c.created_at) + ':</b> ' + apEsc(c.body) + '</li>'; }));
+      if(ns.length) h += '<div class="ap-print-notes"><b>Notes</b><ul>' + ns.join('') + '</ul></div>';
+      h += '</div>';
+    });
+    var el = document.getElementById('ap-print');
+    if(!el){ el = document.createElement('div'); el.id = 'ap-print'; document.body.appendChild(el); }
+    el.innerHTML = h;
+    // Only while the plan is printing: any other module's print stays as it was.
+    document.body.classList.add('ap-printing');
+    var done = function(){ document.body.classList.remove('ap-printing'); window.removeEventListener('afterprint', done); };
+    window.addEventListener('afterprint', done);
+    setTimeout(function(){ window.print(); }, 50);
+  }catch(e){ apFail('PDF not built', e); }
+}
+
 function apCss(){
   if(document.getElementById('ap-css')) return;
   var s = document.createElement('style'); s.id = 'ap-css';
@@ -645,6 +896,30 @@ function apCss(){
     '.ap-toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:9000;max-width:min(560px,calc(100vw - 32px));border:1px solid;border-radius:12px;padding:12px 18px;font-size:15px;box-shadow:0 6px 24px rgba(44,24,16,.18);display:flex;gap:12px;align-items:center}',
     '.ap-x{background:none;border:0;font-size:22px;line-height:1;color:inherit;cursor:pointer;min-width:32px;min-height:32px}',
     '.ap-plan-head{font-size:15px}',
+    '.ap-dl{margin-top:0}',
+    '.ap-tiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}',
+    '.ap-tile{background:#fff;border:1px solid var(--border);border-radius:14px;padding:16px 18px;display:flex;flex-direction:column;gap:10px;break-inside:avoid}',
+    '.ap-tile-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}',
+    '.ap-tile-title{background:none;border:0;padding:0;font:inherit;font-family:var(--font-serif);font-size:19px;color:var(--text);text-align:left;cursor:pointer;display:flex;gap:10px;align-items:baseline}',
+    '.ap-tile-title .ap-num{font-size:20px}',
+    '.ap-tile-prog{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;font-size:13px;color:var(--text-light)}',
+    '.ap-tile-next{font-size:13px;color:var(--text-mid);line-height:1.5}',
+    '.ap-tile-figs{display:flex;flex-direction:column;gap:12px;border-top:1px solid var(--border);padding-top:10px}',
+    '.ap-dfig-top{display:flex;justify-content:space-between;gap:8px;align-items:center}.ap-dfig-label{font-size:14px;color:var(--text-mid)}',
+    '.ap-dfig-row{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}',
+    '.ap-dfig-val{font-family:var(--font-serif);font-size:30px;line-height:1.15;color:var(--text)}',
+    '.ap-delta{font-size:12px;font-weight:600;color:var(--text-light)}.ap-delta.good{color:#1E6B3A}.ap-delta.bad{color:#A1231B}',
+    '.ap-chart{width:100%;height:84px;display:block;margin-top:6px}',
+    '.ap-ch-line{fill:none;stroke:#6B1F2A;stroke-width:2;vector-effect:non-scaling-stroke}.ap-ch-dot{fill:#6B1F2A}.ap-ch-last{fill:#6B1F2A;stroke:#fff;stroke-width:1.5}',
+    '.ap-ch-target{stroke:#C9A84C;stroke-width:1.5;stroke-dasharray:6 4;vector-effect:non-scaling-stroke}.ap-ch-base{stroke:#B9A58C;stroke-width:1;stroke-dasharray:2 3;vector-effect:non-scaling-stroke}',
+    '.ap-ch-x{font-size:10px;fill:#8B7355;font-family:var(--font-sans)}',
+    '.ap-ch-key{display:flex;gap:12px;align-items:center;font-size:11px;color:var(--text-light);margin-top:2px}.ap-ch-key span{display:inline-block;width:16px;margin-right:-6px;vertical-align:middle;border-top:2px solid #6B1F2A}.ap-ch-key .k-target{border-top:2px dashed #C9A84C}.ap-ch-key .k-base{border-top:2px dotted #B9A58C}',
+    '.ap-dfig-foot{font-size:12px;color:var(--text-mid);margin-top:6px;line-height:1.5}.ap-dfig-foot b{font-weight:500;color:var(--text)}',
+    '.ap-tile-coming{font-size:12px;color:var(--text-light);border-top:1px solid var(--border);padding-top:8px;line-height:1.5}',
+    '.ap-tile-note{font-size:13px;color:var(--text);background:var(--surface2);border-radius:10px;padding:10px 12px;line-height:1.5}.ap-tile-note span{display:block;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--text-light);margin-bottom:2px}',
+    '#ap-print{display:none}',
+    '@media print{@page{size:A4;margin:12mm}body.ap-printing>*:not(#ap-print){display:none!important}body.ap-printing #ap-print{display:block!important;font-family:Arial,sans-serif;color:#2C1810}#ap-print .ap-tiles{grid-template-columns:1fr 1fr;gap:8px}#ap-print .ap-tile{border:1px solid #DDD3C6;padding:10px 12px;gap:6px}#ap-print .ap-tile-title{font-size:15px}#ap-print .ap-dfig-val{font-size:22px}#ap-print .ap-chart{height:60px}.ap-print-head{margin-bottom:10px}.ap-print-head h1{font-family:Georgia,serif;color:#6B1F2A;font-size:24px;margin:4px 0}.ap-print-point{break-before:page}.ap-print-point h2{font-family:Georgia,serif;color:#6B1F2A;font-size:18px;margin:0 0 4px}.ap-print-table{width:100%;border-collapse:collapse;font-size:11px;margin-top:8px}.ap-print-table th{text-align:left;background:#6B1F2A;color:#fff;padding:5px 6px}.ap-print-table td{border-bottom:1px solid #E6DED2;padding:5px 6px;vertical-align:top}.ap-print-notes{font-size:11px;margin-top:10px}.ap-print-notes ul{margin:4px 0 0 16px}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}}',
+    '@media (max-width:820px){.ap-tiles{grid-template-columns:1fr}.ap-datahead{flex-wrap:wrap}}',
     '.ap-datahead{display:flex;justify-content:space-between;align-items:flex-end;gap:14px;margin:6px 2px 14px}',
     '.ap-dtitle{font-family:var(--font-serif);font-size:26px;color:var(--vino);line-height:1.1}',
     '.ap-dsec{font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--text-light);font-weight:600;margin:18px 4px 10px}',
