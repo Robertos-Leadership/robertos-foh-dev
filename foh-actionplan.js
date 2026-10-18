@@ -221,14 +221,14 @@ function apFilter(f){ AP.filter = f; apRepaint(); }
 function renderActionPlan(){
   apCss();
   if(!AP.loaded && !AP.loading && !AP.err) setTimeout(apLoad, 0);
-  if(AP.err) return '<div class="ap-wrap"><div class="ap-card ap-msg-bad">The plan could not be read: ' + apEsc(AP.err) + ' <button class="ap-btn" onclick="AP.err=null;apLoad()">Try again</button></div></div>';
-  if(!AP.loaded) return '<div class="ap-wrap"><div class="loading">Reading the plan&hellip;</div></div>';
+  if(AP.err) return '<div class="ap-wrap"><div class="ap-sheet"><div class="ap-card ap-msg-bad">The plan could not be read: ' + apEsc(AP.err) + ' <button class="ap-btn" onclick="AP.err=null;apLoad()">Try again</button></div></div></div>';
+  if(!AP.loaded) return '<div class="ap-wrap"><div class="ap-sheet"><div class="loading">Reading the plan&hellip;</div></div></div>';
   if(AP.noAccess) return '<div class="ap-wrap"><div class="ap-head"><div class="ap-kick">FOH App &middot; Executive</div><div class="ap-title">No access</div>'
     + '<div class="ap-sub">The Roberto\'s 3.0 action plan is private. Your login is not on its list &mdash; ask Francesco if you should be.</div></div></div>';
   // Errors stay until closed; a "Saved" goes by itself.
   var msg = AP.msg ? '<div class="ap-toast ' + (AP.msg.bad ? 'ap-msg-bad' : 'ap-msg-ok') + '" role="status">' + apEsc(AP.msg.text)
     + (AP.msg.bad ? ' <button class="ap-x" onclick="apDismiss()" aria-label="Close">&times;</button>' : '') + '</div>' : '';
-  return '<div class="ap-wrap">' + apOwnersList() + (AP.open ? apPointPage(AP.open, '') : apOverview('')) + msg + '</div>';
+  return '<div class="ap-wrap">' + apOwnersList() + '<div class="ap-sheet">' + (AP.open ? apPointPage(AP.open, '') : apOverview('')) + '</div>' + msg + '</div>';
 }
 
 function apWeekPill(){
@@ -259,7 +259,7 @@ function apOverview(msg){
     + '</div>');
   h.push(apWeekPanel());
   var f = AP.filter;
-  h.push('<div class="ap-filters">' + [['all', 'All'], ['mine', 'My steps'], ['late', 'Late'], ['week', 'This week'], ['plan', 'Owners & dates'], ['numbers', 'Numbers']].map(function(x){
+  h.push('<div class="ap-filters">' + [['all', 'All'], ['mine', 'My steps'], ['late', 'Late'], ['week', 'This week'], ['plan', 'Owners & dates'], ['numbers', 'Data']].map(function(x){
     return '<button class="ap-chip' + (f === x[0] ? ' on' : '') + '" onclick="apFilter(\'' + x[0] + '\')">' + x[1] + '</button>'; }).join('') + '</div>');
   if(f === 'all'){
     // Straight 1-10, in Amin's order (his email of 16 Oct). Listed by group the
@@ -390,24 +390,73 @@ function apManualInput(m){
     + (m.current_label ? '<div class="ap-small">' + apEsc(m.current_label) + '</div>' : '');
 }
 // Every number in the plan on one page, so it can be pulled any time.
+// ── Data ─────────────────────────────────────────────────────────────────
+// Every figure in the plan, pulled whenever someone opens it. Three groups, so
+// the live figures are not buried under measures that do not exist yet:
+//   Live      — automatic and read at least once (a night with no closing
+//               report shows "No data", never 0)
+//   Typed in  — no system holds it; a plan member types it, the app says who
+//   Coming    — automatic, but its module or its date has not arrived
+function apMeasureKind(m){
+  if(m.input !== 'auto') return 'manual';
+  return m.updated_at ? 'live' : 'coming';
+}
+function apValue(m){
+  if(m.current == null) return null;
+  var v = Number(m.current), u = m.unit;
+  return u === '%' ? (Math.round(v * 10) / 10) + '%' : (u === 'rating' ? v.toFixed(1) : String(Math.round(v * 10) / 10));
+}
+// One figure as a card. withPoint: show which of the 10 points it belongs to.
+function apMeasureCard(m, withPoint){
+  var kind = apMeasureKind(m), p = withPoint ? AP.points.filter(function(x){ return x.id === m.point_id; })[0] : null;
+  var tag = kind === 'manual' ? '<span class="ap-mtag ap-tag-man">Typed in</span>' : '<span class="ap-mtag ap-tag-auto">Automatic</span>';
+  var val = apValue(m), body;
+  if(kind === 'manual'){
+    body = '<div class="ap-mval"><input class="ap-in ap-mval-in" inputmode="decimal" value="' + (m.current == null ? '' : m.current) + '" placeholder="&mdash;" onchange="apSetManual(\'' + m.id + '\',this.value)" aria-label="' + apEsc(m.label) + '"></div>'
+      + (m.current_label ? '<div class="ap-mctx">' + apEsc(m.current_label) + '</div>' : '');
+  } else {
+    body = val == null ? '<div class="ap-mval ap-mval-none">No data</div><div class="ap-mctx">' + apEsc(m.current_label || '') + '</div>'
+      : '<div class="ap-mval">' + val + '</div>' + (m.current_label ? '<div class="ap-mctx">' + apEsc(m.current_label) + '</div>' : '');
+  }
+  var src = kind === 'manual'
+    ? (m.updated_by ? 'Typed in by ' + apEsc(apName(m.updated_by)) + ' &middot; ' + apAgo(m.updated_at) : 'Not typed in yet') + ' &middot; ' + apEsc((m.frequency || '').toLowerCase())
+    : apEsc(m.source || '') + ' &middot; ' + apEsc((m.frequency || '').toLowerCase()) + ' &middot; read ' + apAgo(m.updated_at);
+  return '<div class="ap-mcard">'
+    + '<div class="ap-mtop">' + (p ? '<button class="ap-mpoint" onclick="apOpen(\'' + p.id + '\')">' + p.num + ' &middot; ' + apEsc(p.title) + '</button>' : '<span></span>') + tag + '</div>'
+    + '<div class="ap-mlabel">' + apEsc(m.label) + '</div>' + body
+    + '<div class="ap-mfoot"><div><span>Target</span><b>' + apEsc(m.target || '&mdash;') + '</b></div><div><span>Baseline</span><b>' + apEsc(m.baseline || '&mdash;') + '</b></div></div>'
+    + '<div class="ap-msrc">' + src + '</div></div>';
+}
+function apComingRow(m, withPoint){
+  var p = AP.points.filter(function(x){ return x.id === m.point_id; })[0];
+  return '<div class="ap-crow"><div><div class="ap-clabel">' + apEsc(m.label) + '</div>'
+    + (withPoint && p ? '<div class="ap-small">' + p.num + ' &middot; ' + apEsc(p.title) + ' &middot; target ' + apEsc(m.target || '&mdash;') + '</div>' : '<div class="ap-small">Target ' + apEsc(m.target || '&mdash;') + '</div>') + '</div>'
+    + '<div class="ap-cwhen">' + apEsc(m.current_label || 'Not available yet') + '</div></div>';
+}
+function apMeasureBlock(list, withPoint){
+  var live = list.filter(function(m){ return apMeasureKind(m) === 'live'; });
+  var man = list.filter(function(m){ return apMeasureKind(m) === 'manual'; });
+  var coming = list.filter(function(m){ return apMeasureKind(m) === 'coming'; });
+  var h = [];
+  if(live.length) h.push((withPoint ? '<div class="ap-dsec">Live figures</div>' : '') + '<div class="ap-mgrid">' + live.map(function(m){ return apMeasureCard(m, withPoint); }).join('') + '</div>');
+  if(man.length) h.push((withPoint ? '<div class="ap-dsec">Typed in</div>' : '') + '<div class="ap-mgrid">' + man.map(function(m){ return apMeasureCard(m, withPoint); }).join('') + '</div>');
+  if(coming.length) h.push('<div class="ap-dsec">Coming soon</div><div class="ap-card ap-coming">' + coming.map(function(m){ return apComingRow(m, withPoint); }).join('') + '</div>');
+  return h.join('');
+}
 function apNumbersView(){
   var t = apAutoRead();
-  var h = ['<div class="ap-card ap-numhead"><div><b>Automatic numbers read ' + apAgo(t) + '.</b>'
-    + '<div class="ap-small">They refresh themselves when the plan opens if they are over 3 hours old, and every Wednesday before the email. Tap Refresh to read the sources now.</div></div>'
-    + '<button class="ap-btn ap-btn-main" ' + (AP.refreshing ? 'disabled' : '') + ' onclick="apCallWeekly(\'refresh\')">' + (AP.refreshing === 'refresh' ? 'Reading the sources&hellip;' : 'Refresh now') + '</button></div>'];
-  h.push('<div class="ap-card ap-tablewrap"><table class="ap-table ap-numtable"><thead><tr><th>Point</th><th>Measure</th><th>Today</th><th>Target</th><th>Baseline</th><th>How it gets its number</th><th>How often</th></tr></thead><tbody>');
+  var ordered = [];
   AP.points.slice().sort(function(a, b){ return a.num - b.num; }).forEach(function(p){
-    AP.measures.filter(function(m){ return m.point_id === p.id; }).forEach(function(m){
-      h.push('<tr><td><button class="ap-linkbtn" onclick="apOpen(\'' + p.id + '\')">' + p.num + '. ' + apEsc(p.title) + '</button></td><td>' + apEsc(m.label) + '</td>'
-        + '<td>' + (m.input === 'auto' ? apFmt(m) : apManualInput(m)) + '</td><td>' + apEsc(m.target || '') + '</td><td>' + apEsc(m.baseline || '') + '</td>'
-        + '<td>' + apInputBadge(m) + '</td><td>' + apEsc(m.frequency || '') + '</td></tr>');
-    });
+    AP.measures.filter(function(m){ return m.point_id === p.id; }).forEach(function(m){ ordered.push(m); });
   });
-  h.push('</tbody></table></div>');
+  var h = ['<div class="ap-datahead"><div><div class="ap-dtitle">Data</div>'
+    + '<div class="ap-small">Live figures read ' + apAgo(t) + ' &middot; they refresh by themselves when the plan opens</div></div>'
+    + '<button class="ap-btn" ' + (AP.refreshing ? 'disabled' : '') + ' onclick="apCallWeekly(\'refresh\')">' + (AP.refreshing === 'refresh' ? 'Reading&hellip;' : 'Refresh') + '</button></div>'];
+  h.push(apMeasureBlock(ordered, true));
   h.push('<details class="ap-more"><summary>What is automatic and what is typed in</summary><div class="ap-small">'
-    + '<b>Automatic</b>: the app reads it itself &mdash; SevenRooms (walk-ins, channels, guests coming back, relaunch bookings), the closing report (Monday and Sunday guests), Google (rating) and, as each module arrives, the FOH App (SOP sign-off, training, mystery shopper, guest survey). Nobody types these.<br>'
-    + '<b>Typed in</b>: roles filled and catering requests &mdash; there is no system that holds them, so a plan member types the number and the app records who and when.<br>'
-    + '<b>Steps, owners, dates, comments and approvals</b> are always people: they tick, type and approve in the plan.</div></details>');
+    + '<b>Automatic</b>: the app reads it itself &mdash; SevenRooms (walk-ins, channels, guests coming back, relaunch bookings), the closing report (Monday and Sunday guests), Google (rating) and, as each module arrives, the FOH App (SOP sign-off, training, mystery shopper, guest survey). Nobody types these. They refresh when the plan opens if they are over 3 hours old, and every Wednesday before the email.<br>'
+    + '<b>Typed in</b>: roles filled and catering requests &mdash; no system holds them, so a plan member types the number and the app records who and when.<br>'
+    + '<b>Steps, owners, dates, comments and approvals</b> are always people.</div></details>');
   return h.join('');
 }
 
@@ -444,12 +493,7 @@ function apPointPage(pid, msg){
 
   // How we check
   var ms = AP.measures.filter(function(m){ return m.point_id === pid; });
-  h.push('<div class="ap-sec">How we check</div><div class="ap-card ap-tablewrap"><table class="ap-table"><thead><tr><th>Measure</th><th>Today</th><th>Target</th><th>Baseline</th><th>How it gets its number</th><th>How often</th></tr></thead><tbody>');
-  ms.forEach(function(m){
-    var today = m.input === 'auto' ? apFmt(m) : apManualInput(m);
-    h.push('<tr><td>' + apEsc(m.label) + '</td><td>' + today + '</td><td>' + apEsc(m.target || '') + '</td><td>' + apEsc(m.baseline || '') + '</td><td>' + apInputBadge(m) + '</td><td>' + apEsc(m.frequency || '') + '</td></tr>');
-  });
-  h.push('</tbody></table></div>');
+  h.push('<div class="ap-sec">How we check</div>' + apMeasureBlock(ms, false));
 
   // Weekly results log: the stored weekly numbers + what people wrote about the week.
   var mids = ms.map(function(m){ return m.id; });
@@ -532,7 +576,15 @@ function apCss(){
   if(document.getElementById('ap-css')) return;
   var s = document.createElement('style'); s.id = 'ap-css';
   s.textContent = [
-    '.ap-wrap{max-width:1040px;margin:0 auto;padding:4px 0 40px;font-family:var(--font-sans);color:var(--text)}',
+    // The room behind, a wine wash over it, everything on a cream sheet — the same
+    // device as Private Events. Day room (light rooms only); a slow connection
+    // shows the sand colour, never a grey hole.
+    '.ap-wrap{max-width:1080px;margin:0 auto;padding:6px 0 48px;font-family:var(--font-sans);color:var(--text);position:relative;isolation:isolate}',
+    '.ap-wrap::before,.ap-wrap::after{content:"";position:fixed;inset:0;pointer-events:none}',
+    '.ap-wrap::before{z-index:-2;background:#cdbba6 url(venue-chandelier.jpg) center/cover}',
+    '.ap-wrap::after{z-index:-1;background:linear-gradient(180deg,rgba(43,1,4,.58) 0,rgba(43,1,4,.42) 10%,rgba(43,1,4,.38) 62%,rgba(43,1,4,.56) 100%)}',
+    '.ap-sheet{background:#F4EDE1;border-radius:16px;padding:20px 22px 24px;box-shadow:0 34px 76px -34px rgba(20,4,4,.94)}',
+    '@media print{.ap-wrap::before,.ap-wrap::after{display:none}.ap-sheet{box-shadow:none}}',
     '.ap-head{background:var(--vino);color:#fff;border-radius:16px;padding:22px 26px;margin-bottom:16px}',
     '.ap-head-row{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap}',
     '.ap-kick{font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:var(--gold-light);font-weight:500}',
@@ -593,6 +645,29 @@ function apCss(){
     '.ap-toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:9000;max-width:min(560px,calc(100vw - 32px));border:1px solid;border-radius:12px;padding:12px 18px;font-size:15px;box-shadow:0 6px 24px rgba(44,24,16,.18);display:flex;gap:12px;align-items:center}',
     '.ap-x{background:none;border:0;font-size:22px;line-height:1;color:inherit;cursor:pointer;min-width:32px;min-height:32px}',
     '.ap-plan-head{font-size:15px}',
+    '.ap-datahead{display:flex;justify-content:space-between;align-items:flex-end;gap:14px;margin:6px 2px 14px}',
+    '.ap-dtitle{font-family:var(--font-serif);font-size:26px;color:var(--vino);line-height:1.1}',
+    '.ap-dsec{font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--text-light);font-weight:600;margin:18px 4px 10px}',
+    '.ap-mgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-bottom:6px}',
+    '.ap-mcard{background:#fff;border:1px solid var(--border);border-radius:14px;padding:16px 18px 14px;display:flex;flex-direction:column}',
+    '.ap-mtop{display:flex;justify-content:space-between;align-items:center;gap:10px;min-height:22px}',
+    '.ap-mpoint{background:none;border:0;padding:0;font:inherit;font-size:12px;letter-spacing:.06em;color:var(--vino);cursor:pointer;text-align:left}',
+    '.ap-mtag{font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;border-radius:999px;padding:3px 9px;white-space:nowrap}',
+    '.ap-tag-auto{background:#EEF3F6;color:#2F5A73}.ap-tag-man{background:#FBF1DC;color:#7A4B00}',
+    '.ap-mlabel{font-size:15px;color:var(--text-mid);margin-top:8px}',
+    '.ap-mval{font-family:var(--font-serif);font-size:36px;line-height:1.15;color:var(--text);margin-top:4px}',
+    '.ap-mval-none{font-size:22px;color:var(--text-light)}',
+    '.ap-mval-in{font-family:var(--font-serif);font-size:24px;width:120px;margin-top:4px}',
+    '.ap-mctx{font-size:13px;color:var(--text-light);margin-top:2px;line-height:1.45}',
+    '.ap-mfoot{display:grid;grid-template-columns:1fr 1fr;gap:12px;border-top:1px solid var(--border);margin-top:14px;padding-top:10px}',
+    '.ap-mfoot span{display:block;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--text-light)}',
+    '.ap-mfoot b{display:block;font-weight:500;font-size:13px;color:var(--text);margin-top:2px;line-height:1.4}',
+    '.ap-msrc{font-size:12px;color:var(--text-light);margin-top:10px}',
+    '.ap-coming{padding:4px 18px}',
+    '.ap-crow{display:flex;justify-content:space-between;align-items:center;gap:14px;padding:12px 0;border-bottom:1px solid var(--border)}.ap-crow:last-child{border-bottom:0}',
+    '.ap-clabel{font-size:15px;color:var(--text)}.ap-cwhen{font-size:13px;color:var(--text-light);text-align:right;max-width:46%}',
+    '@media (max-width:820px){.ap-mgrid{grid-template-columns:1fr}.ap-sheet{padding:16px 14px 20px;border-radius:14px}}',
+    '@media (max-width:480px){.ap-wrap{padding-top:0}.ap-crow{flex-direction:column;align-items:flex-start;gap:4px}.ap-cwhen{text-align:left;max-width:none}}',
     '.ap-badge{display:inline-block;border-radius:6px;padding:2px 8px;font-size:12px;font-weight:600;letter-spacing:.02em}',
     '.ap-auto{background:#E3EEF5;color:#1F4E6B}.ap-man{background:#FBEFD5;color:#7A4B00}',
     '.ap-numhead{display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap}',

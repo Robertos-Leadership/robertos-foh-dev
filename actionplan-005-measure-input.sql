@@ -24,3 +24,7 @@ notify pgrst, 'reload schema';
 
 -- 18 Oct 2026, Francesco: point 5 renamed to Amin's own words ("take a more proactive sales approach").
 update ap_points set title = 'Proactive sales' where num = 5 and title = 'Go out and sell';
+
+-- 18 Oct 2026: sources in plain words on screen (the Data page).
+update ap_measures set source = 'Google reviews' where source = 'google_reviews_daily';
+update ap_measures set source = 'Closing report' where source = 'rev_daily (closing report)';
