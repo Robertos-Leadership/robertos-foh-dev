@@ -82,7 +82,7 @@ async function apLoad(silent){
       sb.from('ap_points').select('*').order('num'),
       sb.from('ap_steps').select('*').order('sort'),
       sb.from('ap_measures').select('*').order('sort'),
-      sb.from('ap_snapshots').select('*').order('week_start', { ascending: false }).limit(500),
+      sb.from('ap_snapshots').select('*').order('week_start', { ascending: false }).limit(5000),
       sb.from('ap_results').select('*').order('created_at', { ascending: false }),
       sb.from('ap_comments').select('*').order('created_at', { ascending: false }),
       sb.from('ap_changes').select('*').order('created_at', { ascending: false }),
@@ -604,17 +604,29 @@ function apPointLabel(m, d){
   return apMonthly(m) ? x.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' }) : apDate(d);
 }
 // Better = moving towards the target from the baseline.
+// Monday and Sunday guests: the baseline is an AVERAGE of many nights, so one
+// night is compared like-for-like only through an average too — the change is
+// worked on the last 4 nights recorded (18 Oct 2026: a single 97 read "▲ 31",
+// the last-4 average of 76 is "▲ 10").
+var AP_AVG4 = { monday_guests: 1, sunday_guests: 1 };
+function apAvg4(m){
+  var vals = apHist(m).filter(function(h){ return h.v != null; }).map(function(h){ return h.v; }).slice(-4);
+  return vals.length ? { avg: Math.round(vals.reduce(function(a, b){ return a + b; }, 0) / vals.length), n: vals.length } : null;
+}
 function apDelta(m){
-  var v = m.current == null ? null : Number(m.current), b = apBaseNum(m), t = apTargetNum(m);
+  var v = m.current == null ? null : Number(m.current), b = apBaseNum(m), t = apTargetNum(m), basis = '';
+  if(AP_AVG4[m.key]){ var a4 = apAvg4(m); if(a4){ v = a4.avg; basis = (a4.n === 1 ? '1 night' : 'last ' + a4.n + ' avg ' + a4.avg) + ' · '; } }
   if(v == null || b == null || m.unit === 'text') return null;
   var diff = Math.round((v - b) * 10) / 10;
   var lowerBetter = (t != null) ? t < b : false;
   var good = diff === 0 ? null : (lowerBetter ? diff < 0 : diff > 0);
   var unit = m.unit === '%' ? ' pts' : '';
-  return { diff: diff, good: good, text: diff === 0 ? 'same as baseline' : (diff > 0 ? '▲ ' : '▼ ') + Math.abs(diff) + unit + ' vs baseline' };
+  return { diff: diff, good: good, text: basis + (diff === 0 ? 'same as baseline' : (diff > 0 ? '▲ ' : '▼ ') + Math.abs(diff) + unit + ' vs baseline') };
 }
 function apChartGeom(m, W, H){
-  var hs = apHist(m), vals = hs.filter(function(p){ return p.v != null; }).map(function(p){ return p.v; });
+  var hs = apHist(m);
+  while(hs.length && hs[0].v == null) hs.shift();   // start at the first recorded value
+  var vals = hs.filter(function(p){ return p.v != null; }).map(function(p){ return p.v; });
   if(vals.length < 2) return null;
   var t = apTargetNum(m), b = apBaseNum(m), all = vals.slice();
   if(t != null) all.push(t); if(b != null) all.push(b);
@@ -658,7 +670,20 @@ function apFigureBlock(m){
     + '<div class="ap-msrc">' + (kind === 'manual' ? (m.updated_by ? 'Typed in by ' + apEsc(apName(m.updated_by)) + ' &middot; ' + apAgo(m.updated_at) : 'Not typed in yet')
         : apEsc(m.source || '') + ' &middot; ' + apEsc((m.frequency || '').toLowerCase()) + ' &middot; read ' + apAgo(m.updated_at)) + '</div></div>';
 }
-function apDashTile(p){
+// One line per figure for the closed card: name, value, change. Nothing else.
+function apFigureLine(m){
+  var kind = apMeasureKind(m), v = apValue(m), dl = apDelta(m);
+  return '<div class="ap-fline"><span class="ap-fl-lbl">' + apEsc(m.label) + '</span>'
+    + '<span class="ap-fl-val">' + (v == null ? (kind === 'manual' ? '&mdash;' : 'No data') : v) + '</span>'
+    + (dl ? '<span class="ap-delta ' + (dl.good === true ? 'good' : dl.good === false ? 'bad' : '') + '">' + dl.text + '</span>' : '<span></span>') + '</div>';
+}
+// The card stays short: title, status, progress, next step, one line per
+// figure. Tapping it opens the detail in place — charts, target and baseline,
+// source, what is coming, the latest note (Francesco 18 Oct: "keep the initial
+// screen clean and tidy; if you click it gives the info"). Print = expanded.
+function apDashToggle(pid){ AP.dashOpen = AP.dashOpen || {}; AP.dashOpen[pid] = !AP.dashOpen[pid]; apRepaint(); }
+function apDashTile(p, forceOpen){
+  var open = forceOpen || !!(AP.dashOpen && AP.dashOpen[p.id]);
   var st = apPointSteps(p.id), pc = apPct(st), done = st.filter(function(s){ return s.done_at; }).length;
   var nx = apNextStep(p), late = st.filter(apStepLate).length;
   var ms = AP.measures.filter(function(m){ return m.point_id === p.id; });
@@ -666,21 +691,31 @@ function apDashTile(p){
   var coming = ms.filter(function(m){ return apMeasureKind(m) === 'coming'; });
   var note = AP.results.filter(function(r){ return r.point_id === p.id; })[0];
   var cm = AP.comments.filter(function(c){ return c.point_id === p.id; })[0];
-  var h = '<div class="ap-tile"><div class="ap-tile-head"><button class="ap-tile-title" onclick="apOpen(\'' + p.id + '\')"><span class="ap-num">' + p.num + '</span>' + apEsc(p.title) + '</button>' + apPill(apPointStatus(st)) + '</div>'
-    + '<div class="ap-tile-prog">' + apBar(pc) + '<span>' + pc + '% &middot; ' + done + ' of ' + st.length + ' steps' + (late ? ' &middot; <b class="ap-red">' + late + ' late</b>' : '') + '</span></div>'
-    + '<div class="ap-tile-next">' + (nx ? 'Next: <b>' + apEsc(nx.title) + '</b>' + (nx.owner ? ' &middot; ' + apEsc(nx.owner) : ' &middot; <i>no owner</i>') + (nx.due_date ? ' &middot; ' + (apStepLate(nx) ? '<b class="ap-red">was due ' + apDate(nx.due_date) + '</b>' : 'due ' + apDate(nx.due_date)) : ' &middot; <i>no date</i>') : 'All steps done') + '</div>';
-  if(figs.length) h += '<div class="ap-tile-figs">' + figs.map(apFigureBlock).join('') + '</div>';
-  if(coming.length) h += '<div class="ap-tile-coming">Coming: ' + coming.map(function(m){ return apEsc(m.label) + ' <i>(' + apEsc(m.current_label || 'not available yet') + ')</i>'; }).join(' &middot; ') + '</div>';
-  if(note) h += '<div class="ap-tile-note"><span>Week of ' + apDate(note.week_start) + ' &middot; ' + apEsc(apName(note.author_email)) + '</span>' + apEsc(note.note) + '</div>';
-  else if(cm) h += '<div class="ap-tile-note"><span>Comment &middot; ' + apEsc(apName(cm.author_email)) + ' &middot; ' + apDoneDate(cm.created_at) + '</span>' + apEsc(cm.body) + '</div>';
+  var h = '<div class="ap-tile' + (open ? ' open' : '') + '">'
+    + '<button class="ap-tile-hit" onclick="apDashToggle(\'' + p.id + '\')" aria-expanded="' + open + '">'
+    + '<span class="ap-tile-head"><span class="ap-tile-title"><span class="ap-num">' + p.num + '</span>' + apEsc(p.title) + '</span>' + apPill(apPointStatus(st)) + '</span>'
+    + '<span class="ap-tile-prog">' + apBar(pc) + '<span>' + pc + '% &middot; ' + done + '/' + st.length + (late ? ' &middot; <b class="ap-red">' + late + ' late</b>' : '') + '</span></span>'
+    + '<span class="ap-tile-next">' + (nx ? 'Next: ' + apEsc(nx.title) + (nx.due_date ? ' &middot; ' + (apStepLate(nx) ? '<b class="ap-red">was due ' + apDate(nx.due_date) + '</b>' : apDate(nx.due_date)) : '') : 'All steps done') + '</span>'
+    + (figs.length ? '<span class="ap-tile-lines">' + figs.map(apFigureLine).join('') + '</span>' : '')
+    + '<span class="ap-tile-more">' + (open ? 'Less ▴' : 'Details ▾') + '</span></button>';
+  if(open){
+    h += '<div class="ap-tile-detail">'
+      + (nx ? '<div class="ap-tile-next2">Next step: <b>' + apEsc(nx.title) + '</b> &middot; ' + (nx.owner ? apEsc(nx.owner) : '<i>no owner</i>') + ' &middot; ' + (nx.due_date ? (apStepLate(nx) ? '<b class="ap-red">was due ' + apDate(nx.due_date) + '</b>' : 'due ' + apDate(nx.due_date)) : '<i>no date</i>') + '</div>' : '')
+      + (figs.length ? '<div class="ap-tile-figs">' + figs.map(apFigureBlock).join('') + '</div>' : '')
+      + (coming.length ? '<div class="ap-tile-coming">Coming: ' + coming.map(function(m){ return apEsc(m.label) + ' <i>(' + apEsc(m.current_label || 'not available yet') + ')</i>'; }).join(' &middot; ') + '</div>' : '')
+      + (note ? '<div class="ap-tile-note"><span>Week of ' + apDate(note.week_start) + ' &middot; ' + apEsc(apName(note.author_email)) + '</span>' + apEsc(note.note) + '</div>'
+        : cm ? '<div class="ap-tile-note"><span>Comment &middot; ' + apEsc(apName(cm.author_email)) + ' &middot; ' + apDoneDate(cm.created_at) + '</span>' + apEsc(cm.body) + '</div>' : '')
+      + (forceOpen ? '' : '<button class="ap-linkbtn ap-tile-open" onclick="apOpen(\'' + p.id + '\')">Open point ' + p.num + ' &rsaquo;</button>')
+      + '</div>';
+  }
   return h + '</div>';
 }
 function apDashboard(){
   var pts = AP.points.slice().sort(function(a, b){ return a.num - b.num; });
-  var h = ['<div class="ap-datahead"><div><div class="ap-dtitle">Dashboard</div><div class="ap-small">The 10 points, their figures against target, and the latest notes &middot; figures read ' + apAgo(apAutoRead()) + '</div></div>'
+  var h = ['<div class="ap-datahead"><div><div class="ap-dtitle">Dashboard</div><div class="ap-small">Tap a point for its charts and notes &middot; figures read ' + apAgo(apAutoRead()) + '</div></div>'
     + '<div class="ap-btns ap-dl"><button class="ap-btn" ' + (AP.busyDl ? 'disabled' : '') + ' onclick="apExcel()">' + (AP.busyDl === 'xlsx' ? 'Building&hellip;' : 'Download Excel') + '</button>'
     + '<button class="ap-btn" onclick="apPdf()">PDF / Print</button></div></div>'];
-  h.push('<div class="ap-tiles">' + pts.map(apDashTile).join('') + '</div>');
+  h.push('<div class="ap-tiles">' + pts.map(function(p){ return apDashTile(p, false); }).join('') + '</div>');
   return h.join('');
 }
 
@@ -802,7 +837,7 @@ function apPdf(){
     var all = AP.steps, done = all.filter(function(s){ return s.done_at; }).length;
     var h = '<div class="ap-print-head"><div class="ap-kick">Roberto\'s DIFC &middot; Executive</div><h1>Roberto\'s 3.0 action plan</h1>'
       + '<div>As of ' + apDate(apToday()) + ' ' + new Date().getFullYear() + ' &middot; plan progress <b>' + apPct(all) + '%</b> &middot; ' + done + ' of ' + all.length + ' steps done &middot; ' + all.filter(apStepLate).length + ' late</div></div>';
-    h += '<div class="ap-tiles">' + pts.map(apDashTile).join('') + '</div>';
+    h += '<div class="ap-tiles">' + pts.map(function(p){ return apDashTile(p, true); }).join('') + '</div>';
     pts.forEach(function(p){
       h += '<div class="ap-print-point"><h2>' + p.num + '. ' + apEsc(p.title) + '</h2><div class="ap-small">' + apEsc(p.goal || '') + '</div>'
         + '<table class="ap-print-table"><thead><tr><th>Step</th><th>Owner</th><th>Due</th><th>Status</th></tr></thead><tbody>'
@@ -898,14 +933,23 @@ function apCss(){
     '.ap-x{background:none;border:0;font-size:22px;line-height:1;color:inherit;cursor:pointer;min-width:32px;min-height:32px}',
     '.ap-plan-head{font-size:15px}',
     '.ap-dl{margin-top:0}',
-    '.ap-tiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}',
+    '.ap-tiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;align-items:start}',
+    '.ap-tile-hit{all:unset;box-sizing:border-box;display:flex;flex-direction:column;gap:9px;width:100%;cursor:pointer}',
+    '.ap-tile-hit:focus-visible{outline:2px solid var(--gold);outline-offset:4px;border-radius:8px}',
+    '.ap-tile-lines{display:flex;flex-direction:column;gap:6px;border-top:1px solid var(--border);padding-top:9px}',
+    '.ap-fline{display:grid;grid-template-columns:1fr auto;column-gap:10px;align-items:baseline}',
+    '.ap-fl-lbl{font-size:13px;color:var(--text-mid)}.ap-fl-val{font-family:var(--font-serif);font-size:20px;color:var(--text);text-align:right}',
+    '.ap-fline .ap-delta{grid-column:1 / -1;font-size:11px;margin-top:-2px}',
+    '.ap-tile-more{font-size:12px;color:var(--vino);font-weight:600;align-self:flex-end}',
+    '.ap-tile-detail{display:flex;flex-direction:column;gap:12px;border-top:1px solid var(--border);padding-top:12px}',
+    '.ap-tile-next2{font-size:13px;color:var(--text-mid);line-height:1.5}.ap-tile-open{font-size:13px;font-weight:600;align-self:flex-start}',
     '.ap-tile{background:#fff;border:1px solid var(--border);border-radius:14px;padding:16px 18px;display:flex;flex-direction:column;gap:10px;break-inside:avoid}',
     '.ap-tile-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}',
-    '.ap-tile-title{background:none;border:0;padding:0;font:inherit;font-family:var(--font-serif);font-size:19px;color:var(--text);text-align:left;cursor:pointer;display:flex;gap:10px;align-items:baseline}',
+    '.ap-tile-title{font-family:var(--font-serif);font-size:19px;color:var(--text);display:flex;gap:10px;align-items:baseline}',
     '.ap-tile-title .ap-num{font-size:20px}',
     '.ap-tile-prog{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;font-size:13px;color:var(--text-light)}',
-    '.ap-tile-next{font-size:13px;color:var(--text-mid);line-height:1.5}',
-    '.ap-tile-figs{display:flex;flex-direction:column;gap:12px;border-top:1px solid var(--border);padding-top:10px}',
+    '.ap-tile-next{font-size:13px;color:var(--text-mid);line-height:1.45;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
+    '.ap-tile-figs{display:flex;flex-direction:column;gap:14px}',
     '.ap-dfig-top{display:flex;justify-content:space-between;gap:8px;align-items:center}.ap-dfig-label{font-size:14px;color:var(--text-mid)}',
     '.ap-dfig-row{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}',
     '.ap-dfig-val{font-family:var(--font-serif);font-size:30px;line-height:1.15;color:var(--text)}',
@@ -919,7 +963,7 @@ function apCss(){
     '.ap-tile-coming{font-size:12px;color:var(--text-light);border-top:1px solid var(--border);padding-top:8px;line-height:1.5}',
     '.ap-tile-note{font-size:13px;color:var(--text);background:var(--surface2);border-radius:10px;padding:10px 12px;line-height:1.5}.ap-tile-note span{display:block;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--text-light);margin-bottom:2px}',
     '#ap-print{display:none}',
-    '@media print{@page{size:A4;margin:12mm}body.ap-printing>*:not(#ap-print){display:none!important}body.ap-printing #ap-print{display:block!important;font-family:Arial,sans-serif;color:#2C1810}#ap-print .ap-tiles{grid-template-columns:1fr 1fr;gap:8px}#ap-print .ap-tile{border:1px solid #DDD3C6;padding:10px 12px;gap:6px}#ap-print .ap-tile-title{font-size:15px}#ap-print .ap-dfig-val{font-size:22px}#ap-print .ap-chart{height:60px}.ap-print-head{margin-bottom:10px}.ap-print-head h1{font-family:Georgia,serif;color:#6B1F2A;font-size:24px;margin:4px 0}.ap-print-point{break-before:page}.ap-print-point h2{font-family:Georgia,serif;color:#6B1F2A;font-size:18px;margin:0 0 4px}.ap-print-table{width:100%;border-collapse:collapse;font-size:11px;margin-top:8px}.ap-print-table th{text-align:left;background:#6B1F2A;color:#fff;padding:5px 6px}.ap-print-table td{border-bottom:1px solid #E6DED2;padding:5px 6px;vertical-align:top}.ap-print-notes{font-size:11px;margin-top:10px}.ap-print-notes ul{margin:4px 0 0 16px}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}}',
+    '@media print{@page{size:A4;margin:12mm}body.ap-printing>*:not(#ap-print){display:none!important}body.ap-printing #ap-print{display:block!important;font-family:Arial,sans-serif;color:#2C1810}#ap-print .ap-tiles{grid-template-columns:1fr 1fr;gap:8px}#ap-print .ap-tile{border:1px solid #DDD3C6;padding:10px 12px;gap:6px}#ap-print .ap-tile-title{font-size:15px}#ap-print .ap-dfig-val{font-size:22px}#ap-print .ap-chart{height:60px}.ap-print-head{margin-bottom:10px}.ap-print-head h1{font-family:Georgia,serif;color:#6B1F2A;font-size:24px;margin:4px 0}.ap-print-point{break-inside:avoid;margin-top:16px}#ap-print .ap-tile-more{display:none}.ap-print-point h2{font-family:Georgia,serif;color:#6B1F2A;font-size:18px;margin:0 0 4px}.ap-print-table{width:100%;border-collapse:collapse;font-size:11px;margin-top:8px}.ap-print-table th{text-align:left;background:#6B1F2A;color:#fff;padding:5px 6px}.ap-print-table td{border-bottom:1px solid #E6DED2;padding:5px 6px;vertical-align:top}.ap-print-notes{font-size:11px;margin-top:10px}.ap-print-notes ul{margin:4px 0 0 16px}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}}',
     '@media (max-width:820px){.ap-tiles{grid-template-columns:1fr}.ap-datahead{flex-wrap:wrap}}',
     '.ap-datahead{display:flex;justify-content:space-between;align-items:flex-end;gap:14px;margin:6px 2px 14px}',
     '.ap-dtitle{font-family:var(--font-serif);font-size:26px;color:var(--vino);line-height:1.1}',

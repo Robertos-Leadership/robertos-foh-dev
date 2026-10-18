@@ -86,7 +86,8 @@ async function nights(dates: string[], par = 4) {
 // ── The measures ────────────────────────────────────────────────────────
 // `at` = the date the snapshot is filed under (Monday of the week; the 1st of
 // the month for a monthly figure). Defaults to the week being reported.
-type M = { value: number | null; label: string | null; detail?: unknown; at?: string };
+// transient = a read that failed this time: never overwrite a good figure with it.
+type M = { value: number | null; label: string | null; detail?: unknown; at?: string; transient?: boolean };
 
 // ── The SevenRooms night cache (ap_sr_nights) ──────────────────────────────
 // Every SevenRooms figure in the plan — this week's and its history — is
@@ -199,7 +200,7 @@ async function computeMeasures(sb: SB) {
   const wk = await ensureNights(sb, range(wkStart, wkEnd), 7);
   const W = walkinWeek(wk.cached, wkStart);
   if (!W) {
-    const why = { value: null, label: "SevenRooms did not answer for every night of " + label(wkStart) + " week — not counted" };
+    const why = { value: null, label: "SevenRooms did not answer for every night of " + label(wkStart) + " week — not counted", transient: true };
     res.walkin_share = why; res.walkin_covers = why;
   } else {
     const det = { week: wkStart, bookings: W.b, walkins: W.w, covers: W.c, walkin_covers: W.wc };
@@ -213,7 +214,7 @@ async function computeMeasures(sb: SB) {
   const need = range(new Date(Date.UTC(y, m - 4, 1)).toISOString().slice(0, 10), addDays(monthEnd(ym), 2 * VISIT_W));
   const lad = await ensureNights(sb, need, 40);
   const L = lad.still ? null : visitsLadder(lad.cached, ym);
-  res.visits3 = L ? ladderValue(L, ym) : { value: null, label: `Reading SevenRooms: ${need.length - lad.still} of ${need.length} nights so far` };
+  res.visits3 = L ? ladderValue(L, ym) : { value: null, label: `Reading SevenRooms: ${need.length - lad.still} of ${need.length} nights so far`, transient: true };
 
   // Point 7 — Monday and Sunday guests (closing report)
   const lastDow = (want: number) => { let d = yday; while (dow(d) !== want) d = addDays(d, -1); return d; };
@@ -403,14 +404,22 @@ Deno.serve(async (req) => {
       }
       return json({ ok: true, ...(await fillHistory(sb, byKey)) });
     }
-    const { res, wkStart } = await computeMeasures(sb);
+    // A failed read must never stop the Wednesday email: on 'send' the refresh is
+    // best-effort and the email goes out on the last good figures.
+    let res: Record<string, M> = {}, wkStart = "", refreshError: string | null = null;
+    try { ({ res, wkStart } = await computeMeasures(sb)); }
+    catch (e) { refreshError = e instanceof Error ? e.message : String(e); if (mode !== "send") throw e; }
     const now = new Date().toISOString();
     for (const [key, v] of Object.entries(res)) {
       const m = byKey[key]; if (!m) continue;
+      if (v.transient && m.current != null) continue;   // keep the last good figure, and its snapshot
       await sb.from("ap_measures").update({ current: v.value, current_label: v.label, detail: v.detail ?? null, updated_at: now }).eq("id", m.id);
       await sb.from("ap_snapshots").upsert({ measure_id: m.id, week_start: v.at || wkStart, value: v.value, label: v.label, detail: v.detail ?? null, recorded_at: now }, { onConflict: "measure_id,week_start" });
     }
     if (mode === "refresh") return json({ ok: true, refreshed: Object.keys(res), week: wkStart });
+    // Wednesday: fill any week the history is missing (a run that failed, a
+    // Monday with a late closing report). Best-effort, never stops the email.
+    if (mode === "send") { try { await fillHistory(sb, byKey); } catch { /* history waits for next week */ } }
 
     // 2. Build the email from the stored plan.
     const since = new Date(Date.now() - 7 * 86400e3).toISOString();
@@ -449,7 +458,7 @@ Deno.serve(async (req) => {
       await sb.from("email_events").insert((Array.isArray(d?.data) ? d.data : []).map((x: { id?: string }, i: number) =>
         ({ event_type: "app.submitted", email_id: x?.id ?? null, recipients: [to[i]], subject })));
     } catch { /* ledger is best-effort */ }
-    return json({ ok: true, sent: to.length, to, subject, by: isCron ? "schedule" : caller });
+    return json({ ok: true, sent: to.length, to, subject, by: isCron ? "schedule" : caller, refreshError });
   } catch (e) {
     return json({ ok: false, error: e instanceof Error ? e.message : String(e) }, 500);
   }
