@@ -404,7 +404,7 @@ function apNumbersView(){
     });
   });
   h.push('</tbody></table></div>');
-  h.push('<details class="ap-more" open><summary>What is automatic and what is typed in</summary><div class="ap-small">'
+  h.push('<details class="ap-more"><summary>What is automatic and what is typed in</summary><div class="ap-small">'
     + '<b>Automatic</b>: the app reads it itself &mdash; SevenRooms (walk-ins, channels, guests coming back, relaunch bookings), the closing report (Monday and Sunday guests), Google (rating) and, as each module arrives, the FOH App (SOP sign-off, training, mystery shopper, guest survey). Nobody types these.<br>'
     + '<b>Typed in</b>: roles filled and catering requests &mdash; there is no system that holds them, so a plan member types the number and the app records who and when.<br>'
     + '<b>Steps, owners, dates, comments and approvals</b> are always people: they tick, type and approve in the plan.</div></details>');
