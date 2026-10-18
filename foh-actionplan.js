@@ -175,7 +175,8 @@ async function apWeek(status){
   if(status === 'changes' && !note) return apFail('Request changes', 'say what needs to change in the note');
   var r = await sb.from('ap_weeks').upsert({ week_start: apMonday(apToday()), status: status, note: note || null }, { onConflict: 'week_start' }).select();
   if(r.error || !r.data || !r.data.length) return apFail('Could not record the week', r.error || 'only Amin can approve the week');
-  AP.weeks = AP.weeks.filter(function(w){ return w.week_start !== r.data[0].week_start; }); AP.weeks.unshift(r.data[0]); apRepaint();
+  AP.askChanges = false;
+  AP.weeks = AP.weeks.filter(function(w){ return w.week_start !== r.data[0].week_start; }); AP.weeks.unshift(r.data[0]); apSay(status === 'approved' ? 'Week approved' : 'Changes requested');
 }
 // opts.olderThan: only re-read the sources if the numbers are older than this
 // many minutes (the function enforces it, floor 2). opts.quiet: no toast unless
@@ -231,18 +232,41 @@ function renderActionPlan(){
   return '<div class="ap-wrap">' + apOwnersList() + '<div class="ap-sheet">' + (AP.open ? apPointPage(AP.open, '') : apOverview('')) + '</div>' + msg + '</div>';
 }
 
-function apWeekPill(){
+// The plan week: Monday–Sunday, numbered from ap_settings.plan_start.
+function apWeekInfo(){
   var wk = apMonday(apToday()), start = (AP.settings && AP.settings.plan_start) || wk;
   var n = Math.floor((Date.parse(wk) - Date.parse(start)) / (7 * 86400e3)) + 1;
-  var w = AP.weeks.filter(function(x){ return x.week_start === wk; })[0];
-  var st = w ? ({ approved: 'approved', changes: 'changes asked', pending: 'pending' }[w.status]) : 'not approved yet';
-  var label = (n >= 1 ? 'Week ' + n : 'Before week 1') + ' &middot; ' + st;
-  return '<span class="ap-weekpill' + (w && w.status === 'approved' ? '' : ' ap-weekpill-wait') + '">' + label + '</span>';
+  var end = apAdd(wk, 6), a = new Date(wk + 'T12:00:00Z'), b = new Date(end + 'T12:00:00Z');
+  var range = a.getUTCMonth() === b.getUTCMonth() ? a.getUTCDate() + '–' + apDate(end) : apDate(wk) + ' – ' + apDate(end);
+  return { wk: wk, n: n, range: range, start: start, w: AP.weeks.filter(function(x){ return x.week_start === wk; })[0] };
+}
+function apWeekPill(){
+  var W = apWeekInfo(), w = W.w;
+  var st = w ? ({ approved: 'approved', changes: 'changes asked', pending: 'awaiting approval' }[w.status]) : 'awaiting approval';
+  return '<span class="ap-weekpill' + (w && w.status === 'approved' ? '' : ' ap-weekpill-wait') + '">' + (W.n >= 1 ? 'Week ' + W.n : 'Before week 1') + ' &middot; ' + st + '</span>';
+}
+// One slim line: which week, whether it is approved. Amin (ap_settings.approver)
+// gets the two buttons; the note box opens only when he asks for changes.
+function apApproveBar(){
+  var W = apWeekInfo(), w = W.w, who = apName((AP.settings && AP.settings.approver) || '');
+  var txt = W.n >= 1 ? '<b>Week ' + W.n + '</b> &middot; ' + W.range + ' &middot; ' : '<b>Before week 1</b> &middot; the plan starts ' + apDate(W.start) + ' &middot; ';
+  if(w && w.status === 'approved') txt += 'approved by ' + apEsc(apName(w.approved_by)) + ', ' + apDoneDate(w.approved_at) + (w.note ? ' &mdash; &ldquo;' + apEsc(w.note) + '&rdquo;' : '');
+  else if(w && w.status === 'changes') txt += '<span class="ap-red">changes asked</span> by ' + apEsc(apName(w.approved_by)) + ', ' + apDoneDate(w.approved_at) + (w.note ? ' &mdash; &ldquo;' + apEsc(w.note) + '&rdquo;' : '');
+  else txt += 'waiting for ' + apEsc(who) + '\'s approval';
+  var btns = '';
+  if(apIsApprover() && !(w && w.status === 'approved')){
+    btns = AP.askChanges
+      ? '<div class="ap-ab-ask"><input id="ap-week-note" class="ap-in" placeholder="What needs to change?" autocomplete="off"><button class="btn-q" onclick="AP.askChanges=false;apRepaint()">Cancel</button><button class="btn-q main" onclick="apWeek(\'changes\')">Send</button></div>'
+      : '<div class="ap-ab-btns"><button class="btn-q" onclick="AP.askChanges=true;apRepaint();setTimeout(function(){var e=document.getElementById(\'ap-week-note\');if(e)e.focus();},0)">Request changes</button><button class="btn-q main" onclick="apWeek(\'approved\')">Approve week</button></div>';
+  }
+  return '<div class="ap-approve"><div>' + txt + '</div>' + btns + '</div>';
 }
 
 function apOverview(msg){
   var all = AP.steps, done = all.filter(function(s){ return s.done_at; }).length, pct = apPct(all);
   var late = all.filter(apStepLate).length;
+  var since = new Date(Date.now() - 7 * 86400e3).toISOString();
+  var thisWeek = all.filter(function(s){ return s.done_at && s.done_at >= since && s.done_by !== 'seed'; }).length;
   var rel = (AP.settings && AP.settings.relaunch_date) || '2026-11-02';
   var days = Math.round((Date.parse(rel) - Date.parse(apToday())) / 86400e3);
   var members = ((AP.settings && AP.settings.members) || []).map(apName).join(' &middot; ');
@@ -250,39 +274,37 @@ function apOverview(msg){
   h.push('<div class="ap-head"><div class="ap-head-row"><div><div class="ap-kick">FOH App &middot; Executive</div><div class="ap-title">Roberto\'s 3.0 action plan</div>'
     + '<div class="ap-sub">Private: ' + members + '</div></div>' + apWeekPill() + '</div></div>');
   h.push(msg);
-  h.push('<div class="ap-cards">'
-    + '<div class="ap-card ap-stat"><div class="ap-lbl">Plan progress</div><div class="ap-big">' + pct + '%</div>' + apBar(pct) + '</div>'
-    + '<div class="ap-card ap-stat"><div class="ap-lbl">Steps done</div><div class="ap-big">' + done + ' / ' + all.length + '</div></div>'
-    + '<div class="ap-card ap-stat"><div class="ap-lbl">Late</div><div class="ap-big' + (late ? ' ap-red' : '') + '">' + late + '</div></div>'
-    + '<div class="ap-card ap-stat"><div class="ap-lbl">Relaunch</div><div class="ap-big">' + apDate(rel) + '</div><div class="ap-small">'
-    + (days > 0 ? days + ' day' + (days === 1 ? '' : 's') + ' to go' : (days === 0 ? 'Today' : 'Done')) + '</div></div>'
-    + '</div>');
-  h.push(apWeekPanel());
+  h.push('<div class="ap-kpis">'
+    + '<div class="ap-kpi"><div class="l">Plan progress</div><div class="v">' + pct + '%</div>' + apBar(pct) + '</div>'
+    + '<div class="ap-kpi"><div class="l">Steps done</div><div class="v">' + done + ' / ' + all.length + '</div><div class="s">' + thisWeek + ' this week</div></div>'
+    + '<div class="ap-kpi"><div class="l">Late</div><div class="v' + (late ? ' ap-red' : '') + '">' + late + '</div><div class="s">steps past their date</div></div>'
+    + '<div class="ap-kpi"><div class="l">Relaunch</div><div class="v">' + apDate(rel) + '</div><div class="s">'
+    + (days > 0 ? days + ' day' + (days === 1 ? '' : 's') + ' to go' : (days === 0 ? 'today' : 'done')) + '</div></div></div>');
+  h.push(apApproveBar());
   var f = AP.filter;
-  h.push('<div class="ap-filters">' + [['dash', 'Dashboard'], ['all', 'All points'], ['mine', 'My steps'], ['late', 'Late'], ['week', 'This week'], ['plan', 'Owners & dates'], ['numbers', 'Data']].map(function(x){
-    return '<button class="ap-chip' + (f === x[0] ? ' on' : '') + '" onclick="apFilter(\'' + x[0] + '\')">' + x[1] + '</button>'; }).join('') + '</div>');
-  if(f === 'all'){
-    // Straight 1-10, in Amin's order (his email of 16 Oct). Listed by group the
-    // numbers ran 1, 2, 3, 6, 4, 5, 7, 10, 8, 9 and read as if points were
-    // missing (Francesco, 18 Oct), so the group is a label on each row instead.
-    h.push('<div class="ap-card ap-list">');
-    AP.points.slice().sort(function(a, b){ return a.num - b.num; }).forEach(function(p){
-      var st = apPointSteps(p.id), pc = apPct(st);
-      h.push('<button class="ap-row" onclick="apOpen(\'' + p.id + '\')"><span class="ap-num">' + p.num + '</span><span class="ap-ptitle">' + apEsc(p.title)
-        + '<span class="ap-gtag">' + apEsc(p.group) + '</span></span>'
-        + '<span class="ap-rowbar">' + apBar(pc) + '</span><span class="ap-pct">' + pc + '%</span>' + apPill(apPointStatus(st)) + '</button>');
-    });
-    h.push('</div>');
+  var tab = (f === 'all' || f === 'mine' || f === 'late' || f === 'week') ? 'points' : f;
+  h.push('<div class="ap-tabs" role="tablist">' + [['dash', 'Dashboard'], ['points', 'Points'], ['plan', 'Owners &amp; dates'], ['numbers', 'Data']].map(function(x){
+    return '<button role="tab" class="' + (tab === x[0] ? 'on' : '') + '" onclick="apFilter(\'' + (x[0] === 'points' ? 'all' : x[0]) + '\')">' + x[1] + '</button>'; }).join('') + '</div>');
+  if(tab === 'points'){
+    h.push('<div class="ap-subtabs">' + [['all', 'All'], ['mine', 'My steps'], ['late', 'Late'], ['week', 'This week']].map(function(x){
+      return '<button class="' + (f === x[0] ? 'on' : '') + '" onclick="apFilter(\'' + x[0] + '\')">' + x[1] + '</button>'; }).join('') + '</div>');
+    if(f === 'all'){
+      h.push('<div class="ap-card ap-list">');
+      AP.points.slice().sort(function(a, b){ return a.num - b.num; }).forEach(function(p){
+        var st = apPointSteps(p.id), pc = apPct(st);
+        h.push('<button class="ap-row" onclick="apOpen(\'' + p.id + '\')"><span class="ap-num">' + p.num + '</span><span class="ap-ptitle">' + apEsc(p.title)
+          + '<span class="ap-gtag">' + apEsc(p.group) + '</span></span>'
+          + '<span class="ap-rowbar">' + apBar(pc) + '</span><span class="ap-pct">' + pc + '%</span>' + apPill(apPointStatus(st)) + '</button>');
+      });
+      h.push('</div>');
+    } else h.push(apStepList(f));
   } else if(f === 'dash'){
     h.push(apDashboard());
   } else if(f === 'numbers'){
-    h.push(apNumbersView());
+    h.push(apNumbersView() + apAdminStrip());
   } else if(f === 'plan'){
     h.push(apPlanList());
-  } else {
-    h.push(apStepList(f));
   }
-  h.push(apAdminStrip());
   return h.join('');
 }
 
@@ -418,7 +440,7 @@ function apMeasureCard(m, withPoint){
       + (m.current_label ? '<div class="ap-mctx">' + apEsc(m.current_label) + '</div>' : '');
   } else {
     body = val == null ? '<div class="ap-mval ap-mval-none">No data</div><div class="ap-mctx">' + apEsc(m.current_label || '') + '</div>'
-      : '<div class="ap-mval">' + val + '</div>' + (m.current_label ? '<div class="ap-mctx">' + apEsc(m.current_label) + '</div>' : '');
+      : '<div class="ap-mval">' + val + '</div>' + (m.current_label ? '<div class="ap-mctx">' + apEsc(m.current_label) + '</div>' : '') + apChartSVG(m);
   }
   var src = kind === 'manual'
     ? (m.updated_by ? 'Typed in by ' + apEsc(apName(m.updated_by)) + ' &middot; ' + apAgo(m.updated_at) : 'Not typed in yet') + ' &middot; ' + apEsc((m.frequency || '').toLowerCase())
@@ -712,11 +734,65 @@ function apDashTile(p, forceOpen){
 }
 function apDashboard(){
   var pts = AP.points.slice().sort(function(a, b){ return a.num - b.num; });
-  var h = ['<div class="ap-datahead"><div><div class="ap-dtitle">Dashboard</div><div class="ap-small">Tap a point for its charts and notes &middot; figures read ' + apAgo(apAutoRead()) + '</div></div>'
-    + '<div class="ap-btns ap-dl"><button class="ap-btn" ' + (AP.busyDl ? 'disabled' : '') + ' onclick="apExcel()">' + (AP.busyDl === 'xlsx' ? 'Building&hellip;' : 'Download Excel') + '</button>'
-    + '<button class="ap-btn" onclick="apPdf()">PDF / Print</button></div></div>'];
-  h.push('<div class="ap-tiles">' + pts.map(function(p){ return apDashTile(p, false); }).join('') + '</div>');
+  var h = ['<div class="ap-secbar"><div><div class="ap-sect">The 10 points</div><div class="ap-secsub">Tap a card for its charts and notes &middot; figures read ' + apAgo(apAutoRead()) + '</div></div>'
+    + '<div class="ap-ab-btns"><button class="btn-q" ' + (AP.busyDl ? 'disabled' : '') + ' onclick="apExcel()">' + (AP.busyDl === 'xlsx' ? 'Building&hellip;' : 'Download Excel') + '</button>'
+    + '<button class="btn-q" onclick="apPdf()">PDF</button></div></div>'];
+  h.push('<div class="ap-cgrid">' + pts.map(apCard).join('') + '</div>');
   return h.join('');
+}
+// ── The card (mock-up B): every card the same size, the same four slots ──
+//   title + status · progress · next step · one figure (or what is coming)
+function apSpark(m){
+  var hs = apHist(m); while(hs.length && hs[0].v == null) hs.shift();
+  var vals = hs.filter(function(x){ return x.v != null; }).map(function(x){ return x.v; });
+  if(vals.length < 2) return '';
+  var t = apTargetNum(m), b = apBaseNum(m), all = vals.slice(); if(t != null) all.push(t); if(b != null) all.push(b);
+  var lo = Math.min.apply(null, all), hi = Math.max.apply(null, all), pad = (hi - lo) * 0.12 || 1; lo -= pad; hi += pad;
+  var W = 84, H = 28, n = hs.length;
+  var X = function(i){ return 3 + i * (W - 6) / (n - 1); }, Y = function(v){ return 3 + (H - 6) * (1 - (v - lo) / (hi - lo)); };
+  var seg = [], cur = [], last = null;
+  hs.forEach(function(x, i){ if(x.v == null){ if(cur.length) seg.push(cur); cur = []; } else { cur.push(X(i).toFixed(1) + ',' + Y(x.v).toFixed(1)); last = [X(i), Y(x.v)]; } });
+  if(cur.length) seg.push(cur);
+  return '<svg class="ap-spark" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" aria-hidden="true">'
+    + (t != null ? '<line x1="2" x2="' + (W - 2) + '" y1="' + Y(t).toFixed(1) + '" y2="' + Y(t).toFixed(1) + '" stroke="#C9A84C" stroke-dasharray="4 3" stroke-width="1"/>' : '')
+    + seg.map(function(pp){ return pp.length > 1 ? '<polyline points="' + pp.join(' ') + '" fill="none" stroke="#6B1F2A" stroke-width="1.6"/>' : ''; }).join('')
+    + (last ? '<circle cx="' + last[0].toFixed(1) + '" cy="' + last[1].toFixed(1) + '" r="2.4" fill="#6B1F2A"/>' : '') + '</svg>';
+}
+function apCardValue(m){
+  if(m.input !== 'auto'){
+    var of = String(m.target || '').match(/of\s+(\d+)/);
+    return m.current == null ? '&mdash;' : (of ? Number(m.current) + ' of ' + of[1] : apValue(m));
+  }
+  if(AP_AVG4[m.key]){ var a4 = apAvg4(m); if(a4) return String(a4.avg); }
+  var v = apValue(m); return v == null ? 'No data' : v;
+}
+function apCardLabel(m){
+  var l = m.short_label || m.label;
+  if(m.key === 'visits3' && m.detail && m.detail.month) l += ' (' + new Date(m.detail.month + '-15T12:00:00Z').toLocaleDateString('en-GB', { month: 'long', timeZone: 'UTC' }) + ')';
+  return l;
+}
+function apCardFigure(p){
+  var ms = AP.measures.filter(function(m){ return m.point_id === p.id; }).sort(function(a, b){ return (a.sort || 0) - (b.sort || 0); });
+  var shown = ms.filter(function(m){ return apMeasureKind(m) !== 'coming'; });
+  if(!shown.length){
+    var coming = ms.filter(function(m){ return apMeasureKind(m) === 'coming'; });
+    var t = coming.map(function(m){ return apEsc(m.short_label || m.label) + ' &middot; ' + apEsc(m.available_from || m.current_label || 'not yet'); }).join(' &middot; ');
+    return '<span class="ap-cfig none">' + (t || 'No figure for this point') + '</span>';
+  }
+  var m = shown[0], two = shown[1], dl = apDelta(m);
+  var d = m.input !== 'auto' ? '<span class="ap-cd muted">typed in</span>'
+    : dl ? '<span class="ap-cd ' + (dl.good === true ? 'good' : dl.good === false ? 'bad' : 'muted') + '">' + (dl.diff === 0 ? '=' : (dl.diff > 0 ? '▲ ' : '▼ ') + Math.abs(dl.diff) + (m.unit === '%' ? ' pts' : '')) + '</span>' : '';
+  var extra = two ? ' <span class="ap-c2">+ ' + apEsc(two.short_label || two.label) + ' ' + (apValue(two) == null ? '&mdash;' : apValue(two)) + '</span>' : '';
+  return '<span class="ap-cfig"><span class="ap-cfig-l"><span class="t">' + apEsc(apCardLabel(m)) + extra + '</span><span class="v">' + apCardValue(m) + ' ' + d + '</span></span>' + apSpark(m) + '</span>';
+}
+function apCard(p){
+  var st = apPointSteps(p.id), pc = apPct(st), done = st.filter(function(s){ return s.done_at; }).length, nx = apNextStep(p);
+  var sub = nx ? (nx.owner ? apEsc(nx.owner) : 'No owner') + ' &middot; ' + (nx.due_date ? (apStepLate(nx) ? '<b class="ap-red">was due ' + apDate(nx.due_date) + '</b>' : 'due ' + apDate(nx.due_date)) : 'no date') : '';
+  return '<button class="ap-c" onclick="apOpen(\'' + p.id + '\')" aria-label="Point ' + p.num + ': ' + apEsc(p.title) + '">'
+    + '<span class="ap-c-top"><span class="ap-c-title"><span class="ap-num">' + p.num + '</span>' + apEsc(p.title) + '</span>' + apPill(apPointStatus(st)) + '</span>'
+    + '<span class="ap-c-prog">' + apBar(pc) + '<span>' + pc + '% &middot; ' + done + '/' + st.length + '</span></span>'
+    + '<span class="ap-c-next">' + (nx ? 'Next: ' + apEsc(nx.title) + '<small>' + sub + '</small>' : 'All steps done<small>&nbsp;</small>') + '</span>'
+    + apCardFigure(p) + '</button>';
 }
 
 // ── Excel: summary, steps, figures, history, charts and notes ──────────────
@@ -932,6 +1008,39 @@ function apCss(){
     '.ap-toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:9000;max-width:min(560px,calc(100vw - 32px));border:1px solid;border-radius:12px;padding:12px 18px;font-size:15px;box-shadow:0 6px 24px rgba(44,24,16,.18);display:flex;gap:12px;align-items:center}',
     '.ap-x{background:none;border:0;font-size:22px;line-height:1;color:inherit;cursor:pointer;min-width:32px;min-height:32px}',
     '.ap-plan-head{font-size:15px}',
+    '.ap-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:14px}',
+    '.ap-kpi{background:#fff;border:1px solid #E9E1D6;border-radius:12px;padding:14px 18px;min-height:96px}',
+    '.ap-kpi .l{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--text-light);font-weight:600}',
+    '.ap-kpi .v{font-family:var(--font-serif);font-size:32px;line-height:1.1;margin-top:8px;color:var(--text);font-feature-settings:"lnum"}',
+    '.ap-kpi .s{font-size:12px;color:var(--text-light);margin-top:4px}.ap-kpi .ap-bar{margin-top:10px;height:6px}.ap-kpi .ap-bar div{height:6px}',
+    '.ap-approve{display:flex;justify-content:space-between;align-items:center;gap:12px;background:#fff;border:1px solid #E9E1D6;border-radius:12px;padding:12px 16px;margin-top:12px;font-size:14px;color:var(--text)}',
+    '.ap-approve b{font-weight:600}.ap-ab-btns{display:flex;gap:8px;flex:none}.ap-ab-ask{display:flex;gap:8px;flex:1;max-width:520px}.ap-ab-ask .ap-in{flex:1;min-height:38px;font-size:14px}',
+    '.btn-q{font:inherit;font-size:13px;font-weight:600;border-radius:9px;padding:9px 14px;border:1px solid #D9CBB9;background:#fff;color:var(--vino);cursor:pointer;white-space:nowrap;min-height:38px}',
+    '.btn-q.main{background:var(--vino);border-color:var(--vino);color:#fff}.btn-q:disabled{opacity:.55;cursor:default}',
+    '.ap-tabs{display:flex;gap:2px;background:#EDE5DA;border-radius:10px;padding:3px;margin-top:20px;width:max-content;max-width:100%;overflow-x:auto}',
+    '.ap-tabs button{font:inherit;font-size:13px;padding:7px 14px;border-radius:8px;border:0;background:none;color:var(--text-mid);cursor:pointer;white-space:nowrap;min-height:34px}',
+    '.ap-tabs button.on{background:#fff;color:var(--text);font-weight:600;box-shadow:0 1px 2px rgba(0,0,0,.08)}',
+    '.ap-subtabs{display:flex;gap:6px;margin:14px 0 10px;flex-wrap:wrap}.ap-subtabs button{font:inherit;font-size:12px;padding:6px 12px;border-radius:999px;border:1px solid #DDD0BF;background:#fff;color:var(--text-mid);cursor:pointer;min-height:32px}.ap-subtabs button.on{background:var(--vino);border-color:var(--vino);color:#fff}',
+    '.ap-secbar{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;margin:22px 2px 10px}',
+    '.ap-sect{font-family:var(--font-serif);font-size:22px;color:var(--vino)}.ap-secsub{font-size:12px;color:var(--text-light);margin-top:2px}',
+    '.ap-cgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}',
+    '.ap-c{all:unset;box-sizing:border-box;background:#fff;border:1px solid #E9E1D6;border-radius:12px;padding:16px 18px;display:grid;grid-template-rows:28px 22px 40px 64px;row-gap:8px;height:206px;cursor:pointer;min-width:0;transition:border-color .15s,box-shadow .15s}',
+    '.ap-c:hover{border-color:#D9CBB9;box-shadow:0 6px 18px -10px rgba(44,24,16,.25)}.ap-c:focus-visible{outline:2px solid var(--gold);outline-offset:3px}',
+    '.ap-c>*{min-width:0}',
+    '.ap-c-top{display:flex;justify-content:space-between;align-items:center;gap:10px}',
+    '.ap-c-title{font-family:var(--font-serif);font-size:18px;color:var(--text);display:flex;gap:10px;align-items:baseline;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}',
+    '.ap-c-top .ap-pill{min-width:92px;flex:none}',
+    '.ap-c-prog{display:grid;grid-template-columns:1fr 64px;gap:10px;align-items:center;font-size:12px;color:var(--text-light);text-align:right}.ap-c-prog .ap-bar{height:6px}.ap-c-prog .ap-bar div{height:6px}',
+    '.ap-c-next{font-size:13px;color:var(--text-mid);border-top:1px solid #E9E1D6;padding-top:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}',
+    '.ap-c-next small{display:block;font-size:12px;color:var(--text-light);overflow:hidden;text-overflow:ellipsis}',
+    '.ap-cfig{display:grid;grid-template-columns:minmax(0,1fr) 96px;align-items:center;gap:12px;background:#FBF8F3;border-radius:9px;padding:8px 12px;min-width:0}',
+    '.ap-cfig-l{display:block;min-width:0}.ap-cfig .t{display:block;font-size:12px;color:var(--text-mid);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
+    '.ap-cfig .v{display:block;font-family:var(--font-serif);font-size:22px;line-height:1.15;color:var(--text);white-space:nowrap;font-feature-settings:"lnum"}',
+    '.ap-cfig.none{display:flex;align-items:center;color:#A8957F;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
+    '.ap-c2{color:#A8957F}.ap-cd{font-family:var(--font-sans);font-size:12px;font-weight:600}.ap-cd.good{color:#1E6B3A}.ap-cd.bad{color:#A1231B}.ap-cd.muted{color:#A8957F;font-weight:500}',
+    '.ap-spark{width:84px;height:28px;display:block;margin-left:auto}',
+    '@media (max-width:820px){.ap-cgrid{grid-template-columns:minmax(0,1fr)}.ap-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}',
+    '@media (max-width:600px){.ap-approve{flex-direction:column;align-items:stretch}.ap-ab-btns .btn-q{flex:1}.ap-ab-ask{max-width:none}.ap-secbar{flex-direction:column;align-items:flex-start}.ap-cfig{grid-template-columns:minmax(0,1fr) 70px}.ap-spark{width:70px}.ap-kpi .v{font-size:26px}.ap-kpi{min-height:86px}}',
     '.ap-dl{margin-top:0}',
     '.ap-tiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;align-items:start}',
     '.ap-tile-hit{all:unset;box-sizing:border-box;display:flex;flex-direction:column;gap:9px;width:100%;cursor:pointer}',
