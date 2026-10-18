@@ -1228,6 +1228,81 @@ function rrRepNoShowRate(pull, opt){
 //   gone      true if the report needs the cancellations and no-shows
 //   money     true if the whole report is money and is hidden without Revenue
 // ══════════════════════════════════════════════════════════════════════════
+// ── r-threevisits — 3 visits: first, second, third ─────────────────────────
+// Asked for by Francesco, 18 Oct 2026, for point 6 of the Roberto's 3.0 plan
+// (1st, 2nd and 3rd visit; the 3 Visit Rule gestures). "Back within 90 days"
+// counted anyone who came back once at any point in three months — 42 of June's
+// 96 "returners" came back after day 30 — so it could not show the ladder.
+//
+// THE LADDER, per month of first visit:
+//   first-time guest  = we have no record of them in the look-back before
+//                       (same claim as New vs returning: "new as far back as we looked")
+//   came a 2nd time   = a 2nd distinct night within W days of the 1st
+//   came a 3rd time   = rule 'prev'  : a 3rd night within W days of the 2nd
+//                       rule 'first' : a 3rd night within W days of the 1st
+// The rule and W are chosen in the pop-up and printed in the title, because the
+// same book gives very different numbers under each.
+// A month that has not had the whole window yet says "not yet", never a low
+// number that is only the calendar.
+function rrDaysBetween(a, b){ return Math.round((Date.parse(b+'T12:00:00') - Date.parse(a+'T12:00:00')) / 864e5); }
+function rrThreeRuleText(rule, w){
+  return rule === 'first'
+    ? '2nd and 3rd visit both within ' + w + ' days of the first'
+    : '2nd visit within ' + w + ' days of the 1st, 3rd within ' + w + ' days of the 2nd';
+}
+function rrRepThreeVisits(pull, opt){
+  var W = Number(opt.visitWindow) || 30, rule = opt.visitRule === 'first' ? 'first' : 'prev';
+  var back = Number(opt.lookback) || 3;
+  var L = rrLedger(pull.nights);
+  var today = rrToday(), readTo = pull.to < today ? pull.to : today;
+  var order = [], ym = rrMonth(opt.from), endYm = rrMonth(opt.to);
+  while(ym <= endYm){ order.push(ym); ym = rrMonth(rrAddDays(rrMonthEnd(ym), 1)); }
+  var rows = [], three = [], tot = { n:0, s:0, t:0, sOk:true, tOk:true };
+  order.forEach(function(ym){
+    var mEnd = rrMonthEnd(ym);
+    var secondReady = rrAddDays(mEnd, W) <= readTo;
+    var thirdReady  = rrAddDays(mEnd, rule === 'prev' ? 2 * W : W) <= readTo;
+    var n = 0, s2 = 0, s3 = 0;
+    Object.keys(L.guests).forEach(function(id){
+      var g = L.guests[id];
+      if(g.placeholder || rrMonth(g.dates[0]) !== ym) return;   // first night anywhere in what we read
+      n++;
+      var d1 = g.dates[0], d2 = g.dates[1], d3 = g.dates[2];
+      var second = !!d2 && rrDaysBetween(d1, d2) <= W;
+      var third = second && !!d3 && (rule === 'prev' ? rrDaysBetween(d2, d3) <= W : rrDaysBetween(d1, d3) <= W);
+      if(second) s2++;
+      if(third){ s3++; three.push([g.name || 'Guest', resDateLabel(d1), resDateLabel(d2), resDateLabel(d3), rrMonthLabel(ym, pull.from, pull.to)]); }
+    });
+    tot.n += n; if(secondReady) tot.s += s2; else tot.sOk = false; if(thirdReady) tot.t += s3; else tot.tOk = false;
+    rows.push([rrMonthLabel(ym, pull.from, pull.to), n,
+      secondReady ? s2 : null, secondReady ? rrPct(s2, n) : 'not yet',
+      thirdReady ? s3 : null, thirdReady ? rrPct(s3, n) : 'not yet',
+      thirdReady && secondReady ? rrPct(s3, s2) : 'not yet']);
+  });
+  return {
+    title: '3 visits — first, second, third',
+    sub: 'Rule: ' + rrThreeRuleText(rule, W) + '. First-time = no visit in the ' + back + ' month' + (back===1?'':'s') + ' before.',
+    tables: [
+      { name: 'By month',
+        head: ['Month of first visit','First-time guests','Came a 2nd time','% of first-timers','Came a 3rd time','% of first-timers','% of 2nd-timers who came a 3rd'],
+        widths: [22,16,15,16,15,16,24], num:[1,2,4], pct:[3,5,6],
+        rows: rows,
+        note: '"not yet" means that month has not had the full window yet (' + (rule === 'prev' ? 2 * W : W) + ' days after its last day for the 3rd visit). It is not a zero.' },
+      { name: 'Made all three visits',
+        head: ['Guest','1st visit','2nd visit','3rd visit','Month of first visit'],
+        widths: [30,16,16,16,22],
+        rows: three.length ? three : [['Nobody in this period', '', '', '', '']],
+        note: 'Every guest who completed the ladder under this rule — the people the third-visit gesture is for.' }
+    ],
+    notes: [
+      'A VISIT is a distinct night with a booking that was not cancelled or a no-show, counted by SevenRooms client id. Two bookings on one night are one visit.',
+      'FIRST-TIME means we have no record of the guest in the ' + back + ' month' + (back===1?'':'s') + ' before their first night here — "new as far back as we looked", not "new ever". A longer look-back in the pop-up makes it a stronger claim.',
+      'WHY THIS AND NOT "CAME BACK WITHIN 90 DAYS": that report counts anyone who returned once at any time in three months. This one follows the 1st, 2nd and 3rd visit with a window between them, which is what the 3 Visit Rule works on.',
+      RR_WALKIN_NOTE
+    ]
+  };
+}
+
 var RR_REPORTS = [
   { id:'onevisit', qkey:'r-onevisit', name:'Guests who came only once',
     blurb:'By month, with the honest warning about why the months are not comparable.',
@@ -1238,6 +1313,10 @@ var RR_REPORTS = [
   { id:'returnwindow', qkey:'r-returnwindow', name:'Came back within 30 / 60 / 90 days',
     blurb:'The one to use when you want months compared fairly. Every month on the same clock.',
     followUp:90, run:rrRepReturnWindow },
+  { id:'threevisits', qkey:'r-threevisits', name:'3 visits — first, second, third',
+    blurb:'Of each month\'s first-time guests: how many came a 2nd time, then a 3rd, within the window you choose.',
+    lookback:true, visits:true, followUp:function(){ return (RR.visitRule === 'first' ? 1 : 2) * (Number(RR.visitWindow) || 30); },
+    run:rrRepThreeVisits },
   { id:'channel', qkey:'r-channel', name:'Where bookings come from',
     blurb:'Every booking channel, by bookings and covers.',
     money:'optional', run:rrRepChannel },
@@ -1275,6 +1354,7 @@ var RR = {
   pick: null,          // which report the pop-up is configuring
   from: '', to: '',
   lookback: 3, minVisits: 5, weeks: 12, sortBy: 'spend', limit: 100, lapsedTop: 0,
+  visitRule: 'prev', visitWindow: 30,   // 3 visits report
   open: false,         // pop-up showing
   busy: false, done: 0, total: 0, note: '',
   result: null,        // { report, built, from, to, out, failed }
@@ -1322,7 +1402,8 @@ function rrPullWindow(rep, from, to){
   if(rep.followUp){
     // Read past the end so "did they come back within 90 days" has something to
     // find. Never past today: there is no book for a night that hasn't happened.
-    var t2 = rrAddDays(to, rep.followUp), today = rrToday();
+    var fu = (typeof rep.followUp === 'function') ? rep.followUp() : rep.followUp;
+    var t2 = rrAddDays(to, fu), today = rrToday();
     t = t2 > today ? today : t2;
   }
   return { from: f, to: t };
@@ -1385,7 +1466,7 @@ async function rrRun(show){
     var out = rep.run(pull, {
       from: RR.from, to: RR.to, lookback: RR.lookback,
       minVisits: RR.minVisits, weeks: RR.weeks, sortBy: RR.sortBy, limit: RR.limit,
-      lapsedTop: RR.lapsedTop
+      lapsedTop: RR.lapsedTop, visitRule: RR.visitRule, visitWindow: RR.visitWindow
     }, money);
     RR.result = {
       rep: rep, out: out, money: money,
@@ -1720,6 +1801,19 @@ function rrPopHtml(){
       h.push('<option value="'+n+'"'+(Number(RR.lookback)===n?' selected':'')+'>'+n+' month'+(n===1?'':'s')+'</option>');
     });
     h.push('</select></label><i>A guest is “new” if they appear nowhere in the look-back. A longer look-back is a stronger claim and takes longer to read.</i></div>');
+  }
+  if(rep.visits){
+    h.push('<div class="rr-opt"><label>Rule<select class="rr-sel" '+(RR.busy?'disabled ':'')
+      + 'onchange="rrSet(\'visitRule\', this.value)">');
+    [['prev','Each visit within the window of the one before'],['first','All three within the window of the first']].forEach(function(o){
+      h.push('<option value="'+o[0]+'"'+(RR.visitRule===o[0]?' selected':'')+'>'+o[1]+'</option>');
+    });
+    h.push('</select></label><label>Window<select class="rr-sel" '+(RR.busy?'disabled ':'')
+      + 'onchange="rrSet(\'visitWindow\', this.value)">');
+    [30,60,90].forEach(function(n){
+      h.push('<option value="'+n+'"'+(Number(RR.visitWindow)===n?' selected':'')+'>'+n+' days</option>');
+    });
+    h.push('</select></label><i>Printed on the report: '+resEsc(rrThreeRuleText(RR.visitRule, Number(RR.visitWindow)||30))+'.</i></div>');
   }
   if(rep.lapsed){
     h.push('<div class="rr-opt"><label>At least<select class="rr-sel" '+(RR.busy?'disabled ':'')
