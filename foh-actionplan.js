@@ -391,7 +391,7 @@ function apAdminStrip(){
   var upd = AP.measures.map(function(m){ return m.updated_at; }).filter(Boolean).sort().pop();
   var h = '<details class="ap-more"><summary>Numbers and the Wednesday email</summary><div class="ap-small">'
     + 'Live numbers last updated ' + (upd ? apDoneDate(upd) + ' ' + new Date(upd).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Dubai' }) : 'never') + '. '
-    + 'They update every Wednesday at 08:00 before the email, or now with the button. '
+    + 'They update every Wednesday at 09:00 before the email, or now with the button. '
     + 'The Wednesday email goes to: <b>' + apEsc(rec || 'nobody') + '</b>.</div><div class="ap-btns">'
     + '<button class="ap-btn" ' + (AP.refreshing ? 'disabled' : '') + ' onclick="apCallWeekly(\'refresh\')">' + (AP.refreshing === 'refresh' ? 'Updating&hellip;' : 'Update numbers now') + '</button>';
   if(typeof fohIsAdmin === 'function' && fohIsAdmin())

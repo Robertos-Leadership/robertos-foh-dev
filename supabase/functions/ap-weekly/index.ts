@@ -461,7 +461,7 @@ Deno.serve(async (req) => {
       (changes || []).map((c: { point_id: string; proposal: string }) => ({ point: pt(c.point_id), proposal: c.proposal })),
       (comments || []).map((c: { point_id: string; author_email: string; body: string }) => ({ point: pt(c.point_id), author_email: c.author_email, body: c.body })),
       "Week of " + label(thisMonday) + " · sent " + label(dubaiToday()),
-      "To: " + ((settings.recipients as string[]) || []).map((e) => NAMES[String(e).toLowerCase()] || e).join(", ") + " · Wednesday 8:00");
+      "To: " + ((settings.recipients as string[]) || []).map((e) => NAMES[String(e).toLowerCase()] || e).join(", ") + " · Wednesday 9:00");
     const subject = `Roberto's 3.0 · ${weekNo >= 1 ? "Week " + weekNo + " update" : "Before week 1"} · ${f.pct}%`;
     if (mode === "preview") return json({ ok: true, subject, html, facts: f });
 
