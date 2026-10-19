@@ -29,7 +29,7 @@ var AP = { loaded: false, loading: false, noAccess: false, err: null, open: null
            settings: null, points: [], steps: [], measures: [], snaps: [], results: [], comments: [], changes: [], weeks: [],
            busy: {}, moving: null, msg: null, refreshing: false };
 
-var AP_NAMES = { 'fguarracino@robertos.ae': 'Francesco', 'onafid@robertos.ae': 'Ouafaa', 'akadrie@skelmore.com': 'Amin', 'justin@skelmore.com': 'Justin', 'asacchi@skelmore.com': 'Andrea' };
+var AP_NAMES = { 'fguarracino@robertos.ae': 'Francesco', 'onafid@robertos.ae': 'Ouafaa', 'akadrie@skelmore.com': 'Amin', 'justin@skelmore.com': 'Justin', 'asacchi@skelmore.com': 'Andrea', 'ndragan@robertos.ae': 'Nicole' };
 var AP_GROUPS = ['Standards', 'People', 'Business growth', 'Relaunch'];
 
 function apEsc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]; }); }
@@ -427,7 +427,12 @@ function apMeasureKind(m){
 }
 function apValue(m){
   if(m.current == null) return null;
-  var v = Number(m.current), u = m.unit;
+  return apNumText(m, Number(m.current));
+}
+// One number in its unit. Money (point 7 from 19 Oct 2026) reads AED 25.0k.
+function apNumText(m, v){
+  var u = m.unit;
+  if(u === 'AED') return 'AED ' + (Math.round(v / 100) / 10).toFixed(1) + 'k';
   return u === '%' ? (Math.round(v * 10) / 10) + '%' : (u === 'rating' ? v.toFixed(1) : String(Math.round(v * 10) / 10));
 }
 // One figure as a card. withPoint: show which of the 10 points it belongs to.
@@ -478,8 +483,8 @@ function apNumbersView(){
     + '<button class="ap-btn" ' + (AP.refreshing ? 'disabled' : '') + ' onclick="apCallWeekly(\'refresh\')">' + (AP.refreshing === 'refresh' ? 'Reading&hellip;' : 'Refresh') + '</button></div>'];
   h.push(apMeasureBlock(ordered, true));
   h.push('<details class="ap-more"><summary>What is automatic and what is typed in</summary><div class="ap-small">'
-    + '<b>Automatic</b>: the app reads it itself &mdash; SevenRooms (walk-ins, channels, guests coming back, relaunch bookings), the closing report (Monday and Sunday guests), Google (rating) and, as each module arrives, the FOH App (SOP sign-off, training, mystery shopper, guest survey). Nobody types these. They refresh when the plan opens if they are over 3 hours old, and every Wednesday before the email.<br>'
-    + '<b>Typed in</b>: roles filled and catering requests &mdash; no system holds them, so a plan member types the number and the app records who and when.<br>'
+    + '<b>Automatic</b>: the app reads it itself &mdash; SevenRooms (guests booked ahead, channels, guests coming back), the closing report (Monday and Sunday revenue and guests) and, as each module arrives, the FOH App (SOP sign-off, training, mystery shopper, guest survey). Nobody types these. They refresh when the plan opens if they are over 3 hours old, and every Wednesday before the email.<br>'
+    + '<b>Typed in</b>: roles filled, catering requests, and press and Instagram for the relaunch (Nicole) &mdash; no system holds them, so a plan member types the number and the app records who and when.<br>'
     + '<b>Steps, owners, dates, comments and approvals</b> are always people.</div></details>');
   return h.join('');
 }
@@ -500,6 +505,7 @@ function apPointPage(pid, msg){
   h.push('<div class="ap-head"><div class="ap-kick">Point ' + p.num + '</div><div class="ap-title">' + apEsc(p.title) + '</div><div class="ap-sub">' + done + ' of ' + st.length + ' steps done</div></div>');
   h.push(msg);
   h.push('<div class="ap-goal">' + apEsc(p.goal || '') + '</div>');
+  if(p.lead) h.push('<div class="ap-lead"><span>Lead</span>' + apEsc(p.lead) + '</div>');
   h.push('<div class="ap-card"><div class="ap-head-row"><div class="ap-big">' + pc + '%</div>' + apPill(apPointStatus(st)) + '</div>' + apBar(pc) + '</div>');
 
   // Steps
@@ -608,12 +614,15 @@ document.addEventListener('visibilitychange', apAutoRefresh);
 // A figure's target and baseline as numbers, read from their own text, so
 // nothing is typed twice. null when the target is words ("Up every week").
 function apTargetNum(m){
-  var t = String(m.target || ''), r = t.match(/^\s*([\d.]+)\s*%?\s*$/);
+  var t = String(m.target || ''), r = t.match(/^\s*([\d.]+)\s*%?\s*(\([^)]*\))?\s*$/);
   if(r) return Number(r[1]);
+  // money: the first figure is the next target ("AED 30k by end Nov · 50k by Dec" = 30000)
+  r = m.unit === 'AED' && t.match(/([\d.]+)\s*k\b/i);
+  if(r) return Number(r[1]) * 1000;
   r = t.match(/\(([^)]*?)([\d.]+)%?\)/);
   return r ? Number(r[2]) : null;
 }
-function apBaseNum(m){ var r = String(m.baseline || '').match(/(\d+(?:\.\d+)?)/); return r ? Number(r[1]) : null; }
+function apBaseNum(m){ var r = String(m.baseline || '').match(/(\d+(?:\.\d+)?)(\s*k\b)?/i); return r ? Number(r[1]) * (r[2] ? 1000 : 1) : null; }
 // Stored weekly (or monthly) figures, oldest first. Closed nights stay in as gaps.
 function apHist(m){
   return AP.snaps.filter(function(s){ return s.measure_id === m.id && !(s.detail && s.detail.superseded); })
@@ -630,20 +639,23 @@ function apPointLabel(m, d){
 // night is compared like-for-like only through an average too — the change is
 // worked on the last 4 nights recorded (18 Oct 2026: a single 97 read "▲ 31",
 // the last-4 average of 76 is "▲ 10").
-var AP_AVG4 = { monday_guests: 1, sunday_guests: 1 };
+var AP_AVG4 = { monday_guests: 1, sunday_guests: 1, monday_net: 1, sunday_net: 1 };
 function apAvg4(m){
   var vals = apHist(m).filter(function(h){ return h.v != null; }).map(function(h){ return h.v; }).slice(-4);
   return vals.length ? { avg: Math.round(vals.reduce(function(a, b){ return a + b; }, 0) / vals.length), n: vals.length } : null;
 }
 function apDelta(m){
   var v = m.current == null ? null : Number(m.current), b = apBaseNum(m), t = apTargetNum(m), basis = '';
-  if(AP_AVG4[m.key]){ var a4 = apAvg4(m); if(a4){ v = a4.avg; basis = (a4.n === 1 ? '1 night' : 'last ' + a4.n + ' avg ' + a4.avg) + ' · '; } }
+  if(AP_AVG4[m.key]){ var a4 = apAvg4(m); if(a4){ v = a4.avg; basis = (a4.n === 1 ? '1 night' : 'last ' + a4.n + ' avg ' + apNumText(m, a4.avg)) + ' · '; } }
   if(v == null || b == null || m.unit === 'text') return null;
   var diff = Math.round((v - b) * 10) / 10;
   var lowerBetter = (t != null) ? t < b : false;
   var good = diff === 0 ? null : (lowerBetter ? diff < 0 : diff > 0);
-  var unit = m.unit === '%' ? ' pts' : '';
-  return { diff: diff, good: good, text: basis + (diff === 0 ? 'same as baseline' : (diff > 0 ? '▲ ' : '▼ ') + Math.abs(diff) + unit + ' vs baseline') };
+  return { diff: diff, good: good, text: basis + (diff === 0 ? 'same as baseline' : (diff > 0 ? '▲ ' : '▼ ') + apDiffText(m, diff) + ' vs baseline') };
+}
+function apDiffText(m, diff){
+  var a = Math.abs(diff);
+  return m.unit === 'AED' ? (Math.round(a / 100) / 10).toFixed(1) + 'k' : a + (m.unit === '%' ? ' pts' : '');
 }
 function apChartGeom(m, W, H){
   var hs = apHist(m);
@@ -763,7 +775,7 @@ function apCardValue(m){
     var of = String(m.target || '').match(/of\s+(\d+)/);
     return m.current == null ? '&mdash;' : (of ? Number(m.current) + ' of ' + of[1] : apValue(m));
   }
-  if(AP_AVG4[m.key]){ var a4 = apAvg4(m); if(a4) return String(a4.avg); }
+  if(AP_AVG4[m.key]){ var a4 = apAvg4(m); if(a4) return apNumText(m, a4.avg); }
   var v = apValue(m); return v == null ? 'No data' : v;
 }
 function apCardLabel(m){
@@ -781,7 +793,7 @@ function apCardFigure(p){
   }
   var m = shown[0], two = shown[1], dl = apDelta(m);
   var d = m.input !== 'auto' ? '<span class="ap-cd muted">typed in</span>'
-    : dl ? '<span class="ap-cd ' + (dl.good === true ? 'good' : dl.good === false ? 'bad' : 'muted') + '">' + (dl.diff === 0 ? '=' : (dl.diff > 0 ? '▲ ' : '▼ ') + Math.abs(dl.diff) + (m.unit === '%' ? ' pts' : '')) + '</span>' : '';
+    : dl ? '<span class="ap-cd ' + (dl.good === true ? 'good' : dl.good === false ? 'bad' : 'muted') + '">' + (dl.diff === 0 ? '=' : (dl.diff > 0 ? '▲ ' : '▼ ') + apDiffText(m, dl.diff)) + '</span>' : '';
   var extra = two ? ' <span class="ap-c2">+ ' + apEsc(two.short_label || two.label) + ' ' + (apValue(two) == null ? '&mdash;' : apValue(two)) + '</span>' : '';
   return '<span class="ap-cfig"><span class="ap-cfig-l"><span class="t">' + apEsc(apCardLabel(m)) + extra + '</span><span class="v">' + apCardValue(m) + ' ' + d + '</span></span>' + apSpark(m) + '</span>';
 }
@@ -838,15 +850,15 @@ async function apExcel(){
     var pt = function(id){ return AP.points.filter(function(p){ return p.id === id; })[0] || {}; };
     // 1. Summary
     var all = AP.steps, done = all.filter(function(s){ return s.done_at; }).length;
-    var ws = mk('Summary', "Roberto's 3.0 action plan — summary", ['#', 'Point', 'Status', 'Progress', 'Steps done', 'Late', 'Next step', 'Owner', 'Due', 'Latest note'], [5, 32, 14, 10, 11, 7, 34, 14, 12, 50]);
+    var ws = mk('Summary', "Roberto's 3.0 action plan — summary", ['#', 'Point', 'Lead', 'Status', 'Progress', 'Steps done', 'Late', 'Next step', 'Owner', 'Due', 'Latest note'], [5, 32, 34, 14, 10, 11, 7, 34, 14, 12, 50]);
     pts.forEach(function(p){
       var st = apPointSteps(p.id), nx = apNextStep(p), note = AP.results.filter(function(r){ return r.point_id === p.id; })[0];
-      var r = add(ws, [p.num, p.title, AP_PILL[apPointStatus(st)][0], apPct(st) / 100, st.filter(function(s){ return s.done_at; }).length + ' of ' + st.length, st.filter(apStepLate).length,
+      var r = add(ws, [p.num, p.title, p.lead || '', AP_PILL[apPointStatus(st)][0], apPct(st) / 100, st.filter(function(s){ return s.done_at; }).length + ' of ' + st.length, st.filter(apStepLate).length,
         nx ? nx.title : 'All done', nx && nx.owner || '', nx && nx.due_date ? new Date(nx.due_date + 'T12:00:00') : '', note ? note.note : '']);
-      r.getCell(4).numFmt = '0%'; r.getCell(9).numFmt = 'd mmm';
+      r.getCell(5).numFmt = '0%'; r.getCell(10).numFmt = 'd mmm';
     });
-    var tr = add(ws, ['', 'Whole plan', '', all.length ? done / all.length : 0, done + ' of ' + all.length, all.filter(apStepLate).length, '', '', '', '']);
-    tr.font = { bold: true }; tr.getCell(4).numFmt = '0%';
+    var tr = add(ws, ['', 'Whole plan', '', '', all.length ? done / all.length : 0, done + ' of ' + all.length, all.filter(apStepLate).length, '', '', '', '']);
+    tr.font = { bold: true }; tr.getCell(5).numFmt = '0%';
     // 2. Steps
     ws = mk('Steps', 'Every step, with owner, date and status', ['#', 'Point', 'Step', 'Owner', 'Due', 'Status', 'Done on', 'Done by'], [5, 30, 44, 16, 12, 14, 12, 16]);
     pts.forEach(function(p){ apPointSteps(p.id).forEach(function(s){
@@ -915,7 +927,7 @@ function apPdf(){
       + '<div>As of ' + apDate(apToday()) + ' ' + new Date().getFullYear() + ' &middot; plan progress <b>' + apPct(all) + '%</b> &middot; ' + done + ' of ' + all.length + ' steps done &middot; ' + all.filter(apStepLate).length + ' late</div></div>';
     h += '<div class="ap-tiles">' + pts.map(function(p){ return apDashTile(p, true); }).join('') + '</div>';
     pts.forEach(function(p){
-      h += '<div class="ap-print-point"><h2>' + p.num + '. ' + apEsc(p.title) + '</h2><div class="ap-small">' + apEsc(p.goal || '') + '</div>'
+      h += '<div class="ap-print-point"><h2>' + p.num + '. ' + apEsc(p.title) + '</h2><div class="ap-small">' + apEsc(p.goal || '') + '</div>' + (p.lead ? '<div class="ap-small"><b>Lead:</b> ' + apEsc(p.lead) + '</div>' : '')
         + '<table class="ap-print-table"><thead><tr><th>Step</th><th>Owner</th><th>Due</th><th>Status</th></tr></thead><tbody>'
         + apPointSteps(p.id).map(function(s){ return '<tr><td>' + apEsc(s.title) + '</td><td>' + apEsc(s.owner || '') + '</td><td>' + (s.due_date ? apDate(s.due_date) : '') + '</td><td>' + apStepStatus(s) + (s.done_at ? ' ' + apDoneDate(s.done_at) : '') + '</td></tr>'; }).join('')
         + '</tbody></table>';
@@ -985,6 +997,7 @@ function apCss(){
     '.ap-ta{width:100%;resize:vertical;margin-top:8px}',
     '.ap-back{background:none;border:0;color:var(--vino);font-size:15px;font-weight:600;padding:8px 0 12px;cursor:pointer;min-height:44px}',
     '.ap-goal{font-size:16px;color:var(--text-mid);margin:0 4px 14px;line-height:1.5}',
+    '.ap-lead{font-size:14px;color:var(--text-dark,#2C1810);margin:-6px 4px 14px;line-height:1.45}.ap-lead span{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#6B1F2A;margin-right:8px}',
     '.ap-steps{padding:6px 20px}',
     '.ap-step{display:flex;gap:14px;padding:14px 0;border-bottom:1px solid var(--border)}.ap-step:last-child{border-bottom:0}',
     '.ap-check{width:26px;height:26px;accent-color:#1E6B3A;flex:none;margin-top:2px;cursor:pointer}',

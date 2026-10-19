@@ -16,12 +16,12 @@
 // only; he switches it to Amin himself. Nothing in here has another address.
 //
 // WHERE THE NUMBERS COME FROM (never typed by hand):
-//   walk-in share, bookings by channel, first-time guests back within 90 days,
+//   guests booked ahead (and walk-in share), bookings by channel, 2nd visits,
 //   relaunch bookings → SevenRooms nightly book through the Kitchen
 //     sevenrooms-sync ?daysheet= call, same rules as Reservation Reports
 //     (foh-resreports.js): a booking = not cancelled / no-show; a visit = a
 //     distinct night per client id; the anonymous "Guest" placeholder is not a guest.
-//   Monday / Sunday guests → rev_daily (closing report), venue robertos-difc.
+//   Monday / Sunday net revenue and guests → rev_daily (closing report), venue robertos-difc.
 //     A night with no row is "No data", never zero.
 //   Google rating → google_reviews_daily, venue_key robertos.
 // ════════════════════════════════════════════════════════════
@@ -183,6 +183,22 @@ async function guestsOn(sb: SB, d: string): Promise<M> {
 }
 const SUNDAYS_FROM = "2026-10-01";
 
+// Net revenue on a given night from the closing report (point 7, from 19 Oct
+// 2026: the goal is AED 3M a month, Monday and Sunday 30k a night by end of
+// November, 50k by December). No row = No data, never zero.
+async function netOn(sb: SB, d: string): Promise<M> {
+  const { data } = await sb.from("rev_daily").select("service_date,net_actual,rest_covers_actual,lounge_covers_actual").eq("venue_id", "robertos-difc").eq("service_date", d).limit(1);
+  const r = data?.[0];
+  const net = r ? Number(r.net_actual) || 0 : null;
+  const at = mondayOf(d);
+  if (r && net) {
+    const cov = (Number(r.rest_covers_actual) || 0) + (Number(r.lounge_covers_actual) || 0);
+    return { value: Math.round(net), label: `${label(d)} · ${cov} guests`, detail: { date: d, guests: cov }, at };
+  }
+  if (dow(d) === 0 && d < SUNDAYS_FROM) return { value: null, label: "Closed on Sundays until October", detail: { date: d, closed: true }, at };
+  return { value: null, label: "No data — no closing report for " + label(d), detail: { date: d }, at };
+}
+
 // The week a weekly figure reports: the last full Mon–Sun, but never a week
 // whose Sunday is yesterday or later (that night is not settled yet).
 function reportWeek(today: string) {
@@ -201,11 +217,13 @@ async function computeMeasures(sb: SB) {
   const W = walkinWeek(wk.cached, wkStart);
   if (!W) {
     const why = { value: null, label: "SevenRooms did not answer for every night of " + label(wkStart) + " week — not counted", transient: true };
-    res.walkin_share = why; res.walkin_covers = why;
+    res.walkin_share = why; res.walkin_covers = why; res.booked_share = why;
   } else {
     const det = { week: wkStart, bookings: W.b, walkins: W.w, covers: W.c, walkin_covers: W.wc };
     res.walkin_share = { value: pct1(W.w, W.b), label: `${W.w} of ${W.b} bookings · week of ${label(wkStart)}`, detail: det };
     res.walkin_covers = { value: pct1(W.wc, W.c), label: `${W.wc} of ${W.c} covers · week of ${label(wkStart)}`, detail: det };
+    // From 19 Oct the point is judged on guests booked ahead (Amin: a strong business books 70–80% ahead)
+    res.booked_share = { value: pct1(W.c - W.wc, W.c), label: `${W.c - W.wc} of ${W.c} guests booked ahead · week of ${label(wkStart)}`, detail: det };
   }
 
   // Point 6 — 3-visit ladder for the latest month whose window has closed
@@ -220,6 +238,8 @@ async function computeMeasures(sb: SB) {
   const lastDow = (want: number) => { let d = yday; while (dow(d) !== want) d = addDays(d, -1); return d; };
   res.monday_guests = await guestsOn(sb, lastDow(1));
   res.sunday_guests = await guestsOn(sb, lastDow(0));
+  res.monday_net = await netOn(sb, lastDow(1));
+  res.sunday_net = await netOn(sb, lastDow(0));
 
   // Point 8 — bookings 2–15 Nov vs 19 Oct–1 Nov, once the after-window has closed
   if (yday >= "2026-11-15") {
@@ -256,10 +276,13 @@ async function fillHistory(sb: SB, byKey: Record<string, { id: string }>) {
       const det = { week: w, bookings: W.b, walkins: W.w, covers: W.c, walkin_covers: W.wc };
       await put("walkin_share", w, { value: pct1(W.w, W.b), label: `${W.w} of ${W.b} bookings`, detail: det });
       await put("walkin_covers", w, { value: pct1(W.wc, W.c), label: `${W.wc} of ${W.c} covers`, detail: det });
+      await put("booked_share", w, { value: pct1(W.c - W.wc, W.c), label: `${W.c - W.wc} of ${W.c} guests booked ahead`, detail: det });
     }
     // Monday and Sunday of that week, from the closing report
     await put("monday_guests", w, await guestsOn(sb, w));
     if (addDays(w, 6) <= yday) await put("sunday_guests", w, await guestsOn(sb, addDays(w, 6)));
+    await put("monday_net", w, await netOn(sb, w));
+    if (addDays(w, 6) <= yday) await put("sunday_net", w, await netOn(sb, addDays(w, 6)));
   }
   // 3-visit ladder: every month from June whose window has closed
   const lastYm = lastLadderMonth(yday);
@@ -299,7 +322,7 @@ function planFacts(points: { id: string; num: number; title: string }[], steps: 
 // ignores padding/height/radius on <div> (16 Oct: the first version arrived as
 // torn colour strips with no bar and a purple-on-wine button). Padding lives on
 // <td>; the bar is two cells; the button is a filled cell around the link.
-const NAMES: Record<string, string> = { "fguarracino@robertos.ae": "Francesco", "onafid@robertos.ae": "Ouafaa", "akadrie@skelmore.com": "Amin", "justin@skelmore.com": "Justin", "asacchi@skelmore.com": "Andrea" };
+const NAMES: Record<string, string> = { "fguarracino@robertos.ae": "Francesco", "onafid@robertos.ae": "Ouafaa", "akadrie@skelmore.com": "Amin", "justin@skelmore.com": "Justin", "asacchi@skelmore.com": "Andrea", "ndragan@robertos.ae": "Nicole" };
 const SANS = "Arial,Helvetica,sans-serif";
 function emailHtml(f: ReturnType<typeof planFacts>, weekNo: number, pending: { point?: { num: number; title: string }; proposal: string }[],
   comments: { point?: { num: number; title: string }; author_email: string; body: string }[], weekLabel: string, toLabel: string) {
