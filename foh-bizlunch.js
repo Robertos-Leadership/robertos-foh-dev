@@ -207,7 +207,9 @@ function blWeeks(today){
   });
   var TD = blToDate(today);
   if(TD) TD.tail.forEach(function(d){
-    var w = wk(d), n = BL.nights[d];
+    var n = BL.nights[d];
+    if(blDow(d) >= 5 && !(n && n.menus)) return;      // a weekend with no menus is not a booking day
+    var w = wk(d);
     if(n){ w.menus += n.menus; w.net += blNet(n.menuGross, d); w.booked++; if(n.menus) w.days++; }
     else if(BL.failed[d]) w.bad++;
     else w.pending++;
