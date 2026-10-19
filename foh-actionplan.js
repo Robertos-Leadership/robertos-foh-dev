@@ -483,7 +483,7 @@ function apNumbersView(){
     + '<button class="ap-btn" ' + (AP.refreshing ? 'disabled' : '') + ' onclick="apCallWeekly(\'refresh\')">' + (AP.refreshing === 'refresh' ? 'Reading&hellip;' : 'Refresh') + '</button></div>'];
   h.push(apMeasureBlock(ordered, true));
   h.push('<details class="ap-more"><summary>What is automatic and what is typed in</summary><div class="ap-small">'
-    + '<b>Automatic</b>: the app reads it itself &mdash; SevenRooms (guests booked ahead, channels, guests coming back), the closing report (Monday and Sunday revenue and guests) and, as each module arrives, the FOH App (SOP sign-off, training, mystery shopper, guest survey). Nobody types these. They refresh when the plan opens if they are over 3 hours old, and every Wednesday before the email.<br>'
+    + '<b>Automatic</b>: the app reads it itself &mdash; SevenRooms (guests booked ahead, channels, guests coming back), the closing report (Monday and Sunday revenue and guests) and, as each module arrives, the FOH App (SOP sign-off, training, the audit score). Nobody types these. They refresh when the plan opens if they are over 3 hours old, and every Wednesday before the email.<br>'
     + '<b>Typed in</b>: roles filled, catering requests, and press and Instagram for the relaunch (Nicole) &mdash; no system holds them, so a plan member types the number and the app records who and when.<br>'
     + '<b>Steps, owners, dates, comments and approvals</b> are always people.</div></details>');
   return h.join('');
