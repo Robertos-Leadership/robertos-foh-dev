@@ -1120,14 +1120,18 @@ function render(){
   var pool = inMenu();
   if (pool.length && pool.indexOf(idx) < 0) idx = pool[0];
   var d = DISHES[idx];
+  /* an empty menu must show NO dish: drawing whatever dish was open before (a
+     Business lunch soup under "Moda Night") reads as a dish of that menu — wrong
+     allergens to a guest. Found 19 Oct 2026. */
+  var empty = !!(MENUS.length && menuPick && !pool.length && !loadErr);
   var hits = findDishes(bq);
   var walk = pool.length > 1;
   root.innerHTML = frame(
     '<div class="onpaper">' +
       '<div class="fbctl noprint">' +
-      (MENUS.length && menuPick && !pool.length
-        ? '<div class="mnote"><b>Nothing is on this menu yet.</b> The chef puts a dish on it ' +
-          'from the create screen, and it appears here. Pick <b>Everything</b> in the menu list to see the whole book.</div>'
+      (empty
+        ? '<div class="mnote"><b>Nothing is on this menu yet.</b> The kitchen has not put a dish on it, ' +
+          'so there is no page to show. Pick another menu, or <b>Everything</b> in the menu list to see the whole book.</div>'
         : '') +
       /* "nothing matches" while the dish is sitting on the next menu along is a
          half-truth, and it sends a waiter looking for a page he was told is not
@@ -1164,22 +1168,24 @@ function render(){
         '</span>' +
         /* back and forward are the two arrows either side of the page, below */
         '<span class="walk">' +
-          '<button class="btn" id="print">Print this page</button>' +
+          (empty ? '' : '<button class="btn" id="print">Print this page</button>') +
         '</span>' +
       '</div>' +
       '<div class="fbstat">' +
         '<span>' +
           (loadErr ? 'Could not read the recipes — ' + esc(loadErr)
                    : (bq ? hits.length + ' of ' + pool.length + ' match'
+                         : empty ? 'No dishes'
                          : 'Dish ' + (Math.max(0, pool.indexOf(idx)) + 1) + ' of ' + pool.length) +
                      (menuPick ? ' on ' + esc((MENUS.filter(function(m){ return m.id===menuPick; })[0]||{}).name || 'this menu') : '') +
-                     ' &nbsp;·&nbsp; one dish, one A4' +
-                     (d.isSample ? ' &nbsp;·&nbsp; a finished page, written by me' : '') +
+                     (empty ? '' : ' &nbsp;·&nbsp; one dish, one A4') +
+                     (!empty && d.isSample ? ' &nbsp;·&nbsp; a finished page, written by me' : '') +
                      (frozen && SNAP ? ' &nbsp;·&nbsp; <b class="stale">as the recipes stood ' + esc(stamp()) + '</b>' : '')) +
         '</span>' +
         '<span id="fit"></span>' +
       '</div>' +
       '</div>' +
+      (empty ? '' :
       '<div class="fbpage'+(walk?' walking':'')+'">' +
       (walk
         ? '<div class="fbrail l noprint"><button class="fbarrow" id="prev" aria-label="Previous dish" title="Previous dish">&larr;</button></div>' +
@@ -1192,7 +1198,7 @@ function render(){
         : '') +
       glassBar(d) +
       sheet(d) +
-      '</div>' +
+      '</div>') +
     '</div>');
   checkOneSheet();
   warmPhotos();
