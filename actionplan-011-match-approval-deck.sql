@@ -33,6 +33,7 @@ from ap_points p, (values
   ('sunday_net', 'Sunday net revenue', 'Sunday', 'AED 18.6k (4, 11, 18 Oct — open on Sundays since October)', 2)
 ) as v(key, label, short, base, sort)
 where p.num = 7 and not exists (select 1 from ap_measures m where m.key = v.key);
+update ap_points set goal = 'Our two slowest days. Each should bring AED 30k a night by end of November, 50k by December.' where num = 7 and goal = 'Our two slowest days.';
 update ap_measures set sort = 3, target = 'Beside the revenue', short_label = 'Monday guests' where key = 'monday_guests';
 update ap_measures set sort = 4, target = 'Beside the revenue', short_label = 'Sunday guests' where key = 'sunday_guests';
 
@@ -68,6 +69,7 @@ update app_users set modules = array_append(modules, 'actionplan') where email =
 -- update ap_measures set sort=2, target='Up every week', short_label='Sunday' where key='sunday_guests';
 -- update ap_measures set target='All trained, 85% average' where key='trained';
 -- update ap_measures set target='85%' where key='mystery';
+-- update ap_points set goal='Our two slowest days.' where num=7;
 -- update ap_points set goal='Stop waiting for guests; walk-ins are almost 35% of our business.' where num=5;
 -- update ap_steps set title='Amin approves' where id='2cf27cc0-f167-4302-836f-466563c0f74b';
 -- update ap_settings set members=array_remove(members,'ndragan@robertos.ae');

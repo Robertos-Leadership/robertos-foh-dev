@@ -536,7 +536,7 @@ function apPointPage(pid, msg){
   wkeys.forEach(function(w){
     var nums = weeks[w].n.map(function(s){
       var m = ms.filter(function(x){ return x.id === s.measure_id; })[0];
-      return apEsc(m ? m.label : '') + ': <b>' + (s.value == null ? 'No data' : (Math.round(Number(s.value) * 10) / 10) + (m && m.unit === '%' ? '%' : '')) + '</b>';
+      return apEsc(m ? m.label : '') + ': <b>' + (s.value == null ? 'No data' : m ? apNumText(m, Number(s.value)) : String(Math.round(Number(s.value) * 10) / 10)) + '</b>';
     }).join(' &middot; ');
     h.push('<div class="ap-wk"><div class="ap-lbl">Week of ' + apDate(w) + '</div>' + (nums ? '<div>' + nums + '</div>' : '')
       + weeks[w].r.map(function(r){ return '<div class="ap-note">' + apEsc(r.note) + ' <span class="ap-small">&mdash; ' + apEsc(apName(r.author_email)) + '</span></div>'; }).join('') + '</div>');
@@ -874,6 +874,7 @@ async function apExcel(){
         kind === 'manual' ? 'Typed in' : kind === 'coming' ? 'Automatic — coming' : 'Automatic', m.source || '', m.frequency || '',
         kind === 'manual' ? (m.updated_by ? apName(m.updated_by) + ', ' + apAgo(m.updated_at) : 'not typed yet') : (m.updated_at ? apAgo(m.updated_at) : 'not read yet')]);
       if(m.unit === '%' && m.current != null){ r.getCell(4).value = Number(m.current) / 100; r.getCell(4).numFmt = '0.0%'; }
+      if(m.unit === 'AED') r.getCell(4).numFmt = '"AED "#,##0';
     }); });
     // 4. History
     ws = mk('Weekly history', 'Weekly (and monthly) history of every figure',   // "History" is a reserved sheet name in Excel
@@ -882,6 +883,7 @@ async function apExcel(){
       var r = add(ws, [p.num, p.title, m.label, apMonthly(m) ? new Date(h.d + 'T12:00:00').toLocaleDateString('en-GB', { month: 'long', year: 'numeric' }) : 'w/c ' + apDate(h.d),
         h.v == null ? '' : (m.unit === '%' ? h.v / 100 : h.v), h.closed ? 'Closed (Sundays until October)' : h.label]);
       if(m.unit === '%') r.getCell(5).numFmt = '0.0%';
+      if(m.unit === 'AED') r.getCell(5).numFmt = '"AED "#,##0';
     }); }); });
     // 5. Charts
     ws = wb.addWorksheet('Charts'); ws.getCell('A1').value = 'Trend charts — actual against target and baseline'; ws.getCell('A1').font = { bold: true, size: 14, color: { argb: 'FF' + X.VINO } };
