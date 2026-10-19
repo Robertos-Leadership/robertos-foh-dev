@@ -609,6 +609,7 @@ function blCss(){
     '.bl-up{color:#2e6b45;font-weight:600}',
     '.bl-dn{color:var(--red);font-weight:600}',
     '.bl-wk .bl-how{margin:10px 14px 4px}',
+    '@media (max-width:640px){.bl-wk .bl-tbl th,.bl-wk .bl-tbl td{padding-left:6px;padding-right:6px}.bl-wk .bl-tbl th:first-child,.bl-wk .bl-tbl td:first-child{padding-left:12px}.bl-wk .bl-wk-bar{min-width:64px}.bl-wk .bl-wk-src{display:block;margin:2px 0 0}}',
     '.bl-todate{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 18px;margin-top:14px;padding-top:12px;border-top:1px solid var(--border);font-size:13px;color:var(--text-mid)}',
     '.bl-todate b{color:var(--vino);font-weight:600;font-variant-numeric:tabular-nums}',
     '.bl-todate-l{font-size:10px;letter-spacing:.15em;text-transform:uppercase;font-weight:600}',
