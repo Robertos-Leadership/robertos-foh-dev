@@ -169,7 +169,7 @@ async function blLoadSim(dates){
 // The first row's day IS the launch day, so nothing here is typed in.
 async function blLoadAll(){
   try {
-    var r = await sb.from('biz_lunch_sim').select('day,menus,menus_comp,menu_net').order('day');
+    var r = await sb.from('biz_lunch_sim').select('day,menus,menus_comp,menu_net,comp_value').order('day');
     if(r.error) throw r.error;
     BL.all = r.data || []; BL.allState = 'ok';
   } catch(e){ BL.allState = 'failed'; }
@@ -192,6 +192,35 @@ function blToDate(today){
   }
   return t;
 }
+
+// Week by week (19 Oct 2026): every week since launch, side by side. Checked days are Simphony's
+// (biz_lunch_sim); the days after the last checked one are bookings, exactly as in "Since launch".
+// "Avg a day" divides by the days that sold a menu, so a part week compares fairly with a full one.
+function blWeeks(today){
+  var a = BL.all; if(!a || !a.length) return null;
+  var W = {}, order = [];
+  function wk(d){ var m = blMonday(d); if(!W[m]){ W[m] = { mon: m, menus: 0, comped: 0, net: 0, comp: 0, days: 0, checked: 0, booked: 0, pending: 0, bad: 0 }; order.push(m); } return W[m]; }
+  a.forEach(function(r){
+    var d = String(r.day).slice(0,10), w = wk(d), m = Number(r.menus)||0;
+    w.menus += m; w.comped += Number(r.menus_comp)||0; w.net += Number(r.menu_net)||0; w.comp += Number(r.comp_value)||0;
+    w.checked++; if(m) w.days++;
+  });
+  var TD = blToDate(today);
+  if(TD) TD.tail.forEach(function(d){
+    var w = wk(d), n = BL.nights[d];
+    if(n){ w.menus += n.menus; w.net += blNet(n.menuGross, d); w.booked++; if(n.menus) w.days++; }
+    else if(BL.failed[d]) w.bad++;
+    else w.pending++;
+  });
+  order.sort();
+  var thisMon = blMonday(today);
+  return order.map(function(m, i){
+    var w = W[m]; w.n = i + 1; w.avg = w.days ? w.menus / w.days : null;
+    w.off = Math.round((Date.parse(m+'T12:00:00Z') - Date.parse(thisMon+'T12:00:00Z')) / 604800000);
+    return w;
+  });
+}
+function blGoWeek(off){ BL.week = Math.min(0, off); BL.pick = null; BL.open = {}; blRepaint(); }
 
 function blRepaint(){
   if(typeof state === 'object' && state && state.currentTab === 'bizlunch' && typeof renderMain === 'function') renderMain();
@@ -370,6 +399,43 @@ function renderBizLunch(){
     if(S.checkedDays) h.push('<div class="rv2-stat"><div class="l">Comps &amp; discounts</div><div class="v">'+blN(S.compValue)+'</div></div>');
   }
   h.push('</div>');
+  // ── Week by week since launch ──
+  var WK = blWeeks(today);
+  if(WK && WK.length){
+    var wkMax = 0; WK.forEach(function(w){ if(w.avg && w.avg > wkMax) wkMax = w.avg; });
+    h.push('<div class="bl-day bl-wk"><div class="bl-day-h"><div><div class="bl-day-t">Week by week</div>'
+      + '<div class="bl-day-s">Every week since launch &middot; tap a week to open it</div></div></div>');
+    h.push('<table class="bl-tbl"><thead><tr><th>Week</th><th class="r">Menus</th><th class="r">Avg a day</th><th class="r">vs week before</th><th class="r bl-hide-s">Comped</th>'
+      + (money ? '<th class="r">Menu net</th><th class="r bl-hide-s">Comps</th>' : '')+'</tr></thead><tbody>');
+    WK.forEach(function(w, i){
+      var prev = i ? WK[i-1] : null, ch = '&ndash;';
+      if(prev && prev.avg && w.avg){
+        var p = Math.round((w.avg / prev.avg - 1) * 100);
+        ch = '<span class="'+(p > 0 ? 'bl-up' : (p < 0 ? 'bl-dn' : ''))+'">'+(p > 0 ? '+' : (p < 0 ? '&minus;' : ''))+Math.abs(p)+'%</span>';
+      }
+      var fri = blAdd(w.mon, 4), allChecked = w.checked && !w.booked && !w.pending && !w.bad;
+      var tag = w.off === 0 ? ' <span class="bl-sofar">so far</span>' : '';
+      var src = allChecked ? ' <i class="bl-ok" title="Checked in Simphony">&#10003;</i>'
+              : (w.checked ? ' <span class="bl-wk-src">part bookings</span>' : ' <span class="bl-wk-src">bookings</span>');
+      var wait = w.pending ? ' &middot; reading&hellip;' : '';
+      var miss = w.bad ? ' <span class="bl-miss">'+w.bad+' day'+(w.bad===1?'':'s')+' missing</span>' : '';
+      h.push('<tr class="bl-row'+(w.off === BL.week ? ' bl-wk-on' : '')+'" onclick="blGoWeek('+w.off+')">'
+        + '<td><div class="bl-wk-n">Week '+w.n+tag+src+'</div><div class="bl-wk-d">'+blDateLabel(w.mon)+' &ndash; '+blDateLabel(fri)+wait+miss+'</div>'
+        + '<div class="bl-wk-bar"><i style="width:'+(wkMax && w.avg ? Math.round(w.avg / wkMax * 100) : 0)+'%"></i></div></td>'
+        + '<td class="r"><b>'+blN(w.menus)+'</b></td>'
+        + '<td class="r">'+(w.avg != null ? blN(w.avg) : '&ndash;')+'</td>'
+        + '<td class="r">'+ch+'</td>'
+        + '<td class="r bl-hide-s">'+(w.checked ? blN(w.comped) : '&ndash;')+'</td>'
+        + (money ? '<td class="r">'+blN(w.net)+'</td><td class="r bl-hide-s">'+(w.checked ? blN(w.comp) : '&ndash;')+'</td>' : '')+'</tr>');
+    });
+    h.push('</tbody></table>');
+    h.push('<details class="bl-how"><summary>How this is counted</summary><p>Days marked &#10003; are Simphony&rsquo;s own checks, comps included. '
+      + 'Days not yet checked are read from SevenRooms bookings, where a comped menu still shows as paid, so &ldquo;Comped&rdquo; only counts checked days. '
+      + '&ldquo;Avg a day&rdquo; is menus divided by the days that sold at least one menu, so a part week or a closed day does not drag it down; '
+      + '&ldquo;vs week before&rdquo; compares that average.</p></details>');
+    h.push('</div>');
+  }
+
   // ── Against all lunch: Simphony's own lunch guests and net (closing report) ──
   var cmpDays = shown.filter(function(d){ return d <= today; });
   if(cmpDays.length){
@@ -531,6 +597,16 @@ function blCss(){
     '.bl-hero-days b{color:var(--vino);font-weight:600;margin-left:3px;font-variant-numeric:tabular-nums}',
     '.bl-hero-days .today{color:var(--gold-dim)}',
     '.bl-bad{margin:0 0 14px}',
+    '.bl-wk .bl-wk-n{font-weight:600;white-space:nowrap}',
+    '.bl-wk .bl-wk-d{font-size:11px;color:var(--text-mid);margin-top:2px;white-space:nowrap}',
+    '.bl-wk .bl-wk-src{font-size:10px;color:var(--gold-dim);letter-spacing:.06em;text-transform:uppercase;margin-left:4px;font-weight:500}',
+    '.bl-wk .bl-wk-bar{height:4px;background:var(--border);border-radius:2px;margin-top:7px;min-width:90px;max-width:220px}',
+    '.bl-wk .bl-wk-bar i{display:block;height:100%;background:var(--vino);border-radius:2px}',
+    '.bl-wk tr.bl-wk-on td{background:var(--sabbia-light)}',
+    '.bl-wk tbody tr.bl-row{cursor:pointer}',
+    '.bl-up{color:#2e6b45;font-weight:600}',
+    '.bl-dn{color:var(--red);font-weight:600}',
+    '.bl-wk .bl-how{margin:10px 14px 4px}',
     '.bl-todate{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 18px;margin-top:14px;padding-top:12px;border-top:1px solid var(--border);font-size:13px;color:var(--text-mid)}',
     '.bl-todate b{color:var(--vino);font-weight:600;font-variant-numeric:tabular-nums}',
     '.bl-todate-l{font-size:10px;letter-spacing:.15em;text-transform:uppercase;font-weight:600}',
