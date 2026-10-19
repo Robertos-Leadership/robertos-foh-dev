@@ -264,6 +264,73 @@ async function stLoadItems(){
   if(res.error && typeof toast==='function')
     toast('Not all items loaded ('+stItems.length+' so far) — the total may be incomplete. Reopen Stock Take.', true);
 }
+// ── same article on another section's list ──
+// The six section lists come from the cost controller's Excel files and some
+// articles sit on two of them (teas, milk, coffee on Bar Food AND Coffee & Tea).
+// Each list is counted on its own, so the stock gets counted — and valued —
+// twice, sometimes in a different unit (2.92 packets on one, 2.9 KILOGRAM on the
+// other = 4x the value). We can't know which list is right, so every such row
+// says where else it is and what was counted there. Read-only.
+var stOther = {};   // ref-key -> [{ dept, label, qty, unit, value }]
+async function stLoadOtherDepts(){
+  stOther = {};
+  if(!stMonth || !stItems.length) return;
+  var sh = await sb.from('stock_take_sheets').select('dept,month').eq('venue_id',STOCK_VENUE).neq('dept',stDept);
+  if(sh.error) return;
+  var latest = {};
+  // only the six live sections — the retired combined list is history, not a second count
+  var live = {}; STOCK_DEPTS.forEach(function(x){ live[x.key] = 1; });
+  stSortKeysDesc(sh.data).forEach(function(r){ if(live[r.dept] && !latest[r.dept]) latest[r.dept] = r.month; });
+  var mine = {}; stItems.forEach(function(it){ mine[stRefKey(it)] = 1; });
+  var depts = Object.keys(latest);
+  for(var i=0;i<depts.length;i++){
+    var d = depts[i];
+    var it2 = await stFetchAllPaged(function(){
+      return sb.from('stock_take_items').select('id,code,name,unit,price,units')
+        .eq('venue_id',STOCK_VENUE).eq('dept',d).eq('month',latest[d]).eq('active',true).order('id');
+    });
+    var hits = (it2.data||[]).filter(function(x){ return mine[stRefKey(x)]; });
+    if(!hits.length) continue;
+    var cn = await sb.from('stock_take_counts').select('item_id,qty,unit')
+      .eq('venue_id',STOCK_VENUE).eq('dept',d).eq('month',latest[d])
+      .in('item_id', hits.map(function(x){ return x.id; }));
+    var byId = {}; ((cn && cn.data)||[]).forEach(function(c){ byId[c.item_id] = c; });
+    var lbl = (STOCK_DEPTS.find(function(x){ return x.key===d; })||{}).label || d;
+    hits.forEach(function(x){
+      var c = byId[x.id], q = c && c.qty!=null ? Number(c.qty) : null;
+      var u = (c && c.unit) || x.unit || '';
+      var k = stRefKey(x);
+      (stOther[k] = stOther[k] || []).push({ dept:d, label:lbl, qty:q, unit:u,
+        value: q==null ? 0 : Math.round(stPriceForUnit(x, u)*q*100)/100 });
+    });
+  }
+}
+function stOtherText(it){
+  var o = stOther[stRefKey(it)]; if(!o || !o.length) return '';
+  return '<div class="st-dup">⚠ Also on the '+o.map(function(x){
+    return '<b>'+stEsc(x.label)+'</b> list'+(x.qty==null ? ' (not counted there)' : ' — counted there: '+stEsc(String(x.qty))+' '+stEsc(x.unit)+' · '+stMoney(x.value));
+  }).join('; ')+'. Count it in one section only, or it is valued twice.</div>';
+}
+function stOtherBanner(){
+  var n = 0, val = 0;
+  stItems.forEach(function(it){ var o = stOther[stRefKey(it)]; if(o && o.length){ n++; val += stLineValue(it); } });
+  if(!n) return '';
+  return '<div class="st-dupbar">⚠ <b>'+n+' article'+(n===1?' is':'s are')+' also on another section\'s list</b> — '+
+    stMoney(val)+' of this section\'s total may be counted twice. Each one is marked below.</div>';
+}
+
+// When the count is in a unit other than the article's own (e.g. Kilogram for a
+// 250 g packet), say what that is in the article's own unit — 2.9 Kilogram of a
+// 250 g tea is 11.6 packets, which the person can see is not what is on the shelf.
+function stConvText(it){
+  var c = stCounts[it.id], u = stItemUnit(it);
+  if(!c || c.qty==null || !it.unit || u===it.unit) return '';
+  var pu = stPriceForUnit(it, u), pb = Number(it.price)||0;
+  if(!pu || !pb) return '';
+  var eq = Math.round(Number(c.qty)*pu/pb*100)/100;
+  return '= '+eq+' × '+it.unit;
+}
+
 async function stLoadCounts(){
   stCounts = {};
   if(!stMonth) return;
@@ -620,6 +687,9 @@ function stInjectCss(){
     '.st-tag{font-size:10px;font-weight:700;color:#7a4a00;background:#f6d79a;border-radius:5px;padding:1px 6px;margin-left:6px}'+
     '.st-meta{margin-top:4px}'+
     '.st-prev{margin-top:3px;font-size:11px;color:#4F4535;font-style:italic}'+
+    '.st-conv{font-size:12px;font-weight:700;color:#7A2E00}.st-conv:empty{display:none}'+
+    '.st-dup{margin-top:4px;padding:5px 8px;border-radius:6px;background:#FFF1D6;color:#5A2600;font-size:12px;line-height:1.35}'+
+    '.st-dupbar{margin:10px 14px 0;padding:9px 12px;border-radius:8px;background:#FFF1D6;border:1px solid #E0B060;color:#5A2600;font-size:13px;line-height:1.4}'+
     '.st-prevtotal{padding:6px 14px 0;font-size:12px;color:#4F4535}'+
     '.st-prevtotal b{color:#410207}'+
     '.st-lockbanner{margin:10px 14px 0;padding:10px 12px;background:#f3eee6;border:1px solid #c9a84c;border-radius:10px;font-size:13px;color:#5a4a2a;line-height:1.4}'+
@@ -747,6 +817,7 @@ function stRender(){
           ['en-GB','fr-FR','it-IT'].map(function(L){ var lbl={'en-GB':'EN','fr-FR':'FR','it-IT':'IT'}[L]; return '<option value="'+L+'"'+(stVoiceLang===L?' selected':'')+'>'+lbl+'</option>'; }).join('')+
         '</select></div>' : '')+
     (stUser && !stIsLocked() ?'<div style="padding:4px 14px 0;font-size:12px;color:#4F4535;line-height:1.4">Type the <b>total</b> you counted in the white box. Use the green <b>+ add</b> box to add onto a count someone already started (e.g. a second person or the store-room).'+(stVoiceSupported()?' Or tap <b>🎤 Count by voice</b> and say the item and how many.':'')+'</div>':'')+
+    stOtherBanner()+
     '<div id="st-rows"></div>'+
     '<button class="st-addbtn" onclick="stShowAdd()">+ Add missing item</button>';
 
@@ -778,7 +849,9 @@ function stRenderRows(){
             '<div class="st-name">'+stEsc(it.name)+(it.is_added?'<span class="st-tag">added</span>':'')+'</div>'+
             (flat?'<div class="st-muted" style="margin-top:1px">'+stEsc(cat)+'</div>':'')+
             '<div class="st-meta">'+unitCtl+'</div>'+
+            '<div class="st-conv" id="st-conv-'+it.id+'">'+stEsc(stConvText(it))+'</div>'+
             stPrevText(it)+
+            stOtherText(it)+
           '</div>'+
           '<div class="st-qtywrap">'+
             '<input class="st-qty" inputmode="decimal" placeholder="0" value="'+qv+'" '+(disabled?'disabled':'')+
@@ -811,6 +884,8 @@ function stUpdateRowUI(itemId){
   if(!it) return;
   var line = document.getElementById('st-line-'+itemId);
   if(line) line.textContent = stMoney(stLineValue(it));
+  var conv = document.getElementById('st-conv-'+itemId);
+  if(conv) conv.textContent = stConvText(it);
   var row = document.getElementById('st-row-'+itemId);
   if(row){ var inp = row.querySelector('.st-qty'); var c=stCounts[itemId];
     if(inp && document.activeElement!==inp){ inp.value = (c&&c.qty!=null)?c.qty:''; } }
@@ -1456,7 +1531,7 @@ async function stApplyUpload(month, items, filename){
     if(res.error) throw new Error(res.error.message);
   }
   stMonth=month; stUnitSel={};
-  await stLoadItems(); await stLoadCounts(); await stLoadPrevMonth();
+  await stLoadItems(); await stLoadCounts(); await stLoadPrevMonth(); await stLoadOtherDepts();
   stSubscribe(); stRender();
 }
 
@@ -1467,6 +1542,7 @@ async function stOpen(){
   await stLoadItems();
   await stLoadCounts();
   await stLoadPrevMonth();
+  await stLoadOtherDepts();
   stSubscribe();
   stLoading = false;
   stRender();
