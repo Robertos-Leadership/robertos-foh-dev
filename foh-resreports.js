@@ -1250,25 +1250,37 @@ function rrThreeRuleText(rule, w){
     ? '2nd and 3rd visit both within ' + w + ' days of the first'
     : '2nd visit within ' + w + ' days of the 1st, 3rd within ' + w + ' days of the 2nd';
 }
-function rrRepThreeVisits(pull, opt){
-  var W = Number(opt.visitWindow) || 30, rule = opt.visitRule === 'first' ? 'first' : 'prev';
-  var back = Number(opt.lookback) || 3;
-  var L = rrLedger(pull.nights);
-  var today = rrToday(), readTo = pull.to < today ? pull.to : today;
-  var order = [], ym = rrMonth(opt.from), endYm = rrMonth(opt.to);
-  while(ym <= endYm){ order.push(ym); ym = rrMonth(rrAddDays(rrMonthEnd(ym), 1)); }
-  var rows = [], three = [], tot = { n:0, s:0, t:0, sOk:true, tOk:true };
-  order.forEach(function(ym){
-    var mEnd = rrMonthEnd(ym);
-    var secondReady = rrAddDays(mEnd, W) <= readTo;
-    var thirdReady  = rrAddDays(mEnd, rule === 'prev' ? 2 * W : W) <= readTo;
+// ── FIRST VISIT EVER ──────────────────────────────────────────────────────
+// 21 Oct 2026, Francesco: "first visit is a first-timer guest, and the second
+// visit should be his second all-time visit at Roberto's". The book look-back
+// alone could not say that. Checked by hand against SevenRooms that day: of the
+// 19 July guests on "Made all three visits", 13 had been in before -- Khalil
+// Al Mamoori with 676 lifetime visits, Thamer Abdullah 67, Galen Koller 37.
+// They were "new" only because they had skipped the three months we looked at.
+//
+// So the look-back is now just the cheap first pass, and every guest who
+// survives it is asked of SevenRooms' own history at this venue (back to 2015):
+// was there a real visit -- not cancelled, not a no-show -- strictly BEFORE the
+// night we think was their first? Any one means they are not a first-timer.
+// A guest whose history will not read is NOT counted as new: the report says
+// how many could not be checked rather than guessing either way.
+var RRFE = {};   // 'id|date' -> real visits before that date (capped at 12), or -1 = could not read
+function rrFeKey(id, d){ return id + '|' + d; }
+function rrFePrior(id, d){ var v = RRFE[rrFeKey(id, d)]; return v === undefined ? -1 : v; }
+
+// The guests the look-back calls new, one per month they first appear in.
+// Shared by the runner (to know whom to check) and the report (to count them),
+// so the two can never disagree about who was a candidate.
+function rrThreeCandidates(L, opt){
+  var back = Number(opt.lookback) || 3, out = [];
+  var ym = rrMonth(opt.from), endYm = rrMonth(opt.to);
+  while(ym <= endYm){
     // FIRST-TIME is judged on exactly `back` months before THIS month, for every
     // month alike. (18 Oct 2026: judging it on "anything earlier in what we read"
     // gave later months a longer look-back than the report states — July looked
     // back four months when June-July was picked — and July came out 6 short.)
     var y0 = Number(ym.slice(0,4)), m0 = Number(ym.slice(5,7));
-    var lookStart = rrIsoOf(new Date(y0, m0 - 1 - back, 1)), mStart = ym + '-01';
-    var n = 0, s2 = 0, s3 = 0;
+    var lookStart = rrIsoOf(new Date(y0, m0 - 1 - back, 1));
     Object.keys(L.guests).forEach(function(id){
       var g = L.guests[id];
       if(g.placeholder) return;
@@ -1276,6 +1288,93 @@ function rrRepThreeVisits(pull, opt){
       for(var k = 0; k < g.dates.length; k++){ if(rrMonth(g.dates[k]) === ym){ i = k; break; } }
       if(i < 0) return;                                              // not here this month
       if(i > 0 && g.dates[i - 1] >= lookStart) return;               // seen in the look-back: returning
+      out.push({ id: id, ym: ym, i: i, d1: g.dates[i] });
+    });
+    ym = rrMonth(rrAddDays(rrMonthEnd(ym), 1));
+  }
+  return out;
+}
+
+// TWO PASSES, because one ?guest= history call is ~2.4s and July 2026 alone
+// had 1,122 guests the look-back called new -- 7-8 minutes a month.
+//
+// 1. The batched profile read (60 a call, shared with the other reports). If
+//    SevenRooms' lifetime visits at this venue are no more than the nights we
+//    can SEE in the book from their first night on, every visit they ever made
+//    is in front of us, so nothing came before. Settles 792 of July's 1,122 in
+//    ~40s. Proved, not assumed: 80 of those 792 picked at random were run
+//    through the full history call on 21 Oct 2026 -- 79 showed no earlier
+//    visit, 1 would not load, none disagreed.
+// 2. Everyone else gets the history call, `before` = their first night in the
+//    book -- the same call the Reservations "Last here" panel makes. Six run
+//    side by side. July: 330 guests, 318 had been before, 10 were new (their
+//    extra visits were AFTER the nights we read, which is why pass 1 could not
+//    settle them).
+// Both cached for the page, like the nights.
+async function rrFirstEver(L, cands, venue, onProgress){
+  var open = cands.filter(function(c){ var v = RRFE[rrFeKey(c.id, c.d1)]; return v === undefined || v < 0; });
+  if(onProgress) onProgress(0, open.length, 'profiles');
+  await rrProfiles(open.map(function(c){ return c.id; }), venue, function(done, total){
+    if(onProgress) onProgress(done, total, 'profiles');
+  });
+  var queue = [];
+  open.forEach(function(c){
+    var p = rrProf(c.id), g = L.guests[c.id];
+    var seen = g.dates.length - c.i;                               // nights in the book from their first on
+    if(p && (Number(p.visits) || 0) <= seen) RRFE[rrFeKey(c.id, c.d1)] = 0;
+    else queue.push(c);
+  });
+  var total = queue.length, done = 0;
+  async function worker(){
+    while(queue.length){
+      var c = queue.shift();
+      for(var attempt = 0; attempt < 2; attempt++){
+      try{
+        var r = await fetch(KITCHEN_URL + '/functions/v1/sevenrooms-sync?guest=' + encodeURIComponent(c.id)
+            + (venue ? '&venue=' + encodeURIComponent(venue) : '') + '&before=' + encodeURIComponent(c.d1), {
+          method:'POST',
+          headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+KITCHEN_KEY, 'x-proxy-secret':KITCHEN_PROXY_SECRET }
+        });
+        if(!r.ok) throw new Error('HTTP '+r.status);
+        var j = await r.json();
+        // visits_have says the history READ, not that it is non-empty. Without it
+        // an empty list is "we don't know", never "never been".
+        if(!j || !j.ok || !j.visits_have || !Array.isArray(j.visits_recent)) throw new Error('no history');
+        RRFE[rrFeKey(c.id, c.d1)] = j.visits_recent.filter(function(v){ return v && v.date && v.date < c.d1 && !v.cancelled; }).length;
+        break;
+      }catch(e){
+        // One retry: SevenRooms is noisy and a single blip should not cost a guest.
+        console.warn('[resreports] first-visit check failed', c.id, e);
+        RRFE[rrFeKey(c.id, c.d1)] = -1;
+      }
+      }
+      done++;
+      if(onProgress) onProgress(done, total, 'history');
+    }
+  }
+  var ws = []; for(var w = 0; w < 6; w++) ws.push(worker());
+  await Promise.all(ws);
+}
+
+function rrRepThreeVisits(pull, opt){
+  var W = Number(opt.visitWindow) || 30, rule = opt.visitRule === 'first' ? 'first' : 'prev';
+  var L = rrLedger(pull.nights);
+  var today = rrToday(), readTo = pull.to < today ? pull.to : today;
+  var order = [], ym = rrMonth(opt.from), endYm = rrMonth(opt.to);
+  while(ym <= endYm){ order.push(ym); ym = rrMonth(rrAddDays(rrMonthEnd(ym), 1)); }
+  var byMonth = {};
+  rrThreeCandidates(L, opt).forEach(function(c){ (byMonth[c.ym] || (byMonth[c.ym] = [])).push(c); });
+  var rows = [], three = [], tot = { n:0, s:0, t:0, sOk:true, tOk:true, before:0, unchecked:0 };
+  order.forEach(function(ym){
+    var mEnd = rrMonthEnd(ym);
+    var secondReady = rrAddDays(mEnd, W) <= readTo;
+    var thirdReady  = rrAddDays(mEnd, rule === 'prev' ? 2 * W : W) <= readTo;
+    var n = 0, s2 = 0, s3 = 0, before = 0, unchecked = 0;
+    (byMonth[ym] || []).forEach(function(c){
+      var g = L.guests[c.id], i = c.i;
+      var prior = rrFePrior(c.id, c.d1);
+      if(prior < 0){ unchecked++; return; }                          // could not read: never guessed new
+      if(prior > 0){ before++; return; }                             // been to Roberto's before
       n++;
       var d1 = g.dates[i], d2 = g.dates[i + 1], d3 = g.dates[i + 2];
       var second = !!d2 && rrDaysBetween(d1, d2) <= W;
@@ -1284,20 +1383,27 @@ function rrRepThreeVisits(pull, opt){
       if(third){ s3++; three.push([g.name || 'Guest', resDateLabel(d1), resDateLabel(d2), resDateLabel(d3), rrMonthLabel(ym, pull.from, pull.to)]); }
     });
     tot.n += n; if(secondReady) tot.s += s2; else tot.sOk = false; if(thirdReady) tot.t += s3; else tot.tOk = false;
+    tot.before += before; tot.unchecked += unchecked;
     rows.push([rrMonthLabel(ym, pull.from, pull.to), n,
       secondReady ? s2 : null, secondReady ? rrPct(s2, n) : 'not yet',
       thirdReady ? s3 : null, thirdReady ? rrPct(s3, n) : 'not yet',
-      thirdReady && secondReady ? rrPct(s3, s2) : 'not yet']);
+      thirdReady && secondReady ? rrPct(s3, s2) : 'not yet', unchecked]);
   });
+  // The "could not check" column only appears when there is something in it --
+  // but when there is, it is never folded away: those months are SHORT.
+  var head = ['Month of first visit','First-time guests','Came a 2nd time','% of first-timers','Came a 3rd time','% of first-timers','% of 2nd-timers who came a 3rd'];
+  var widths = [22,16,15,16,15,16,24], num = [1,2,4];
+  if(tot.unchecked){ head.push('Could not check'); widths.push(16); num.push(7); }
+  else rows.forEach(function(r){ r.pop(); });
   return {
     title: '3 visits — first, second, third',
-    sub: 'Rule: ' + rrThreeRuleText(rule, W) + '. First-time = no visit in the ' + back + ' month' + (back===1?'':'s') + ' before.',
+    sub: 'Rule: ' + rrThreeRuleText(rule, W) + '. First-time = first visit ever at Roberto\'s, checked against each guest\'s SevenRooms history.',
     tables: [
       { name: 'By month',
-        head: ['Month of first visit','First-time guests','Came a 2nd time','% of first-timers','Came a 3rd time','% of first-timers','% of 2nd-timers who came a 3rd'],
-        widths: [22,16,15,16,15,16,24], num:[1,2,4], pct:[3,5,6],
+        head: head, widths: widths, num: num, pct:[3,5,6],
         rows: rows,
-        note: '"not yet" means that month has not had the full window yet (' + (rule === 'prev' ? 2 * W : W) + ' days after its last day for the 3rd visit). It is not a zero.' },
+        note: '"not yet" means that month has not had the full window yet (' + (rule === 'prev' ? 2 * W : W) + ' days after its last day for the 3rd visit). It is not a zero.'
+          + (tot.unchecked ? ' "Could not check" are guests whose SevenRooms history would not load; they are left out, so those months are short, never inflated.' : '') },
       { name: 'Made all three visits',
         head: ['Guest','1st visit','2nd visit','3rd visit','Month of first visit'],
         widths: [30,16,16,16,22],
@@ -1306,7 +1412,7 @@ function rrRepThreeVisits(pull, opt){
     ],
     notes: [
       'A VISIT is a distinct night with a booking that was not cancelled or a no-show, counted by SevenRooms client id. Two bookings on one night are one visit.',
-      'FIRST-TIME means we have no record of the guest in the ' + back + ' month' + (back===1?'':'s') + ' before their first night here — "new as far back as we looked", not "new ever". A longer look-back in the pop-up makes it a stronger claim.',
+      'FIRST-TIME means this was their first visit EVER at Roberto\'s: SevenRooms\' own history for the guest (back to 2015) shows no visit before it. Their 2nd and 3rd visit are therefore their 2nd and 3rd ever. ' + resNum(tot.before) + ' guest' + (tot.before===1?'':'s') + ' who had not been in for a while, but had been before, are not counted.',
       'WHY THIS AND NOT "CAME BACK WITHIN 90 DAYS": that report counts anyone who returned once at any time in three months. This one follows the 1st, 2nd and 3rd visit with a window between them, which is what the 3 Visit Rule works on.',
       RR_WALKIN_NOTE
     ]
@@ -1325,7 +1431,7 @@ var RR_REPORTS = [
     followUp:90, run:rrRepReturnWindow },
   { id:'threevisits', qkey:'r-threevisits', name:'3 visits — first, second, third',
     blurb:'Of each month\'s first-time guests: how many came a 2nd time, then a 3rd, within the window you choose.',
-    lookback:true, visits:true, followUp:function(){ return (RR.visitRule === 'first' ? 1 : 2) * (Number(RR.visitWindow) || 30); },
+    lookback:true, visits:true, firstEver:true, followUp:function(){ return (RR.visitRule === 'first' ? 1 : 2) * (Number(RR.visitWindow) || 30); },
     run:rrRepThreeVisits },
   { id:'channel', qkey:'r-channel', name:'Where bookings come from',
     blurb:'Every booking channel, by bookings and covers.',
@@ -1466,6 +1572,20 @@ async function rrRun(show){
       await rrProfiles(ids, rrVenueOf(pulled.nights), function(done, total){
         RR.gdone = done; RR.gtotal = total || ids.length;
         RR.note = 'Reading guest histories…';
+        rrPaint();
+      });
+    }
+    if(rep.firstEver){
+      // Every guest the look-back calls new is checked against their whole
+      // SevenRooms history -- see rrFirstEver. Same progress bar as the profiles.
+      var LF = rrLedger(pulled.nights);
+      var cands = rrThreeCandidates(LF, { from: RR.from, to: RR.to, lookback: RR.lookback });
+      RR.phase = 'guests'; RR.gdone = 0; RR.gtotal = cands.length;
+      RR.note = 'Checking who has been here before…';
+      rrPaint();
+      await rrFirstEver(LF, cands, rrVenueOf(pulled.nights), function(done, total, pass){
+        RR.gdone = done; RR.gtotal = total;
+        RR.note = pass === 'history' ? 'Reading the history of guests who may have been here before…' : 'Checking who has been here before…';
         rrPaint();
       });
     }
@@ -1787,6 +1907,14 @@ function rrPopHtml(){
     gTodo += toRead.length * 39;          // nights not yet read can only be estimated
   }
   var gSecs = gTodo * 0.15;
+  // The first-visit check (3 visits report). Measured 21 Oct 2026 on July:
+  // 1,122 guests to check over 31 nights, ~40s of profiles plus ~2 min of
+  // history calls -- call it 36 guests and 6 seconds a night. Only the nights
+  // she picked count; the look-back months produce no one to check.
+  if(rep.firstEver && RR.from && RR.to && RR.from <= RR.to){
+    var picked = rrDates(RR.from, RR.to).length;
+    gTodo += picked * 36; gSecs += picked * 6;
+  }
   var bad = (RR.from && RR.to && RR.from > RR.to) ? 'The "from" date is after the "to" date.' : '';
 
   var h = ['<div class="rg-card rr-card" role="dialog" aria-modal="true" aria-label="Run a report">'];
@@ -1810,7 +1938,9 @@ function rrPopHtml(){
     [1,3,6,12].forEach(function(n){
       h.push('<option value="'+n+'"'+(Number(RR.lookback)===n?' selected':'')+'>'+n+' month'+(n===1?'':'s')+'</option>');
     });
-    h.push('</select></label><i>A guest is “new” if they appear nowhere in the look-back. A longer look-back is a stronger claim and takes longer to read.</i></div>');
+    h.push('</select></label><i>' + (rep.firstEver
+      ? 'Guests seen in the look-back are dropped at once. Everyone else is checked against their whole SevenRooms history, so this changes how long it takes, not the answer.'
+      : 'A guest is “new” if they appear nowhere in the look-back. A longer look-back is a stronger claim and takes longer to read.') + '</i></div>');
   }
   if(rep.visits){
     h.push('<div class="rr-opt"><label>Rule<select class="rr-sel" '+(RR.busy?'disabled ':'')
