@@ -273,14 +273,8 @@ function renderReviews(){
   h.push(grRaceHTML());
   h.push('</div>');
 
-  // ── The two numbers side by side, with the gaps named ──
-  var recon = grReconHTML();
-  if(recon){
-    h.push('<div class="gr-cell">');
-    h.push('<div class="gr-sec">Against Google’s published total</div>');
-    h.push(recon);
-    h.push('</div>');
-  }
+  // (The "Against Google's published total" card was taken off 21 Oct 2026:
+  //  misleading, and nothing the team can control. grReconHTML is left unused.)
 
   // ── Not how many wrote, but what they gave ──
   var qual = grQualityHTML();
