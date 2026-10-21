@@ -23,6 +23,9 @@
       '.mo-main{flex:1;min-width:0;cursor:pointer} .mo-main b{display:block;font-size:16px;font-weight:600;overflow-wrap:anywhere} .mo-main span{font-size:13px;color:var(--muted)}' +
       '.mo-price{font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap;font-weight:700;min-width:84px} .mo-price.none{color:var(--red);font-weight:600;font-size:13px}' +
       '.mo-sup{min-width:150px;max-width:220px;text-align:right} .mo-sup .tag{white-space:normal;text-align:left}' +
+      '.mo-tags{background:none;border:0;padding:4px 0;font:inherit;cursor:pointer;display:flex;flex-wrap:wrap;gap:4px;justify-content:flex-end;align-items:center;min-height:36px}' +
+      '.mo-plus{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;border:1px dashed rgba(122,74,18,.5);color:var(--amber);font-weight:700}' +
+      '.mo-ct{gap:8px;display:flex;flex-direction:column;background:#FBF6EE}' +
       '.mo-add{background:none;border:1px dashed rgba(122,74,18,.5);color:var(--amber);border-radius:8px;padding:6px 10px;font-weight:700;font-size:13px;min-height:36px}' +
       '.mo-bulk{position:sticky;top:0;z-index:20;display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:var(--rail);color:#fff;border-radius:10px;padding:10px 14px}' +
       '.mo-bulk select{max-width:260px} .mo-bulk .btn.ghost{min-height:38px}' +
@@ -64,6 +67,19 @@
   function unit(u) { return u ? T(UNITS[u] || u) : ''; }
   function price(a) { return a.price == null ? '<span class="mo-price none">' + E(T('no price')) + '</span>' : '<span class="mo-price">' + M.money(+a.price) + '<small class="muted"> / ' + E(unit(a.unit)) + '</small></span>'; }
   function supName(id) { var s = O.d && O.d.suppliers.filter(function (x) { return x.id === id; })[0]; return s ? s.name : ''; }
+  // An article can have several suppliers (21 Oct 2026, Milica: "2 or 3 … depends on availability,
+  // delivery"). The first is the usual one; an order goes there unless someone picks another.
+  function sids(a) { return a.supplier_ids && a.supplier_ids.length ? a.supplier_ids : a.supplier_id ? [a.supplier_id] : []; }
+  O.sids = sids;
+  function supTags(a) { return sids(a).map(function (id, i) { return '<span class="tag ' + (i ? 'grey' : 'teal') + '">' + E(supName(id)) + '</span>'; }).join(' '); }
+  // A supplier's people, one per shift: the fixed fields are the first contact, the rest in contacts.
+  function people(s) {
+    var out = [];
+    if (s.contact || s.phone || s.viber || s.whatsapp || s.email) out.push({ name: s.contact || '', when: '', phone: s.phone, viber: s.viber, whatsapp: s.whatsapp, email: s.email });
+    (s.contacts || []).forEach(function (c) { out.push(c); });
+    return out;
+  }
+  function asContact(s, c) { var x = {}; Object.keys(s).forEach(function (k) { x[k] = s[k]; }); if (c) { ['phone', 'viber', 'whatsapp', 'email'].forEach(function (k) { x[k] = c[k] || null; }); x.cname = c.name || ''; } return x; }
   function load() { return App.call('mare_m_ord_data', { p_days: 60 }).then(function (d) { if (d) O.d = d; return d; }); }
   function supOptions(sel, withNone) {
     return (withNone ? '<option value="">' + E(T('No supplier yet')) + '</option>' : '') + O.d.suppliers.filter(function (s) { return s.active || s.id === sel; }).map(function (s) {
@@ -90,11 +106,11 @@
     function pass(a, f) {
       if (O.store !== 'all' && a.store !== O.store) return false;
       f = f || O.flt;
-      if (f === 'nosup' && (a.supplier_id || !a.active)) return false;
+      if (f === 'nosup' && (sids(a).length || !a.active)) return false;
       if (f === 'noprice' && (a.price != null || !a.active)) return false;
       if (f === 'off' && a.active) return false;
       if (f === 'all' && !a.active) return false;
-      if (O.sup && a.supplier_id !== O.sup) return false;
+      if (O.sup && sids(a).indexOf(O.sup) < 0) return false;
       if (O.q) { var q = O.q.toLowerCase(); if ((a.name + ' ' + (a.name_me || '') + ' ' + (a.name_en || '') + ' ' + a.code + ' ' + (a.grp || '')).toLowerCase().indexOf(q) < 0) return false; }
       return true;
     }
@@ -112,14 +128,14 @@
         '<div class="mo-chips">' + chip('all', 'On the list', 'all') + chip('nosup', 'No supplier yet', 'nosup', 'amber') + chip('noprice', 'No price', 'noprice', 'red') + chip('off', 'Off the list', 'off') + '</div>' +
         '<div class="mo-tools"><input type="text" id="mo-q" value="' + E(O.q) + '" placeholder="' + E(T('Search a name or a code')) + '" aria-label="' + E(T('Search')) + '">' +
         '<select id="mo-sf" aria-label="' + E(T('Supplier')) + '"><option value="">' + E(T('Every supplier')) + '</option>' + supOptions(O.sup) + '</select></div>' +
-        (ticked.length ? '<div class="mo-bulk"><b>' + E(T('{n} ticked', { n: ticked.length })) + '</b><select id="mo-bs"><option value="">' + E(T('Choose a supplier…')) + '</option>' + supOptions('') + '<option value="__new">+ ' + E(T('New supplier')) + '</option><option value="__none">' + E(T('Take the supplier off')) + '</option></select>' +
-          '<button class="btn ghost sm" id="mo-ba">' + E(T('Set supplier')) + '</button><button class="btn ghost sm" id="mo-bc">' + E(T('Untick all')) + '</button></div>' : '') +
+        (ticked.length ? '<div class="mo-bulk"><b>' + E(T('{n} ticked', { n: ticked.length })) + '</b><select id="mo-bs"><option value="">' + E(T('Choose a supplier…')) + '</option>' + supOptions('') + '<option value="__new">+ ' + E(T('New supplier')) + '</option><option value="__none">' + E(T('Take every supplier off')) + '</option></select>' +
+          '<button class="btn ghost sm" id="mo-ba">' + E(T('Add supplier')) + '</button><button class="btn ghost sm" id="mo-br">' + E(T('Remove supplier')) + '</button><button class="btn ghost sm" id="mo-bc">' + E(T('Untick all')) + '</button></div>' : '') +
         '<div class="small muted">' + E(T('{n} articles', { n: list.length })) + (list.length ? ' · <button class="lnk" style="margin:0" id="mo-tall">' + E(T('Tick all shown')) + '</button>' : '') + '</div>';
       h += list.length ? '<div class="card mo-list">' + list.slice(0, O.show).map(function (a) {
         var o2 = nm2(a);
         return '<div class="mo-row' + (O.tick[a.id] ? ' ticked' : '') + '"><input type="checkbox" data-tk="' + a.id + '"' + (O.tick[a.id] ? ' checked' : '') + ' aria-label="' + E(T('Tick')) + '">' +
           '<div class="mo-main" data-a="' + a.id + '"><b>' + E(nm(a)) + '</b><span>' + E(a.code) + ' · ' + E(T(STORES[a.store])) + (o2 ? ' · ' + E(o2) : '') + (a.pack ? ' · ' + E(a.pack) : '') + '</span></div>' +
-          price(a) + '<div class="mo-sup">' + (a.supplier_id ? '<span class="tag teal">' + E(supName(a.supplier_id)) + '</span>' : '<button class="mo-add" data-pick="' + a.id + '">+ ' + E(T('Choose supplier')) + '</button>') + '</div></div>';
+          price(a) + '<div class="mo-sup">' + (sids(a).length ? '<button class="mo-tags" data-pick="' + a.id + '" aria-label="' + E(T('Suppliers')) + '">' + supTags(a) + ' <span class="mo-plus">+</span></button>' : '<button class="mo-add" data-pick="' + a.id + '">+ ' + E(T('Choose supplier')) + '</button>') + '</div></div>';
       }).join('') + '</div>' + (list.length > O.show ? '<button class="btn ghost" id="mo-more">' + E(T('Show all {n}', { n: list.length })) + '</button>' : '')
         : App.empty(T('Nothing matches.'));
       main.innerHTML = h + '</section>';
@@ -132,12 +148,16 @@
       var bc = main.querySelector('#mo-bc'); if (bc) bc.onclick = function () { O.tick = {}; paint(); };
       var ba = main.querySelector('#mo-ba'); if (ba) ba.onclick = function () {
         var v = main.querySelector('#mo-bs').value; if (!v) { App.say(T('Choose a supplier first.')); return; }
-        if (v === '__new') { supplierForm({ active: true }, function (s) { setSup(ticked, s.id); }); return; }
-        setSup(ticked, v === '__none' ? null : v);
+        if (v === '__new') { supplierForm({ active: true }, function (s) { setSup(ticked, s.id, 'add'); }); return; }
+        setSup(ticked, v === '__none' ? null : v, v === '__none' ? 'remove' : 'add');
+      };
+      var br = main.querySelector('#mo-br'); if (br) br.onclick = function () {
+        var v = main.querySelector('#mo-bs').value; if (!v || v === '__new') { App.say(T('Choose a supplier first.')); return; }
+        setSup(ticked, v === '__none' ? null : v, 'remove');
       };
     }
-    function setSup(ids, sid) {
-      App.call('mare_m_ord_set_supplier', { p_ids: ids, p_supplier: sid }).then(function (r) {
+    function setSup(ids, sid, mode) {
+      App.call('mare_m_ord_set_supplier', { p_ids: ids, p_supplier: sid, p_mode: mode }).then(function (r) {
         if (!r) return; App.say(T('{n} articles updated.', { n: r.n })); O.tick = {};
         load().then(function () { all = O.d.articles; paint(); });
       });
@@ -150,16 +170,27 @@
     App.on(main, '[data-go-up]', function () { App.go('ordering', 'upload'); });
     paint();
   }
-  // One article: one tap on "+ Choose supplier".
+  // One article: tick every supplier that sells it; the one marked "usual" gets the order first.
   function pickSupplier(a) {
+    var pick = sids(a).slice();
     var o = App.overlay('<div class="row between"><h3>' + E(nm(a)) + '</h3><button class="btn ghost sm" data-close>' + E(T('Close')) + '</button></div>' +
-      '<label class="f">' + E(T('Supplier')) + '<select id="ps">' + '<option value="">' + E(T('Choose a supplier…')) + '</option>' + supOptions(a.supplier_id) + '</select></label>' +
+      '<p class="muted" style="margin:0">' + E(T('Tick every supplier that sells it. Orders go to the usual one; you can switch on the order.')) + '</p><div class="card mo-list" id="pl"></div>' +
       '<div class="row"><button class="btn" id="pok">' + E(T('Save')) + '</button><button class="btn ghost" id="pnew">+ ' + E(T('New supplier')) + '</button></div>');
-    o.querySelector('#pok').onclick = function () {
-      var v = o.querySelector('#ps').value; if (!v) { App.say(T('Choose a supplier first.')); return; }
-      App.call('mare_m_ord_set_supplier', { p_ids: [a.id], p_supplier: v }).then(function (r) { if (r) { o.close(); App.say(T('Saved.')); App.reload(); } });
-    };
-    o.querySelector('#pnew').onclick = function () { o.close(); supplierForm({ active: true }, function (s) { App.call('mare_m_ord_set_supplier', { p_ids: [a.id], p_supplier: s.id }).then(function () { App.reload(); }); }); };
+    function draw() {
+      var act = O.d.suppliers.filter(function (s) { return s.active || pick.indexOf(s.id) >= 0; });
+      act.sort(function (x, y) { var i = pick.indexOf(x.id), j = pick.indexOf(y.id); i = i < 0 ? 999 : i; j = j < 0 ? 999 : j; return i - j || (x.name < y.name ? -1 : 1); });
+      o.querySelector('#pl').innerHTML = act.map(function (s) {
+        var i = pick.indexOf(s.id);
+        return '<label class="mo-row' + (i >= 0 ? ' ticked' : '') + '" style="cursor:pointer"><input type="checkbox" data-ps="' + s.id + '"' + (i >= 0 ? ' checked' : '') + '><div class="mo-main"><b>' + E(s.name) + '</b></div>' +
+          (i === 0 ? '<span class="tag teal">' + E(T('Usual')) + '</span>' : i > 0 ? '<button class="btn ghost sm" data-usual="' + s.id + '">' + E(T('Make usual')) + '</button>' : '') + '</label>';
+      }).join('') || App.empty(T('No suppliers yet.'));
+    }
+    o.addEventListener('change', function (e) { var id = e.target.getAttribute && e.target.getAttribute('data-ps'); if (!id) return; var i = pick.indexOf(id); if (e.target.checked) { if (i < 0) pick.push(id); } else if (i >= 0) pick.splice(i, 1); draw(); });
+    o.addEventListener('click', function (e) { var b = e.target.closest && e.target.closest('[data-usual]'); if (!b) return; e.preventDefault(); var id = b.getAttribute('data-usual'); pick.splice(pick.indexOf(id), 1); pick.unshift(id); draw(); });
+    draw();
+    function save(list) { return App.call('mare_m_ord_save', { p_table: 'mare_articles', p_row: { id: a.id, supplier_ids: list } }); }
+    o.querySelector('#pok').onclick = function () { save(pick).then(function (r) { if (r) { o.close(); App.say(T('Saved.')); App.reload(); } }); };
+    o.querySelector('#pnew').onclick = function () { o.close(); supplierForm({ active: true }, function (s) { save(pick.concat([s.id])).then(function () { App.reload(); }); }); };
   }
   function articleForm(a) {
     var s = split(a.name || '');
@@ -173,14 +204,16 @@
       '<label class="f">' + E(T('Unit')) + '<select id="au">' + ['KG', 'L', 'kom'].map(function (u) { return '<option value="' + u + '"' + (a.unit === u ? ' selected' : '') + '>' + E(unit(u)) + '</option>'; }).join('') + '</select></label>' +
       '<label class="f">' + E(T('Price per unit (€)')) + '<input type="text" inputmode="decimal" data-num="1" id="ap" value="' + (a.price != null ? String(Math.round(a.price * 100) / 100).replace('.', M.lang() === 'me' ? ',' : '.') : '') + '"></label>' +
       '<label class="f">' + E(T('How it is bought (optional)')) + '<input type="text" id="apk" value="' + E(a.pack || '') + '" placeholder="' + E(T('e.g. box of 6 bottles')) + '"></label>' +
-      '<label class="f">' + E(T('Supplier')) + '<select id="asu">' + supOptions(a.supplier_id, true) + '</select></label></div>' +
+      (a.id ? '<div class="f"><span>' + E(T('Suppliers')) + '</span><button class="mo-tags" id="asp" type="button">' + (sids(a).length ? supTags(a) : E(T('No supplier yet'))) + ' <span class="mo-plus">+</span></button></div>'
+        : '<label class="f">' + E(T('Usual supplier')) + '<select id="asu">' + supOptions('', true) + '</select></label>') + '</div>' +
       '<div class="small muted">' + E(T('Price {p} from {d}. Upload a new stock list to update every price at once.', { p: a.price != null ? M.money(+a.price) : '—', d: a.price_at ? M.shortDate(a.price_at) : '—' })) + '</div>' +
       '<div id="ph"></div>' +
       '<div class="row"><button class="btn" id="as">' + E(T('Save')) + '</button>' + (a.id ? '<button class="btn ' + (a.active ? 'warn' : 'ghost') + '" id="aoff">' + E(a.active ? T('Take off the order list') : T('Put back on the order list')) + '</button><button class="btn ghost" id="ahist">' + E(T('Price history')) + '</button>' : '') + '</div>');
     o.querySelector('#as').onclick = function () {
       var p; try { p = M.num(o.querySelector('#ap').value); } catch (e) { App.say(e.message); return; }
       var row = { name_me: o.querySelector('#ame').value.trim() || null, name_en: o.querySelector('#aen').value.trim() || null, store: o.querySelector('#ast').value, unit: o.querySelector('#au').value,
-        pack: o.querySelector('#apk').value.trim() || null, supplier_id: o.querySelector('#asu').value || null };
+        pack: o.querySelector('#apk').value.trim() || null };
+      if (!a.id) { var su = o.querySelector('#asu').value; row.supplier_ids = su ? [su] : []; }
       if (p !== (a.price == null ? null : Math.round(a.price * 100) / 100)) row.price = p;
       if (a.id) row.id = a.id;
       else {
@@ -190,6 +223,7 @@
       }
       App.call('mare_m_ord_save', { p_table: 'mare_articles', p_row: row }).then(function (r) { if (r) { o.close(); App.say(T('Saved.')); App.reload(); } });
     };
+    var asp = o.querySelector('#asp'); if (asp) asp.onclick = function () { o.close(); pickSupplier(a); };
     var off = o.querySelector('#aoff'); if (off) off.onclick = function () { App.call('mare_m_ord_save', { p_table: 'mare_articles', p_row: { id: a.id, active: !a.active } }).then(function (r) { if (r) { o.close(); App.reload(); } }); };
     var hi = o.querySelector('#ahist'); if (hi) hi.onclick = function () {
       App.call('mare_m_price_history', { p_article: a.id }).then(function (r) {
@@ -208,7 +242,7 @@
   function suppliers(main) {
     var list = O.d.suppliers;
     var on = list.filter(function (s) { return s.active; }), off = list.filter(function (s) { return !s.active; });
-    var nosup = O.d.articles.filter(function (a) { return a.active && !a.supplier_id; }).length;
+    var nosup = O.d.articles.filter(function (a) { return a.active && !sids(a).length; }).length;
     var h = '<section class="stack"><div class="row between"><h2 class="serif">' + E(T('Suppliers')) + '</h2><div class="row"><button class="btn ghost" id="mo-fld">+ ' + E(T('Add a field')) + '</button><button class="btn" id="mo-ns">' + E(T('New supplier')) + '</button></div></div>' +
       (nosup ? '<button class="notice" style="text-align:left;cursor:pointer;font:inherit" data-nosup><b>' + E(T('{n} articles have no supplier yet', { n: nosup })) + '</b><span>' + E(T('Open Articles → No supplier yet, tick several and set their supplier in one go.')) + '</span></button>' : '');
     h += on.length ? '<div class="mo-sgrid">' + on.map(function (s) {
@@ -230,13 +264,21 @@
       if (kind === 'area') return '<textarea id="' + id + '">' + E(v || '') + '</textarea>';
       return '<input id="' + id + '" type="' + (kind === 'email' ? 'email' : kind === 'date' ? 'date' : 'text') + '"' + (kind === 'phone' ? ' inputmode="tel"' : kind === 'number' ? ' inputmode="decimal"' : '') + ' value="' + E(v || '') + '">';
     }
-    var arts = s.id ? O.d.articles.filter(function (a) { return a.supplier_id === s.id && a.active; }) : [];
+    var arts = s.id ? O.d.articles.filter(function (a) { return sids(a).indexOf(s.id) >= 0 && a.active; }) : [];
+    function ctHtml(c) {
+      c = c || {};
+      return '<div class="card mo-ct"><div class="row between"><b>' + E(T('Another contact')) + '</b><button class="btn ghost sm" type="button" data-ctx>' + E(T('Remove')) + '</button></div><div class="mo-kv">' +
+        [['name', 'Name', 'text'], ['when', 'When (shift)', 'text'], ['phone', 'Phone', 'phone'], ['viber', 'Viber', 'phone'], ['whatsapp', 'WhatsApp', 'phone'], ['email', 'Email', 'email']].map(function (f) {
+          return '<label>' + E(T(f[1])) + '</label><input type="' + (f[2] === 'email' ? 'email' : 'text') + '"' + (f[2] === 'phone' ? ' inputmode="tel"' : '') + ' data-ck="' + f[0] + '" value="' + E(c[f[0]] || '') + '"' + (f[0] === 'when' ? ' placeholder="' + E(T('e.g. mornings, after 15:00')) + '"' : '') + '>';
+        }).join('') + '</div></div>';
+    }
     var o = App.overlay('<div class="row between"><h3 class="serif" style="font-size:28px">' + E(s.id ? s.name : T('New supplier')) + '</h3><button class="btn ghost sm" data-close>' + E(T('Close')) + '</button></div>' +
       '<div class="mo-kv"><label for="sn">' + E(T('Name')) + '</label><input id="sn" type="text" value="' + E(s.name || '') + '">' +
       '<label for="sb">' + E(T('Takes orders by')) + '</label><select id="sb"><option value="">—</option>' + Object.keys(BY).map(function (k) { return '<option value="' + k + '"' + (s.order_by === k ? ' selected' : '') + '>' + E(T(BY[k])) + '</option>'; }).join('') + '</select>' +
       FIXED.map(function (f) { return '<label for="s_' + f[0] + '">' + E(T(f[1])) + '</label>' + inp('s_' + f[0], f[2], s[f[0]]); }).join('') +
       O.d.fields.map(function (f) { return '<label class="mine" for="x_' + f.id + '">' + E(f.label) + '</label>' + inp('x_' + f.id, f.kind, ex[f.id]); }).join('') + '</div>' +
-      '<button class="lnk" style="align-self:flex-start" id="sfld">+ ' + E(T('Add a field')) + '</button>' +
+      '<div id="sct" class="stack">' + (s.contacts || []).map(ctHtml).join('') + '</div>' +
+      '<div class="row"><button class="btn ghost sm" type="button" id="sctadd">+ ' + E(T('Another contact (other shift)')) + '</button><button class="lnk" style="align-self:flex-start" id="sfld">+ ' + E(T('Add a field')) + '</button></div>' +
       '<label class="row" style="gap:10px;align-items:flex-start;flex-wrap:nowrap;font-size:16px' + (admin ? '' : ';opacity:.6') + '"><input type="checkbox" id="sd" style="width:22px;height:22px;flex-shrink:0"' + (s.direct ? ' checked' : '') + (admin ? '' : ' disabled') + '><span><b>' + E(T('Send orders straight to this supplier')) + '</b><br><span class="small muted">' +
         E(admin ? T('Off: every order comes to you first. On: the person who orders sends it to the supplier themselves. Articles without a supplier always come to you.') : T('Only the Mare admin can change this.')) + '</span></span></label>' +
       (arts.length ? '<details><summary>' + E(T('Its articles · {n}', { n: arts.length })) + '</summary><table class="mo-diff">' + arts.map(function (a) { return '<tr><td>' + E(nm(a)) + '</td><td>' + E(T(STORES[a.store])) + '</td><td class="n">' + (a.price != null ? M.money(+a.price) + ' / ' + E(unit(a.unit)) : '—') + '</td></tr>'; }).join('') + '</table></details>' : '') +
@@ -247,19 +289,24 @@
       var x = {}; Object.keys(ex).forEach(function (k) { x[k] = ex[k]; });
       O.d.fields.forEach(function (f) { var el = o.querySelector('#x_' + f.id); if (!el) return; var v = el.value.trim(); if (v) x[f.id] = v; else delete x[f.id]; });
       row.extra = x;
+      row.contacts = [].slice.call(o.querySelectorAll('.mo-ct')).map(function (b) {
+        var c = {}; [].slice.call(b.querySelectorAll('[data-ck]')).forEach(function (el) { var v = el.value.trim(); if (v) c[el.getAttribute('data-ck')] = v; }); return c;
+      }).filter(function (c) { return Object.keys(c).length; });
       if (admin && !!o.querySelector('#sd').checked !== !!s.direct) row.direct = o.querySelector('#sd').checked;
       if (s.id) row.id = s.id;
       return row;
     }
     o.querySelector('#ss').onclick = function () {
       var row = collect(); if (row.name.length < 2) { App.say(T('Type the name.')); return; }
-      if (row.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(row.email)) { App.say(T('That email does not look right.')); return; }
+      if ([row].concat(row.contacts).some(function (c) { return c.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(c.email); })) { App.say(T('That email does not look right.')); return; }
       var btn = this; btn.disabled = true;
       App.call('mare_m_ord_save', { p_table: 'mare_suppliers', p_row: row }).then(function (r) {
         btn.disabled = false; if (!r) return; o.close(); App.say(T('Saved.'));
         if (then) then(r.row); else App.reload();
       });
     };
+    o.querySelector('#sctadd').onclick = function () { var d = document.createElement('div'); d.innerHTML = ctHtml(); var n = d.firstChild; o.querySelector('#sct').appendChild(n); n.querySelector('input').focus(); };
+    o.addEventListener('click', function (e) { var b = e.target.closest && e.target.closest('[data-ctx]'); if (b) b.closest('.mo-ct').remove(); });
     // A new field must not lose what was already typed: reopen with the typed values.
     o.querySelector('#sfld').onclick = function () {
       fieldForm(function () { var cur = collect(), keep = {}; Object.keys(s).forEach(function (k) { keep[k] = s[k]; }); Object.keys(cur).forEach(function (k) { keep[k] = cur[k]; });
@@ -312,7 +359,8 @@
   }
   O.sendButtons = sendButtons;
   function orders(main) {
-    var d = O.d, sups = {}; d.suppliers.forEach(function (s) { sups[s.id] = s; });
+    var d = O.d, sups = {}, artById = {}; d.suppliers.forEach(function (s) { sups[s.id] = s; }); d.articles.forEach(function (a) { artById[a.id] = a; });
+    O.ct = O.ct || {};
     var wait = d.orders.filter(function (o) { return o.status === 'waiting'; }).sort(function (a, b) { return a.created_at < b.created_at ? -1 : 1; });
     var direct = d.orders.filter(function (o) { return o.status === 'direct'; });
     var done = d.orders.filter(function (o) { return o.status === 'sent' || o.status === 'cancelled'; });
@@ -326,8 +374,21 @@
       }).join('') + '<tr><td><b>' + E(T('Total')) + '</b></td><td></td><td class="n"><b>' + M.money(+o.total || 0) + '</b></td></tr></table>' +
         (o.lines.some(function (l) { return l.price == null; }) ? '<div class="small muted">' + E(T('Lines without a price are not in the total.')) + '</div>' : '') +
         (o.deliver_on ? '<div>' + E(T('Delivery: {d}', { d: M.niceDate(o.deliver_on) })) + '</div>' : '') + (o.note ? '<div class="excerpt serif" style="margin-top:0;padding-top:8px;font-size:18px">“' + E(o.note) + '”</div>' : '');
+      if (open && sup) {
+        // Other suppliers that sell EVERY line of this order: availability, delivery day.
+        var alt = null;
+        o.lines.forEach(function (l) { var a = artById[l.article_id]; var ids = a ? sids(a) : []; alt = alt === null ? ids.slice() : alt.filter(function (x) { return ids.indexOf(x) >= 0; }); });
+        alt = (alt || []).filter(function (x) { return x !== sup.id && sups[x] && sups[x].active; });
+        var others = d.suppliers.filter(function (s) { return s.active && s.id !== sup.id && alt.indexOf(s.id) < 0; });
+        h += '<div class="row small"><span class="muted">' + E(T('Another supplier?')) + '</span><select data-osw="' + o.id + '"><option value="">' + E(T('Keep {n}', { n: sup.name })) + '</option>' +
+          (alt.length ? '<optgroup label="' + E(T('Also sell these articles')) + '">' + alt.map(function (x) { return '<option value="' + x + '">' + E(sups[x].name) + '</option>'; }).join('') + '</optgroup>' : '') +
+          (others.length ? '<optgroup label="' + E(T('Other suppliers')) + '">' + others.map(function (s) { return '<option value="' + s.id + '">' + E(s.name) + '</option>'; }).join('') + '</optgroup>' : '') + '</select></div>';
+        var ppl = people(sup), ci = Math.min(O.ct[o.id] || 0, Math.max(0, ppl.length - 1));
+        if (ppl.length > 1) h += '<div class="mo-chips">' + ppl.map(function (c, i) { return '<button class="mo-chip' + (i === ci ? ' on' : '') + '" data-ct="' + o.id + '|' + i + '">' + E(c.name || T('Contact {n}', { n: i + 1 })) + (c.when ? ' · ' + E(c.when) : '') + '</button>'; }).join('') + '</div>';
+        sup = asContact(sup, ppl[ci]);
+      }
       if (open && sup) h += '<div class="mo-send">' + sendButtons(o, sup) + '</div><div class="row" data-mark="' + o.id + '" hidden><span class="muted">' + E(T('Did it go to the supplier?')) + '</span><button class="btn" data-sent="' + o.id + '">' + E(T('Yes, mark as sent')) + '</button></div>' +
-        (sup.viber ? '<div class="small muted">' + E(T('Viber: choose {n} ({p}) in the list that opens.', { n: sup.name, p: sup.viber })) + '</div>' : '');
+        (sup.viber ? '<div class="small muted">' + E(T('Viber: choose {n} ({p}) in the list that opens.', { n: sup.cname ? sup.cname + ' · ' + sup.name : sup.name, p: sup.viber })) + '</div>' : '');
       if (open) h += '<div class="row"><button class="btn ghost sm" data-sent="' + o.id + '">' + E(T('Already sent another way')) + '</button><button class="btn warn sm" data-cancel="' + o.id + '">' + E(T('Cancel the order')) + '</button></div>';
       if (o.status === 'direct') h += '<div><span class="tag amber">' + E(T('Waiting for {n} to send it', { n: o.by_name || '' })) + '</span></div>';
       if (o.status === 'sent') h += '<div><span class="tag green">' + E(T('Sent {d} by {w}', { d: M.shortDate(M.dateKey(o.sent_at)) + ' ' + M.hhmm(o.sent_at), w: o.sent_by || '' })) + (o.sent_via ? ' · ' + E(o.sent_via) : '') + '</span></div>';
@@ -342,6 +403,11 @@
     function byId(id) { return d.orders.filter(function (o) { return o.id === id; })[0]; }
     App.on(main, '[data-go-new]', function () { App.go('ordering', 'new'); });
     App.on(main, '[data-via]', function (a) { var c = a.closest('[data-o]'); var m = c.querySelector('[data-mark]'); if (m) { m.hidden = false; m.setAttribute('data-v', a.getAttribute('data-via')); } });
+    App.on(main, '[data-ct]', function (b) { var k = b.getAttribute('data-ct').split('|'); O.ct[k[0]] = +k[1]; App.reload(); });
+    App.on(main, '[data-osw]', function (sel) {
+      var v = sel.value; if (!v) return;
+      App.call('mare_m_ord_save', { p_table: 'mare_orders', p_row: { id: sel.getAttribute('data-osw'), supplier_id: v } }).then(function (r) { if (r) { App.say(T('Saved.')); App.reload(); } });
+    }, 'change');
     App.on(main, '[data-copy]', function (b) {
       var o = byId(b.getAttribute('data-copy')), t = orderText(o, sups[o.supplier_id]);
       (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(function () { App.say(T('Copied. Paste it in the supplier\'s chat.')); }, function () { App.overlay('<textarea style="min-height:260px">' + E(t) + '</textarea><button class="btn ghost" data-close>' + E(T('Close')) + '</button>'); });
@@ -381,12 +447,14 @@
   // ════════════════ NEW ORDER (a manager orders herself) ════════════════
   function newOrder(main) {
     var arts = O.d.articles.filter(function (a) { return a.active; });
+    O.bsup = O.bsup || {};
+    function lineSup(a) { var ids = sids(a), v = O.bsup[a.id]; return v && ids.indexOf(v) >= 0 ? v : ids[0] || null; }
     function paint() {
       var q = O.nq.toLowerCase();
       var list = arts.filter(function (a) { return a.store === O.bstore && (!q || (a.name + ' ' + (a.name_me || '') + ' ' + (a.name_en || '') + ' ' + a.code).toLowerCase().indexOf(q) >= 0); });
       var inB = Object.keys(O.basket).filter(function (id) { return O.basket[id] > 0; }).map(function (id) { return arts.filter(function (a) { return a.id === id; })[0]; }).filter(Boolean);
       var tot = inB.reduce(function (s, a) { return s + (a.price != null ? a.price * O.basket[a.id] : 0); }, 0);
-      var nsup = {}; inB.forEach(function (a) { nsup[a.supplier_id || 'none'] = 1; });
+      var nsup = {}; inB.forEach(function (a) { nsup[lineSup(a) || 'none'] = 1; });
       var h = '<section class="stack"><div class="mo-chips">' + ['kitchen', 'bar'].map(function (s) { return '<button class="mo-chip' + (O.bstore === s ? ' on' : '') + '" data-bst="' + s + '">' + E(T(STORES[s])) + '</button>'; }).join('') + '</div>' +
         '<input type="text" id="nq" value="' + E(O.nq) + '" placeholder="' + E(T('Search: vongole, spinach, Heineken…')) + '" aria-label="' + E(T('Search')) + '">';
       if (!q && inB.length) h += App.sec(T('In this order')) + rows(inB);
@@ -397,10 +465,10 @@
       main.innerHTML = h + '</section>';
       var nq = main.querySelector('#nq'); nq.oninput = function () { O.nq = nq.value; var p = nq.selectionStart; paint(); var n = main.querySelector('#nq'); n.focus(); n.setSelectionRange(p, p); };
       var go = main.querySelector('#ngo'); if (go) go.onclick = function () {
-        var lines = inB.map(function (a) { return { id: a.id, qty: O.basket[a.id] }; }); go.disabled = true;
+        var lines = inB.map(function (a) { return { id: a.id, qty: O.basket[a.id], sup: lineSup(a) }; }); go.disabled = true;
         App.call('mare_m_ord_create', { p_store: O.bstore, p_lines: lines, p_note: main.querySelector('#nn').value, p_deliver: main.querySelector('#nd').value || null }).then(function (r) {
           go.disabled = false; if (!r) return;
-          O.basket = {}; O.nn = ''; App.say(T('Orders made: {n}. Send them from Orders.', { n: r.orders.length })); App.go('ordering', 'orders');
+          O.basket = {}; O.bsup = {}; O.nn = ''; App.say(T('Orders made: {n}. Send them from Orders.', { n: r.orders.length })); App.go('ordering', 'orders');
         });
       };
       ['nd', 'nn'].forEach(function (k) { var el = main.querySelector('#' + k); if (el) el.onchange = function () { O[k] = el.value; }; });
@@ -408,10 +476,14 @@
     function rows(list) {
       return '<div class="card mo-list">' + list.map(function (a) {
         var q = O.basket[a.id] || 0;
-        return '<div class="mo-row"><div class="mo-main"><b>' + E(nm(a)) + '</b><span>' + (a.price != null ? M.money(+a.price) + ' / ' + E(unit(a.unit)) : E(T('no price'))) + ' · ' + E(a.supplier_id ? supName(a.supplier_id) : T('Supplier to choose')) + '</span></div>' +
+        var ids = sids(a), cur = lineSup(a);
+        return '<div class="mo-row"><div class="mo-main"><b>' + E(nm(a)) + '</b><span>' + (a.price != null ? M.money(+a.price) + ' / ' + E(unit(a.unit)) : E(T('no price'))) + ' · ' +
+          (ids.length > 1 ? '</span><select data-bsup="' + a.id + '" aria-label="' + E(T('Supplier')) + '" style="margin-top:4px">' + ids.map(function (id) { return '<option value="' + id + '"' + (id === cur ? ' selected' : '') + '>' + E(supName(id)) + '</option>'; }).join('') + '</select><span>'
+            : E(cur ? supName(cur) : T('Supplier to choose'))) + '</span></div>' +
           '<div class="mo-qty"><button data-dq="' + a.id + '" aria-label="' + E(T('Less')) + '">−</button><input type="text" inputmode="decimal" data-num="1" data-nqty="' + a.id + '" value="' + (q ? E(fmtQty(q)) : '') + '" aria-label="' + E(T('Quantity')) + '"><button data-iq="' + a.id + '" aria-label="' + E(T('More')) + '">+</button></div></div>';
       }).join('') + '</div>';
     }
+    App.on(main, '[data-bsup]', function (s) { O.bsup[s.getAttribute('data-bsup')] = s.value; paint(); }, 'change');
     App.on(main, '[data-bst]', function (b) { O.bstore = b.getAttribute('data-bst'); paint(); });
     App.on(main, '[data-iq]', function (b) { var id = b.getAttribute('data-iq'); O.basket[id] = (O.basket[id] || 0) + 1; paint(); });
     App.on(main, '[data-dq]', function (b) { var id = b.getAttribute('data-dq'); O.basket[id] = Math.max(0, (O.basket[id] || 0) - 1); paint(); });

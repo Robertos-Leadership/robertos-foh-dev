@@ -1172,5 +1172,22 @@ window.MARE_ME = {
 "Your order went to Milica. She checks it and sends it to the supplier.": "Vaša narudžba je otišla Milici. Ona je provjerava i šalje dobavljaču.",
 "Orders sent to Milica: {n}. She checks them and sends them to the suppliers.": "Narudžbi poslato Milici: {n}. Ona ih provjerava i šalje dobavljačima.",
 "{n} prices could not be read and count as no price.": "{n} cijena nije moguće pročitati i vode se kao bez cijene.",
-"{n} ticked": "Označeno: {n}"
+"{n} ticked": "Označeno: {n}",
+"Take every supplier off": "Ukloni sve dobavljače",
+"Add supplier": "Dodaj dobavljača",
+"Remove supplier": "Ukloni dobavljača",
+"Tick every supplier that sells it. Orders go to the usual one; you can switch on the order.": "Označite sve dobavljače koji ga prodaju. Narudžba ide stalnom; na narudžbi možete promijeniti.",
+"Usual": "Stalni",
+"Make usual": "Postavi kao stalnog",
+"No suppliers yet.": "Još nema dobavljača.",
+"Usual supplier": "Stalni dobavljač",
+"Another contact": "Još jedan kontakt",
+"When (shift)": "Kada (smjena)",
+"e.g. mornings, after 15:00": "npr. ujutru, poslije 15:00",
+"Another contact (other shift)": "Još jedan kontakt (druga smjena)",
+"Another supplier?": "Drugi dobavljač?",
+"Keep {n}": "Ostavi {n}",
+"Also sell these articles": "Prodaju i ove artikle",
+"Other suppliers": "Ostali dobavljači",
+"Contact {n}": "Kontakt {n}"
 };
