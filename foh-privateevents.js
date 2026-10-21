@@ -1603,9 +1603,17 @@ function peMatchesLead(e){
   return String(e.handled_by||'') === L;
 }
 // The distinct leads present in the book, most-used first — drives the chip row.
-function peLeadKeys(){
+// The events the lead chips are built from: the current status tab, search and
+// pill spotlight — everything except the lead filter itself. Chips built from the
+// whole book offered names (Valentina: 26 events, all Done/Lost) that the Open
+// tab then showed as "No events here".
+function peLeadPool(){
+  var f = peState.filter, q = (peState.q||'').toLowerCase();
+  return (peState.events||[]).filter(function(e){ return peEventMatchesQuery(e, q) && pePassesStatus(e, f) && peFocusMatch(e); });
+}
+function peLeadKeys(list){
   var counts = {};
-  (peState.events||[]).forEach(function(e){ var h = e.handled_by ? String(e.handled_by) : ''; if(h) counts[h] = (counts[h]||0)+1; });
+  (list||peState.events||[]).forEach(function(e){ var h = e.handled_by ? String(e.handled_by) : ''; if(h) counts[h] = (counts[h]||0)+1; });
   return Object.keys(counts).sort(function(a,b){ return peLeadLabel(a).localeCompare(peLeadLabel(b)); });
 }
 function peSetLead(i){ var d = (peState._leadDefs||[])[i]; peState.lead = d ? d.k : 'all'; renderMain(); }
@@ -1796,7 +1804,11 @@ function peRenderList(){
   var filterName = {open:'Open',draft:'Draft',sent:'Sent',confirmed:'Confirmed',deposit:'Deposit paid',done:'Done',lost:'Lost',all:'All'};
   // If the book is back down to a single lead, drop any leftover lead filter BEFORE
   // filtering, so a stale "Mine"/person selection can never silently hide events.
-  if(peLeadKeys().length < 2 && (peState.lead||'all')!=='all') peState.lead = 'all';
+  // Same for a person (or "Mine") with nothing in the current tab — their chip is
+  // not shown, so a selection left on them would hide every event behind it.
+  var leadPool = peLeadPool(), leadKeys = peLeadKeys(leadPool), leadHasMine = leadPool.some(peIsMine);
+  var L0 = peState.lead || 'all';
+  if(L0!=='all' && (leadKeys.length < 2 || (L0==='mine' ? !leadHasMine : leadKeys.indexOf(L0)<0))) peState.lead = 'all';
   var all = peFilteredEvents();
   var collapse = (peState.filter==='open' || peState.filter==='all') && !(peState.q && peState.q.trim());
   var empties = collapse ? all.filter(peIsEmptyDraft) : [];
@@ -1841,9 +1853,8 @@ function peRenderList(){
   '</div>';
   // ── Lead filter — only when more than one person has taken a lead, so a
   // single-handler desk never grows a chip row that just says "Everyone". ──
-  var leadKeys = peLeadKeys();
   if(leadKeys.length >= 2){
-    var leadDefs = [{k:'all',n:'Everyone'},{k:'mine',n:'Mine'}].concat(leadKeys.map(function(hk){ return {k:hk, n:peLeadLabel(hk)}; }));
+    var leadDefs = [{k:'all',n:'Everyone'}].concat(leadHasMine ? [{k:'mine',n:'Mine'}] : []).concat(leadKeys.map(function(hk){ return {k:hk, n:peLeadLabel(hk)}; }));
     peState._leadDefs = leadDefs;
     var curLead = peState.lead || 'all';
     h += '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:8px 0 2px"><span style="font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:#544418;margin-right:2px">Lead</span>'+
