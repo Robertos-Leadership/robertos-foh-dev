@@ -240,6 +240,6 @@ function renderModaNight(){
 function mnCss(){
   if(document.getElementById('mn-css')) return;
   var s = document.createElement('style'); s.id = 'mn-css';
-  s.textContent = '.mn-sim{margin:-6px 2px 16px}\n.mn-comps div{margin-top:4px}\n.mn-book{margin-top:8px}\n.mn-wrap .bl-items span:last-child{color:var(--text-light);font-size:11px}';
+  s.textContent = '.bl-wrap.mn-wrap{--room:url(venue-scala-day.jpg)}\n.mn-sim{margin:-6px 2px 16px}\n.mn-comps div{margin-top:4px}\n.mn-book{margin-top:8px}\n.mn-wrap .bl-items span:last-child{color:var(--text-light);font-size:11px}';
   document.head.appendChild(s);
 }

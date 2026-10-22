@@ -594,6 +594,12 @@ function blCss(){
     // calc(100vw - 40px) wide and ran past the right edge inside the app's content area
     '.res-wrap.bl-wrap{width:auto;max-width:980px;margin-left:auto;margin-right:auto}',
     '.bl-wrap .rv2-hero{margin-top:4px}',
+    // The room behind (22 Oct 2026, same Soft cream wash Francesco picked for the
+    // Management page): Ristorante by day for lunch. Moda Night shares .bl-wrap and
+    // swaps --room for Scala in mnCss. Fixed to the viewport, so iOS never zooms it.
+    '.bl-wrap{position:relative;isolation:isolate;--room:url(venue-ristorante-day.jpg)}',
+    '.bl-wrap::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;background:linear-gradient(180deg,rgba(248,244,236,.92) 0,rgba(248,244,236,.80) 260px,rgba(248,244,236,.80) 100%),var(--room) center/cover no-repeat #F8F4EC}',
+    '@media print{.bl-wrap::before{display:none}}',
     '.bl-week{font-size:12px;color:var(--text-mid);letter-spacing:.02em;min-width:104px;text-align:center;font-variant-numeric:tabular-nums}',
     '.bl-hero-days{display:flex;flex-wrap:wrap;gap:6px 18px;margin-top:14px;font-size:12px;color:var(--text-light)}',
     '.bl-hero-days b{color:var(--vino);font-weight:600;margin-left:3px;font-variant-numeric:tabular-nums}',
