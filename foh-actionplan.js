@@ -409,11 +409,11 @@ function apMyTasks(){
   ];
   var who = (mine[0] || '').replace(/^./, function(c){ return c.toUpperCase(); });
   var h = ['<div class="ap-my-head">' + (open.length ? '<b>' + open.length + '</b> open step' + (open.length === 1 ? '' : 's') + ' for ' + apEsc(who) : 'No open steps for ' + apEsc(who) + '.')
-    + ' <span class="ap-small">Direct link: <a href="' + apEsc(location.origin + location.pathname) + '#actionplan/mine">' + apEsc(location.origin + location.pathname) + '#actionplan/mine</a></span></div>'];
+    + ' <span class="ap-small">&middot; <a href="' + apEsc(location.origin + location.pathname) + '#actionplan/mine" title="Bookmark this to open your tasks straight away">Your direct link</a></span></div>'];
   if(!all.length) h.push('<div class="ap-card ap-empty">No step has your name as owner yet. Owners are set in <b>Owners &amp; dates</b>.</div>');
   groups.forEach(function(g){
     if(!g[1].length) return;
-    h.push('<div class="ap-group' + (g[0] === 'Late' ? ' ap-red' : '') + '">' + g[0] + '</div><div class="ap-card ap-list">');
+    h.push('<div class="ap-group' + (g[0] === 'Late' ? ' ap-red' : '') + '">' + g[0] + '</div><div class="ap-card ap-list ap-my">');
     g[1].forEach(function(s){
       var p = AP.points.filter(function(x){ return x.id === s.point_id; })[0] || { num: '', title: '' };
       var others = String(s.owner || '').split(/\s*(?:,|&|\/|\+|\band\b)\s*/).filter(function(n){ return n && mine.indexOf(n.trim().toLowerCase().split(/\s+/)[0]) === -1; });
@@ -1088,7 +1088,7 @@ function apCss(){
     '.ap-tabs{display:flex;gap:2px;background:#EDE5DA;border-radius:10px;padding:3px;margin-top:20px;width:max-content;max-width:100%;overflow-x:auto}',
     '.ap-tabs button{font:inherit;font-size:13px;padding:7px 14px;border-radius:8px;border:0;background:none;color:var(--text-mid);cursor:pointer;white-space:nowrap;min-height:34px}',
     '.ap-tcount{display:inline-block;min-width:18px;margin-left:5px;padding:0 6px;border-radius:999px;background:#EDE5DA;color:var(--text);font-size:11px;font-weight:600;line-height:18px}.ap-tcount.late{background:#F6D8D8;color:#8B1E1E}',
-    '.ap-my-head{margin:16px 0 4px;font-size:14px}.ap-my-head a{color:var(--vino)}.ap-mydate{flex:none;font-size:13px;color:var(--text-mid);white-space:nowrap;padding-left:8px;align-self:center}',
+    '.ap-my-head{margin:16px 0 4px;font-size:14px}.ap-my-head a{color:var(--vino)}.ap-my .ap-slink{flex:1 1 auto;min-width:0}.ap-mydate{flex:none;font-size:13px;color:var(--text-mid);white-space:nowrap;padding-left:8px;align-self:center}',
     '.ap-tabs button.on{background:#fff;color:var(--text);font-weight:600;box-shadow:0 1px 2px rgba(0,0,0,.08)}',
     '.ap-subtabs{display:flex;gap:6px;margin:14px 0 10px;flex-wrap:wrap}.ap-subtabs button{font:inherit;font-size:12px;padding:6px 12px;border-radius:999px;border:1px solid #DDD0BF;background:#fff;color:var(--text-mid);cursor:pointer;min-height:32px}.ap-subtabs button.on{background:var(--vino);border-color:var(--vino);color:#fff}',
     '.ap-secbar{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;margin:22px 2px 10px}',
