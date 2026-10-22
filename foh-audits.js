@@ -61,6 +61,8 @@ function auAgo(ts){
   var h = Math.floor(m / 60); if(h < 24) return h + (h === 1 ? ' hour ago' : ' hours ago');
   return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'Asia/Dubai' });
 }
+// "sent by Andrea Sacchi", but "via the shared link" (the one link from before 22 Oct, no sender).
+function auVia(s){ s = String(s || 'Shared link'); return s === 'Shared link' ? 'via the shared link' : /link$/i.test(s) ? 'via ' + s : 'sent by ' + s; }
 function auState(a){
   if(a.status === 'sent') return { k: 'done', t: 'Sent to Amin' };
   if(a.status === 'submitted') return { k: 'done', t: 'Finished' };
@@ -168,7 +170,7 @@ function auListView(){
     var st = auState(a), pct = a.overall_pct;
     h += '<button class="au-row" onclick="auOpen(\'' + auEsc(a.id) + '\')">'
       + '<div class="au-main"><div class="au-name">' + auEsc(a.auditor) + '</div>'
-      + '<div class="au-sub">' + auEsc(auDate(a.visit_date)) + (a.visit_time ? ' &middot; ' + auEsc(a.visit_time) : '') + ' &middot; sent by ' + auEsc(a.sent_by) + '</div>'
+      + '<div class="au-sub">' + auEsc(auDate(a.visit_date)) + (a.visit_time ? ' &middot; ' + auEsc(a.visit_time) : '') + ' &middot; ' + auEsc(auVia(a.sent_by)) + '</div>'
       + '<span class="au-tag ' + st.k + '">' + auEsc(st.t) + '</span>'
       + (st.k === 'open' && a.updated_at ? ' <span class="au-sub" style="display:inline">&middot; last change ' + auEsc(auAgo(a.updated_at)) + '</span>' : '')
       + '</div><div class="au-pct">' + (pct != null ? pct + '%' : '<span style="color:#cfc0ad">&mdash;</span>') + '</div></button>';
