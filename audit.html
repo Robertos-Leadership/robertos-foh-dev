@@ -256,6 +256,7 @@ var T = {
     nextQ:'Domanda successiva', nextSec:'Sezione successiva', kRest:'Il ristorante', kRestSub:'Dalla prenotazione al saluto · 33 domande',
     kScala:'Scala, bar & lounge', kScalaSub:"Dall'accoglienza al conto · 27 domande", kVenue:'Tutto il locale', atTable:'Al tavolo', atScala:'Alla Scala',
     best:'Il momento migliore', fixone:'Una cosa da migliorare', other:'Altro', bestPh:'Cosa ti è piaciuto di più?', fixonePh:'Se potessi cambiare una cosa…', otherPh:'Qualsiasi altra cosa',
+    ordered:'Cosa hai ordinato?', orderedSub:'Scegli ogni piatto dal menu e dagli un voto.', thenFood:'Poi, il cibo in generale', scoreIt:'Da votare', dish1n:'piatto', dishesN:'piatti',
     dish5:'Lo riordineresti domani', dish3:'Buono', dish1:"L'hai lasciato", startTitle:'Audit ospite', begin:"Inizia l'audit",
     startSub:"Circa 15 minuti. Rispondi da ospite: quello che hai visto, sentito e assaggiato. Quello che non hai visto, saltalo.",
     allNa:'Non ho visto niente di questa sezione', undoNa:'Annulla i "non visto"', saved:'Salvato', food:'Il cibo',
@@ -290,6 +291,7 @@ var T = {
     nextQ:'Next question', nextSec:'Next section', kRest:'The restaurant', kRestSub:'Booking to goodbye · 33 questions',
     kScala:'Scala, bar & lounge', kScalaSub:'Welcome to the bill · 27 questions', kVenue:'Whole venue', atTable:'At the table', atScala:'At Scala',
     best:'The best moment', fixone:'One thing to fix', other:'Anything else', bestPh:'What did you enjoy most?', fixonePh:'If you could change one thing…', otherPh:'Anything else',
+    ordered:'What did you order?', orderedSub:'Pick each dish from the menu and give it a score.', thenFood:'Then, the food overall', scoreIt:'To score', dish1n:'dish', dishesN:'dishes',
     dish5:"You'd order it again tomorrow", dish3:'Fine', dish1:'You left it', startTitle:'Guest audit', begin:'Start the audit',
     startSub:"About 15 minutes. Answer as a guest: what you saw, heard and tasted. Anything you didn't see, skip.",
     allNa:"I didn't see any of this section", undoNa:'Clear the "didn\'t see"', saved:'Saved', food:'The food',
@@ -312,8 +314,12 @@ function setAreas(){
   if (!D || !D.areas) return;
   AREAS = D.areas.slice();
   ORDER = AREAS.slice();
-  var at = ORDER.indexOf(D.kind === 'scala' ? 'scala' : 'cucina');
-  ORDER.splice(at < 0 ? ORDER.length : at + 1, 0, 'piatti');
+  // A Restaurant visit names its dishes inside The food ("What did you order?", Francesco 22 Oct 2026),
+  // so it has no separate dishes step; Scala bites and Enrico's tasting keep theirs.
+  if (D.kind !== 'restaurant') {
+    var at = ORDER.indexOf(D.kind === 'scala' ? 'scala' : 'cucina');
+    ORDER.splice(at < 0 ? ORDER.length : at + 1, 0, 'piatti');
+  }
   if (D.area_en) for (var k in D.area_en) AREA_EN[k] = D.area_en[k];
 }
 function lab(c){ return LANG === 'en' ? c.label_en : c.label_it; }
@@ -422,6 +428,19 @@ function ansLabel(c, r, lang){
 }
 function hint(c){ return LANG === 'en' ? c.hint_en : (c.hint_it || c.hint_en); }
 function anchor(c, n){ return LANG === 'en' ? c['a' + n + '_en'] : (c['a' + n + '_it'] || c['a' + n + '_en']); }
+function foodWithDishes(a){ return a === 'cucina' && D && D.kind === 'restaurant'; }
+// The dishes, by name: one row per dish (score, note, photos), shared by the dishes step and The food.
+function dishRows(){
+  var h = '';
+  if (!D.dishes.length) return '<div class="msg info">' + t('noDishes') + '</div>';
+  h += '<div class="card">';
+  D.dishes.forEach(function(d, i){
+    var v = d.verdict === 'keep' ? t('dKeep') : d.verdict === 'fix' ? t('dFix') : d.verdict === 'remove' ? t('dRemove') : '';
+    h += '<button class="sec" style="border:0;border-top:' + (i ? '1px solid var(--soft)' : '0') + ';border-radius:0" data-act="dish" data-id="' + d.id + '"><span class="dot' + (d.score ? ' done' : '') + '">' + (d.score ? CHECK_SVG : i + 1) + '</span>' +
+      '<span class="grow"><span class="t" style="font-size:17px">' + esc(d.dish_name) + '</span><span class="s">' + (d.score ? '' : t('scoreIt')) + v + (d.note_it ? (v ? ' · ' : '') + t('noted') : '') + ((d.photos || []).length ? ' · ' + d.photos.length + ' ' + t('photos') : '') + '</span></span><span class="sc">' + (d.score ? d.score + ' / 5' : '') + '</span></button>';
+  });
+  return h + '</div>';
+}
 function kindName(){ return D && D.kind === 'scala' ? t('kScala') : D && D.kind === 'restaurant' ? t('kRest') : t('kVenue'); }
 // After the last question of a section: the next section's first open question, then the dishes, then the end.
 function afterSection(area){
@@ -429,6 +448,7 @@ function afterSection(area){
   for (var j = i + 1; j < ORDER.length; j++) {
     var a = ORDER[j];
     if (a === 'piatti') return { v: 'dishes' };
+    if (foodWithDishes(a)) return { v: 'area', area: a };   // opens on "What did you order?"
     var open = cat(a).filter(function(c){ return !isDone(c.code); })[0];
     if (open) return { v: 'item', code: open.code };
   }
@@ -560,6 +580,7 @@ function vHome(){
     }
     var st = areaStats(a), full = st.done === st.total, now = a === current;
     var sub = full ? t('doneN') + ' · ' + st.total + ' ' + t('of') + ' ' + st.total : now ? t('nextUp') + ' · ' + (st.total - st.done) + ' ' + t('qs') : st.total + ' ' + t('qs');
+    if (foodWithDishes(a)) sub = (D.dishes.length ? D.dishes.length + ' ' + t(D.dishes.length === 1 ? 'dish1n' : 'dishesN') : t('ordered')) + ' · ' + sub;
     h += '<button class="sec' + (now ? ' now' : '') + '" data-act="area" data-a="' + a + '"><span class="dot' + (full ? ' done' : now ? ' go' : '') + '">' + (full ? CHECK_SVG : n) + '</span>' +
          '<span class="grow"><span class="t">' + areaName(a) + '</span><span class="s">' + sub + '</span></span>' + (now ? CHEV_SVG : '') + '</button>';
   });
@@ -575,7 +596,14 @@ function vHome(){
 function vArea(){
   var a = S.area, items = cat(a), st = areaStats(a);
   var h = head({ v: 'home' }, t('home'), st.done + ' ' + t('of') + ' ' + st.total, areaName(a));
-  h += '<div class="body">' + closedBanner() + '<div class="card">';
+  h += '<div class="body">' + closedBanner();
+  // The food on a Restaurant visit opens with the dishes, by name: what was ordered, each scored.
+  if (foodWithDishes(a)) {
+    h += '<div style="display:flex;flex-direction:column;gap:4px"><h2 style="margin:0;font:400 26px/1.15 var(--display);color:var(--vino)">' + t('ordered') + '</h2><div class="muted" style="font-size:14px">' + t('orderedSub') + '</div></div>';
+    if (D.dishes.length) h += dishRows();
+    h += picker('adddish') + '<div class="lbl" style="margin-top:14px">' + t('thenFood') + '</div>';
+  }
+  h += '<div class="card">';
   items.forEach(function(c, i){
     var r = scoreRow(c.code), done = isDone(c.code);
     h += '<button class="sec" style="border:0;border-top:' + (i ? '1px solid var(--soft)' : '0') + ';border-radius:0" data-act="item" data-code="' + c.code + '">' +
@@ -654,16 +682,22 @@ function picker(mode){
 }
 function norm(s){ return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); }
 function presHtml(mode){
-  var raw = (S.q || '').trim(), q = norm(raw); if (!q) return '';
-  var hits = D.menu.filter(function(m){ return norm(m.name).indexOf(q) !== -1; })
-    .sort(function(a, b){ return D.kind === 'scala' ? (a.where === 'scala' ? 0 : 1) - (b.where === 'scala' ? 0 : 1) : 0; }).slice(0, 8), h = '';
+  // The whole menu shows before anything is typed (an empty box read as "it doesn't work", 22 Oct 2026),
+  // this visit's own menu first; typing narrows it.
+  var raw = (S.q || '').trim(), q = norm(raw);
+  var mine = function(m){ return D.kind === 'scala' ? m.where === 'scala' : D.kind === 'restaurant' ? m.where !== 'scala' : true; };
+  var hits = D.menu.filter(function(m){ return !q || norm(m.name).indexOf(q) !== -1; })
+    .sort(function(a, b){ return (mine(a) ? 0 : 1) - (mine(b) ? 0 : 1) || a.name.localeCompare(b.name); }).slice(0, q ? 12 : 200), h = '';
+  if (!q) { hits.forEach(function(m){ h += '<button class="opt" data-act="pickdish" data-mode="' + mode + '" data-id="' + m.id + '" data-name="' + esc(m.name) + '">' + esc(m.name) + '<small>' + (m.where === 'scala' ? 'Scala' : '') + '</small></button>'; });
+            return '<div style="max-height:320px;overflow:auto;border-top:1px solid var(--soft);margin:0 -14px -14px">' + h + '</div>'; }
   hits.forEach(function(m){ h += '<button class="opt" data-act="pickdish" data-mode="' + mode + '" data-id="' + m.id + '" data-name="' + esc(m.name) + '">' + esc(m.name) + '<small>' + (m.where === 'scala' ? 'Scala' : '') + '</small></button>'; });
   return h + '<button class="opt" data-act="pickdish" data-mode="' + mode + '" data-id="" data-name="' + esc(raw) + '">' + t('useName') + ': <b>' + esc(raw) + '</b></button>';
 }
 
 function vDish(){
   var d = byId(D.dishes, S.id); if (!d) return vDishes();
-  var h = head({ v: 'dishes' }, t(isEnrico() ? 'piatti' : 'piattiG').split(' — ')[0], null, d.dish_name);
+  var backTo = D.kind === 'restaurant' ? { v: 'area', area: 'cucina' } : { v: 'dishes' };
+  var h = head(backTo, D.kind === 'restaurant' ? areaName('cucina') : t(isEnrico() ? 'piatti' : 'piattiG').split(' — ')[0], null, d.dish_name);
   h += '<div class="body" style="gap:16px">' + closedBanner() + '<div class="scores five">';
   [1, 2, 3, 4, 5].forEach(function(n){ h += '<button class="sbtn' + (d.score === n ? ' on' : '') + '" data-act="dscore" data-v="' + n + '">' + n + '</button>'; });
   h += '</div>';
@@ -677,7 +711,7 @@ function vDish(){
     h += '</div>';
   }
   h += '<button class="link" data-act="ddel">' + t('removeDish') + '</button></div>';
-  h += '<div class="foot"><button class="big vino" data-act="go" data-to=\'{"v":"dishes"}\'>' + t('done') + '</button></div>';
+  h += '<div class="foot"><button class="big vino" data-act="go" data-to=\'' + esc(JSON.stringify(backTo)) + '\'>' + t('done') + '</button></div>';
   return h;
 }
 function vFlag(){
@@ -925,6 +959,12 @@ root.addEventListener('input', function(e){
     S.q = el.value;
     var box = document.getElementById('pres'); if (box) box.innerHTML = presHtml(el.getAttribute('data-mode'));
   }
+});
+// Enter in the dish search picks the top match.
+root.addEventListener('keydown', function(e){
+  if (e.key !== 'Enter' || !e.target || e.target.id !== 'pq') return;
+  e.preventDefault();
+  var first = document.querySelector('#pres .opt'); if (first && (S.q || '').trim()) first.click();
 });
 root.addEventListener('change', function(e){
   var el = e.target;
