@@ -297,7 +297,7 @@ function renderNav(){
   const active = resolveTab(state.currentTab);
   // Module-scoped nav: Revenue and Operations are single pages reached from the Manager
   // landing — no cross-module links there. Only the Events module keeps its own sub-tabs.
-  if(active==='revenue' || active==='operations' || active==='stocktake' || active==='admin' || active==='privateevents' || active==='reviews' || active==='reservations' || active==='resreports' || active==='bizlunch' || active==='modanight' || active==='actionplan'){ nav.innerHTML=''; return; }
+  if(active==='revenue' || active==='operations' || active==='stocktake' || active==='admin' || active==='privateevents' || active==='reviews' || active==='reservations' || active==='resreports' || active==='bizlunch' || active==='modanight' || active==='actionplan' || active==='audits'){ nav.innerHTML=''; return; }
   const eventTabs = state.events.slice().sort(eventSort).map(ev=>
     `<div class="nav-tab ${active===eventTab(ev)?'active':''}" data-tab="${eventTab(ev)}" onclick="switchTab('${eventTab(ev)}')">${ev.name}</div>`
   ).join('');
@@ -341,6 +341,8 @@ function moduleOf(t){
   // Roberto's 3.0 Action Plan (16 Oct 2026): its own grant. The card follows it;
   // the lock is RLS on the ap_* tables (ap_settings.members) — see foh-actionplan.js.
   if(t==='actionplan') return 'actionplan';
+  // Audits (22 Oct 2026): two grants, audit_send and audit_read — see fohBlocked and foh-audits.js.
+  if(t==='audits') return 'audits';
   if(t==='revenue'||t==='operations'||t==='stocktake'||t==='admin'||t==='privateevents'||t==='reviews'||t==='reservations') return t;
   return 'events';   // dashboard, event_*, events => the Events module
 }
@@ -370,6 +372,7 @@ function fohBlocked(module){
   var m=moduleOf(module);
   if(m==='admin') return !fohCanAdmin();
   var mods=(state.access && state.access.modules) ? state.access.modules : FOH_DEFAULT_MODULES;
+  if(m==='audits') return !(fohIsAdmin() || mods.indexOf('audit_send')!==-1 || mods.indexOf('audit_read')!==-1);
   return mods.indexOf(m)===-1;
 }
 // ── Activations is paused (7 Aug 2026). The card stays visible and still opens —
@@ -414,6 +417,8 @@ function applyFohAccess(){
   if(rrc) rrc.style.display = fohBlocked('resreports') ? 'none' : '';
   var rrn=document.getElementById('mod-new-resreports');
   if(rrn) rrn.style.display = fohNewSeen('reservations') ? 'none' : '';
+  var auc=document.getElementById('mod-card-audits');
+  if(auc) auc.style.display = fohBlocked('audits') ? 'none' : '';
   var apc=document.getElementById('mod-card-actionplan');
   if(apc) apc.style.display = fohBlocked('actionplan') ? 'none' : '';
   var ape=document.getElementById('sec-exec');
@@ -430,7 +435,7 @@ function applyFohAccess(){
   var s1=document.getElementById('sec-daily');
   if(s1) s1.style.display = (!fohBlocked('operations') || !fohBlocked('events')) ? '' : 'none';
   var s2=document.getElementById('sec-business');
-  if(s2) s2.style.display = (!fohBlocked('revenue') || !fohBlocked('stocktake')) ? '' : 'none';
+  if(s2) s2.style.display = (!fohBlocked('revenue') || !fohBlocked('stocktake') || !fohBlocked('audits')) ? '' : 'none';
   // The Guests column carries Events, Guest Reviews and Reservation Reports. It
   // only disappears when the user has NONE of them — holding just one still
   // shows the column. Reservation Reports had to be added here as well as to the
@@ -2422,6 +2427,7 @@ var USAGE_MODULE_NAMES=(function(){
   m.admin='Admin';
   m.resreports='Reservation reports';
   m.actionplan='Action Plan 3.0';
+  m.audits='Audits';
   return m;
 })();
 function admUsageModName(m){ return USAGE_MODULE_NAMES[m]||m||'—'; }
@@ -4308,6 +4314,7 @@ function admDetailFull(p){
       +admLoginLine(p.login)
       +'<div class="px-accgrid">'+acc+'</div>'
       +admApSection(email)
+      +(typeof admAuditSection==='function' ? admAuditSection(email) : '')
       +'<div class="px-pslbl" style="margin-top:14px;">Permissions</div>'+powers
       +'<div class="px-pslbl" style="margin-top:14px;">Email alerts</div><div class="px-accgrid">'+notif+'</div>'
       +'</div>';
@@ -4715,7 +4722,7 @@ function enterApp(module){
   // Land in the chosen module — Revenue/Operations go straight there; Events keeps the
   // current Events-family tab (Leaders or an event) but NEVER another module's tab.
   var cur=state.currentTab;
-  var target=(module==='revenue'||module==='operations'||module==='stocktake'||module==='admin'||module==='privateevents'||module==='reviews'||module==='reservations'||module==='resreports'||module==='bizlunch'||module==='modanight'||module==='actionplan') ? module
+  var target=(module==='revenue'||module==='operations'||module==='stocktake'||module==='admin'||module==='privateevents'||module==='reviews'||module==='reservations'||module==='resreports'||module==='bizlunch'||module==='modanight'||module==='actionplan'||module==='audits') ? module
     : ((cur==='dashboard' || (cur && cur.indexOf('event_')===0)) ? cur : 'dashboard');
   switchTab(target);
 }
