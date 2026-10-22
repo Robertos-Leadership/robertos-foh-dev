@@ -265,6 +265,7 @@ var T = {
     best:'Il momento migliore', fixone:'Una cosa da migliorare', other:'Altro', bestPh:'Cosa ti è piaciuto di più?', fixonePh:'Se potessi cambiare una cosa…', otherPh:'Qualsiasi altra cosa', formfb:'Feedback su questo audit', formfbPh:'Cosa cambieresti nelle domande o nella app?',
     youSent:'Cosa hai inviato', answeredW:'risposte', notSeenW:'non viste', stillEdit:'Puoi ancora aggiungere o correggere qualcosa dalle sezioni: si salva da solo.',
     orSection:'Oppure apri una sezione del menu:',
+    startNew:'Nuovo audit', earlier:'I tuoi audit precedenti su questo telefono', openIt:'Apri', another:'Inizia un altro audit',
     ordered:'Cosa hai ordinato?', orderedSub:'Scegli ogni piatto dal menu e dagli un voto.', thenFood:'Poi, il cibo in generale', scoreIt:'Da votare', dish1n:'piatto', dishesN:'piatti',
     dish5:'Lo riordineresti domani', dish3:'Buono', dish1:"L'hai lasciato", startTitle:'Audit ospite', begin:"Inizia l'audit",
     startSub:"Circa 15 minuti. Rispondi da ospite: quello che hai visto, sentito e assaggiato. Quello che non hai visto, saltalo.",
@@ -302,6 +303,7 @@ var T = {
     best:'The best moment', fixone:'One thing to fix', other:'Anything else', bestPh:'What did you enjoy most?', fixonePh:'If you could change one thing…', otherPh:'Anything else', formfb:'Feedback on this audit', formfbPh:'What would you change in the questions or the app?',
     youSent:'What you sent', answeredW:'answered', notSeenW:'not seen', stillEdit:'You can still add or correct anything from the sections: it saves by itself.',
     orSection:'Or open a section of the menu:',
+    startNew:'New audit', earlier:'Your earlier audits on this phone', openIt:'Open', another:'Start another audit',
     ordered:'What did you order?', orderedSub:'Pick each dish from the menu and give it a score.', thenFood:'Then, the food overall', scoreIt:'To score', dish1n:'dish', dishesN:'dishes',
     dish5:"You'd order it again tomorrow", dish3:'Fine', dish1:'You left it', startTitle:'Guest audit', begin:'Start the audit',
     startSub:"About 15 minutes. Answer as a guest: what you saw, heard and tasted. Anything you didn't see, skip.",
@@ -808,14 +810,24 @@ function vThanks(){
     h += '<div class="muted" style="padding:6px 2px">' + t('stillEdit') + '</div>';
   }
   h += '<button class="sec" data-act="go" data-to=\'{"v":"home"}\'><span class="grow"><span class="t">' + t('sections') + '</span></span>' + CHEV_SVG + '</button></div>';
+  // Another audit from the same link (this phone remembers which link this audit came from).
+  var from = !isEnrico() && TOK && TOK.k ? ls('auditFrom:' + TOK.k) : null;
+  if (from) h += '<div class="foot"><a class="big vino" style="text-decoration:none" href="' + esc(location.pathname + '?n=' + encodeURIComponent(from)) + '">' + t('another') + '</a></div>';
   return h;
 }
 /* ── shared link: name first, then their own audit ──────────────────────── */
 function mine(){ try { return JSON.parse(ls('auditMine:' + TOK.n) || 'null'); } catch(e){ return null; } }
+// Every audit this phone started from this link, newest first (up to 10). The shared link always opens on a
+// NEW audit; earlier ones are a small list underneath (Francesco, 22 Oct 2026: "the link keeps giving me the
+// same audit, I should be able to start a new one").
+function mineAll(){
+  var list = []; try { list = JSON.parse(ls('auditList:' + TOK.n) || '[]') || []; } catch(e){}
+  var m = mine(); if (m && m.k && !list.some(function(x){ return x.k === m.k; })) list.unshift(m);
+  return list;
+}
 function vStart(){
-  var m = mine();
-  var h = topBar('<div style="display:flex;flex-direction:column;gap:6px"><div class="kick">Roberto\'s DIFC</div><h1>' + t('startTitle') + '</h1><div class="sub">' + t('startSub') + '</div></div>') + '<div class="body" style="gap:16px">';
-  if (m && m.k) h += '<button class="sec now" data-act="resume"><span class="dot go">›</span><span class="grow"><span class="t">' + t('cont') + '</span><span class="s">' + esc(m.name) + ' · ' + t('started') + ' ' + esc(dubaiTime(m.at)) + '</span></span></button><div class="muted" style="padding:0 2px">' + t('newOne') + '</div>';
+  var earlier = mineAll();
+  var h = topBar('<div style="display:flex;flex-direction:column;gap:6px"><div class="kick">Roberto\'s DIFC</div><h1>' + t(earlier.length ? 'startNew' : 'startTitle') + '</h1><div class="sub">' + t('startSub') + '</div></div>') + '<div class="body" style="gap:16px">';
   h += '<label style="display:flex;flex-direction:column;gap:8px"><span class="lbl" style="margin:0">' + t('yourName') + '</span>' +
        '<input id="aname" autocomplete="name" autocapitalize="words" maxlength="60" value="' + esc(S.name || '') + '" style="font-size:17px;padding:13px 14px;border:1px solid var(--line);border-radius:10px;background:#fff"></label>' +
        '<div class="when"><label><span class="lbl" style="margin:0">' + t('visitDate') + '</span><input id="adate" type="date" max="' + dubaiNow().date + '" value="' + esc(S.vdate || dubaiNow().date) + '" style="font-size:17px;padding:12px;border:1px solid var(--line);border-radius:10px;background:#fff"></label>' +
@@ -826,7 +838,16 @@ function vStart(){
     h += '<button class="kcard' + (on ? ' on' : '') + '" data-act="kind" data-k="' + k[0] + '" aria-pressed="' + on + '"><span class="r"></span>' +
          '<span><span class="t">' + t(k[1]) + '</span><span class="s">' + t(k[1] + 'Sub') + '</span></span></button>';
   });
-  h += '</div></div>';
+  h += '</div>';
+  if (earlier.length) {
+    h += '<div style="display:flex;flex-direction:column;gap:8px;margin-top:6px"><span class="lbl" style="margin:0">' + t('earlier') + '</span><div class="card">';
+    earlier.forEach(function(x, i){
+      h += '<a class="sec" style="border:0;border-top:' + (i ? '1px solid var(--soft)' : '0') + ';border-radius:0;text-decoration:none;min-height:54px" href="' + esc(location.pathname + '?k=' + encodeURIComponent(x.k)) + '">' +
+           '<span class="grow"><span class="t" style="font-size:17px">' + esc(x.name) + '</span><span class="s">' + t('started') + ' ' + esc(dubaiTime(x.at)) + '</span></span><span class="muted">' + t('openIt') + '</span>' + CHEV_SVG + '</a>';
+    });
+    h += '</div></div>';
+  }
+  h += '</div>';
   h += '<div class="foot"><button class="big vino" data-act="begin" id="beginbtn">' + t('begin') + '</button></div>';
   return h;
 }
@@ -839,7 +860,10 @@ function begin(b){
   if (S.kind !== 'restaurant' && S.kind !== 'scala') { toast(t('pickKind'), true); return; }
   b.disabled = true; b.textContent = t('saving');
   api('start', { name: name, visit_date: dd, visit_time: tt, kind: S.kind }).then(function(r){
-    ls('auditMine:' + TOK.n, JSON.stringify({ k: r.k, name: name, at: new Date().toISOString() }));
+    var me = { k: r.k, name: name, at: new Date().toISOString() };
+    ls('auditMine:' + TOK.n, JSON.stringify(me));
+    ls('auditList:' + TOK.n, JSON.stringify([me].concat(mineAll().filter(function(x){ return x.k !== r.k; })).slice(0, 10)));
+    ls('auditFrom:' + r.k, TOK.n);   // so "Start another audit" after sending knows which link to open
     ls('auditLang', LANG);   // they carry on in the language they started in
     location.replace(location.pathname + '?k=' + encodeURIComponent(r.k));
   }, function(er){ b.disabled = false; b.textContent = t('begin'); toast(er.message, true); });
