@@ -646,6 +646,7 @@ function begin(b){
   b.disabled = true; b.textContent = t('saving');
   api('start', { name: name, visit_date: dd, visit_time: tt, kind: S.kind }).then(function(r){
     ls('auditMine:' + TOK.n, JSON.stringify({ k: r.k, name: name, at: new Date().toISOString() }));
+    ls('auditLang', LANG);   // they carry on in the language they started in
     location.replace(location.pathname + '?k=' + encodeURIComponent(r.k));
   }, function(er){ b.disabled = false; b.textContent = t('begin'); toast(er.message, true); });
 }
@@ -1036,6 +1037,9 @@ function reload(){
     if (D) { D.scores.forEach(function(r){ if (r._local != null) local['s:' + r.code] = r._local; }); D.texts.forEach(function(r){ if (r._local != null) local['t:' + r.key] = r._local; });
              D.dishes.forEach(function(r){ if (r._local != null) local['d:' + r.id] = r._local; }); D.flags.forEach(function(r){ if (r._local != null) local['f:' + r.id] = r._local; }); }
     D = d; setAreas();
+    // Italian first is for Enrico only: anyone else opening their own audit link gets English
+    // unless they chose otherwise (a guest landed on Italian after Start, 22 Oct 2026).
+    if (!ls('auditLang') && D.visit && D.visit.auditor !== ENRICO && LANG !== 'en') { LANG = 'en'; document.documentElement.lang = 'en'; }
     D.scores.forEach(function(r){ if (local['s:' + r.code] != null) r._local = local['s:' + r.code]; });
     D.texts.forEach(function(r){ if (local['t:' + r.key] != null) r._local = local['t:' + r.key]; });
     D.dishes.forEach(function(r){ if (local['d:' + r.id] != null) r._local = local['d:' + r.id]; });
