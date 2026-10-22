@@ -307,13 +307,19 @@
     position: relative;
     overflow: hidden;
   }
+  /* Room behind the Management landing (22 Oct 2026, Francesco picked the A&T
+     terrace by day, "Soft"): cream wash at .80, a little heavier across the top
+     so the title and live strip sit on calm paper. Fixed to the viewport, not
+     background-attachment:fixed, which iOS ignores and would zoom the photo to
+     the full page height. */
   #landing::before {
     content:'';
-    position:absolute;
+    position:fixed;
     inset:0;
     background:
-      linear-gradient(90deg, rgba(248,244,236,0.98) 0%, rgba(248,244,236,0.92) 48%, rgba(74,21,32,0.16) 100%),
-      repeating-linear-gradient(0deg, transparent, transparent 72px, rgba(107,31,42,0.045) 72px, rgba(107,31,42,0.045) 73px);
+      linear-gradient(180deg, rgba(248,244,236,0.92) 0, rgba(248,244,236,0.80) 260px, rgba(248,244,236,0.80) 100%),
+      repeating-linear-gradient(0deg, transparent, transparent 72px, rgba(107,31,42,0.045) 72px, rgba(107,31,42,0.045) 73px),
+      url('venue-terrace-day.jpg') center/cover no-repeat #F8F4EC;
     pointer-events:none;
   }
   .landing-content {
