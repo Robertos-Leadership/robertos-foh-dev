@@ -255,7 +255,7 @@ var T = {
     uploading:'Carico…', photoFail:'Foto non caricata. Riprova.', removeDish:'Togli questo piatto dalla lista', liked:'tenere', att:'attenzione', notes:'note',
     anchorAll:'1 = scarso · 3 = accettabile · 5 = eccellente', started:'iniziato', allNa:'Non visto — tutto N/A', undoNa:'Togli i N/A',
     startTitle:'Audit', startSub:'Scrivi il tuo nome e quando sei venuto.', yourName:'Il tuo nome', visitDate:'Data della visita', visitTime:'Ora', badDate:'Controlla la data della visita',
-    prenota:'Prenotazione', bagno:'Bagno', congedo:'Conto e saluto', food:'Cibo',
+    prenota:'Prenotazione', servito:'Chi ti ha servito', bookOpt:'Facoltativo', walkIn:'Sono entrato senza prenotare: salta', walkedIn:'Senza prenotazione, saltato', walkInSub:'Se sei entrato senza prenotare, salta questa sezione.', seatQ:'Dove eri seduto?', seatBar:'Al bancone', seatLounge:'A un tavolo del lounge', seatChange:'cambia', bagno:'Bagno', congedo:'Conto e saluto', food:'Cibo',
     where:'Dove sei stato?', kRest:'Ristorante', kRestSub:'Prenotazione, accoglienza, sala, vino, cibo, bagno, conto', kScala:'Scala', kScalaSub:'Bar & lounge: prenotazione, accoglienza, servizio, drink, bagno, conto', pickKind:'Scegli Ristorante o Scala',
     doneN:'Fatto', nextUp:'Prossima', qs:'domande', tasted:'assaggiati', piattiG:'I piatti assaggiati', piattiSubG:'Un voto per ogni piatto',
     finalG:'Prima di inviare', finalSubG:'Il momento migliore, una cosa da migliorare', addPhoto:'Aggiungi una foto', cont2:'Continua', startS:'Inizia',
@@ -293,7 +293,7 @@ var T = {
     uploading:'Uploading…', photoFail:'Photo not uploaded. Try again.', removeDish:'Remove this dish from the list', liked:'keep', att:'attention', notes:'notes',
     anchorAll:'1 = poor · 3 = acceptable · 5 = excellent', started:'started', allNa:'Not experienced — all N/A', undoNa:'Clear the N/As',
     startTitle:'Audit', startSub:'Type your name and when you visited.', yourName:'Your name', visitDate:'Date of your visit', visitTime:'Time', badDate:'Check the date of your visit',
-    prenota:'Booking', bagno:'Washroom', congedo:'Bill & goodbye', food:'Food',
+    prenota:'Booking', servito:'Who served you', bookOpt:'Optional', walkIn:'I walked in: skip Booking', walkedIn:'Walked in, skipped', walkInSub:'If you walked in without booking, skip this section.', seatQ:'Where did you sit?', seatBar:'At the bar counter', seatLounge:'At a lounge table', seatChange:'change', bagno:'Washroom', congedo:'Bill & goodbye', food:'Food',
     where:'Where did you go?', kRest:'Restaurant', kRestSub:'Booking, welcome, service, wine, food, washroom, bill', kScala:'Scala', kScalaSub:'Bar & lounge: booking, welcome, service, drinks, washroom, bill', pickKind:'Choose Restaurant or Scala',
     doneN:'Done', nextUp:'Next up', qs:'questions', tasted:'tasted', piattiG:'Dishes you tasted', piattiSubG:'A score for each dish',
     finalG:'Before you send', finalSubG:'The best moment, one thing to fix', addPhoto:'Add a photo', cont2:'Continue', startS:'Start',
@@ -345,7 +345,7 @@ var root = document.getElementById('root');
 
 /* ── API ─────────────────────────────────────────────────────────────────── */
 function api(action, payload){
-  var body = Object.assign({ action: action, pv: 3 }, TOK, payload || {});
+  var body = Object.assign({ action: action, pv: 3, qset: 2 }, TOK, payload || {});
   return fetch(FN + (action === 'load' ? '?read=1' : ''), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY },
@@ -582,6 +582,13 @@ function vHome(){
   var h = topBar(adminTabs() + '<div><div class="kick">' + esc(kindName()) + ' · ' + when + '</div><h1>' + hello + '</h1></div>' +
     '<div class="bar"><div class="track"><div class="fill" style="width:' + pct + '%"></div></div><b>' + done + ' ' + t('of') + ' ' + total + '</b><span class="saved ok">' + t('saved') + '</span></div>');
   h += '<div class="body">' + closedBanner();
+  // Scala: bar counter or lounge table first, so the questions read right (Francesco, 22 Oct 2026).
+  if (D.kind === 'scala' && !isEnrico()) {
+    var seat = textRow('seat'); seat = seat._local != null ? seat._local : seat.it;
+    if (!seat) h += '<div class="card" style="padding:14px"><div class="lbl" style="margin:0 0 8px">' + t('seatQ') + '</div><div class="verd" style="grid-template-columns:repeat(2,minmax(0,1fr))">' +
+      '<button class="vbtn" data-act="seat" data-v="bar">' + t('seatBar') + '</button><button class="vbtn" data-act="seat" data-v="lounge">' + t('seatLounge') + '</button></div></div>';
+    else h += '<div class="muted" style="padding:2px 2px 4px">' + t(seat === 'bar' ? 'seatBar' : 'seatLounge') + ' · <button class="link" style="display:inline;padding:0" data-act="seat" data-v="">' + t('seatChange') + '</button></div>';
+  }
   var n = 0, current = null;
   ORDER.forEach(function(a){ if (a !== 'piatti' && current === null) { var st = areaStats(a); if (st.done < st.total) current = a; } });
   ORDER.forEach(function(a){
@@ -593,9 +600,13 @@ function vHome(){
     }
     var st = areaStats(a), full = st.done === st.total, now = a === current;
     var sub = full ? t('doneN') + ' · ' + st.total + ' ' + t('of') + ' ' + st.total : now ? t('nextUp') + ' · ' + (st.total - st.done) + ' ' + t('qs') : st.total + ' ' + t('qs');
+    // Booking is optional: a walk-in skips it in one tap and is never marked down for the phone.
+    var walked = a === 'prenota' && st.total && cat(a).every(function(c){ return scoreRow(c.code).na; });
+    if (a === 'prenota' && !isEnrico()) sub = walked ? t('walkedIn') : t('bookOpt') + ' · ' + sub;
     if (foodWithDishes(a)) sub = (D.dishes.length ? D.dishes.length + ' ' + t(D.dishes.length === 1 ? 'dish1n' : 'dishesN') : t('ordered')) + ' · ' + sub;
     h += '<button class="sec' + (now ? ' now' : '') + '" data-act="area" data-a="' + a + '"><span class="dot' + (full ? ' done' : now ? ' go' : '') + '">' + (full ? CHECK_SVG : n) + '</span>' +
          '<span class="grow"><span class="t">' + areaName(a) + '</span><span class="s">' + sub + '</span></span>' + (now ? CHEV_SVG : '') + '</button>';
+    if (a === 'prenota' && !isEnrico() && !st.done) h += '<button class="link" style="margin:-4px 0 4px" data-act="areana" data-a="prenota">' + t('walkIn') + '</button>';
   });
   h += '<button class="sec final" data-act="go" data-to=\'{"v":"final"}\'><span class="dot star">★</span><span class="grow"><span class="t">' + t(isEnrico() ? 'final' : 'finalG') + '</span><span class="s">' + t(isEnrico() ? 'finalSub' : 'finalSubG') + '</span></span></button>';
   var nf = D.flags.length;
@@ -610,6 +621,7 @@ function vArea(){
   var a = S.area, items = cat(a), st = areaStats(a);
   var h = head({ v: 'home' }, t('home'), st.done + ' ' + t('of') + ' ' + st.total, areaName(a));
   h += '<div class="body">' + closedBanner();
+  if (a === 'prenota' && !isEnrico() && !st.done) h += '<div class="msg info">' + t('walkInSub') + '</div><button class="big light" data-act="areana" data-a="prenota" data-home="1">' + t('walkIn') + '</button>';
   // The food on a Restaurant visit opens with the dishes, by name: what was ordered, each scored.
   if (foodWithDishes(a)) {
     h += '<div style="display:flex;flex-direction:column;gap:4px"><h2 style="margin:0;font:400 26px/1.15 var(--display);color:var(--vino)">' + t('ordered') + '</h2><div class="muted" style="font-size:14px">' + t('orderedSub') + '</div></div>';
@@ -1095,6 +1107,11 @@ root.addEventListener('click', function(e){
     S.kind = b.getAttribute('data-k'); render(); return;
   }
   if (act === 'resume') { var m = mine(); if (m && m.k) location.href = location.pathname + '?k=' + encodeURIComponent(m.k); return; }
+  if (act === 'seat') {
+    var sr = textRow('seat'); sr._local = b.getAttribute('data-v'); queue('text:seat', 'text', { key: 'seat', it: sr._local });
+    render(); waitSaved().then(reload); return;
+  }
+  if (act === 'areana' && b.getAttribute('data-home')) setTimeout(function(){ go({ v: 'home' }); }, 0);   // skipped Booking from inside it: back to the sections
   if (act === 'areana' || act === 'areaclear') {
     cat(b.getAttribute('data-a')).forEach(function(c){
       var r = scoreRow(c.code);
