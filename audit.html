@@ -6,148 +6,177 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Audit Roberto's">
-<meta name="theme-color" content="#410207">
+<meta name="theme-color" content="#FBF7F1">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <title>Audit — Roberto's DIFC</title>
 <!-- Before any code below can call fetch(): on the DEV host this blocks every write. -->
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Bodoni+Moda:opsz,wght@6..96,400;6..96,500&family=DM+Sans:wght@400;500;700&display=swap');
-/* The house tokens (the same as the Kitchen app, where this page started). */
+@import url('https://fonts.googleapis.com/css2?family=Forum&family=Outfit:wght@400;500;600;700&display=swap');
+/* Roberto's brand (redesign 22 Oct 2026, approved mock-up): wine #450207, cream, orange used sparingly,
+   tan hairlines; Forum for headings, Outfit for text. The older names below point at the new colours so
+   every screen follows. */
 :root{
-  --sabbia:#e1d3c2;--sabbia-light:#ede5d8;--sabbia-dark:#cfc0ad;--line:#e6dacb;
-  --vino:#410207;--vino-mid:#5e0a10;--terra:#c0481f;
-  --ink:#2a1a10;--cream:#f5ede0;--paper:#fbf7f1;--door:#f4ede2;--muted:#6b5b50;
-  --ok:#2f5d1e;--ok-bg:#e4ecd9;--below:#7a4200;--below-bg:#f6e6cc;--err:#8f1d12;--err-bg:#f6dcd6;
-  --display:'Bodoni Moda',Didot,'Times New Roman',serif;
-  --sans:'DM Sans',-apple-system,'Segoe UI',Roboto,sans-serif;
+  --vino:#450207;--accent:#FA4700;--ink:#3A332C;--muted:#6E5A4C;--body:#4F4238;
+  --line:#D8C4AC;--soft:#EFE4D6;--sand:#E8D9C7;--paper:#FBF7F1;--door:#F6EFE6;
+  --sabbia:#E8D9C7;--sabbia-light:#EFE4D6;--sabbia-dark:#D8C4AC;--terra:#450207;--cream:#FBF7F1;--vino-mid:#6B1A20;
+  --ok:#2F6B2F;--ok-bg:#EEF4EA;--below:#8A5A00;--below-bg:#F6EBD4;--err:#B23A00;--err-bg:#FCEBE2;
+  --display:'Forum',Georgia,'Times New Roman',serif;
+  --sans:'Outfit',-apple-system,'Segoe UI',Roboto,sans-serif;
   color-scheme:light;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:15px}
 button,input,textarea,select{font:inherit;color:inherit}
 button{cursor:pointer}
-button:focus-visible,input:focus-visible,textarea:focus-visible,a:focus-visible{outline:3px solid var(--terra);outline-offset:2px}
+button:focus-visible,input:focus-visible,textarea:focus-visible,a:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 [hidden]{display:none!important}
 .app{max-width:560px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column;background:var(--paper)}
 .app.wide{max-width:820px}
-.top{background:var(--vino);color:var(--cream);padding:22px 20px 20px;padding-top:max(22px,env(safe-area-inset-top));display:flex;flex-direction:column;gap:10px}
+.top{background:var(--paper);color:var(--ink);padding:24px 20px 18px;padding-top:max(24px,env(safe-area-inset-top));display:flex;flex-direction:column;gap:12px;border-bottom:1px solid var(--line)}
 .top .row{display:flex;justify-content:space-between;align-items:center;gap:10px}
 .brand{display:flex;align-items:center;gap:10px}
-.brand img{width:16px;height:24px;object-fit:contain}
-.kick{font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--sabbia);font-weight:700}
-.top h1{font-family:var(--display);font-weight:400;font-size:34px;line-height:1.1;margin:0}
-.top .sub{font-size:14px;color:var(--sabbia)}
-.lang{display:flex;gap:4px}
-.lang button{font-size:11px;letter-spacing:.08em;font-weight:700;padding:6px 10px;border-radius:3px;border:1px solid var(--vino-mid);background:transparent;color:var(--sabbia);min-height:32px}
-.lang button.on{background:var(--cream);color:var(--vino);border-color:var(--cream)}
-.bar{display:flex;align-items:center;gap:10px;margin-top:4px}
-.bar .track{flex:1;height:4px;background:var(--vino-mid);border-radius:2px;overflow:hidden}
-.bar .fill{height:4px;background:var(--terra)}
-.bar b{font-size:13px}
+.brand img{height:22px;width:auto;display:block}
+.kick{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:500}
+.top h1{font-family:var(--display);font-weight:400;font-size:34px;line-height:1.08;margin:0;color:var(--vino)}
+.top .sub{font-size:15px;line-height:1.5;color:var(--body)}
+.lang{display:flex;border:1px solid var(--line);border-radius:999px;overflow:hidden}
+.lang button{font-size:13px;font-weight:500;padding:7px 12px;border:0;background:transparent;color:var(--muted);min-height:34px}
+.lang button.on{background:var(--vino);color:var(--paper)}
+.bar{display:flex;align-items:center;gap:12px}
+.bar .track{flex:1;height:6px;background:var(--sand);border-radius:3px;overflow:hidden}
+.bar .fill{height:6px;background:var(--vino)}
+.bar b{font-size:14px;font-weight:600;color:var(--vino);white-space:nowrap}
 .body{padding:16px;display:flex;flex-direction:column;gap:10px;flex:1}
-.lbl{font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--vino);font-weight:700;padding:0 2px;margin-top:6px}
-.card{background:#fff;border:1px solid var(--line);border-radius:8px}
-.sec{display:flex;align-items:center;gap:12px;padding:12px 14px;width:100%;text-align:left;background:#fff;border:1px solid var(--line);border-radius:8px;min-height:60px}
-.sec:hover{border-color:var(--terra)}
-.sec.now{border:2px solid var(--terra);padding:11px 13px}
-.sec.final{background:var(--door);border-color:var(--sabbia-dark)}
-.dot{flex:none;width:28px;height:28px;border-radius:14px;background:var(--sabbia-light);color:var(--vino);font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center}
-.dot.done{background:var(--ok-bg);color:var(--ok)}
-.dot.go{background:var(--vino);color:var(--cream)}
-.dot.star{background:var(--terra);color:#fff}
-.sec .t{display:block;font-family:var(--display);font-size:19px;color:var(--vino);line-height:1.2}
-.sec .s{display:block;font-size:12.5px;color:var(--muted);margin-top:2px}
+.lbl{font-size:13px;font-weight:600;color:var(--vino);padding:0 2px;margin-top:8px}
+.lbl small{font-weight:400;color:var(--muted)}
+.card{background:#fff;border:1px solid var(--line);border-radius:12px}
+.sec{display:flex;align-items:center;gap:14px;padding:13px 15px;width:100%;text-align:left;background:#fff;border:1px solid var(--line);border-radius:12px;min-height:64px}
+.sec:hover{border-color:var(--vino)}
+.sec.now{border:2px solid var(--vino);padding:12px 14px}
+.sec.final{background:var(--door)}
+.dot{flex:none;width:28px;height:28px;border-radius:14px;background:var(--sand);color:var(--vino);font-size:13px;font-weight:600;display:flex;align-items:center;justify-content:center}
+.dot.done{background:var(--vino);color:var(--paper)}
+.dot.go{background:transparent;border:2px solid var(--vino);color:var(--vino)}
+.dot.star{background:var(--vino);color:var(--paper)}
+.sec .t{display:block;font-family:var(--display);font-size:20px;color:var(--vino);line-height:1.2}
+.sec .s{display:block;font-size:13px;color:var(--muted);margin-top:2px}
 .sec .grow{flex:1;min-width:0}
-.sec .sc{font-weight:700;font-size:15px;white-space:nowrap}
-.fab{position:fixed;right:max(16px,calc(50% - 264px));bottom:max(20px,env(safe-area-inset-bottom));height:58px;padding:0 22px 0 18px;border-radius:29px;background:var(--terra);color:#fff;border:0;font-weight:700;font-size:15px;display:flex;align-items:center;gap:10px;box-shadow:0 6px 18px rgba(65,2,7,.28);z-index:20}
-.head{padding:16px 20px 14px;padding-top:max(16px,env(safe-area-inset-top));background:var(--door);border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:8px}
+.sec .sc{font-weight:600;font-size:15px;white-space:nowrap;color:var(--vino)}
+.sec .chev{flex:none;color:var(--vino)}
+.head{padding:14px 20px 14px;padding-top:max(14px,env(safe-area-inset-top));background:var(--paper);border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:8px}
 .head .row{display:flex;justify-content:space-between;align-items:center;gap:8px}
-.back{font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--vino);background:var(--sabbia-light);border:1px solid var(--sabbia-dark);border-radius:3px;padding:9px 12px;min-height:38px}
-.head h2{font-family:var(--display);font-weight:400;font-size:30px;color:var(--vino);line-height:1.1;margin:0}
+.back{display:inline-flex;align-items:center;gap:6px;font-size:14px;font-weight:500;color:var(--vino);background:none;border:0;padding:0;min-height:44px}
+.head h2{font-family:var(--display);font-weight:400;font-size:28px;color:var(--vino);line-height:1.15;margin:0}
+.head .hint{font-size:15px;line-height:1.5;color:var(--body);margin:0}
 .head .prev{font-size:12.5px;color:var(--muted)}
-.head .prev b{color:var(--terra)}
-.muted{color:var(--muted);font-size:12.5px}
-.scores{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:6px}
+.qk{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.qk .kick{font-size:12px}
+.segs{display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end}
+.segs i{width:14px;height:4px;border-radius:2px;background:var(--sand)}
+.segs i.on{background:var(--vino)}
+.muted{color:var(--muted);font-size:13px}
+.scores{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px}
 .scores.five{grid-template-columns:repeat(5,minmax(0,1fr))}
-.sbtn{height:52px;border:1px solid var(--sabbia-dark);background:#fff;border-radius:6px;font-size:18px;font-weight:700}
-.sbtn.na{font-size:13px;background:var(--sabbia-light);color:var(--muted)}
-.sbtn.on{background:var(--vino);border:2px solid var(--vino);color:var(--cream)}
-.verd{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
-.vbtn{min-height:46px;border:1px solid var(--sabbia-dark);background:#fff;border-radius:6px;font-size:14px;padding:4px}
+.sbtn{height:56px;border:1px solid var(--line);background:#fff;border-radius:12px;font-size:20px;font-weight:600;color:var(--ink)}
+.sbtn.na{font-size:13px;background:var(--door);color:var(--muted)}
+.sbtn.on{background:var(--vino);border-color:var(--vino);color:var(--paper)}
+.yn{display:flex;flex-direction:column;gap:10px}
+.ybtn{min-height:58px;border:1px solid var(--line);border-radius:12px;background:#fff;color:var(--ink);font-size:18px;font-weight:500;display:flex;align-items:center;justify-content:center;gap:10px}
+.ybtn.yes.on{border:2px solid var(--ok);background:var(--ok-bg);color:var(--ok);font-weight:600}
+.ybtn.no.on{border:2px solid var(--err);background:var(--err-bg);color:var(--err);font-weight:600}
+.ybtn.seen{min-height:48px;border-style:dashed;background:transparent;color:var(--muted);font-size:15px}
+.ybtn.seen.on{border:2px solid var(--muted);color:var(--ink);background:var(--door)}
+.anc{background:#fff;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.anc div{display:flex;gap:12px;padding:11px 14px;border-top:1px solid var(--soft);font-size:14px;line-height:1.4}
+.anc div:first-child{border-top:0}
+.anc div.on{background:var(--door)}
+.anc b{flex:none;width:14px;color:var(--vino);font-weight:600}
+.pill{min-height:44px;padding:0 14px;border:1px solid var(--line);border-radius:999px;background:#fff;color:var(--vino);font-size:14px;font-weight:500;display:inline-flex;align-items:center;gap:8px}
+.pill.dash{border-style:dashed;background:transparent;color:var(--muted)}
+.pill.on{border:2px solid var(--muted);color:var(--ink);background:var(--door)}
+.verd{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.vbtn{min-height:46px;border:1px solid var(--line);background:#fff;border-radius:12px;font-size:14px;padding:4px}
 .vbtn.ok{color:var(--ok)}.vbtn.fix{color:var(--below)}.vbtn.urgent{color:var(--err)}
-.vbtn.ok.on{background:var(--ok-bg);border:2px solid var(--ok);font-weight:700}
-.vbtn.fix.on{background:var(--below-bg);border:2px solid var(--below);font-weight:700}
-.vbtn.urgent.on{background:var(--err-bg);border:2px solid var(--err);font-weight:700}
+.vbtn.ok.on{background:var(--ok-bg);border:2px solid var(--ok);font-weight:600}
+.vbtn.fix.on{background:var(--below-bg);border:2px solid var(--below);font-weight:600}
+.vbtn.urgent.on{background:var(--err-bg);border:2px solid var(--err);font-weight:600}
 .note{padding:12px;display:flex;flex-direction:column;gap:10px}
-.note textarea{width:100%;min-height:96px;border:1px solid var(--line);border-radius:6px;padding:10px;font-size:16px;line-height:1.45;background:var(--paper);resize:vertical}
+.note textarea{width:100%;min-height:72px;border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:16px;line-height:1.45;background:var(--paper);resize:vertical}
 .note textarea.small{min-height:52px}
 .note .tools{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-.mic,.cam{min-height:44px;border-radius:22px;padding:0 16px;font-weight:700;font-size:14px;display:inline-flex;align-items:center;gap:8px;border:0}
-.mic{background:var(--vino);color:var(--cream)}
-.mic.live{background:var(--err);animation:pulse 1.2s infinite}
+.mic,.cam{min-height:44px;border-radius:999px;padding:0 14px;font-weight:500;font-size:14px;display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);background:#fff;color:var(--vino)}
+.mic.live{background:var(--err);border-color:var(--err);color:#fff;animation:pulse 1.2s infinite}
 @keyframes pulse{50%{opacity:.75}}
-.cam{background:#fff;border:1px solid var(--sabbia-dark);color:var(--vino)}
-.saved{font-size:12px;color:var(--muted);margin-left:auto}
-.saved.bad{color:var(--err);font-weight:700}
+.saved{font-size:13px;color:var(--ok);margin-left:auto;display:inline-flex;align-items:center;gap:5px}
+.saved.ok::before{content:'';width:12px;height:7px;border-left:2.4px solid currentColor;border-bottom:2.4px solid currentColor;transform:rotate(-45deg) translateY(-2px)}
+.saved.ing{color:var(--muted)}
+.saved.bad{color:var(--err);font-weight:600}
 .pics{display:flex;gap:6px;flex-wrap:wrap}
-.pic{position:relative;width:72px;height:72px;border-radius:6px;overflow:hidden;background:var(--sabbia)}
+.pic{position:relative;width:72px;height:72px;border-radius:8px;overflow:hidden;background:var(--sand)}
 .pic img{width:100%;height:100%;object-fit:cover;display:block}
-.pic button{position:absolute;top:2px;right:2px;width:26px;height:26px;border-radius:13px;border:0;background:rgba(42,26,16,.75);color:#fff;font-size:15px;line-height:26px;padding:0}
+.pic button{position:absolute;top:2px;right:2px;width:26px;height:26px;border-radius:13px;border:0;background:rgba(58,51,44,.8);color:#fff;font-size:15px;line-height:26px;padding:0}
 .pic.up{display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--muted)}
-.en{font-size:13px;line-height:1.45;color:var(--muted);border-top:1px solid var(--sabbia-light);padding-top:8px}
-.en b{color:var(--vino);font-size:10.5px;letter-spacing:.12em}
-.foot{position:sticky;bottom:0;padding:12px 16px;padding-bottom:max(16px,env(safe-area-inset-bottom));background:var(--door);border-top:1px solid var(--line);display:flex;gap:10px}
-.big{flex:1;min-height:56px;border-radius:28px;border:0;font-weight:700;font-size:16px}
-.big.vino{background:var(--vino);color:var(--cream)}
-.big.terra{background:var(--terra);color:#fff}
-.big.light{background:#fff;border:1px solid var(--sabbia-dark);color:var(--vino)}
+.en{font-size:13px;line-height:1.45;color:var(--muted);border-top:1px solid var(--soft);padding-top:8px}
+.en b{color:var(--vino);font-size:11px;letter-spacing:.12em}
+.foot{position:sticky;bottom:0;padding:12px 16px;padding-bottom:max(16px,env(safe-area-inset-bottom));background:var(--paper);border-top:1px solid var(--line);display:flex;gap:10px}
+.foot.static{position:static}
+.big{flex:1;min-height:52px;border-radius:12px;border:0;font-weight:500;font-size:16px;display:inline-flex;align-items:center;justify-content:center;gap:8px}
+.big.vino,.big.terra{background:var(--vino);color:var(--paper)}
+.big.light{background:#fff;border:1px solid var(--line);color:var(--vino)}
 .big:disabled{opacity:.55}
 .chips{display:flex;flex-wrap:wrap;gap:6px}
-.chip{border:1px solid var(--sabbia-dark);background:#fff;border-radius:18px;padding:9px 14px;font-size:14px;min-height:42px}
-.chip.on{background:var(--vino);color:var(--cream);border-color:var(--vino)}
-.pick{padding:12px;display:flex;flex-direction:column;gap:8px}
-.pick input{width:100%;border:1px solid var(--sabbia-dark);border-radius:6px;padding:12px;font-size:16px;background:#fff}
-.opt{display:block;width:100%;text-align:left;padding:12px;border:0;border-top:1px solid var(--sabbia-light);background:#fff;font-size:15px}
+.chip{border:1px solid var(--line);background:#fff;border-radius:999px;padding:9px 14px;font-size:14px;min-height:42px}
+.chip.on{background:var(--vino);color:var(--paper);border-color:var(--vino)}
+.pick{padding:14px;display:flex;flex-direction:column;gap:8px}
+.pick input{width:100%;border:1px solid var(--line);border-radius:10px;padding:13px 14px;font-size:17px;background:#fff;color:var(--ink)}
+.opt{display:block;width:100%;text-align:left;padding:12px;border:0;border-top:1px solid var(--soft);background:#fff;font-size:15px}
 .opt small{color:var(--muted);margin-left:6px}
-.shot{min-height:220px;border-radius:8px;border:2px dashed var(--terra);background:var(--door);color:var(--vino);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;font-weight:700;font-size:17px;width:100%}
-.msg{padding:12px 14px;border-radius:8px;font-size:14px;line-height:1.45}
+.kcard{display:flex;align-items:center;gap:14px;text-align:left;padding:16px;border:1px solid var(--line);border-radius:14px;background:#fff;min-height:76px;width:100%}
+.kcard.on{border:2px solid var(--vino);padding:15px}
+.kcard .r{flex:none;width:22px;height:22px;border-radius:50%;border:2px solid var(--line);display:flex;align-items:center;justify-content:center}
+.kcard.on .r{border-color:var(--vino)}
+.kcard.on .r::after{content:'';width:10px;height:10px;border-radius:50%;background:var(--vino)}
+.kcard .t{display:block;font-family:var(--display);font-size:22px;color:var(--vino);line-height:1.15}
+.kcard .s{display:block;font-size:14px;color:var(--muted);margin-top:2px}
+.shot{min-height:200px;border-radius:12px;border:2px dashed var(--line);background:var(--door);color:var(--vino);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;font-weight:500;font-size:17px;width:100%}
+.msg{padding:12px 14px;border-radius:12px;font-size:14px;line-height:1.45}
 .msg.ok{background:var(--ok-bg);color:var(--ok)}
 .msg.err{background:var(--err-bg);color:var(--err)}
-.msg.info{background:var(--sabbia-light);color:var(--ink)}
+.msg.info{background:var(--door);color:var(--ink)}
 .center{text-align:center;padding:40px 20px;color:var(--muted)}
-.link{background:none;border:0;color:var(--vino);text-decoration:underline;padding:8px 0;font-size:14px}
+.link{background:none;border:0;color:var(--vino);text-decoration:underline;padding:8px 0;font-size:14px;align-self:flex-start}
 /* report */
 .tiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
-.tile{background:#fff;border:1px solid var(--line);border-radius:6px;padding:10px 12px}
-.tile b{display:block;font-size:24px}
+.tile{background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.tile b{display:block;font-size:24px;font-weight:600;color:var(--vino)}
 .tile span{font-size:12px;color:var(--muted)}
-.top .tile{background:var(--vino-mid);border:0}
-.top .tile span{color:var(--sabbia)}
 .tbl{width:100%;border-collapse:collapse;font-size:14px}
 .tbl th{font-weight:400;color:var(--muted);font-size:12px;text-align:left;padding:6px 4px;border-bottom:1px solid var(--line)}
-.tbl td{padding:9px 4px;border-bottom:1px solid var(--line)}
+.tbl td{padding:9px 4px;border-bottom:1px solid var(--soft)}
 .tbl td.a{font-family:var(--display);font-size:17px;color:var(--vino)}
 .act{padding:12px 14px;display:flex;flex-direction:column;gap:6px}
 .act .h{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}
 .act .n{font-family:var(--display);font-size:18px;color:var(--vino);line-height:1.2}
-.badge{display:inline-block;font-size:11.5px;font-weight:700;padding:3px 9px;border-radius:10px;white-space:nowrap}
+.badge{display:inline-block;font-size:11.5px;font-weight:600;padding:3px 9px;border-radius:10px;white-space:nowrap}
 .badge.urgent,.badge.remove{background:var(--err-bg);color:var(--err)}
 .badge.fix,.badge.attention{background:var(--below-bg);color:var(--below)}
 .badge.ok,.badge.keep{background:var(--ok-bg);color:var(--ok)}
 .act .it{font-size:12.5px;color:var(--muted);font-style:italic}
-.act textarea,.rtext textarea,.item textarea{width:100%;border:1px solid var(--line);border-radius:6px;padding:8px 10px;font-size:16px;line-height:1.45;background:var(--paper);min-height:44px;resize:vertical}
+.act textarea,.rtext textarea,.item textarea{width:100%;border:1px solid var(--line);border-radius:10px;padding:8px 10px;font-size:16px;line-height:1.45;background:var(--paper);min-height:44px;resize:vertical}
 .who{display:flex;gap:8px;flex-wrap:wrap}
-.who input{flex:1;min-width:130px;border:1px solid var(--sabbia-dark);border-radius:6px;padding:9px 10px;font-size:16px;background:#fff;min-height:42px}
+.who input{flex:1;min-width:130px;border:1px solid var(--line);border-radius:10px;padding:9px 10px;font-size:16px;background:#fff;min-height:42px}
 .rtext{padding:12px 14px;display:flex;flex-direction:column;gap:6px}
 .tabs{display:flex;gap:6px}
-.tabs button{flex:1;min-height:40px;border-radius:4px;border:1px solid var(--vino-mid);background:transparent;color:var(--sabbia);font-weight:700;font-size:13px}
-.tabs button.on{background:var(--cream);color:var(--vino);border-color:var(--cream)}
-.item{padding:10px 14px;border-top:1px solid var(--sabbia-light);display:flex;flex-direction:column;gap:6px}
+.tabs button{flex:1;min-height:40px;border-radius:10px;border:1px solid var(--line);background:#fff;color:var(--vino);font-weight:500;font-size:13px}
+.tabs button.on{background:var(--vino);color:var(--paper);border-color:var(--vino)}
+.item{padding:10px 14px;border-top:1px solid var(--soft);display:flex;flex-direction:column;gap:6px}
 .item:first-child{border-top:0}
 .item .h{display:flex;justify-content:space-between;gap:8px;font-size:14px}
-@media (max-width:420px){.tiles{grid-template-columns:repeat(2,minmax(0,1fr))}.top h1{font-size:30px}}
+.when{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.when label{min-width:0;display:flex;flex-direction:column;gap:8px}
+.when input{width:100%;box-sizing:border-box}
+@media (max-width:420px){.tiles{grid-template-columns:repeat(2,minmax(0,1fr))}.top h1{font-size:32px}}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
-.when{display:flex;gap:10px;margin-top:12px}.when label{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}.when input{width:100%;box-sizing:border-box}
 </style>
 </head>
 <body>
@@ -221,7 +250,16 @@ var T = {
     startTitle:'Audit', startSub:'Scrivi il tuo nome e quando sei venuto.', yourName:'Il tuo nome', visitDate:'Data della visita', visitTime:'Ora', badDate:'Controlla la data della visita',
     prenota:'Prenotazione', bagno:'Bagno', congedo:'Conto e saluto', food:'Cibo',
     where:'Dove sei stato?', kRest:'Ristorante', kRestSub:'Prenotazione, accoglienza, sala, vino, cibo, bagno, conto', kScala:'Scala', kScalaSub:'Bar & lounge: prenotazione, accoglienza, servizio, drink, bagno, conto', pickKind:'Scegli Ristorante o Scala',
-    sendTeam:'Invia al team di direzione', sentTeamTitle:'Grazie', sentTeamLine:"Il team di direzione di Roberto's vede già il tuo audit. Puoi ancora aggiungere o correggere qualcosa: si salva da solo.", begin:'Inizia', cont:'Continua il tuo audit', newOne:'oppure inizia un nuovo audit'
+    doneN:'Fatto', nextUp:'Prossima', qs:'domande', tasted:'assaggiati', piattiG:'I piatti assaggiati', piattiSubG:'Un voto per ogni piatto',
+    finalG:'Prima di inviare', finalSubG:'Il momento migliore, una cosa da migliorare', addPhoto:'Aggiungi una foto', cont2:'Continua', startS:'Inizia',
+    noted:'nota', photos:'foto', yes:'Sì', no:'No', notSeen:"Non l'ho visto", anything:'Vuoi aggiungere qualcosa?', optional:'Facoltativo',
+    nextQ:'Domanda successiva', nextSec:'Sezione successiva', kRest:'Il ristorante', kRestSub:'Dalla prenotazione al saluto · 33 domande',
+    kScala:'Scala, bar & lounge', kScalaSub:"Dall'accoglienza al conto · 27 domande", kVenue:'Tutto il locale', atTable:'Al tavolo', atScala:'Alla Scala',
+    best:'Il momento migliore', fixone:'Una cosa da migliorare', other:'Altro', bestPh:'Cosa ti è piaciuto di più?', fixonePh:'Se potessi cambiare una cosa…', otherPh:'Qualsiasi altra cosa',
+    dish5:'Lo riordineresti domani', dish3:'Buono', dish1:"L'hai lasciato", startTitle:'Audit ospite', begin:"Inizia l'audit",
+    startSub:"Circa 15 minuti. Rispondi da ospite: quello che hai visto, sentito e assaggiato. Quello che non hai visto, saltalo.",
+    allNa:'Non ho visto niente di questa sezione', undoNa:'Annulla i "non visto"', saved:'Salvato', food:'Il cibo',
+    sendTeam:'Invia al team di direzione', sentTeamTitle:'Grazie', sentTeamLine:"Il team di direzione di Roberto's vede già il tuo audit. Puoi ancora aggiungere o correggere qualcosa: si salva da solo.", begin:"Inizia l'audit", cont:'Continua il tuo audit', newOne:'oppure inizia un nuovo audit'
   },
   en: {
     hello:'Hello Enrico', visit:'Visit', autosave:'type or speak, it saves by itself', sections:'Sections',
@@ -246,13 +284,28 @@ var T = {
     startTitle:'Audit', startSub:'Type your name and when you visited.', yourName:'Your name', visitDate:'Date of your visit', visitTime:'Time', badDate:'Check the date of your visit',
     prenota:'Booking', bagno:'Washroom', congedo:'Bill & goodbye', food:'Food',
     where:'Where did you go?', kRest:'Restaurant', kRestSub:'Booking, welcome, service, wine, food, washroom, bill', kScala:'Scala', kScalaSub:'Bar & lounge: booking, welcome, service, drinks, washroom, bill', pickKind:'Choose Restaurant or Scala',
-    sendTeam:"Send to Roberto's management team", sentTeamTitle:'Thank you', sentTeamLine:"Roberto's management team can already see your audit. You can still add or correct anything: it saves by itself.", begin:'Start', cont:'Continue your audit', newOne:'or start a new audit'
+    doneN:'Done', nextUp:'Next up', qs:'questions', tasted:'tasted', piattiG:'Dishes you tasted', piattiSubG:'A score for each dish',
+    finalG:'Before you send', finalSubG:'The best moment, one thing to fix', addPhoto:'Add a photo', cont2:'Continue', startS:'Start',
+    noted:'note', photos:'photos', yes:'Yes', no:'No', notSeen:"I didn't see this", anything:'Anything to add?', optional:'Optional',
+    nextQ:'Next question', nextSec:'Next section', kRest:'The restaurant', kRestSub:'Booking to goodbye · 33 questions',
+    kScala:'Scala, bar & lounge', kScalaSub:'Welcome to the bill · 27 questions', kVenue:'Whole venue', atTable:'At the table', atScala:'At Scala',
+    best:'The best moment', fixone:'One thing to fix', other:'Anything else', bestPh:'What did you enjoy most?', fixonePh:'If you could change one thing…', otherPh:'Anything else',
+    dish5:"You'd order it again tomorrow", dish3:'Fine', dish1:'You left it', startTitle:'Guest audit', begin:'Start the audit',
+    startSub:"About 15 minutes. Answer as a guest: what you saw, heard and tasted. Anything you didn't see, skip.",
+    allNa:"I didn't see any of this section", undoNa:'Clear the "didn\'t see"', saved:'Saved', food:'The food',
+    sendTeam:"Send to Roberto's management team", sentTeamTitle:'Thank you', sentTeamLine:"Roberto's management team can already see your audit. You can still add or correct anything: it saves by itself.", begin:'Start the audit', cont:'Continue your audit', newOne:'or start a new audit'
   }
 };
 function t(k){ return (T[LANG] && T[LANG][k]) || T.it[k] || k; }
 function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
 // For a guest (Restaurant visit) the kitchen section is the food on the plate.
-function areaName(a){ return a === 'cucina' && D && D.kind && D.kind !== 'venue' ? t('food') : t(a); }
+function areaName(a){
+  var k = D && D.kind;
+  if (a === 'cucina' && k && k !== 'venue') return t('food');
+  if (a === 'ristorante' && k === 'restaurant') return t('atTable');
+  if (a === 'scala' && k === 'scala') return t('atScala');
+  return t(a);
+}
 // The sections come from the visit's type (22 Oct 2026: whole venue / Restaurant / Scala); the lists
 // above are only the fallback. Dishes sit after the food (or after Scala on a Scala visit).
 function setAreas(){
@@ -264,6 +317,7 @@ function setAreas(){
   if (D.area_en) for (var k in D.area_en) AREA_EN[k] = D.area_en[k];
 }
 function lab(c){ return LANG === 'en' ? c.label_en : c.label_it; }
+function shortDate(d){ if (!d) return ''; try { return new Date(d + 'T12:00:00Z').toLocaleDateString(LANG === 'en' ? 'en-GB' : 'it-IT', { weekday:'short', day:'numeric', month:'short' }); } catch(e){ return d; } }
 function fmtDate(d, lang){ if (!d) return ''; try { return new Date(d + 'T12:00:00Z').toLocaleDateString(lang === 'en' ? 'en-GB' : 'it-IT', { weekday:'long', day:'numeric', month:'long', year:'numeric' }); } catch(e){ return d; } }
 
 var D = null;                 // everything the API returned
@@ -272,7 +326,7 @@ var root = document.getElementById('root');
 
 /* ── API ─────────────────────────────────────────────────────────────────── */
 function api(action, payload){
-  var body = Object.assign({ action: action, pv: 2 }, TOK, payload || {});
+  var body = Object.assign({ action: action, pv: 3 }, TOK, payload || {});
   return fetch(FN + (action === 'load' ? '?read=1' : ''), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY },
@@ -315,7 +369,7 @@ window.addEventListener('online', function(){ flushSoon(0); });
 function setStatus(s){
   var els = document.querySelectorAll('.saved');
   for (var i = 0; i < els.length; i++) {
-    els[i].className = 'saved' + (s === 'bad' ? ' bad' : '');
+    els[i].className = 'saved ' + (s === 'bad' ? 'bad' : s === 'saving' ? 'ing' : 'ok');
     els[i].textContent = s === 'saving' ? t('saving') : s === 'bad' ? t('notSaved') : t('saved');
   }
 }
@@ -344,17 +398,43 @@ function scoreRow(code){ for (var i = 0; i < D.scores.length; i++) if (D.scores[
 function textRow(key){ for (var i = 0; i < D.texts.length; i++) if (D.texts[i].key === key) return D.texts[i]; var r = { key: key, photos: [] }; D.texts.push(r); return r; }
 function byId(list, id){ for (var i = 0; i < list.length; i++) if (list[i].id === id) return list[i]; return null; }
 function cat(area){ return D.catalog.filter(function(c){ return c.area === area; }).sort(function(a, b){ return a.position - b.position; }); }
+// A standard is answered Yes (5) or No (0); a quality score is 1-5. "Answered" = a score is there at all:
+// a No is 0, so a score is never tested for truth (22 Oct 2026 redesign).
+function has(r){ return !!r && !r.na && r.score != null && r.score !== ''; }
+function isStd(c){ return c && c.qtype === 'standard'; }
+function ansLabel(c, r, lang){
+  var L = lang || LANG;
+  if (!r || (!r.na && !has(r))) return '';
+  if (r.na) return L === 'en' ? "Didn't see" : 'Non visto';
+  if (isStd(c)) return r.score > 0 ? (L === 'en' ? 'Yes' : 'Sì') : 'No';
+  return r.score + ' / 5';
+}
+function hint(c){ return LANG === 'en' ? c.hint_en : (c.hint_it || c.hint_en); }
+function anchor(c, n){ return LANG === 'en' ? c['a' + n + '_en'] : (c['a' + n + '_it'] || c['a' + n + '_en']); }
+function kindName(){ return D && D.kind === 'scala' ? t('kScala') : D && D.kind === 'restaurant' ? t('kRest') : t('kVenue'); }
+// After the last question of a section: the next section's first open question, then the dishes, then the end.
+function afterSection(area){
+  var i = ORDER.indexOf(area);
+  for (var j = i + 1; j < ORDER.length; j++) {
+    var a = ORDER[j];
+    if (a === 'piatti') return { v: 'dishes' };
+    var open = cat(a).filter(function(c){ return !isDone(c.code); })[0];
+    if (open) return { v: 'item', code: open.code };
+  }
+  return { v: 'final' };
+}
+
 /* Trend against the last visit, like for like: only items scored (not N/A) in BOTH visits.
    Nov 2022 scored 17 items in 3 areas; this audit can score 33 in 5, so comparing the two
    overall %s would compare different things. n = how many items the trend stands on. */
 function like(area){
   if (!D.previous) return null;
-  var old = {}; D.previous.scores.forEach(function(p){ if (p.score && !p.na) old[p.code] = p.score; });
+  var old = {}; D.previous.scores.forEach(function(p){ if (has(p)) old[p.code] = p.score; });
   var a = 0, b = 0, n = 0;
   D.catalog.forEach(function(c){
     if (area && c.area !== area) return;
     var r = scoreRow(c.code);
-    if (r.score && !r.na && old[c.code]) { a += r.score; b += old[c.code]; n++; }
+    if (has(r) && old[c.code] != null) { a += r.score; b += old[c.code]; n++; }
   });
   if (!n) return null;
   var now = Math.round(a / (5 * n) * 100), then = Math.round(b / (5 * n) * 100);
@@ -362,13 +442,13 @@ function like(area){
 }
 function signed(x){ return (x >= 0 ? '+' : '') + x; }
 function prevScore(code){ if (!D.previous) return null; for (var i = 0; i < D.previous.scores.length; i++) if (D.previous.scores[i].code === code) return D.previous.scores[i]; return null; }
-function isDone(code){ var r = scoreRow(code); return !!(r.score || r.na); }
+function isDone(code){ var r = scoreRow(code); return !!(has(r) || r.na); }
 function areaStats(a){
   var items = cat(a), n = 0, s = 0, k = 0;
-  items.forEach(function(c){ var r = scoreRow(c.code); if (r.score || r.na) n++; if (r.score) { s += r.score; k++; } });
+  items.forEach(function(c){ var r = scoreRow(c.code); if (has(r) || r.na) n++; if (has(r)) { s += r.score; k++; } });
   return { done: n, total: items.length, avg: k ? (s / k) : null, pct: k ? Math.round(s / (5 * k) * 100) : null };
 }
-function overallPct(){ var s = 0, k = 0; D.scores.forEach(function(r){ if (r.score && !r.na) { s += r.score; k++; } }); return k ? Math.round(s / (5 * k) * 100) : null; }
+function overallPct(){ var s = 0, k = 0, codes = {}; D.catalog.forEach(function(c){ codes[c.code] = 1; }); D.scores.forEach(function(r){ if (codes[r.code] && has(r)) { s += r.score; k++; } }); return k ? Math.round(s / (5 * k) * 100) : null; }
 
 /* ── navigation (the iPhone back swipe works) ───────────────────────────── */
 function go(next, replace){
@@ -400,15 +480,20 @@ function noteBlock(o){
     (o.nopics ? '' : pics(o.row, o.target, o.ref)) +
     '<div class="tools"><button class="mic" data-act="mic" data-for="' + o.id + '">' + MIC_SVG + '<span>' + t('speak') + '</span></button>' +
     (o.nopics ? '' : '<button class="cam" data-act="photo" data-target="' + o.target + '" data-ref="' + esc(o.ref) + '">' + CAM_SVG + '<span>' + t('photo') + '</span></button>') +
-    '<span class="saved">' + t('saved') + '</span></div>' + en + '</div>';
+    '</div>' + en + '</div>';
 }
+var CHECK_SVG = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><path d="M5 12l5 5L20 7"/></svg>';
+var CHEV_SVG = '<svg class="chev" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>';
+var BACK_SVG = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>';
+// The header: the official Roberto's wordmark on cream (never re-typed), the language switch, then the screen's own lines.
 function topBar(sub){   // not "top": window.top cannot be redeclared
-  return '<div class="top"><div class="row"><div class="brand"><img src="data:image/png;base64,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" alt="Roberto\'s"><span class="kick">Roberto\'s DIFC · Audit</span></div>' +
+  return '<div class="top"><div class="row"><div class="brand"><img src="robertos-logo-burgundy.svg" alt="Roberto\'s"></div>' +
     '<div class="lang"><button data-act="lang" data-l="it" class="' + (LANG === 'it' ? 'on' : '') + '">IT</button><button data-act="lang" data-l="en" class="' + (LANG === 'en' ? 'on' : '') + '">EN</button></div></div>' + (sub || '') + '</div>';
 }
 function head(backTo, backLabel, right, title, extra){
-  return '<div class="head"><div class="row"><button class="back" data-act="go" data-to=\'' + esc(JSON.stringify(backTo)) + '\'>‹ ' + esc(backLabel) + '</button><span class="muted">' + (right || '') + '</span></div>' +
-    '<h2>' + esc(title) + '</h2>' + (extra || '') + '</div>';
+  return '<div class="head"><div class="row"><button class="back" data-act="go" data-to=\'' + esc(JSON.stringify(backTo)) + '\'>' + BACK_SVG + esc(backLabel) + '</button>' +
+    (right != null ? '<span class="muted">' + right + '</span>' : '<span class="saved ok">' + t('saved') + '</span>') + '</div>' +
+    (title ? '<h2>' + esc(title) + '</h2>' : '') + (extra || '') + '</div>';
 }
 function adminTabs(){
   if (!ADMIN) return '';
@@ -446,46 +531,45 @@ function closedBanner(){
 }
 
 function vHome(){
-  var total = D.catalog.length, done = D.scores.filter(function(r){ return r.score || r.na; }).length;
+  var total = D.catalog.length, done = D.catalog.filter(function(c){ return isDone(c.code); }).length;
   var pct = total ? Math.round(done / total * 100) : 0;
-  var hello = isEnrico() ? t('hello') : (LANG === 'en' ? 'Hello ' : 'Ciao ') + esc(who());
-  var when = isEnrico() || D.visit.visit_time ? esc(fmtDate(D.visit.visit_date, LANG)) + (D.visit.visit_time ? ' · ' + esc(D.visit.visit_time) : '') : t('started') + ' ' + esc(dubaiTime(D.visit.created_at));
-  var h = topBar(adminTabs() + '<h1>' + hello + '</h1><div class="sub">' + t('visit') + ' ' + when + ' · ' + t('autosave') + '</div>' +
-    '<div class="bar"><div class="track"><div class="fill" style="width:' + pct + '%"></div></div><b>' + done + ' / ' + total + '</b></div>');
-  h += '<div class="body">' + closedBanner() + '<div class="lbl">' + t('sections') + '</div>';
+  var hello = isEnrico() ? t('hello') : (LANG === 'en' ? esc(who()) + "'s audit" : "L'audit di " + esc(who()));
+  var when = esc(shortDate(D.visit.visit_date)) + (D.visit.visit_time ? ', ' + esc(D.visit.visit_time) : '');
+  var h = topBar(adminTabs() + '<div><div class="kick">' + esc(kindName()) + ' · ' + when + '</div><h1>' + hello + '</h1></div>' +
+    '<div class="bar"><div class="track"><div class="fill" style="width:' + pct + '%"></div></div><b>' + done + ' ' + t('of') + ' ' + total + '</b><span class="saved ok">' + t('saved') + '</span></div>');
+  h += '<div class="body">' + closedBanner();
   var n = 0, current = null;
   ORDER.forEach(function(a){ if (a !== 'piatti' && current === null) { var st = areaStats(a); if (st.done < st.total) current = a; } });
   ORDER.forEach(function(a){
     n++;
     if (a === 'piatti') {
       var nd = D.dishes.length;
-      h += '<button class="sec" data-act="go" data-to=\'{"v":"dishes"}\'><span class="dot' + (nd ? ' done' : '') + '">' + (nd ? nd : n) + '</span><span class="grow"><span class="t">' + t('piatti') + '</span><span class="s">' + t('piattiSub') + '</span></span></button>';
+      h += '<button class="sec" data-act="go" data-to=\'{"v":"dishes"}\'><span class="dot' + (nd ? ' done' : '') + '">' + (nd ? nd : n) + '</span><span class="grow"><span class="t">' + t(isEnrico() ? 'piatti' : 'piattiG') + '</span><span class="s">' + (nd ? nd + ' ' + t('tasted') : t(isEnrico() ? 'piattiSub' : 'piattiSubG')) + '</span></span></button>';
       return;
     }
-    var st = areaStats(a), full = st.done === st.total, now = a === current && st.done > 0;
-    var sub = st.done + '/' + st.total + (st.avg != null ? ' · ' + t('avg') + ' ' + st.avg.toFixed(1) : '') + (now ? ' · ' + t('inProgress') : '');
-    var lf = like(a), pv = lf ? ' · ' + (lf.diff >= 0 ? '↑' : '↓') + ' vs ' + esc(D.previous.title.replace('Novembre', 'Nov')) : '';
-    h += '<button class="sec' + (a === current ? ' now' : '') + '" data-act="area" data-a="' + a + '"><span class="dot' + (full ? ' done' : a === current ? ' go' : '') + '">' + (full ? '✓' : n) + '</span>' +
-         '<span class="grow"><span class="t">' + areaName(a) + '</span><span class="s">' + sub + pv + '</span></span>' + (st.pct != null ? '<span class="sc">' + st.pct + '%</span>' : '') + '</button>';
+    var st = areaStats(a), full = st.done === st.total, now = a === current;
+    var sub = full ? t('doneN') + ' · ' + st.total + ' ' + t('of') + ' ' + st.total : now ? t('nextUp') + ' · ' + (st.total - st.done) + ' ' + t('qs') : st.total + ' ' + t('qs');
+    h += '<button class="sec' + (now ? ' now' : '') + '" data-act="area" data-a="' + a + '"><span class="dot' + (full ? ' done' : now ? ' go' : '') + '">' + (full ? CHECK_SVG : n) + '</span>' +
+         '<span class="grow"><span class="t">' + areaName(a) + '</span><span class="s">' + sub + '</span></span>' + (now ? CHEV_SVG : '') + '</button>';
   });
-  h += '<button class="sec final" data-act="go" data-to=\'{"v":"final"}\'><span class="dot star">★</span><span class="grow"><span class="t">' + t('final') + '</span><span class="s">' + t('finalSub') + '</span></span></button>';
+  h += '<button class="sec final" data-act="go" data-to=\'{"v":"final"}\'><span class="dot star">★</span><span class="grow"><span class="t">' + t(isEnrico() ? 'final' : 'finalG') + '</span><span class="s">' + t(isEnrico() ? 'finalSub' : 'finalSubG') + '</span></span></button>';
   var nf = D.flags.length;
-  if (nf) h += '<div class="muted" style="padding:4px 2px">' + nf + ' ' + (LANG === 'en' ? (nf === 1 ? 'flag' : 'flags') : (nf === 1 ? 'segnalazione' : 'segnalazioni')) + '</div>';
-  h += '<div style="height:80px"></div></div>';
-  h += '<button class="fab" data-act="newflag">' + CAM_SVG + t('flagBtn') + '</button>';
+  if (nf) h += '<div class="muted" style="padding:4px 2px">' + nf + ' ' + (LANG === 'en' ? (nf === 1 ? 'photo note' : 'photo notes') : (nf === 1 ? 'nota con foto' : 'note con foto')) + '</div>';
+  h += '</div>';
+  var go = current ? { v: 'area', area: current } : { v: 'final' };
+  h += '<div class="foot"><button class="big light" data-act="newflag">' + CAM_SVG + t('addPhoto') + '</button><button class="big vino" data-act="go" data-to=\'' + esc(JSON.stringify(go)) + '\'>' + t('cont2') + '</button></div>';
   return h;
 }
 
 function vArea(){
   var a = S.area, items = cat(a), st = areaStats(a);
-  var h = head({ v: 'home' }, t('home'), st.done + ' / ' + st.total, areaName(a));
+  var h = head({ v: 'home' }, t('home'), st.done + ' ' + t('of') + ' ' + st.total, areaName(a));
   h += '<div class="body">' + closedBanner() + '<div class="card">';
   items.forEach(function(c, i){
-    var r = scoreRow(c.code);
-    var sc = r.na ? t('na') : (r.score ? r.score : '');
-    h += '<button class="sec" style="border:0;border-top:' + (i ? '1px solid var(--sabbia-light)' : '0') + ';border-radius:0" data-act="item" data-code="' + c.code + '">' +
-      '<span class="dot' + (r.score || r.na ? ' done' : '') + '">' + (i + 1) + '</span><span class="grow"><span class="t" style="font-size:17px">' + esc(lab(c)) + '</span>' +
-      '<span class="s">' + (r.verdict ? t(r.verdict) : '') + (r.note_it ? (r.verdict ? ' · ' : '') + '✎' : '') + ((r.photos || []).length ? ' · ' + r.photos.length + ' foto' : '') + '</span></span><span class="sc">' + sc + '</span></button>';
+    var r = scoreRow(c.code), done = isDone(c.code);
+    h += '<button class="sec" style="border:0;border-top:' + (i ? '1px solid var(--soft)' : '0') + ';border-radius:0" data-act="item" data-code="' + c.code + '">' +
+      '<span class="dot' + (done ? ' done' : '') + '">' + (done ? CHECK_SVG : i + 1) + '</span><span class="grow"><span class="t" style="font-size:17px">' + esc(lab(c)) + '</span>' +
+      '<span class="s">' + (r.verdict ? t(r.verdict) : '') + (r.note_it ? (r.verdict ? ' · ' : '') + t('noted') : '') + ((r.photos || []).length ? ' · ' + r.photos.length + ' ' + t('photos') : '') + '</span></span><span class="sc">' + esc(ansLabel(c, r)) + '</span></button>';
   });
   h += '</div>';
   var open = items.filter(function(c){ return !isDone(c.code); }).length, nas = items.filter(function(c){ return scoreRow(c.code).na; }).length;
@@ -493,44 +577,62 @@ function vArea(){
   else if (nas) h += '<button class="link" data-act="areaclear" data-a="' + a + '">' + t('undoNa') + '</button>';
   h += '</div>';
   var next = items.filter(function(c){ return !isDone(c.code); })[0] || items[0];
-  h += '<div class="foot"><button class="big vino" data-act="item" data-code="' + next.code + '">' + (st.done ? t('next') : (LANG === 'en' ? 'Start' : 'Inizia')) + '</button></div>';
+  h += '<div class="foot"><button class="big vino" data-act="item" data-code="' + next.code + '">' + (st.done ? t('cont2') : t('startS')) + '</button></div>';
   return h;
 }
 
 function vItem(){
   var c = D.catalog.filter(function(x){ return x.code === S.code; })[0]; if (!c) return vHome();
-  var items = cat(c.area), idx = items.indexOf(c), r = scoreRow(c.code), p = prevScore(c.code);
-  var prev = p ? '<div class="prev">' + t('last') + ' (' + esc(D.previous.title) + '): <b>' + (p.na ? 'N/A' : (p.score || '—')) + '</b>' +
-    ((LANG === 'en' ? p.note_en : p.note_it) ? ' — “' + esc(LANG === 'en' ? p.note_en : p.note_it) + '”' : '') + '</div>' : '';
-  var h = head({ v: 'area', area: c.area }, areaName(c.area), (idx + 1) + ' ' + t('of') + ' ' + items.length, lab(c), prev);
-  h += '<div class="body">' + closedBanner() + '<div class="lbl">' + t('score') + '</div><div class="scores">';
-  [1, 2, 3, 4, 5].forEach(function(n){ h += '<button class="sbtn' + (r.score === n && !r.na ? ' on' : '') + '" data-act="score" data-v="' + n + '" aria-pressed="' + (r.score === n) + '">' + n + '</button>'; });
-  h += '<button class="sbtn na' + (r.na ? ' on' : '') + '" data-act="score" data-v="na">N/A</button></div><div class="muted">' + (isEnrico() ? t('anchor') : t('anchorAll')) + '</div>';
-  h += '<div class="lbl">' + t('note') + '</div>' + noteBlock({ id: 'n-' + c.code, target: 'score', ref: c.code, row: r, it: r._local != null ? r._local : r.note_it, en: r.note_en });
-  h += '<div class="lbl">' + t('action') + '</div><div class="verd">';
-  ['ok', 'fix', 'urgent'].forEach(function(v){ h += '<button class="vbtn ' + v + (r.verdict === v ? ' on' : '') + '" data-act="verdict" data-v="' + v + '">' + t(v) + '</button>'; });
-  h += '</div><div style="height:12px"></div></div>';
-  var last = idx === items.length - 1;
-  h += '<div class="foot"><button class="big light" data-act="go" data-to=\'' + esc(JSON.stringify({ v: 'area', area: c.area })) + '\' style="flex:0 0 auto;padding:0 20px">' + t('home') + '</button>' +
-       '<button class="big terra" data-act="nextitem">' + (last ? t('done') : t('next')) + '</button></div>';
+  var items = cat(c.area), idx = items.indexOf(c), r = scoreRow(c.code), std = isStd(c);
+  var segs = '<span class="segs">' + items.map(function(x, i){ return '<i class="' + (i <= idx ? 'on' : '') + '"></i>'; }).join('') + '</span>';
+  var h = '<div class="head"><div class="row"><button class="back" data-act="go" data-to=\'' + esc(JSON.stringify({ v: 'home' })) + '\'>' + BACK_SVG + t('sections') + '</button><span class="saved ok">' + t('saved') + '</span></div>' +
+    '<div class="qk"><span class="kick">' + esc(areaName(c.area)) + ' · ' + (idx + 1) + ' ' + t('of') + ' ' + items.length + '</span>' + segs + '</div></div>';
+  h += '<div class="body" style="gap:18px">' + closedBanner();
+  h += '<div style="display:flex;flex-direction:column;gap:8px"><h2 style="margin:0;font:400 28px/1.15 var(--display);color:var(--vino)">' + esc(lab(c)) + '</h2>' +
+       (hint(c) ? '<p class="hint" style="margin:0;font-size:15px;line-height:1.5;color:var(--body)">' + esc(hint(c)) + '</p>' : '') + '</div>';
+  if (std) {
+    h += '<div class="yn"><button class="ybtn yes' + (has(r) && r.score > 0 ? ' on' : '') + '" data-act="yn" data-v="yes" aria-pressed="' + (has(r) && r.score > 0) + '">' + (has(r) && r.score > 0 ? CHECK_SVG : '') + t('yes') + '</button>' +
+         '<button class="ybtn no' + (has(r) && r.score === 0 ? ' on' : '') + '" data-act="yn" data-v="no" aria-pressed="' + (has(r) && r.score === 0) + '">' + t('no') + '</button>' +
+         '<button class="ybtn seen' + (r.na ? ' on' : '') + '" data-act="yn" data-v="na" aria-pressed="' + !!r.na + '">' + t('notSeen') + '</button></div>';
+  } else {
+    h += '<div class="scores five">';
+    [1, 2, 3, 4, 5].forEach(function(n){ h += '<button class="sbtn' + (r.score === n && !r.na ? ' on' : '') + '" data-act="score" data-v="' + n + '" aria-pressed="' + (r.score === n) + '">' + n + '</button>'; });
+    h += '</div>';
+    if (anchor(c, 5)) {
+      h += '<div class="anc">' + [5, 3, 1].map(function(n){ return '<div class="' + (r.score === n && !r.na ? 'on' : '') + '"><b>' + n + '</b><span>' + esc(anchor(c, n)) + '</span></div>'; }).join('') + '</div>';
+    } else h += '<div class="muted">' + (isEnrico() ? t('anchor') : t('anchorAll')) + '</div>';
+    h += '<div><button class="pill dash' + (r.na ? ' on' : '') + '" data-act="score" data-v="na">' + t('notSeen') + '</button></div>';
+  }
+  h += '<div style="display:flex;flex-direction:column;gap:8px"><div class="lbl" style="margin:0">' + t('anything') + ' <small>' + t('optional') + '</small></div>' +
+       noteBlock({ id: 'n-' + c.code, target: 'score', ref: c.code, row: r, it: r._local != null ? r._local : r.note_it, en: r.note_en, small: true }) + '</div>';
+  if (isEnrico()) {
+    h += '<div class="lbl" style="margin:0">' + t('action') + '</div><div class="verd">';
+    ['ok', 'fix', 'urgent'].forEach(function(v){ h += '<button class="vbtn ' + v + (r.verdict === v ? ' on' : '') + '" data-act="verdict" data-v="' + v + '">' + t(v) + '</button>'; });
+    h += '</div>';
+  }
+  h += '</div>';
+  var prev = idx > 0 ? { v: 'item', code: items[idx - 1].code } : { v: 'area', area: c.area };
+  h += '<div class="foot"><button class="big light" style="flex:1" data-act="go" data-to=\'' + esc(JSON.stringify(prev)) + '\'>' + t('back') + '</button>' +
+       '<button class="big vino" style="flex:2" data-act="nextitem">' + (idx === items.length - 1 ? t('nextSec') : t('nextQ')) + '</button></div>';
   return h;
 }
 
 function vDishes(){
-  var h = head({ v: 'home' }, t('home'), D.dishes.length ? String(D.dishes.length) : '', t('piatti'));
+  var h = head({ v: 'home' }, t('home'), D.dishes.length ? String(D.dishes.length) : '', t(isEnrico() ? 'piatti' : 'piattiG'));
   h += '<div class="body">' + closedBanner();
   if (!D.dishes.length) h += '<div class="msg info">' + t('noDishes') + '</div>';
   else {
     h += '<div class="card">';
     D.dishes.forEach(function(d, i){
       var v = d.verdict === 'keep' ? t('dKeep') : d.verdict === 'fix' ? t('dFix') : d.verdict === 'remove' ? t('dRemove') : '';
-      h += '<button class="sec" style="border:0;border-top:' + (i ? '1px solid var(--sabbia-light)' : '0') + ';border-radius:0" data-act="dish" data-id="' + d.id + '"><span class="dot' + (d.score ? ' done' : '') + '">' + (i + 1) + '</span>' +
-        '<span class="grow"><span class="t" style="font-size:17px">' + esc(d.dish_name) + '</span><span class="s">' + v + (d.note_it ? ' · ✎' : '') + ((d.photos || []).length ? ' · ' + d.photos.length + ' foto' : '') + '</span></span><span class="sc">' + (d.score ? d.score + '/5' : '') + '</span></button>';
+      h += '<button class="sec" style="border:0;border-top:' + (i ? '1px solid var(--soft)' : '0') + ';border-radius:0" data-act="dish" data-id="' + d.id + '"><span class="dot' + (d.score ? ' done' : '') + '">' + (d.score ? CHECK_SVG : i + 1) + '</span>' +
+        '<span class="grow"><span class="t" style="font-size:17px">' + esc(d.dish_name) + '</span><span class="s">' + v + (d.note_it ? (v ? ' · ' : '') + t('noted') : '') + ((d.photos || []).length ? ' · ' + d.photos.length + ' ' + t('photos') : '') + '</span></span><span class="sc">' + (d.score ? d.score + ' / 5' : '') + '</span></button>';
     });
     h += '</div>';
   }
   h += picker('adddish');
   h += '</div>';
+  h += '<div class="foot"><button class="big vino" data-act="go" data-to=\'' + esc(JSON.stringify(afterSection('piatti'))) + '\'>' + t('cont2') + '</button></div>';
   return h;
 }
 /* Dish search over the à la carte + Scala menus, or a free name. */
@@ -550,18 +652,23 @@ function presHtml(mode){
 
 function vDish(){
   var d = byId(D.dishes, S.id); if (!d) return vDishes();
-  var h = head({ v: 'dishes' }, t('piatti').split(' — ')[0], '', d.dish_name);
-  h += '<div class="body">' + closedBanner() + '<div class="lbl">' + t('score') + '</div><div class="scores five">';
+  var h = head({ v: 'dishes' }, t(isEnrico() ? 'piatti' : 'piattiG').split(' — ')[0], null, d.dish_name);
+  h += '<div class="body" style="gap:16px">' + closedBanner() + '<div class="scores five">';
   [1, 2, 3, 4, 5].forEach(function(n){ h += '<button class="sbtn' + (d.score === n ? ' on' : '') + '" data-act="dscore" data-v="' + n + '">' + n + '</button>'; });
-  h += '</div><div class="lbl">' + t('note') + '</div>' + noteBlock({ id: 'n-d-' + d.id, target: 'dish', ref: d.id, row: d, it: d._local != null ? d._local : d.note_it, en: d.note_en, ph: LANG === 'en' ? 'Taste, technique, presentation, temperature…' : 'Gusto, tecnica, presentazione, temperatura…' });
-  h += '<div class="lbl">' + t('action') + '</div><div class="verd">';
-  [['keep', 'ok', t('dKeep')], ['fix', 'fix', t('dFix')], ['remove', 'urgent', t('dRemove')]].forEach(function(v){
-    h += '<button class="vbtn ' + v[1] + (d.verdict === v[0] ? ' on' : '') + '" data-act="dverdict" data-v="' + v[0] + '">' + v[2] + '</button>'; });
-  h += '</div><button class="link" data-act="ddel">' + t('removeDish') + '</button></div>';
-  h += '<div class="foot"><button class="big terra" data-act="go" data-to=\'{"v":"dishes"}\'>' + t('done') + '</button></div>';
+  h += '</div>';
+  if (!isEnrico()) h += '<div class="anc">' + [[5, 'dish5'], [3, 'dish3'], [1, 'dish1']].map(function(x){ return '<div class="' + (d.score === x[0] ? 'on' : '') + '"><b>' + x[0] + '</b><span>' + t(x[1]) + '</span></div>'; }).join('') + '</div>';
+  h += '<div style="display:flex;flex-direction:column;gap:8px"><div class="lbl" style="margin:0">' + t('anything') + ' <small>' + t('optional') + '</small></div>' +
+       noteBlock({ id: 'n-d-' + d.id, target: 'dish', ref: d.id, row: d, it: d._local != null ? d._local : d.note_it, en: d.note_en, small: true, ph: LANG === 'en' ? 'Taste, temperature, presentation…' : 'Gusto, temperatura, presentazione…' }) + '</div>';
+  if (isEnrico()) {
+    h += '<div class="lbl" style="margin:0">' + t('action') + '</div><div class="verd">';
+    [['keep', 'ok', t('dKeep')], ['fix', 'fix', t('dFix')], ['remove', 'urgent', t('dRemove')]].forEach(function(v){
+      h += '<button class="vbtn ' + v[1] + (d.verdict === v[0] ? ' on' : '') + '" data-act="dverdict" data-v="' + v[0] + '">' + v[2] + '</button>'; });
+    h += '</div>';
+  }
+  h += '<button class="link" data-act="ddel">' + t('removeDish') + '</button></div>';
+  h += '<div class="foot"><button class="big vino" data-act="go" data-to=\'{"v":"dishes"}\'>' + t('done') + '</button></div>';
   return h;
 }
-
 function vFlag(){
   var f = S.id ? byId(D.flags, S.id) : null;
   var h = head({ v: 'home' }, t('home'), '', t('flagTitle'));
@@ -587,24 +694,26 @@ function vFlag(){
 }
 
 function vFinal(){
-  var h = head({ v: 'home' }, t('home'), '', t('final'));
-  var ov = overallPct();
+  var h = head({ v: 'home' }, t('sections'), null, t(isEnrico() ? 'final' : 'finalG'));
   h += '<div class="body">' + closedBanner();
-  if (ov != null) {
-    h += '<div class="tiles" style="grid-template-columns:repeat(3,minmax(0,1fr))"><div class="tile"><b>' + ov + '%</b><span>' + esc(D.visit.title) + '</span></div>';
-    var lf = like();
-    if (lf) h += '<div class="tile"><b style="color:var(--muted)">' + lf.prev + '%</b><span>' + esc(D.previous.title) + '</span></div><div class="tile"><b style="color:' + (lf.diff >= 0 ? 'var(--ok)' : 'var(--err)') + '">' + signed(lf.diff) + '</b><span>' + (LANG === 'en' ? 'on the same ' + lf.n + ' items' : 'sugli stessi ' + lf.n + ' punti') + '</span></div>';
-    h += '</div>';
+  if (isEnrico()) {
+    ['overall', 'improve'].forEach(function(k){
+      var r = textRow(k);
+      h += '<div class="lbl">' + t(k) + '</div>' + noteBlock({ id: 'n-t-' + k, target: 'text', ref: k, row: r, it: r._local != null ? r._local : r.it, en: r.en });
+    });
+    h += '<div class="lbl">' + t('top3') + '</div>';
+    ['p1', 'p2', 'p3'].forEach(function(k, i){
+      var r = textRow(k);
+      h += noteBlock({ id: 'n-t-' + k, target: 'text', ref: k, row: r, it: r._local != null ? r._local : r.it, en: r.en, small: true, nopics: true, ph: t('prio') + ' ' + (i + 1), label: t('prio') + ' ' + (i + 1) });
+    });
+  } else {
+    var total = D.catalog.length, open = D.catalog.filter(function(c){ return !isDone(c.code); }).length;
+    if (open) h += '<div class="msg info">' + (LANG === 'en' ? open + ' of ' + total + ' questions still open. You can send anyway: they count as not seen.' : open + ' domande su ' + total + ' ancora aperte. Puoi inviare lo stesso: contano come non viste.') + '</div>';
+    [['best', 'bestPh'], ['fixone', 'fixonePh'], ['other', 'otherPh']].forEach(function(x){
+      var r = textRow(x[0]);
+      h += '<div class="lbl">' + t(x[0]) + (x[0] === 'other' ? ' <small>' + t('optional') + '</small>' : '') + '</div>' + noteBlock({ id: 'n-t-' + x[0], target: 'text', ref: x[0], row: r, it: r._local != null ? r._local : r.it, en: r.en, ph: t(x[1]), nopics: x[0] !== 'best' });
+    });
   }
-  ['overall', 'improve'].forEach(function(k){
-    var r = textRow(k);
-    h += '<div class="lbl">' + t(k) + '</div>' + noteBlock({ id: 'n-t-' + k, target: 'text', ref: k, row: r, it: r._local != null ? r._local : r.it, en: r.en });
-  });
-  h += '<div class="lbl">' + t('top3') + '</div>';
-  ['p1', 'p2', 'p3'].forEach(function(k, i){
-    var r = textRow(k);
-    h += noteBlock({ id: 'n-t-' + k, target: 'text', ref: k, row: r, it: r._local != null ? r._local : r.it, en: r.en, small: true, nopics: true, ph: t('prio') + ' ' + (i + 1), label: t('prio') + ' ' + (i + 1) });
-  });
   h += '</div>';
   if (!ADMIN) h += '<div class="foot"><button class="big vino" data-act="submit" id="subbtn">' + (isEnrico() ? t('send') : t('sendTeam')) + '</button></div>';
   return h;
@@ -612,27 +721,26 @@ function vFinal(){
 
 function vThanks(){
   var title = isEnrico() ? t('sentTitle') : t('sentTeamTitle') + ', ' + esc(who()) + '.';
-  return topBar('<h1>' + title + '</h1><div class="sub">' + (isEnrico() ? t('sentLine') : t('sentTeamLine')) + '</div>') +
-    '<div class="body"><button class="sec" data-act="go" data-to=\'{"v":"home"}\'><span class="grow"><span class="t">' + t('sections') + '</span></span></button></div>';
+  return topBar('<div><h1>' + title + '</h1></div><div class="sub">' + (isEnrico() ? t('sentLine') : t('sentTeamLine')) + '</div>') +
+    '<div class="body"><button class="sec" data-act="go" data-to=\'{"v":"home"}\'><span class="grow"><span class="t">' + t('sections') + '</span></span>' + CHEV_SVG + '</button></div>';
 }
-
 /* ── shared link: name first, then their own audit ──────────────────────── */
 function mine(){ try { return JSON.parse(ls('auditMine:' + TOK.n) || 'null'); } catch(e){ return null; } }
 function vStart(){
   var m = mine();
-  var h = topBar('<h1>' + t('startTitle') + '</h1><div class="sub">' + t('startSub') + '</div>') + '<div class="body">';
-  if (m && m.k) h += '<button class="sec now" data-act="resume"><span class="dot go">›</span><span class="grow"><span class="t">' + t('cont') + '</span><span class="s">' + esc(m.name) + ' · ' + t('started') + ' ' + esc(dubaiTime(m.at)) + '</span></span></button><div class="muted" style="padding:2px">' + t('newOne') + '</div>';
-  h += '<div class="card pick"><label class="lbl" for="aname" style="margin:0">' + t('yourName') + '</label>' +
-       '<input id="aname" autocomplete="name" autocapitalize="words" maxlength="60" value="' + esc(S.name || '') + '">' +
-       '<div class="when"><label><span class="lbl">' + t('visitDate') + '</span><input id="adate" type="date" max="' + dubaiNow().date + '" value="' + esc(S.vdate || dubaiNow().date) + '"></label>' +
-       '<label><span class="lbl">' + t('visitTime') + '</span><input id="atime" type="time" value="' + esc(S.vtime || dubaiNow().time) + '"></label></div></div>';
-  h += '<div class="lbl">' + t('where') + '</div>';
+  var h = topBar('<div style="display:flex;flex-direction:column;gap:6px"><div class="kick">Roberto\'s DIFC</div><h1>' + t('startTitle') + '</h1><div class="sub">' + t('startSub') + '</div></div>') + '<div class="body" style="gap:16px">';
+  if (m && m.k) h += '<button class="sec now" data-act="resume"><span class="dot go">›</span><span class="grow"><span class="t">' + t('cont') + '</span><span class="s">' + esc(m.name) + ' · ' + t('started') + ' ' + esc(dubaiTime(m.at)) + '</span></span></button><div class="muted" style="padding:0 2px">' + t('newOne') + '</div>';
+  h += '<label style="display:flex;flex-direction:column;gap:8px"><span class="lbl" style="margin:0">' + t('yourName') + '</span>' +
+       '<input id="aname" autocomplete="name" autocapitalize="words" maxlength="60" value="' + esc(S.name || '') + '" style="font-size:17px;padding:13px 14px;border:1px solid var(--line);border-radius:10px;background:#fff"></label>' +
+       '<div class="when"><label><span class="lbl" style="margin:0">' + t('visitDate') + '</span><input id="adate" type="date" max="' + dubaiNow().date + '" value="' + esc(S.vdate || dubaiNow().date) + '" style="font-size:17px;padding:12px;border:1px solid var(--line);border-radius:10px;background:#fff"></label>' +
+       '<label><span class="lbl" style="margin:0">' + t('visitTime') + '</span><input id="atime" type="time" value="' + esc(S.vtime || dubaiNow().time) + '" style="font-size:17px;padding:12px;border:1px solid var(--line);border-radius:10px;background:#fff"></label></div>';
+  h += '<div style="display:flex;flex-direction:column;gap:10px"><span class="lbl" style="margin:0">' + t('where') + '</span>';
   [['restaurant', 'kRest'], ['scala', 'kScala']].forEach(function(k){
     var on = S.kind === k[0];
-    h += '<button class="sec' + (on ? ' now' : '') + '" data-act="kind" data-k="' + k[0] + '" aria-pressed="' + on + '"><span class="dot' + (on ? ' done' : '') + '">' + (on ? '✓' : '') + '</span>' +
-         '<span class="grow"><span class="t">' + t(k[1]) + '</span><span class="s">' + t(k[1] + 'Sub') + '</span></span></button>';
+    h += '<button class="kcard' + (on ? ' on' : '') + '" data-act="kind" data-k="' + k[0] + '" aria-pressed="' + on + '"><span class="r"></span>' +
+         '<span><span class="t">' + t(k[1]) + '</span><span class="s">' + t(k[1] + 'Sub') + '</span></span></button>';
   });
-  h += '</div>';
+  h += '</div></div>';
   h += '<div class="foot"><button class="big vino" data-act="begin" id="beginbtn">' + t('begin') + '</button></div>';
   return h;
 }
@@ -700,10 +808,11 @@ function vReport(){
   ['p1', 'p2', 'p3'].forEach(function(k, i){ var r = textRow(k); h += '<div class="muted">' + (i + 1) + '</div>' + enEdit('text', k, r.en, r.it); });
   h += '</div>';
 
-  h += '<div class="lbl">Scores by area</div><div class="card" style="padding:4px 12px"><table class="tbl"><tr><th>Area</th><th>' + esc(D.visit.title) + '</th><th>' + esc(pv ? pv.title : 'Last') + '</th><th>Trend</th></tr>';
+  h += '<div class="lbl">Scores by area</div><div class="card" style="padding:4px 12px"><table class="tbl"><tr><th>Area</th><th>Score</th>' + (pv ? '<th>' + esc(pv.title) + '</th><th>Trend</th>' : '') + '</tr>';
   AREAS.forEach(function(a){
     var s = areaStats(a), o = pv && pv.area_pct ? pv.area_pct[a] : null, lf = like(a);
-    h += '<tr><td class="a">' + AREA_EN[a] + '</td><td>' + (s.pct == null ? '—' : s.pct + '%') + '</td><td>' + (o == null ? 'not scored' : o + '%') + '</td><td>' + (lf ? signed(lf.diff) + ' <small class="muted">(' + lf.n + ')</small>' : '—') + '</td></tr>';
+    h += '<tr><td class="a">' + esc(AREA_EN[a] || a) + '</td><td style="color:' + (s.pct == null ? 'var(--muted)' : s.pct >= 85 ? 'var(--ok)' : 'var(--err)') + ';font-weight:600">' + (s.pct == null ? 'not seen' : s.pct + '%') + '</td>' +
+      (pv ? '<td>' + (o == null ? '—' : o + '%') + '</td><td>' + (lf ? signed(lf.diff) + ' <small class="muted">(' + lf.n + ')</small>' : '—') + '</td>' : '') + '</tr>';
   });
   h += '</table></div>';
   if (pv) h += '<div class="muted">Trend compares only the items scored in both visits (how many in brackets), so the two visits are measured on the same things.</div>';
@@ -745,14 +854,14 @@ function vReport(){
     h += '<div class="card"><div class="item" style="background:var(--door)"><div class="h"><span style="font-family:var(--display);font-size:19px;color:var(--vino)">' + AREA_EN[a] + '</span><b>' + (s.pct == null ? '' : s.pct + '%') + '</b></div></div>';
     cat(a).forEach(function(c){
       var r = scoreRow(c.code);
-      h += '<div class="item"><div class="h"><span>' + esc(c.label_en) + (r.verdict ? ' <span class="badge ' + r.verdict + '">' + { ok: 'OK', fix: 'To fix', urgent: 'Urgent' }[r.verdict] + '</span>' : '') + '</span><b>' + (r.na ? 'N/A' : (r.score ? r.score + '/5' : '—')) + '</b></div>' +
+      h += '<div class="item"><div class="h"><span>' + esc(c.label_en) + (r.verdict ? ' <span class="badge ' + r.verdict + '">' + { ok: 'OK', fix: 'To fix', urgent: 'Urgent' }[r.verdict] + '</span>' : '') + '</span><b>' + esc(ansLabel(c, r, 'en') || '—') + '</b></div>' +
         (r.note_it || r.note_en ? enEdit('score', c.code, r.note_en, r.note_it) : '') + pics(r, 'score', c.code) + '</div>';
     });
     h += '</div>';
   });
   h += '<div style="height:12px"></div></div>';
   var to = D.recipients ? D.recipients.to : { name: 'Amin' };
-  h += '<div class="foot" style="flex-wrap:wrap"><button class="big light" data-act="translate" style="flex:1 1 140px">Translate new notes</button><button class="big light" data-act="sendtest" style="flex:1 1 140px">Send me a test</button>' +
+  h += '<div class="foot static" style="flex-wrap:wrap"><button class="big light" data-act="translate" style="flex:1 1 140px">Translate new notes</button><button class="big light" data-act="sendtest" style="flex:1 1 140px">Send me a test</button>' +
        '<button class="big vino" data-act="sendamin" id="aminbtn" style="flex:1 1 100%"' + (st === 'test' ? ' disabled' : '') + '>' + (st === 'sent' ? 'Email ' + esc(to.name) + ' again' : 'Email to ' + esc(to.name)) + '</button></div>';
   return h;
 }
@@ -833,14 +942,17 @@ root.addEventListener('click', function(e){
     else { var n = +v; r.score = r.score === n && !r.na ? null : n; r.na = false; queue('score:' + S.code + ':s', 'score', { code: S.code, score: r.score }); }
     render(); return;
   }
+  if (act === 'yn') {
+    var ry = scoreRow(S.code), vy = b.getAttribute('data-v');
+    if (vy === 'na') { ry.na = !ry.na; if (ry.na) ry.score = null; queue('score:' + S.code + ':s', 'score', { code: S.code, na: ry.na }); }
+    else { var sv = vy === 'yes' ? 5 : 0; ry.score = (has(ry) && ry.score === sv) ? null : sv; ry.na = false; queue('score:' + S.code + ':s', 'score', { code: S.code, score: ry.score }); }
+    render(); return;
+  }
   if (act === 'verdict') { var r2 = scoreRow(S.code), vv = b.getAttribute('data-v'); r2.verdict = r2.verdict === vv ? null : vv; queue('score:' + S.code + ':v', 'score', { code: S.code, verdict: r2.verdict }); render(); return; }
   if (act === 'nextitem') {
     var c = D.catalog.filter(function(x){ return x.code === S.code; })[0], items = cat(c.area), i = items.indexOf(c);
     if (i < items.length - 1) go({ v: 'item', code: items[i + 1].code }, true);
-    else {
-      var ai = AREAS.indexOf(c.area);
-      go({ v: 'home' });
-    }
+    else go(afterSection(c.area));
     return;
   }
   if (act === 'mic') { toggleMic(b); return; }

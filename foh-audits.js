@@ -291,6 +291,9 @@ function auChartCard(){
     svg += '<line x1="' + L + '" x2="' + (W - R) + '" y1="' + y(v) + '" y2="' + y(v) + '" stroke="#efe6da" stroke-width="1"/>'
       + '<text x="' + (L - 6) + '" y="' + (y(v) + 4) + '" text-anchor="end" font-size="11" fill="#8a7a62">' + v + '%</text>';
   });
+  // The Roberto's 3.0 target (85%), so a point reads as above or below it at a glance.
+  svg += '<line x1="' + L + '" x2="' + (W - R) + '" y1="' + y(85) + '" y2="' + y(85) + '" stroke="#B23A00" stroke-width="1.2" stroke-dasharray="5 4"/>'
+    + '<text x="' + (W - R) + '" y="' + (y(85) - 5) + '" text-anchor="end" font-size="11" fill="#B23A00">Target 85%</text>';
   D2.months.forEach(function(mo, i){ if((D2.months.length - 1 - i) % 2 === 0) svg += '<text x="' + x(i) + '" y="' + (H - 6) + '" text-anchor="middle" font-size="11" fill="#8a7a62">' + auMonthName(mo) + '</text>'; });
   shown.forEach(function(s){
     var d = '';
