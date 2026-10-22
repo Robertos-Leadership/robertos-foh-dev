@@ -842,6 +842,64 @@ async function adminToggle(email, mod){
   await adminSave(u);
   if(email===(state.userEmail||'').toLowerCase()) loadFohAccess();
 }
+// ── ACTION PLAN 3.0 in Admin → People (22 Oct 2026) ─────────────────────────
+// Francesco: "in the admin I need the possibility to add or remove people from
+// the action plan." The plan has TWO locks and both have to move together:
+//   1. app_users.modules 'actionplan' — shows the card on the landing page.
+//   2. ap_settings.members — the RLS lock on every ap_* table.
+// The tile also adds/removes the person from ap_settings.recipients, so being
+// on the plan always means getting the Wednesday 9:00 email. Admin only (not
+// HR), and the approver (Amin) can't be removed here — without him nobody can
+// approve the week. Not in ADMIN_MODULES on purpose: that list is what HR can
+// grant, and the module count stays about the everyday modules.
+function admApLoad(){
+  if(state.admApLoading) return;
+  state.admApLoading=true;
+  sb.from('ap_settings').select('members,recipients,approver').eq('id',1).maybeSingle().then(function(r){
+    state.admApLoading=false;
+    state.admAp = (r && r.data) ? r.data : { members:[], recipients:[], approver:null, err:!!(r&&r.error) };
+    if(state.currentTab==='admin') renderMain();
+  });
+}
+function admApSection(email){
+  if(!fohIsAdmin()) return '';
+  if(!state.admAp){ admApLoad(); return '<div class="px-pslbl" style="margin-top:14px;">Action Plan 3.0</div><div class="px-dhint">Loading…</div>'; }
+  var ap=state.admAp, e=String(email||'').toLowerCase();
+  var low=function(a){ return (a||[]).map(function(x){ return String(x).toLowerCase(); }); };
+  var on=low(ap.members).indexOf(e)>-1;
+  var isApprover=String(ap.approver||'').toLowerCase()===e;
+  var who=low(ap.members).map(function(m){ var u=adminFind(m); return (u&&u.name)?u.name.split(' ')[0]:m.split('@')[0]; }).join(' &middot; ');
+  return '<div class="px-pslbl" style="margin-top:14px;">Action Plan 3.0</div>'
+    +'<div class="px-accgrid"><button class="px-acc'+(on?' on':'')+'" onclick="admApToggle(\''+admEsc(e)+'\')">'
+    +'<i>'+(on?'&#10003;':'')+'</i><span>Action Plan 3.0'+(isApprover?' &middot; approver':'')+'</span></button></div>'
+    +'<div class="px-dhint">'+(on?'Sees the plan and gets the Wednesday 9:00 email.':'Tick to show the plan and send the Wednesday 9:00 email.')
+    +' On the plan: '+(who||'nobody')+'.</div>';
+}
+async function admApToggle(email){
+  if(!fohIsAdmin()) return;
+  var ap=state.admAp; if(!ap) return;
+  var e=String(email||'').toLowerCase();
+  var low=function(a){ return (a||[]).map(function(x){ return String(x).toLowerCase(); }); };
+  var members=low(ap.members), recips=low(ap.recipients);
+  var on=members.indexOf(e)>-1;
+  if(on && String(ap.approver||'').toLowerCase()===e){ toast('Amin approves the plan, so he can’t be removed here.', true); return; }
+  if(on){ members=members.filter(function(x){return x!==e;}); recips=recips.filter(function(x){return x!==e;}); }
+  else { members.push(e); if(recips.indexOf(e)===-1) recips.push(e); }
+  var r=await sb.from('ap_settings').update({ members:members, recipients:recips, updated_at:new Date().toISOString() }).eq('id',1).select('members,recipients,approver');
+  if(r.error || !r.data || !r.data.length){ toast('Could not change the plan list'+(r.error?': '+r.error.message:'.'), true); return; }
+  state.admAp=r.data[0];
+  var u=adminFind(e);
+  if(u){
+    u.modules=u.modules||[];
+    var i=u.modules.indexOf('actionplan');
+    if(on && i>-1) u.modules.splice(i,1);
+    if(!on && i===-1) u.modules.push('actionplan');
+    await adminSave(u);
+  }
+  toast(on?'Removed from the action plan.':'Added to the action plan.');
+  renderMain();
+  if(e===(state.userEmail||'').toLowerCase()) loadFohAccess();
+}
 async function adminToggleAdmin(email){
   if(!fohIsAdmin()) return;
   var u=adminFind(email); if(!u) return;
@@ -2363,6 +2421,7 @@ var USAGE_MODULE_NAMES=(function(){
   // ADMIN_MODULES: the Admin area itself, and the Reservation-reports sub-screen.
   m.admin='Admin';
   m.resreports='Reservation reports';
+  m.actionplan='Action Plan 3.0';
   return m;
 })();
 function admUsageModName(m){ return USAGE_MODULE_NAMES[m]||m||'—'; }
@@ -4248,6 +4307,7 @@ function admDetailFull(p){
       +'<div class="px-sum">'+sum.join('<span class="px-sum-sep">&middot;</span>')+'</div>'
       +admLoginLine(p.login)
       +'<div class="px-accgrid">'+acc+'</div>'
+      +admApSection(email)
       +'<div class="px-pslbl" style="margin-top:14px;">Permissions</div>'+powers
       +'<div class="px-pslbl" style="margin-top:14px;">Email alerts</div><div class="px-accgrid">'+notif+'</div>'
       +'</div>';
