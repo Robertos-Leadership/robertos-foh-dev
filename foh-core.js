@@ -1794,6 +1794,7 @@ var ADM_VIEWS=[
   {k:'usage',   n:'Usage'},
   {k:'feedback',n:'Feedback'},
   {k:'emails',  n:'Emails'},
+  {k:'audits',  n:'Audits'},   // remove / put back an audit (22 Oct 2026) — foh-audits.js
   {k:'settings',n:'Settings'}
 ];
 function renderAdmin(){
@@ -1816,7 +1817,8 @@ function renderAdmin(){
     : (v==='usage' ? admUsageHTML()
     : (v==='feedback' ? admFbHTML()
     : (v==='emails' ? admEmailsHTML()
-    : (v==='settings' ? admSettingsHTML() : admControlCentre()))));
+    : (v==='settings' ? admSettingsHTML()
+    : (v==='audits' && typeof admAuditsHTML==='function' ? admAuditsHTML() : admControlCentre())))));
   return '<style>'+ADM_CSS+'</style>'+tabs+body;
 }
 function admSetView(v){

@@ -219,6 +219,8 @@ var T = {
     uploading:'Carico…', photoFail:'Foto non caricata. Riprova.', removeDish:'Togli questo piatto dalla lista', liked:'tenere', att:'attenzione', notes:'note',
     anchorAll:'1 = scarso · 3 = accettabile · 5 = eccellente', started:'iniziato', allNa:'Non visto — tutto N/A', undoNa:'Togli i N/A',
     startTitle:'Audit', startSub:'Scrivi il tuo nome e quando sei venuto.', yourName:'Il tuo nome', visitDate:'Data della visita', visitTime:'Ora', badDate:'Controlla la data della visita',
+    prenota:'Prenotazione', bagno:'Bagno', congedo:'Conto e saluto', food:'Cibo',
+    where:'Dove sei stato?', kRest:'Ristorante', kRestSub:'Prenotazione, accoglienza, sala, vino, cibo, bagno, conto', kScala:'Scala', kScalaSub:'Bar & lounge: prenotazione, accoglienza, servizio, drink, bagno, conto', pickKind:'Scegli Ristorante o Scala',
     sendTeam:'Invia al team di direzione', sentTeamTitle:'Grazie', sentTeamLine:"Il team di direzione di Roberto's vede già il tuo audit. Puoi ancora aggiungere o correggere qualcosa: si salva da solo.", begin:'Inizia', cont:'Continua il tuo audit', newOne:'oppure inizia un nuovo audit'
   },
   en: {
@@ -242,12 +244,25 @@ var T = {
     uploading:'Uploading…', photoFail:'Photo not uploaded. Try again.', removeDish:'Remove this dish from the list', liked:'keep', att:'attention', notes:'notes',
     anchorAll:'1 = poor · 3 = acceptable · 5 = excellent', started:'started', allNa:'Not experienced — all N/A', undoNa:'Clear the N/As',
     startTitle:'Audit', startSub:'Type your name and when you visited.', yourName:'Your name', visitDate:'Date of your visit', visitTime:'Time', badDate:'Check the date of your visit',
+    prenota:'Booking', bagno:'Washroom', congedo:'Bill & goodbye', food:'Food',
+    where:'Where did you go?', kRest:'Restaurant', kRestSub:'Booking, welcome, service, wine, food, washroom, bill', kScala:'Scala', kScalaSub:'Bar & lounge: booking, welcome, service, drinks, washroom, bill', pickKind:'Choose Restaurant or Scala',
     sendTeam:"Send to Roberto's management team", sentTeamTitle:'Thank you', sentTeamLine:"Roberto's management team can already see your audit. You can still add or correct anything: it saves by itself.", begin:'Start', cont:'Continue your audit', newOne:'or start a new audit'
   }
 };
 function t(k){ return (T[LANG] && T[LANG][k]) || T.it[k] || k; }
 function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
-function areaName(a){ return t(a); }
+// For a guest (Restaurant visit) the kitchen section is the food on the plate.
+function areaName(a){ return a === 'cucina' && D && D.kind && D.kind !== 'venue' ? t('food') : t(a); }
+// The sections come from the visit's type (22 Oct 2026: whole venue / Restaurant / Scala); the lists
+// above are only the fallback. Dishes sit after the food (or after Scala on a Scala visit).
+function setAreas(){
+  if (!D || !D.areas) return;
+  AREAS = D.areas.slice();
+  ORDER = AREAS.slice();
+  var at = ORDER.indexOf(D.kind === 'scala' ? 'scala' : 'cucina');
+  ORDER.splice(at < 0 ? ORDER.length : at + 1, 0, 'piatti');
+  if (D.area_en) for (var k in D.area_en) AREA_EN[k] = D.area_en[k];
+}
 function lab(c){ return LANG === 'en' ? c.label_en : c.label_it; }
 function fmtDate(d, lang){ if (!d) return ''; try { return new Date(d + 'T12:00:00Z').toLocaleDateString(lang === 'en' ? 'en-GB' : 'it-IT', { weekday:'long', day:'numeric', month:'long', year:'numeric' }); } catch(e){ return d; } }
 
@@ -257,7 +272,7 @@ var root = document.getElementById('root');
 
 /* ── API ─────────────────────────────────────────────────────────────────── */
 function api(action, payload){
-  var body = Object.assign({ action: action }, TOK, payload || {});
+  var body = Object.assign({ action: action, pv: 2 }, TOK, payload || {});
   return fetch(FN + (action === 'load' ? '?read=1' : ''), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY },
@@ -527,7 +542,8 @@ function picker(mode){
 function norm(s){ return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); }
 function presHtml(mode){
   var raw = (S.q || '').trim(), q = norm(raw); if (!q) return '';
-  var hits = D.menu.filter(function(m){ return norm(m.name).indexOf(q) !== -1; }).slice(0, 8), h = '';
+  var hits = D.menu.filter(function(m){ return norm(m.name).indexOf(q) !== -1; })
+    .sort(function(a, b){ return D.kind === 'scala' ? (a.where === 'scala' ? 0 : 1) - (b.where === 'scala' ? 0 : 1) : 0; }).slice(0, 8), h = '';
   hits.forEach(function(m){ h += '<button class="opt" data-act="pickdish" data-mode="' + mode + '" data-id="' + m.id + '" data-name="' + esc(m.name) + '">' + esc(m.name) + '<small>' + (m.where === 'scala' ? 'Scala' : '') + '</small></button>'; });
   return h + '<button class="opt" data-act="pickdish" data-mode="' + mode + '" data-id="" data-name="' + esc(raw) + '">' + t('useName') + ': <b>' + esc(raw) + '</b></button>';
 }
@@ -609,7 +625,14 @@ function vStart(){
   h += '<div class="card pick"><label class="lbl" for="aname" style="margin:0">' + t('yourName') + '</label>' +
        '<input id="aname" autocomplete="name" autocapitalize="words" maxlength="60" value="' + esc(S.name || '') + '">' +
        '<div class="when"><label><span class="lbl">' + t('visitDate') + '</span><input id="adate" type="date" max="' + dubaiNow().date + '" value="' + esc(S.vdate || dubaiNow().date) + '"></label>' +
-       '<label><span class="lbl">' + t('visitTime') + '</span><input id="atime" type="time" value="' + esc(S.vtime || dubaiNow().time) + '"></label></div></div></div>';
+       '<label><span class="lbl">' + t('visitTime') + '</span><input id="atime" type="time" value="' + esc(S.vtime || dubaiNow().time) + '"></label></div></div>';
+  h += '<div class="lbl">' + t('where') + '</div>';
+  [['restaurant', 'kRest'], ['scala', 'kScala']].forEach(function(k){
+    var on = S.kind === k[0];
+    h += '<button class="sec' + (on ? ' now' : '') + '" data-act="kind" data-k="' + k[0] + '" aria-pressed="' + on + '"><span class="dot' + (on ? ' done' : '') + '">' + (on ? '✓' : '') + '</span>' +
+         '<span class="grow"><span class="t">' + t(k[1]) + '</span><span class="s">' + t(k[1] + 'Sub') + '</span></span></button>';
+  });
+  h += '</div>';
   h += '<div class="foot"><button class="big vino" data-act="begin" id="beginbtn">' + t('begin') + '</button></div>';
   return h;
 }
@@ -619,8 +642,9 @@ function begin(b){
   var dd = (document.getElementById('adate') || {}).value || '', tt = (document.getElementById('atime') || {}).value || '';
   S.name = name; S.vdate = dd; S.vtime = tt;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dd) || dd > dubaiNow().date || !/^\d{2}:\d{2}$/.test(tt)) { toast(t('badDate'), true); return; }
+  if (S.kind !== 'restaurant' && S.kind !== 'scala') { toast(t('pickKind'), true); return; }
   b.disabled = true; b.textContent = t('saving');
-  api('start', { name: name, visit_date: dd, visit_time: tt }).then(function(r){
+  api('start', { name: name, visit_date: dd, visit_time: tt, kind: S.kind }).then(function(r){
     ls('auditMine:' + TOK.n, JSON.stringify({ k: r.k, name: name, at: new Date().toISOString() }));
     location.replace(location.pathname + '?k=' + encodeURIComponent(r.k));
   }, function(er){ b.disabled = false; b.textContent = t('begin'); toast(er.message, true); });
@@ -836,6 +860,10 @@ root.addEventListener('click', function(e){
   if (act === 'fdel') { var f3 = byId(D.flags, S.id); api('flag', { id: f3.id, remove: true }).then(function(){ D.flags = D.flags.filter(function(x){ return x.id !== f3.id; }); go({ v: 'home' }, true); }, function(er){ toast(er.message, true); }); return; }
   if (act === 'submit') { submit(b); return; }
   if (act === 'begin') { begin(b); return; }
+  if (act === 'kind') {
+    ['aname', 'adate', 'atime'].forEach(function(id, i){ var e = document.getElementById(id); if (e) S[['name', 'vdate', 'vtime'][i]] = e.value; });
+    S.kind = b.getAttribute('data-k'); render(); return;
+  }
   if (act === 'resume') { var m = mine(); if (m && m.k) location.href = location.pathname + '?k=' + encodeURIComponent(m.k); return; }
   if (act === 'areana' || act === 'areaclear') {
     cat(b.getAttribute('data-a')).forEach(function(c){
@@ -1007,7 +1035,7 @@ function reload(){
     var local = {};
     if (D) { D.scores.forEach(function(r){ if (r._local != null) local['s:' + r.code] = r._local; }); D.texts.forEach(function(r){ if (r._local != null) local['t:' + r.key] = r._local; });
              D.dishes.forEach(function(r){ if (r._local != null) local['d:' + r.id] = r._local; }); D.flags.forEach(function(r){ if (r._local != null) local['f:' + r.id] = r._local; }); }
-    D = d;
+    D = d; setAreas();
     D.scores.forEach(function(r){ if (local['s:' + r.code] != null) r._local = local['s:' + r.code]; });
     D.texts.forEach(function(r){ if (local['t:' + r.key] != null) r._local = local['t:' + r.key]; });
     D.dishes.forEach(function(r){ if (local['d:' + r.id] != null) r._local = local['d:' + r.id]; });
