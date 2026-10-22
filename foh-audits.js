@@ -20,11 +20,9 @@ var AU = { me: null, list: null, total: 0, err: null, loading: false, open: null
            copied: false, replacing: false, showHow: false, filter: 'all' };
 
 function auEsc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]; }); }
-// The audit page that matches this app: DEV FOH hands out the DEV audit page, LIVE the LIVE one.
-function auPage(){
-  var dev = /robertos-foh-dev|pages\.dev|localhost|127\.0\.0\.1/.test(location.host + location.pathname);
-  return dev ? 'https://robertos-kitchen.github.io/robertos-kitchen/audit.html' : 'https://guarracinofamily.github.io/robertos-kitchen/audit.html';
-}
+// The audit page lives in this app (moved from the Kitchen app 22 Oct 2026), next to index.html:
+// DEV hands out the DEV page, LIVE the LIVE one. The function only accepts our own pages.
+function auPage(){ return new URL('audit.html', location.origin + location.pathname).href; }
 async function auApi(action, payload){
   var s = await sb.auth.getSession();
   var jwt = s && s.data && s.data.session && s.data.session.access_token;
