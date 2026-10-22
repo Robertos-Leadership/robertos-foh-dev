@@ -2336,32 +2336,82 @@ function peContactCell(val, kind){
 }
 // ── Extract ──────────────────────────────────────────────────────────
 // Exports exactly what is on screen, search and all -- if she has filtered to
-// one company, that is what she gets. A CSV that quietly exported everything
+// one company, that is what she gets. A file that quietly exported everything
 // would be the sort of number that ships wrong.
-function peClientsCsv(){
+// A branded .xlsx, not a CSV: Excel opened the CSV with phone numbers turned
+// into 5.23E+08 and every date as ########, and with nothing to say whose file
+// it was. Same builder and palette as the Reservations export (RES_XL).
+async function peClientsCsv(){
   var rows = peClientShown();
   if(!rows.length){ peToast('Nothing to extract', true); return; }
-  var head = ['Name','Company','Contact','Phone','Email','Bookings','Value (AED)','Latest booking','First enquiry'];
-  var q = function(v){
-    v = (v===null || v===undefined) ? '' : String(v);
-    return /[",\n\r]/.test(v) ? '"' + v.replace(/"/g,'""') + '"' : v;
-  };
-  var lines = [head.join(',')];
-  rows.forEach(function(r){
-    var c = r.c;
-    lines.push([c.display_name, c.company, c.contact_name, c.phone, c.email,
-      r.evs.length, r.value || 0, r.last || '', String(c.first_enquiry_at||'').slice(0,10)].map(q).join(','));
-  });
-  // The BOM is not decoration: without it Excel opens a UTF-8 CSV as ANSI and
-  // every accented name arrives mangled. CRLF for the same reason.
-  var blob = new Blob(['\ufeff' + lines.join('\r\n')], { type:'text/csv;charset=utf-8;' });
-  var a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  // localISO needs a Date -- called bare it threw and no file ever came out.
-  a.download = 'robertos-event-clients-' + localISO(new Date()) + '.csv';
-  document.body.appendChild(a); a.click();
-  setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 1000);
-  peToast(rows.length + ' client' + (rows.length===1?'':'s') + ' extracted');
+  try{
+    if(typeof resLoadExcelJS !== 'function') throw new Error('the spreadsheet helper is not loaded');
+    await resLoadExcelJS();
+    var C = RES_XL;
+    var head = ['Name','Company','Contact','Phone','Email','Bookings','Value (AED)','Latest booking','First enquiry'];
+    var widths = [30,26,22,18,34,10,14,15,15];
+    var n = head.length;
+    var wb = new ExcelJS.Workbook(); wb.creator = "Roberto's FOH App";
+    var ws = wb.addWorksheet('Clients', {
+      views: [{ state:'frozen', ySplit:4 }],
+      pageSetup: { orientation:'landscape', fitToPage:true, fitToWidth:1, fitToHeight:0 }
+    });
+    ws.columns = widths.map(function(w){ return { width:w }; });
+    var title = ws.addRow(["ROBERTO'S DIFC  —  Private events client book"]);
+    title.height = 32; ws.mergeCells(1, 1, 1, n);
+    title.getCell(1).style = { font:{bold:true, size:16, color:{argb:'FF'+C.SABBIA}, name:'Calibri'},
+      fill:{type:'pattern', pattern:'solid', fgColor:{argb:'FF'+C.VINO}}, alignment:{horizontal:'center', vertical:'middle'} };
+    var q = String(peState.cq||'').trim();
+    var sub = ws.addRow([rows.length + ' client' + (rows.length===1?'':'s') +
+      (q ? ' matching “' + q + '”' : '') + ' · extracted ' + peDLabel(localISO(new Date())) +
+      ' · value excludes lost bookings']);
+    sub.height = 18; ws.mergeCells(2, 1, 2, n);
+    sub.getCell(1).style = { font:{size:9, italic:true, color:{argb:'FF'+C.VINO}, name:'Calibri'},
+      fill:{type:'pattern', pattern:'solid', fgColor:{argb:'FF'+C.SABBIA}}, alignment:{horizontal:'center', vertical:'middle'} };
+    ws.addRow([]);
+    var hdr = ws.addRow(head); hdr.height = 26;
+    hdr.eachCell(function(cell){
+      cell.style = { font:{bold:true, size:10, color:{argb:'FFFFFFFF'}, name:'Calibri'},
+        fill:{type:'pattern', pattern:'solid', fgColor:{argb:'FF'+C.VINO}},
+        alignment:{horizontal:'center', vertical:'middle', wrapText:true}, border:resXlBorder(C.GOLD) };
+    });
+    // Dates go in as real dates (noon, so no timezone can tip them a day) and
+    // the phone as TEXT -- a phone number is a label, not a quantity.
+    var day = function(d){ d = String(d||'').slice(0,10); return /^\d{4}-\d{2}-\d{2}$/.test(d) ? new Date(d+'T12:00:00') : ''; };
+    var total = 0;
+    rows.forEach(function(r, i){
+      var c = r.c;
+      total += r.value || 0;
+      var row = ws.addRow([c.display_name||c.contact_name||'', c.company||'', c.contact_name||'',
+        c.phone ? String(c.phone) : '', c.email||'', r.evs.length, r.value || 0, day(r.last), day(c.first_enquiry_at)]);
+      row.eachCell({ includeEmpty:true }, function(cell, k){
+        cell.font = { name:'Calibri', size:10.5, color:{argb:'FF2C1810'} };
+        cell.alignment = { vertical:'top', horizontal: k>=6 ? 'right' : 'left', wrapText: k<=5 };
+        cell.border = { bottom:{style:'thin', color:{argb:'FF'+C.LIGHT}} };
+        if(i % 2) cell.fill = {type:'pattern', pattern:'solid', fgColor:{argb:'FFFBF8F3'}};
+      });
+      row.getCell(4).numFmt = '@';
+      row.getCell(7).numFmt = '#,##0';
+      row.getCell(8).numFmt = 'd mmm yyyy';
+      row.getCell(9).numFmt = 'd mmm yyyy';
+    });
+    var tr = ws.addRow(['Total', '', '', '', '', rows.reduce(function(a, r){ return a + r.evs.length; }, 0), total, '', '']);
+    tr.eachCell({ includeEmpty:true }, function(cell, k){
+      cell.font = { name:'Calibri', size:10.5, bold:true, color:{argb:'FF'+C.VINO} };
+      cell.fill = {type:'pattern', pattern:'solid', fgColor:{argb:'FF'+C.SABBIA}};
+      cell.border = { top:{style:'thin', color:{argb:'FF'+C.VINO}} };
+      if(k>=6) cell.alignment = { horizontal:'right' };
+    });
+    tr.getCell(7).numFmt = '#,##0';
+    var buf = await wb.xlsx.writeBuffer();
+    var blob = new Blob([buf], { type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = "Roberto's event clients " + localISO(new Date()) + '.xlsx';
+    document.body.appendChild(a); a.click();
+    setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+    peToast(rows.length + ' client' + (rows.length===1?'':'s') + ' extracted');
+  }catch(e){ peToast('Could not build the spreadsheet — ' + (e && e.message || e), true); }
 }
 // ── "Have they dined with us before?" ────────────────────────────────
 // The events desk never talks to SevenRooms. It asks the Kitchen project's
