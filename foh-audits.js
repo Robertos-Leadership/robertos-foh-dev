@@ -170,7 +170,7 @@ function auListView(){
     var st = auState(a), pct = a.overall_pct;
     h += '<button class="au-row" onclick="auOpen(\'' + auEsc(a.id) + '\')">'
       + '<div class="au-main"><div class="au-name">' + auEsc(a.auditor) + '</div>'
-      + '<div class="au-sub">' + auEsc(auDate(a.visit_date)) + (a.visit_time ? ' &middot; ' + auEsc(a.visit_time) : '') + ' &middot; ' + auEsc(auVia(a.sent_by)) + '</div>'
+      + '<div class="au-sub">' + auEsc(a.visit_date ? auDate(a.visit_date) : (a.title || 'Date not given')) + (a.visit_time ? ' &middot; ' + auEsc(a.visit_time) : '') + ' &middot; ' + auEsc(auVia(a.sent_by)) + '</div>'
       + '<span class="au-tag ' + st.k + '">' + auEsc(st.t) + '</span>'
       + (st.k === 'open' && a.updated_at ? ' <span class="au-sub" style="display:inline">&middot; last change ' + auEsc(auAgo(a.updated_at)) + '</span>' : '')
       + '</div><div class="au-pct">' + (pct != null ? pct + '%' : '<span style="color:#cfc0ad">&mdash;</span>') + '</div></button>';
