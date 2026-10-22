@@ -341,7 +341,7 @@ function api(action, payload){
 
 /* Saves queue: the latest value per key wins, retried until it lands. A copy sits in
    localStorage so a reload with no network does not lose a note. */
-var PEND = {}, BUSY = false, PKEY = 'auditPending:' + (TOK ? (TOK.k || TOK.a) : '');
+var PEND = {}, BUSY = 0, PKEY = 'auditPending:' + (TOK ? (TOK.k || TOK.a) : '');
 try { PEND = JSON.parse(ls(PKEY) || '{}') || {}; } catch(e){ PEND = {}; }
 function keepPend(){ ls(PKEY, JSON.stringify(PEND)); }
 function queue(key, action, payload){
@@ -349,19 +349,30 @@ function queue(key, action, payload){
   keepPend(); setStatus('saving'); flushSoon();
 }
 var flushT = null;
-function flushSoon(ms){ clearTimeout(flushT); flushT = setTimeout(flush, ms == null ? 700 : ms); }
+// A save waits at most 700 ms after the FIRST change, never pushed back by the next one: a fast
+// tapper kept resetting the timer and 29 of 33 answers sat unsaved (end-to-end test, 22 Oct 2026).
+function flushSoon(ms){
+  if (ms == null && flushT) return;
+  clearTimeout(flushT); flushT = setTimeout(function(){ flushT = null; flush(); }, ms == null ? 700 : ms);
+}
+// Up to 4 saves at once (each takes 1.5-3 s), never two for the same answer: a newer value for an
+// answer that is still on its way waits and goes next. BUSY = how many are on their way.
+var SENDING = {};
 function flush(){
-  if (BUSY) return flushSoon(500);
-  var keys = Object.keys(PEND); if (!keys.length) { setStatus('saved'); return; }
-  var k = keys[0], job = PEND[k]; BUSY = true;
+  var keys = Object.keys(PEND).filter(function(k){ return !SENDING[k]; });
+  if (!keys.length) { if (!BUSY && !Object.keys(PEND).length) setStatus('saved'); return; }
+  while (BUSY < 4 && keys.length) sendOne(keys.shift());
+}
+function sendOne(k){
+  var job = PEND[k]; SENDING[k] = true; BUSY++;
   api(job.action, job.payload).then(function(res){
-    BUSY = false;
+    BUSY--; delete SENDING[k];
     if (PEND[k] === job) { delete PEND[k]; keepPend(); }
     merge(job.action, res && res.row);
     flushSoon(0);
   }, function(e){
-    BUSY = false;
-    if (e.status && e.status < 500) { delete PEND[k]; keepPend(); toast(e.message, true); flushSoon(0); return; }
+    BUSY--; delete SENDING[k];
+    if (e.status && e.status < 500) { if (PEND[k] === job) { delete PEND[k]; keepPend(); } toast(e.message, true); flushSoon(0); return; }
     setStatus('bad'); flushSoon(4000);
   });
 }
@@ -1022,8 +1033,15 @@ function submit(b){
 }
 function waitSaved(){
   return new Promise(function(res, rej){
-    var n = 0; flushSoon(0);
-    (function check(){ if (!Object.keys(PEND).length && !BUSY && !anyUploading()) return res(); if (++n > 120) return rej(new Error(t('notSaved'))); setTimeout(check, 250); })();
+    // Waits as long as saves keep landing; gives up only after 40 s with no progress (it used to
+    // give up after 30 s in all, with saves still going through).
+    var left = -1, still = 0; flushSoon(0);
+    (function check(){
+      var k = Object.keys(PEND).length;
+      if (!k && !BUSY && !anyUploading()) return res();
+      if (k !== left) { left = k; still = 0; } else if (++still > 160) return rej(new Error(t('notSaved')));
+      setTimeout(check, 250);
+    })();
   });
 }
 function runTranslate(b){
