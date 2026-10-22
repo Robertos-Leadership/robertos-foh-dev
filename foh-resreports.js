@@ -1455,7 +1455,7 @@ var RR_REPORTS = [
     blurb:'The one to use when you want months compared fairly. Every month on the same clock.',
     followUp:90, run:rrRepReturnWindow },
   { id:'threevisits', qkey:'r-threevisits', name:'3 visits — first, second, third',
-    blurb:'Of each month\'s first-time guests: how many came a 2nd time, then a 3rd, within the window you choose.',
+    blurb:'First-time guests (never been, or not in for 12 months or more): how many came a 2nd time, then a 3rd, within the window you choose.',
     lookback:true, visits:true, firstEver:true, followUp:function(){ return (RR.visitRule === 'first' ? 1 : 2) * (Number(RR.visitWindow) || 30); },
     run:rrRepThreeVisits },
   { id:'channel', qkey:'r-channel', name:'Where bookings come from',
