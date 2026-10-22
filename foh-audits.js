@@ -326,7 +326,7 @@ function auChartCard(){
 function auTip(i){ if(AU.tip === i) return; AU.tip = i; auRepaint(); }
 
 // ── Admin → Audits: remove a test or a mistake, put it back. Nothing is deleted. ──
-var AUA = { list: null, removed: null, err: null, loading: false, asking: null, busy: null };
+var AUA = { list: null, removed: null, err: null, loading: false, asking: null, busy: null, pick: {}, purge: false };
 async function admAuditsLoad(){
   if(AUA.loading) return; AUA.loading = true;
   try { var a = await auApi('list'), r = await auApi('removed'); AUA.list = a.audits || []; AUA.removed = r.audits || []; AUA.err = null; }
@@ -341,7 +341,7 @@ function admAuditsHTML(){
   var h = '<div class="adm-wrap"><div class="au-wrap">';
   if(AUA.err) return h + '<div class="au-bad">Audits could not be read: ' + auEsc(AUA.err) + ' <button class="au-btn quiet" onclick="AUA.err=null;admAuditsLoad()">Try again</button></div></div></div>';
   if(!AUA.list) return h + '<div class="loading">Reading the audits&hellip;</div></div></div>';
-  h += '<div class="au-hint" style="margin:0 2px 12px">Remove a test or a mistake. It leaves the Audits list and the chart, and stays below with who removed it and why, so it can be put back.</div>';
+  h += '<div class="au-hint" style="margin:0 2px 12px">Remove a test or a mistake. It leaves the Audits list and the chart, and stays below with who removed it and why, so it can be put back or deleted for good.</div>';
   h += '<div class="au-lbl">In use &middot; ' + AUA.list.length + '</div>';
   AUA.list.forEach(function(a){
     var ask = AUA.asking === a.id;
@@ -357,9 +357,24 @@ function admAuditsHTML(){
   var rem = AUA.removed || [];
   h += '<div class="au-lbl" style="margin-top:22px">Removed &middot; ' + rem.length + '</div>';
   if(!rem.length) h += '<div class="au-empty">Nothing removed.</div>';
+  // Delete for good: tick some (or all), then confirm inline. Only removed audits can go.
+  var can = rem.filter(function(a){ return a.status !== 'archived'; });   // the archived Nov 2022 record is never deleted
+  var picked = can.filter(function(a){ return AUA.pick[a.id]; }), all = can.length && picked.length === can.length;
+  if(can.length) h += '<div class="au-btns" style="align-items:center;margin:0 0 10px">'
+    + '<label style="display:flex;align-items:center;gap:8px;min-height:44px;cursor:pointer;font:600 14px Inter,system-ui,sans-serif;color:#410207">'
+    + '<input type="checkbox" style="width:22px;height:22px;accent-color:#8f1d12"' + (all ? ' checked' : '') + ' onchange="admAuditPickAll(this.checked)">Select all</label>'
+    + (picked.length && !AUA.purge ? '<button class="au-btn" style="border-color:#8f1d12;color:#8f1d12;margin-left:auto" onclick="AUA.purge=true;renderMain()">Delete for good (' + picked.length + ')</button>' : '')
+    + '</div>';
+  if(picked.length && AUA.purge) h += '<div class="au-card" style="padding:12px 14px;margin-bottom:10px;border-color:#8f1d12">'
+    + '<div class="au-name" style="color:#8f1d12">Delete ' + picked.length + (picked.length === 1 ? ' audit' : ' audits') + ' for good?</div>'
+    + '<div class="au-sub">Their answers, notes and photos go too. This cannot be undone.</div>'
+    + '<div class="au-btns"><button class="au-btn" style="background:#8f1d12;border-color:#8f1d12;color:#fff"' + (AUA.busy ? ' disabled' : '') + ' onclick="admAuditPurge()">' + (AUA.busy === 'purge' ? 'Deleting&hellip;' : 'Delete for good') + '</button>'
+    + '<button class="au-btn quiet" onclick="AUA.purge=false;renderMain()">Cancel</button></div></div>';
   rem.forEach(function(a){
-    h += '<div class="au-card" style="padding:12px 14px;margin-bottom:8px;background:#fbf7f1"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">'
-      + '<div class="au-main"><div class="au-name" style="color:#6b5b50">' + auEsc(a.auditor) + '</div><div class="au-sub">' + auEsc(a.visit_date ? auDate(a.visit_date) : a.title) + ' &middot; ' + auEsc(auKind(a.kind).n) + '</div>'
+    var keep = a.status === 'archived', on = !keep && !!AUA.pick[a.id];
+    h += '<div class="au-card" style="padding:12px 14px;margin-bottom:8px;background:' + (on ? '#f6e9e4' : '#fbf7f1') + (on ? ';border-color:#c9a59c' : '') + '"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">'
+      + (keep ? '<div style="min-width:44px" title="Kept for the record"></div>' : '<label style="display:flex;align-items:center;min-width:44px;min-height:44px;justify-content:center;cursor:pointer;margin:-6px 0 -6px -8px"><input type="checkbox" style="width:22px;height:22px;accent-color:#8f1d12"' + (on ? ' checked' : '') + ' onchange="admAuditPick(\'' + auEsc(a.id) + '\',this.checked)" aria-label="Select"></label>')
+      + '<div class="au-main"' + (keep ? '' : ' style="cursor:pointer" onclick="admAuditPick(\'' + auEsc(a.id) + '\',' + !on + ')"') + '><div class="au-name" style="color:#6b5b50">' + auEsc(a.auditor) + '</div><div class="au-sub">' + auEsc(a.visit_date ? auDate(a.visit_date) : a.title) + ' &middot; ' + auEsc(auKind(a.kind).n) + '</div>'
       + '<div class="au-sub">Removed by ' + auEsc(admAuditWho(a.removed_by)) + ', ' + auEsc(auAgo(a.removed_at)) + (a.removed_reason ? ' &middot; &ldquo;' + auEsc(a.removed_reason) + '&rdquo;' : '') + '</div></div>'
       + '<button class="au-btn quiet"' + (AUA.busy ? ' disabled' : '') + ' onclick="admAuditRestore(\'' + auEsc(a.id) + '\')">Put back</button></div></div>';
   });
@@ -374,6 +389,16 @@ async function admAuditRemove(id){
   try { await auApi('remove', { id: id, reason: why }); AUA.asking = null; toast('Removed. It is kept below and can be put back.'); }
   catch(e){ toast('Could not remove it: ' + (e.message || e), true); }
   AUA.busy = null; AU.list = null; await admAuditsLoad();
+}
+function admAuditPick(id, on){ if(on) AUA.pick[id] = true; else delete AUA.pick[id]; if(!Object.keys(AUA.pick).length) AUA.purge = false; renderMain(); }
+function admAuditPickAll(on){ AUA.pick = {}; if(on) (AUA.removed || []).forEach(function(a){ if(a.status !== 'archived') AUA.pick[a.id] = true; }); else AUA.purge = false; renderMain(); }
+async function admAuditPurge(){
+  var ids = (AUA.removed || []).filter(function(a){ return AUA.pick[a.id] && a.status !== 'archived'; }).map(function(a){ return a.id; });
+  if(!ids.length) return;
+  AUA.busy = 'purge'; renderMain();
+  try { var r = await auApi('purge', { ids: ids }); AUA.pick = {}; AUA.purge = false; toast('Deleted for good: ' + (r.deleted || 0) + '.'); }
+  catch(e){ toast('Could not delete: ' + (e.message || e), true); }
+  AUA.busy = null; await admAuditsLoad();
 }
 async function admAuditRestore(id){
   AUA.busy = id; renderMain();
