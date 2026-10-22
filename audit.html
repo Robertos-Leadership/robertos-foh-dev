@@ -262,7 +262,7 @@ var T = {
     noted:'nota', photos:'foto', yes:'Sì', no:'No', notSeen:"Non l'ho visto", anything:'Vuoi aggiungere qualcosa?', optional:'Facoltativo',
     nextQ:'Domanda successiva', nextSec:'Sezione successiva', kRest:'Il ristorante', kRestSub:'Dalla prenotazione al saluto · 33 domande',
     kScala:'Scala, bar & lounge', kScalaSub:"Dall'accoglienza al conto · 27 domande", kVenue:'Tutto il locale', atTable:'Al tavolo', atScala:'Alla Scala',
-    best:'Il momento migliore', fixone:'Una cosa da migliorare', other:'Altro', bestPh:'Cosa ti è piaciuto di più?', fixonePh:'Se potessi cambiare una cosa…', otherPh:'Qualsiasi altra cosa',
+    best:'Il momento migliore', fixone:'Una cosa da migliorare', other:'Altro', bestPh:'Cosa ti è piaciuto di più?', fixonePh:'Se potessi cambiare una cosa…', otherPh:'Qualsiasi altra cosa', formfb:'Feedback su questo audit', formfbPh:'Cosa cambieresti nelle domande o nella app?',
     youSent:'Cosa hai inviato', answeredW:'risposte', notSeenW:'non viste', stillEdit:'Puoi ancora aggiungere o correggere qualcosa dalle sezioni: si salva da solo.',
     orSection:'Oppure apri una sezione del menu:',
     ordered:'Cosa hai ordinato?', orderedSub:'Scegli ogni piatto dal menu e dagli un voto.', thenFood:'Poi, il cibo in generale', scoreIt:'Da votare', dish1n:'piatto', dishesN:'piatti',
@@ -299,7 +299,7 @@ var T = {
     noted:'note', photos:'photos', yes:'Yes', no:'No', notSeen:"I didn't see this", anything:'Anything to add?', optional:'Optional',
     nextQ:'Next question', nextSec:'Next section', kRest:'The restaurant', kRestSub:'Booking to goodbye · 33 questions',
     kScala:'Scala, bar & lounge', kScalaSub:'Welcome to the bill · 27 questions', kVenue:'Whole venue', atTable:'At the table', atScala:'At Scala',
-    best:'The best moment', fixone:'One thing to fix', other:'Anything else', bestPh:'What did you enjoy most?', fixonePh:'If you could change one thing…', otherPh:'Anything else',
+    best:'The best moment', fixone:'One thing to fix', other:'Anything else', bestPh:'What did you enjoy most?', fixonePh:'If you could change one thing…', otherPh:'Anything else', formfb:'Feedback on this audit', formfbPh:'What would you change in the questions or the app?',
     youSent:'What you sent', answeredW:'answered', notSeenW:'not seen', stillEdit:'You can still add or correct anything from the sections: it saves by itself.',
     orSection:'Or open a section of the menu:',
     ordered:'What did you order?', orderedSub:'Pick each dish from the menu and give it a score.', thenFood:'Then, the food overall', scoreIt:'To score', dish1n:'dish', dishesN:'dishes',
@@ -776,9 +776,9 @@ function vFinal(){
   } else {
     var total = D.catalog.length, open = D.catalog.filter(function(c){ return !isDone(c.code); }).length;
     if (open) h += '<div class="msg info">' + (LANG === 'en' ? open + ' of ' + total + ' questions still open. You can send anyway: they count as not seen.' : open + ' domande su ' + total + ' ancora aperte. Puoi inviare lo stesso: contano come non viste.') + '</div>';
-    [['best', 'bestPh'], ['fixone', 'fixonePh'], ['other', 'otherPh']].forEach(function(x){
+    [['best', 'bestPh'], ['fixone', 'fixonePh'], ['other', 'otherPh'], ['formfb', 'formfbPh']].forEach(function(x){
       var r = textRow(x[0]);
-      h += '<div class="lbl">' + t(x[0]) + (x[0] === 'other' ? ' <small>' + t('optional') + '</small>' : '') + '</div>' + noteBlock({ id: 'n-t-' + x[0], target: 'text', ref: x[0], row: r, it: r._local != null ? r._local : r.it, en: r.en, ph: t(x[1]), nopics: x[0] !== 'best' });
+      h += '<div class="lbl">' + t(x[0]) + (x[0] === 'other' || x[0] === 'formfb' ? ' <small>' + t('optional') + '</small>' : '') + '</div>' + noteBlock({ id: 'n-t-' + x[0], target: 'text', ref: x[0], row: r, it: r._local != null ? r._local : r.it, en: r.en, ph: t(x[1]), nopics: x[0] !== 'best' });
     });
   }
   h += '</div>';
@@ -801,7 +801,7 @@ function vThanks(){
     h += '</div>';
     if (D.dishes.length) h += '<div class="lbl">' + t(D.kind === 'restaurant' ? 'ordered' : 'piattiG') + '</div><div class="card">' + D.dishes.map(function(d, i){
       return '<div class="sec" style="border:0;border-top:' + (i ? '1px solid var(--soft)' : '0') + ';border-radius:0;min-height:48px"><span class="grow"><span class="t" style="font-size:17px">' + esc(d.dish_name) + '</span></span><span class="sc">' + (d.score ? d.score + ' / 5' : '') + '</span></div>'; }).join('') + '</div>';
-    ['best', 'fixone', 'other'].forEach(function(k){
+    ['best', 'fixone', 'other', 'formfb'].forEach(function(k){
       var r = textRow(k), txt = r._local != null ? r._local : r.it;
       if (txt) h += '<div class="lbl">' + t(k) + '</div><div class="card" style="padding:12px 14px;font-size:15px;line-height:1.5;white-space:pre-line">' + esc(txt) + '</div>';
     });
