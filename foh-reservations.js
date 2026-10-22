@@ -38,6 +38,7 @@ var RES = {
   err: null,
   loadedAt: null,
   shift: 'all',      // all | the shift_category values present in the data
+  printPick: false,  // Print brief tapped: showing the All day / Lunch / Dinner choice
   q: ''              // search text
 };
 
@@ -1220,12 +1221,24 @@ function resNoteToggle(el){
   el.classList.toggle('rn-open');
 }
 
-async function resPrintBrief(){
+// Print brief asks which service first (22 Oct 2026): the evening team was
+// printing the whole day to brief dinner. The choice is made on the button, not
+// through the shift chip, and the search box is ignored -- a brief is the whole
+// service, never whatever happened to be typed in the search.
+function resPrintPick(on){ RES.printPick = !!on; renderMain(); }
+function resBriefRows(shift){
+  var rows = (RES.data && RES.data.reservations) ? RES.data.reservations : [];
+  return shift === 'all' ? rows : rows.filter(function(r){ return (r.shift||'') === shift; });
+}
+async function resPrintBrief(shift){
+  shift = shift || 'all';
+  RES.printPick = false; renderMain();
   // Never print a sheet with the history column silently empty.
   await resEnsureHistory();
   var money = !fohBlocked('revenue');
-  var rows = resRows();
-  if(!rows.length){ alert('Nothing to brief — there are no bookings on this night.'); return; }
+  var rows = resBriefRows(shift);
+  var svc = shift === 'all' ? '' : shift;
+  if(!rows.length){ alert('Nothing to brief — there are no ' + (svc ? svc.toLowerCase() + ' ' : '') + 'bookings on this day.'); return; }
 
   var byArea = {}, order = [];
   rows.forEach(function(r){
@@ -1239,9 +1252,13 @@ async function resPrintBrief(){
     return cb-ca;
   });
 
-  var t = RES.data.totals || {};
-  var h = '<div class="hd"><div class="ttl">Service brief</div>'
-    + '<div class="dt">' + resEsc(resDateLabel(RES.date)) + '</div>'
+  // Counted from the printed rows, the same way the on-screen tiles count a shift.
+  var t = shift === 'all' ? (RES.data.totals || {}) : {
+    reservations: rows.length,
+    covers: rows.reduce(function(s,r){ return s+(Number(r.pax)||0); },0)
+  };
+  var h = '<div class="hd"><div class="ttl">Service brief' + (svc ? ' &middot; ' + resEsc(svc) : ' &middot; all day') + '</div>'
+    + '<div class="dt">' + resEsc(resDateLabel(RES.date)) + (svc ? ' &mdash; ' + resEsc(svc) : '') + '</div>'
     + '<div class="tot">' + resNum(t.reservations) + ' reservations &middot; ' + resNum(t.covers) + ' covers</div></div>';
 
   order.forEach(function(k){
@@ -1407,7 +1424,7 @@ async function resPrintBrief(){
     + '.ft{margin-top:12px;padding-top:6px;border-top:1px solid #ccc;font-size:8px;color:#4F4535;line-height:1.5}';
 
   var doc = '<!doctype html><html><head><meta charset="utf-8"><title>Service brief — '
-    + resEsc(resDateLabel(RES.date)) + '</title><style>' + css + '</style></head><body>' + h + '</body></html>';
+    + resEsc(resDateLabel(RES.date)) + (svc ? ' — ' + resEsc(svc) : '') + '</title><style>' + css + '</style></head><body>' + h + '</body></html>';
 
   var w = window.open('', '_blank');
   if(!w){ alert('Pop-up blocked — allow pop-ups for this site and press Print brief again.'); return; }
@@ -2195,9 +2212,22 @@ function renderReservations(){
   if(!isTonight) h.push('<button class="res-btn" onclick="resToTonight()">Tonight</button>');
   // Disabled while the history is still arriving, and it says why — a brief
   // printed with an empty history column is worse than waiting three seconds.
-  h.push('<button class="res-btn res-btn-go" onclick="resPrintBrief()"'
-    + (RESH.loading?' disabled title="Reading guest history…"':' title="Print a pre-service brief for the team"')
-    + '>'+(RESH.loading?'Reading guests…':'Print brief')+'</button>');
+  if(RES.printPick && !RESH.loading && RES.data){
+    // Which service to print. Each button prints straight away; the count is the
+    // bookings that will be on the sheet.
+    ['all'].concat(resShifts()).forEach(function(s){
+      var n = resBriefRows(s).length;
+      if(s !== 'all' && !n) return;
+      h.push('<button class="res-btn res-btn-go" onclick="resPrintBrief(\''+resEsc(s).replace(/'/g,"\\'")+'\')"'
+        + ' title="Print the brief for '+(s==='all'?'the whole day':resEsc(s.toLowerCase()))+'">'
+        + 'Print '+(s==='all'?'all day':resEsc(s.toLowerCase()))+' &middot; '+resNum(n)+'</button>');
+    });
+    h.push('<button class="res-nav" onclick="resPrintPick(false)" title="Cancel">&times;</button>');
+  } else {
+    h.push('<button class="res-btn res-btn-go" onclick="resPrintPick(true)"'
+      + (RESH.loading?' disabled title="Reading guest history…"':' title="Print a pre-service brief for the team — all day, lunch or dinner"')
+      + '>'+(RESH.loading?'Reading guests…':'Print brief')+'</button>');
+  }
   h.push('<button class="res-btn" id="res-xls-btn" onclick="resExportExcel()" title="Download this night as an Excel file">Excel</button>');
   h.push('<button class="res-btn" onclick="resRangeOpen()" title="Download several nights as ONE Excel file — a summary line per night plus a full sheet for each">Excel: date range</button>');
   // The way across to the Reports module. It is a separate module (Nicole's
