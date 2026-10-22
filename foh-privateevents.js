@@ -1156,7 +1156,10 @@ function peScrollTop(){
   // columns, not a summary line. Four columns on a desk; on a phone the same
   // row stacks and each value carries its own label, because a bare number
   // under a bare address tells you nothing about which is which.
-  '.pe-crow{display:grid;grid-template-columns:1.5fr 1.15fr 1.7fr auto;gap:10px 14px;align-items:center;'+
+  // Every row is its own grid, so the columns must be FIXED: an `auto` column
+  // sized itself per row and a row carrying "AED 63,636" pushed every other
+  // column sideways, which is why the list looked crooked.
+  '.pe-crow{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr) minmax(0,1.75fr) 110px;gap:10px 18px;align-items:center;'+
     'padding:10px 16px;border-bottom:1px solid rgba(107,31,42,0.10)}'+
   '.pe-crow:last-child{border-bottom:none}'+
   '@media(hover:hover){.pe-crow:hover{background:#FBF6EC}}'+
@@ -1165,7 +1168,7 @@ function peScrollTop(){
   '.pe-cname{font-size:13.5px;font-weight:600;color:#6B1F2A;cursor:pointer;border-bottom:1px solid rgba(107,31,42,.3)}'+
   '@media(hover:hover){.pe-cname:hover{color:#4A1520;border-bottom-color:#4A1520}}'+
   '.pe-csub{display:block;font-size:11px;color:#5C3D2E;font-weight:400}'+
-  '.pe-cval{font-size:12.5px;color:#2C1810;min-width:0;overflow-wrap:anywhere}'+
+  '.pe-cval{font-size:12.5px;color:#2C1810;min-width:0;overflow-wrap:anywhere;text-align:left}'+
   '.pe-cnum{font-size:13px;color:#2C1810;text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}'+
   '.pe-cnum .pe-csub{text-align:right}'+
   // A quiet copy mark beside a value. 30px of touch target on a phone, because
@@ -2354,7 +2357,8 @@ function peClientsCsv(){
   var blob = new Blob(['\ufeff' + lines.join('\r\n')], { type:'text/csv;charset=utf-8;' });
   var a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = 'robertos-event-clients-' + (localISO().slice(0,10)) + '.csv';
+  // localISO needs a Date -- called bare it threw and no file ever came out.
+  a.download = 'robertos-event-clients-' + localISO(new Date()) + '.csv';
   document.body.appendChild(a); a.click();
   setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 1000);
   peToast(rows.length + ' client' + (rows.length===1?'':'s') + ' extracted');
