@@ -29,7 +29,7 @@ var AP = { loaded: false, loading: false, noAccess: false, err: null, open: null
            settings: null, points: [], steps: [], measures: [], snaps: [], results: [], comments: [], changes: [], weeks: [],
            busy: {}, moving: null, msg: null, refreshing: false };
 
-var AP_NAMES = { 'fguarracino@robertos.ae': 'Francesco', 'onafid@robertos.ae': 'Ouafaa', 'akadrie@skelmore.com': 'Amin', 'justin@skelmore.com': 'Justin', 'asacchi@skelmore.com': 'Andrea', 'ndragan@robertos.ae': 'Nicole' };
+var AP_NAMES = { 'fguarracino@robertos.ae': 'Francesco', 'onafid@robertos.ae': 'Ouafaa', 'akadrie@skelmore.com': 'Amin', 'justin@skelmore.com': 'Justin', 'asacchi@skelmore.com': 'Andrea', 'ndragan@robertos.ae': 'Nicole', 'musti@robertos.ae': 'Mustafa' };
 var AP_GROUPS = ['Standards', 'People', 'Business growth', 'Relaunch'];
 
 function apEsc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]; }); }
@@ -40,6 +40,20 @@ function apAdd(d, n){ var x = new Date(d + 'T12:00:00Z'); x.setUTCDate(x.getUTCD
 function apMonday(d){ var w = new Date(d + 'T12:00:00Z').getUTCDay(); return apAdd(d, -((w + 6) % 7)); }
 function apDate(d){ if(!d) return ''; return new Date(String(d).slice(0, 10) + 'T12:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' }); }
 function apDoneDate(ts){ return ts ? apDate(new Date(new Date(ts).getTime() + 4 * 3600e3).toISOString().slice(0, 10)) : ''; }
+// ── My tasks ── who "me" is, by first name. An owner can be several people
+// ("Andrea, Mustafa", "Andrea and Mustafa"), so each name in the box counts.
+function apMyNames(){
+  var out = [];
+  [state.access && state.access.name, apName(apMe())].forEach(function(n){
+    n = String(n || '').trim().toLowerCase().split(/\s+/)[0]; if(n && out.indexOf(n) === -1) out.push(n); });
+  return out;
+}
+function apIsMine(s, mine){
+  mine = mine || apMyNames(); if(!mine.length || !s.owner) return false;
+  return String(s.owner).toLowerCase().split(/\s*(?:,|&|\/|\+|\band\b)\s*/).some(function(part){
+    return mine.indexOf(part.trim().split(/\s+/)[0]) !== -1; });
+}
+function apMyOpen(){ var mine = apMyNames(); return AP.steps.filter(function(s){ return !s.done_at && apIsMine(s, mine); }); }
 function apIsApprover(){ return !!(AP.settings && String(AP.settings.approver || '').toLowerCase() === apMe()); }
 // A repaint rewrites the whole screen (renderMain). Anything half-typed would be
 // lost — a comment draft, or an owner being typed when the auto-refresh lands —
@@ -97,6 +111,7 @@ async function apLoad(silent){
     AP.noAccess = false;
     AP.settings = r[0].data[0]; AP.points = r[1].data; AP.steps = r[2].data; AP.measures = r[3].data.filter(function(m){ return !m.hidden; });   // hidden = taken off the plan, kept in the table
     AP.snaps = r[4].data; AP.results = r[5].data; AP.comments = r[6].data; AP.changes = r[7].data; AP.weeks = r[8].data;
+    if(!AP.loaded && !AP.tabChosen) AP.filter = (AP_WANT_MINE || apMyOpen().length) ? 'mine' : 'dash';   // first open: straight to My tasks
     AP.loaded = true;
     setTimeout(apMaybeRefresh, 0);
   }catch(e){
@@ -216,7 +231,7 @@ function apMaybeRefresh(){
   if(!t || Date.now() - new Date(t).getTime() > AP_STALE_MIN * 60000) apCallWeekly('refresh', { olderThan: AP_STALE_MIN, quiet: true });
 }
 function apOpen(pid){ AP.open = pid; AP.moving = null; AP.msg = null; apRepaint(); try{ window.scrollTo(0, 0); }catch(e){} }
-function apFilter(f){ AP.filter = f; apRepaint(); }
+function apFilter(f){ AP.filter = f; AP.tabChosen = true; apRepaint(); }
 
 // ── render ────────────────────────────────────────────────────────────────
 function renderActionPlan(){
@@ -282,11 +297,13 @@ function apOverview(msg){
     + (days > 0 ? days + ' day' + (days === 1 ? '' : 's') + ' to go' : (days === 0 ? 'today' : 'done')) + '</div></div></div>');
   h.push(apApproveBar());
   var f = AP.filter;
-  var tab = (f === 'all' || f === 'mine' || f === 'late' || f === 'week') ? 'points' : f;
-  h.push('<div class="ap-tabs" role="tablist">' + [['dash', 'Dashboard'], ['points', 'Points'], ['plan', 'Owners &amp; dates'], ['numbers', 'Data']].map(function(x){
-    return '<button role="tab" class="' + (tab === x[0] ? 'on' : '') + '" onclick="apFilter(\'' + (x[0] === 'points' ? 'all' : x[0]) + '\')">' + x[1] + '</button>'; }).join('') + '</div>');
+  var tab = (f === 'all' || f === 'late' || f === 'week') ? 'points' : f;
+  var myN = apMyOpen().length, myLate = apMyOpen().filter(apStepLate).length;
+  h.push('<div class="ap-tabs" role="tablist">' + [['mine', 'My tasks'], ['dash', 'Dashboard'], ['points', 'Points'], ['plan', 'Owners &amp; dates'], ['numbers', 'Data']].map(function(x){
+    var badge = x[0] === 'mine' && myN ? ' <span class="ap-tcount' + (myLate ? ' late' : '') + '">' + myN + '</span>' : '';
+    return '<button role="tab" class="' + (tab === x[0] ? 'on' : '') + '" onclick="apFilter(\'' + (x[0] === 'points' ? 'all' : x[0]) + '\')">' + x[1] + badge + '</button>'; }).join('') + '</div>');
   if(tab === 'points'){
-    h.push('<div class="ap-subtabs">' + [['all', 'All'], ['mine', 'My steps'], ['late', 'Late'], ['week', 'This week']].map(function(x){
+    h.push('<div class="ap-subtabs">' + [['all', 'All'], ['late', 'Late'], ['week', 'This week']].map(function(x){
       return '<button class="' + (f === x[0] ? 'on' : '') + '" onclick="apFilter(\'' + x[0] + '\')">' + x[1] + '</button>'; }).join('') + '</div>');
     if(f === 'all'){
       h.push('<div class="ap-card ap-list">');
@@ -298,6 +315,8 @@ function apOverview(msg){
       });
       h.push('</div>');
     } else h.push(apStepList(f));
+  } else if(f === 'mine'){
+    h.push(apMyTasks());
   } else if(f === 'dash'){
     h.push(apDashboard());
   } else if(f === 'numbers'){
@@ -351,16 +370,14 @@ function apPlanList(){
 }
 
 function apStepList(f){
-  var me = String((state.access && state.access.name) || apName(apMe())).toLowerCase().split(/\s+/)[0];
   var t = apToday();
   var pick = AP.steps.filter(function(s){
     if(f === 'late') return apStepLate(s);
     if(f === 'week') return !s.done_at && s.due_date && s.due_date <= apAdd(t, 7);
-    if(f === 'mine') return !!me && String(s.owner || '').toLowerCase().indexOf(me) !== -1;
     return true;
   });
   if(!pick.length){
-    var none = { late: 'Nothing is late.', week: 'No open step is due in the next 7 days.', mine: 'No step has your name as owner yet. Owners are set in <b>Owners &amp; dates</b>.' }[f];
+    var none = { late: 'Nothing is late.', week: 'No open step is due in the next 7 days.', }[f];
     return '<div class="ap-card ap-empty">' + none + '</div>';
   }
   var h = ['<div class="ap-card ap-list">'];
@@ -372,6 +389,41 @@ function apStepList(f){
     });
   });
   h.push('</div>');
+  return h.join('');
+}
+
+// Your own open steps by date: late, this week, coming up; done in the last 7
+// days underneath so a wrong tick can be undone. Tick = done (same apTick as
+// everywhere); the title opens the point.
+function apMyTasks(){
+  var mine = apMyNames(), t = apToday(), wk = apAdd(t, 7);
+  var since = new Date(Date.now() - 7 * 86400e3).toISOString();
+  var all = AP.steps.filter(function(s){ return apIsMine(s, mine); });
+  var byDate = function(a, b){ return String(a.due_date || '9999').localeCompare(String(b.due_date || '9999')) || (a.sort - b.sort); };
+  var open = all.filter(function(s){ return !s.done_at; }).sort(byDate);
+  var groups = [
+    ['Late', open.filter(apStepLate)],
+    ['This week', open.filter(function(s){ return !apStepLate(s) && s.due_date && s.due_date <= wk; })],
+    ['Coming up', open.filter(function(s){ return !apStepLate(s) && !(s.due_date && s.due_date <= wk); })],
+    ['Done in the last 7 days', all.filter(function(s){ return s.done_at && s.done_at >= since; }).sort(function(a, b){ return String(b.done_at).localeCompare(String(a.done_at)); })]
+  ];
+  var who = (mine[0] || '').replace(/^./, function(c){ return c.toUpperCase(); });
+  var h = ['<div class="ap-my-head">' + (open.length ? '<b>' + open.length + '</b> open step' + (open.length === 1 ? '' : 's') + ' for ' + apEsc(who) : 'No open steps for ' + apEsc(who) + '.')
+    + ' <span class="ap-small">Direct link: <a href="' + apEsc(location.origin + location.pathname) + '#actionplan/mine">' + apEsc(location.origin + location.pathname) + '#actionplan/mine</a></span></div>'];
+  if(!all.length) h.push('<div class="ap-card ap-empty">No step has your name as owner yet. Owners are set in <b>Owners &amp; dates</b>.</div>');
+  groups.forEach(function(g){
+    if(!g[1].length) return;
+    h.push('<div class="ap-group' + (g[0] === 'Late' ? ' ap-red' : '') + '">' + g[0] + '</div><div class="ap-card ap-list">');
+    g[1].forEach(function(s){
+      var p = AP.points.filter(function(x){ return x.id === s.point_id; })[0] || { num: '', title: '' };
+      var others = String(s.owner || '').split(/\s*(?:,|&|\/|\+|\band\b)\s*/).filter(function(n){ return n && mine.indexOf(n.trim().toLowerCase().split(/\s+/)[0]) === -1; });
+      var date = s.done_at ? 'done ' + apDoneDate(s.done_at) : (s.due_date ? (apStepLate(s) ? '<b class="ap-red">was due ' + apDate(s.due_date) + '</b>' : apDate(s.due_date)) : 'no date');
+      h.push('<div class="ap-srow"><input type="checkbox" class="ap-check" ' + (s.done_at ? 'checked ' : '') + 'onchange="apTick(\'' + s.id + '\',this.checked)" aria-label="Done: ' + apEsc(s.title) + '">'
+        + '<button class="ap-slink" onclick="apOpen(\'' + s.point_id + '\')"><span class="ap-stitle">' + apEsc(s.title) + '</span><span class="ap-ssub">' + p.num + '. ' + apEsc(p.title)
+        + (others.length ? ' &middot; with ' + apEsc(others.join(', ')) : '') + '</span></button><span class="ap-mydate">' + date + '</span></div>');
+    });
+    h.push('</div>');
+  });
   return h.join('');
 }
 
@@ -570,7 +622,8 @@ function apPointPage(pid, msg){
 // signed in, open the sign-in box straight away; once access has loaded
 // (loadFohAccess calls apHashOpen) go straight into the plan.
 var AP_WANT = false;
-try{ AP_WANT = location.hash === '#actionplan'; }catch(e){}
+var AP_WANT_MINE = false;
+try{ AP_WANT = /^#actionplan(\/mine)?$/.test(location.hash); AP_WANT_MINE = location.hash === '#actionplan/mine'; }catch(e){}
 function apHashOpen(){
   if(!AP_WANT || !state || !state.access) return;
   AP_WANT = false;
@@ -1034,6 +1087,8 @@ function apCss(){
     '.btn-q.main{background:var(--vino);border-color:var(--vino);color:#fff}.btn-q:disabled{opacity:.55;cursor:default}',
     '.ap-tabs{display:flex;gap:2px;background:#EDE5DA;border-radius:10px;padding:3px;margin-top:20px;width:max-content;max-width:100%;overflow-x:auto}',
     '.ap-tabs button{font:inherit;font-size:13px;padding:7px 14px;border-radius:8px;border:0;background:none;color:var(--text-mid);cursor:pointer;white-space:nowrap;min-height:34px}',
+    '.ap-tcount{display:inline-block;min-width:18px;margin-left:5px;padding:0 6px;border-radius:999px;background:#EDE5DA;color:var(--text);font-size:11px;font-weight:600;line-height:18px}.ap-tcount.late{background:#F6D8D8;color:#8B1E1E}',
+    '.ap-my-head{margin:16px 0 4px;font-size:14px}.ap-my-head a{color:var(--vino)}.ap-mydate{flex:none;font-size:13px;color:var(--text-mid);white-space:nowrap;padding-left:8px;align-self:center}',
     '.ap-tabs button.on{background:#fff;color:var(--text);font-weight:600;box-shadow:0 1px 2px rgba(0,0,0,.08)}',
     '.ap-subtabs{display:flex;gap:6px;margin:14px 0 10px;flex-wrap:wrap}.ap-subtabs button{font:inherit;font-size:12px;padding:6px 12px;border-radius:999px;border:1px solid #DDD0BF;background:#fff;color:var(--text-mid);cursor:pointer;min-height:32px}.ap-subtabs button.on{background:var(--vino);border-color:var(--vino);color:#fff}',
     '.ap-secbar{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;margin:22px 2px 10px}',
