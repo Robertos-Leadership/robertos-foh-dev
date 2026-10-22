@@ -131,6 +131,13 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,a:focus-visible{
 .pick input{width:100%;border:1px solid var(--line);border-radius:10px;padding:13px 14px;font-size:17px;background:#fff;color:var(--ink)}
 .opt{display:block;width:100%;text-align:left;padding:12px;border:0;border-top:1px solid var(--soft);background:#fff;font-size:15px}
 .opt small{color:var(--muted);margin-left:6px}
+.menu{border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#fff}
+.msec{display:flex;align-items:center;gap:10px;width:100%;min-height:50px;padding:0 14px;border:0;border-top:1px solid var(--soft);background:#fff;text-align:left;font-family:var(--display);font-size:19px;color:var(--vino)}
+.msec:first-child{border-top:0}
+.msec span{flex:1}
+.msec small{font-family:var(--sans);font-size:13px;color:var(--muted)}
+.msec.on{background:var(--door)}
+.opt.in{padding:13px 14px 13px 28px;font-size:16px;min-height:48px}
 .kcard{display:flex;align-items:center;gap:14px;text-align:left;padding:16px;border:1px solid var(--line);border-radius:14px;background:#fff;min-height:76px;width:100%}
 .kcard.on{border:2px solid var(--vino);padding:15px}
 .kcard .r{flex:none;width:22px;height:22px;border-radius:50%;border:2px solid var(--line);display:flex;align-items:center;justify-content:center}
@@ -256,6 +263,8 @@ var T = {
     nextQ:'Domanda successiva', nextSec:'Sezione successiva', kRest:'Il ristorante', kRestSub:'Dalla prenotazione al saluto · 33 domande',
     kScala:'Scala, bar & lounge', kScalaSub:"Dall'accoglienza al conto · 27 domande", kVenue:'Tutto il locale', atTable:'Al tavolo', atScala:'Alla Scala',
     best:'Il momento migliore', fixone:'Una cosa da migliorare', other:'Altro', bestPh:'Cosa ti è piaciuto di più?', fixonePh:'Se potessi cambiare una cosa…', otherPh:'Qualsiasi altra cosa',
+    youSent:'Cosa hai inviato', answeredW:'risposte', notSeenW:'non viste', stillEdit:'Puoi ancora aggiungere o correggere qualcosa dalle sezioni: si salva da solo.',
+    orSection:'Oppure apri una sezione del menu:',
     ordered:'Cosa hai ordinato?', orderedSub:'Scegli ogni piatto dal menu e dagli un voto.', thenFood:'Poi, il cibo in generale', scoreIt:'Da votare', dish1n:'piatto', dishesN:'piatti',
     dish5:'Lo riordineresti domani', dish3:'Buono', dish1:"L'hai lasciato", startTitle:'Audit ospite', begin:"Inizia l'audit",
     startSub:"Circa 15 minuti. Rispondi da ospite: quello che hai visto, sentito e assaggiato. Quello che non hai visto, saltalo.",
@@ -291,6 +300,8 @@ var T = {
     nextQ:'Next question', nextSec:'Next section', kRest:'The restaurant', kRestSub:'Booking to goodbye · 33 questions',
     kScala:'Scala, bar & lounge', kScalaSub:'Welcome to the bill · 27 questions', kVenue:'Whole venue', atTable:'At the table', atScala:'At Scala',
     best:'The best moment', fixone:'One thing to fix', other:'Anything else', bestPh:'What did you enjoy most?', fixonePh:'If you could change one thing…', otherPh:'Anything else',
+    youSent:'What you sent', answeredW:'answered', notSeenW:'not seen', stillEdit:'You can still add or correct anything from the sections: it saves by itself.',
+    orSection:'Or open a section of the menu:',
     ordered:'What did you order?', orderedSub:'Pick each dish from the menu and give it a score.', thenFood:'Then, the food overall', scoreIt:'To score', dish1n:'dish', dishesN:'dishes',
     dish5:"You'd order it again tomorrow", dish3:'Fine', dish1:'You left it', startTitle:'Guest audit', begin:'Start the audit',
     startSub:"About 15 minutes. Answer as a guest: what you saw, heard and tasted. Anything you didn't see, skip.",
@@ -688,8 +699,19 @@ function presHtml(mode){
   var mine = function(m){ return D.kind === 'scala' ? m.where === 'scala' : D.kind === 'restaurant' ? m.where !== 'scala' : true; };
   var hits = D.menu.filter(function(m){ return !q || norm(m.name).indexOf(q) !== -1; })
     .sort(function(a, b){ return (mine(a) ? 0 : 1) - (mine(b) ? 0 : 1) || a.name.localeCompare(b.name); }).slice(0, q ? 12 : 200), h = '';
-  if (!q) { hits.forEach(function(m){ h += '<button class="opt" data-act="pickdish" data-mode="' + mode + '" data-id="' + m.id + '" data-name="' + esc(m.name) + '">' + esc(m.name) + '<small>' + (m.where === 'scala' ? 'Scala' : '') + '</small></button>'; });
-            return '<div style="max-height:320px;overflow:auto;border-top:1px solid var(--soft);margin:0 -14px -14px">' + h + '</div>'; }
+  // Nothing typed: the menu by section, in menu order (Crudo, Antipasti, Pasta…). Tap a section to open
+  // it, tap the dish. Nobody has to remember a dish's name (Francesco, 22 Oct 2026).
+  if (!q) {
+    var secs = [], by = {};
+    D.menu.filter(mine).forEach(function(m){ var s = m.section || 'Other'; if (!by[s]) { by[s] = []; secs.push(s); } by[s].push(m); });
+    secs.forEach(function(s){
+      var open = S.msec === s;
+      h += '<button class="msec' + (open ? ' on' : '') + '" data-act="msec" data-s="' + esc(s) + '" aria-expanded="' + open + '"><span>' + esc(s) + '</span><small>' + by[s].length + '</small>' +
+           '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="' + (open ? 'M6 15l6-6 6 6' : 'M6 9l6 6 6-6') + '"/></svg></button>';
+      if (open) by[s].forEach(function(m){ h += '<button class="opt in" data-act="pickdish" data-mode="' + mode + '" data-id="' + m.id + '" data-name="' + esc(m.name) + '">' + esc(m.name) + '</button>'; });
+    });
+    return '<div class="muted" style="margin:2px 2px 6px">' + t('orSection') + '</div><div class="menu">' + h + '</div>';
+  }
   hits.forEach(function(m){ h += '<button class="opt" data-act="pickdish" data-mode="' + mode + '" data-id="' + m.id + '" data-name="' + esc(m.name) + '">' + esc(m.name) + '<small>' + (m.where === 'scala' ? 'Scala' : '') + '</small></button>'; });
   return h + '<button class="opt" data-act="pickdish" data-mode="' + mode + '" data-id="" data-name="' + esc(raw) + '">' + t('useName') + ': <b>' + esc(raw) + '</b></button>';
 }
@@ -766,8 +788,27 @@ function vFinal(){
 
 function vThanks(){
   var title = isEnrico() ? t('sentTitle') : t('sentTeamTitle') + ', ' + esc(who()) + '.';
-  return topBar('<div><h1>' + title + '</h1></div><div class="sub">' + (isEnrico() ? t('sentLine') : t('sentTeamLine')) + '</div>') +
-    '<div class="body"><button class="sec" data-act="go" data-to=\'{"v":"home"}\'><span class="grow"><span class="t">' + t('sections') + '</span></span>' + CHEV_SVG + '</button></div>';
+  var h = topBar('<div><h1>' + title + '</h1></div><div class="sub">' + (isEnrico() ? t('sentLine') : t('sentTeamLine')) + '</div>') + '<div class="body">';
+  // A guest sees what they sent, so it visibly went through: answers by section, the dishes, their words.
+  // No % here: the score is for Roberto's management team (Francesco, 22 Oct 2026).
+  if (!isEnrico()) {
+    h += '<div class="lbl" style="margin:0">' + t('youSent') + '</div><div class="card">';
+    AREAS.forEach(function(a, i){
+      var st = areaStats(a), seen = cat(a).filter(function(c){ return scoreRow(c.code).na; }).length;
+      h += '<div class="sec" style="border:0;border-top:' + (i ? '1px solid var(--soft)' : '0') + ';border-radius:0;min-height:52px"><span class="dot' + (st.done === st.total ? ' done' : '') + '">' + (st.done === st.total ? CHECK_SVG : i + 1) + '</span>' +
+           '<span class="grow"><span class="t" style="font-size:17px">' + esc(areaName(a)) + '</span><span class="s">' + (st.done - seen) + ' ' + t('of') + ' ' + st.total + ' ' + t('answeredW') + (seen ? ' · ' + seen + ' ' + t('notSeenW') : '') + '</span></span></div>';
+    });
+    h += '</div>';
+    if (D.dishes.length) h += '<div class="lbl">' + t(D.kind === 'restaurant' ? 'ordered' : 'piattiG') + '</div><div class="card">' + D.dishes.map(function(d, i){
+      return '<div class="sec" style="border:0;border-top:' + (i ? '1px solid var(--soft)' : '0') + ';border-radius:0;min-height:48px"><span class="grow"><span class="t" style="font-size:17px">' + esc(d.dish_name) + '</span></span><span class="sc">' + (d.score ? d.score + ' / 5' : '') + '</span></div>'; }).join('') + '</div>';
+    ['best', 'fixone', 'other'].forEach(function(k){
+      var r = textRow(k), txt = r._local != null ? r._local : r.it;
+      if (txt) h += '<div class="lbl">' + t(k) + '</div><div class="card" style="padding:12px 14px;font-size:15px;line-height:1.5;white-space:pre-line">' + esc(txt) + '</div>';
+    });
+    h += '<div class="muted" style="padding:6px 2px">' + t('stillEdit') + '</div>';
+  }
+  h += '<button class="sec" data-act="go" data-to=\'{"v":"home"}\'><span class="grow"><span class="t">' + t('sections') + '</span></span>' + CHEV_SVG + '</button></div>';
+  return h;
 }
 /* ── shared link: name first, then their own audit ──────────────────────── */
 function mine(){ try { return JSON.parse(ls('auditMine:' + TOK.n) || 'null'); } catch(e){ return null; } }
@@ -983,6 +1024,7 @@ root.addEventListener('click', function(e){
   var b = e.target.closest('[data-act]'); if (!b) return;
   var act = b.getAttribute('data-act');
   if (act === 'pq') return;
+  if (act === 'msec') { var sv = b.getAttribute('data-s'); S.msec = S.msec === sv ? null : sv; var box = document.getElementById('pres'); if (box) box.innerHTML = presHtml(document.getElementById('pq').getAttribute('data-mode')); return; }
   if (act === 'lang') { LANG = b.getAttribute('data-l'); ls('auditLang', LANG); document.documentElement.lang = LANG; render(); return; }
   if (act === 'go') { e.preventDefault(); go(JSON.parse(b.getAttribute('data-to'))); return; }
   if (act === 'area') { go({ v: 'area', area: b.getAttribute('data-a') }); return; }
