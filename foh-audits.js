@@ -215,7 +215,13 @@ function auFit(f){
   try {
     var d = f.contentDocument; if(!d) return;
     d.querySelectorAll('a').forEach(function(x){ x.target = '_blank'; x.rel = 'noopener'; });
-    f.style.height = (d.documentElement.scrollHeight + 8) + 'px';
+    // The report grows after its fonts and photos arrive (3,025 -> 3,085 px, which left an inner
+    // scrollbar hiding the logo): follow the content's height whenever it changes.
+    var fit = function(){ f.style.height = (d.documentElement.scrollHeight + 8) + 'px'; try { f.contentWindow.scrollTo(0, 0); } catch(e){} };
+    fit();
+    if (window.ResizeObserver) new ResizeObserver(fit).observe(d.body);
+    if (d.fonts && d.fonts.ready) d.fonts.ready.then(fit);
+    d.querySelectorAll('img').forEach(function(im){ if(!im.complete) im.addEventListener('load', fit); });
   } catch(e){}
 }
 
