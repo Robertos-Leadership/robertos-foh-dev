@@ -261,8 +261,8 @@ var T = {
     doneN:'Fatto', nextUp:'Prossima', qs:'domande', tasted:'assaggiati', piattiG:'I piatti assaggiati', piattiSubG:'Un voto per ogni piatto',
     finalG:'Prima di inviare', finalSubG:'Il momento migliore, una cosa da migliorare', addPhoto:'Aggiungi una foto', cont2:'Continua', startS:'Inizia',
     noted:'nota', photos:'foto', yes:'Sì', no:'No', notSeen:"Non l'ho visto", anything:'Vuoi aggiungere qualcosa?', optional:'Facoltativo',
-    nextQ:'Domanda successiva', nextSec:'Sezione successiva', kRest:'Il ristorante', kRestSub:'Dalla prenotazione al saluto · 36 domande',
-    kScala:'Scala, bar & lounge', kScalaSub:"Dall'accoglienza al conto · 32 domande", kVenue:'Tutto il locale', atTable:'Al tavolo', atScala:'Alla Scala',
+    nextQ:'Domanda successiva', nextSec:'Sezione successiva', kRest:'Il ristorante', kRestSub:'Dalla prenotazione al saluto · 44 domande',
+    kScala:'Scala, bar & lounge', kScalaSub:"Dall'accoglienza al conto · 36 domande", kVenue:'Tutto il locale', atTable:'Al tavolo', atScala:'Alla Scala',
     best:'Il momento migliore', fixone:'Una cosa da migliorare', other:'Altro', bestPh:'Cosa ti è piaciuto di più?', fixonePh:'Se potessi cambiare una cosa…', otherPh:'Qualsiasi altra cosa', formfb:'Feedback su questo audit', formfbPh:'Cosa cambieresti nelle domande o nella app?',
     youSent:'Cosa hai inviato', answeredW:'risposte', notSeenW:'non viste', stillEdit:'Puoi ancora aggiungere o correggere qualcosa dalle sezioni: si salva da solo.',
     orSection:'Oppure apri una sezione del menu:',
@@ -299,8 +299,8 @@ var T = {
     doneN:'Done', nextUp:'Next up', qs:'questions', tasted:'tasted', piattiG:'Dishes you tasted', piattiSubG:'A score for each dish',
     finalG:'Before you send', finalSubG:'The best moment, one thing to fix', addPhoto:'Add a photo', cont2:'Continue', startS:'Start',
     noted:'note', photos:'photos', yes:'Yes', no:'No', notSeen:"I didn't see this", anything:'Anything to add?', optional:'Optional',
-    nextQ:'Next question', nextSec:'Next section', kRest:'The restaurant', kRestSub:'Booking to goodbye · 36 questions',
-    kScala:'Scala, bar & lounge', kScalaSub:'Welcome to the bill · 32 questions', kVenue:'Whole venue', atTable:'At the table', atScala:'At Scala',
+    nextQ:'Next question', nextSec:'Next section', kRest:'The restaurant', kRestSub:'Booking to goodbye · 44 questions',
+    kScala:'Scala, bar & lounge', kScalaSub:'Welcome to the bill · 36 questions', kVenue:'Whole venue', atTable:'At the table', atScala:'At Scala',
     best:'The best moment', fixone:'One thing to fix', other:'Anything else', bestPh:'What did you enjoy most?', fixonePh:'If you could change one thing…', otherPh:'Anything else', formfb:'Feedback on this audit', formfbPh:'What would you change in the questions or the app?',
     youSent:'What you sent', answeredW:'answered', notSeenW:'not seen', stillEdit:'You can still add or correct anything from the sections: it saves by itself.',
     orSection:'Or open a section of the menu:',
@@ -346,7 +346,7 @@ var root = document.getElementById('root');
 
 /* ── API ─────────────────────────────────────────────────────────────────── */
 function api(action, payload){
-  var body = Object.assign({ action: action, pv: 3, qset: 2 }, TOK, payload || {});
+  var body = Object.assign({ action: action, pv: 3, qset: 3 }, TOK, payload || {});
   return fetch(FN + (action === 'load' ? '?read=1' : ''), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY },
@@ -812,6 +812,8 @@ function vFinal(){
   } else {
     var total = D.catalog.length, open = D.catalog.filter(function(c){ return !isDone(c.code); }).length;
     if (open) h += '<div class="msg info">' + (LANG === 'en' ? open + ' of ' + total + ' questions still open. You can send anyway: they count as not seen.' : open + ' domande su ' + total + ' ancora aperte. Puoi inviare lo stesso: contano come non viste.') + '</div>';
+    if (open) h += '<div class="card" style="margin:0 0 10px">' + D.catalog.filter(function(c){ return !isDone(c.code); }).map(function(c, n){
+      return '<button class="sec" style="border:0;border-top:' + (n ? '1px solid var(--soft)' : '0') + ';border-radius:0;min-height:52px" data-act="item" data-code="' + c.code + '"><span class="grow"><span class="t" style="font-size:16px">' + esc(lab(c)) + '</span><span class="s">' + esc(areaName(c.area)) + '</span></span>' + CHEV_SVG + '</button>'; }).join('') + '</div>';
     [['best', 'bestPh'], ['fixone', 'fixonePh'], ['other', 'otherPh'], ['formfb', 'formfbPh']].forEach(function(x){
       var r = textRow(x[0]);
       h += '<div class="lbl">' + t(x[0]) + (x[0] === 'other' || x[0] === 'formfb' ? ' <small>' + t('optional') + '</small>' : '') + '</div>' + noteBlock({ id: 'n-t-' + x[0], target: 'text', ref: x[0], row: r, it: r._local != null ? r._local : r.it, en: r.en, ph: t(x[1]), nopics: x[0] !== 'best' });
