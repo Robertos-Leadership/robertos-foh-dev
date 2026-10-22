@@ -812,7 +812,7 @@ function vFinal(){
   } else {
     var total = D.catalog.length, open = D.catalog.filter(function(c){ return !isDone(c.code); }).length;
     if (open) h += '<div class="msg info">' + (LANG === 'en' ? open + ' of ' + total + ' questions still open. You can send anyway: they count as not seen.' : open + ' domande su ' + total + ' ancora aperte. Puoi inviare lo stesso: contano come non viste.') + '</div>';
-    if (open) h += '<div class="card" style="margin:0 0 10px">' + D.catalog.filter(function(c){ return !isDone(c.code); }).map(function(c, n){
+    if (open) h += '<div class="card" style="margin:0 0 10px">' + D.catalog.filter(function(c){ return !isDone(c.code); }).sort(function(x, y){ return (ORDER.indexOf(x.area) - ORDER.indexOf(y.area)) || (x.position - y.position); }).map(function(c, n){
       return '<button class="sec" style="border:0;border-top:' + (n ? '1px solid var(--soft)' : '0') + ';border-radius:0;min-height:52px" data-act="item" data-code="' + c.code + '"><span class="grow"><span class="t" style="font-size:16px">' + esc(lab(c)) + '</span><span class="s">' + esc(areaName(c.area)) + '</span></span>' + CHEV_SVG + '</button>'; }).join('') + '</div>';
     [['best', 'bestPh'], ['fixone', 'fixonePh'], ['other', 'otherPh'], ['formfb', 'formfbPh']].forEach(function(x){
       var r = textRow(x[0]);
