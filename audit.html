@@ -104,6 +104,9 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,a:focus-visible{
 .note textarea{width:100%;min-height:72px;border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:16px;line-height:1.45;background:var(--paper);resize:vertical}
 .note textarea.small{min-height:52px}
 .note .tools{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.opt.on{background:var(--ok-bg);color:var(--ok);font-weight:600}.opt.on:before{content:'¹3  '}
+.note .said .listen{color:var(--err);font-weight:600}.note .said .listen i{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--err);margin-right:7px;animation:pulse 1.2s infinite}
+.mic.dict{min-width:46px;justify-content:center;padding:0 12px;font-weight:600}
 .note .said{font-size:13px;color:var(--muted);min-height:0}.note .said:empty{display:none}.note .said .link{padding:0;font-size:13px}
 .mic,.cam{min-height:44px;border-radius:999px;padding:0 14px;font-weight:500;font-size:14px;display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);background:#fff;color:var(--vino)}
 .mic.live{background:var(--err);border-color:var(--err);color:#fff;animation:pulse 1.2s infinite}
@@ -228,6 +231,8 @@ var ORDER = ['arrivo', 'cucina', 'piatti', 'ristorante', 'vino', 'scala'];
 function ls(k, v){ try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch(e){ return null; } }
 // Italian first for Enrico; English first for anyone a shared link reaches (staff or a guest). The IT/EN switch stays.
 var LANG = ls('auditLang') || (ADMIN || (TOK && TOK.n) ? 'en' : 'it');
+var DICT = ls('auditDict') === 'it' || ls('auditDict') === 'en' ? ls('auditDict') : ((navigator.language || '').slice(0, 2) === 'it' ? 'it' : LANG);   // the language the microphone listens in
+function speakLabel(){ return LANG === 'it' ? 'Parla' : 'Speak'; }
 var ENRICO = 'Chef Enrico Bartolini';
 function isEnrico(){ return !D || !D.visit || D.visit.auditor === ENRICO; }
 function who(){ return String((D && D.visit && D.visit.auditor) || ENRICO).replace(/^Chef\s+/i, '').trim().split(/\s+/)[0]; }
@@ -241,7 +246,7 @@ var T = {
     final:'Commento finale', finalSub:'Visita in generale · miglioramenti · 3 priorità',
     piattiSub:'Piatto per piatto: tieni / correggi / togli', flagBtn:'Foto · Segnala',
     of:'di', score:'Voto', anchor:'3 = accettabile, non da Bartolini · 5 = standard stellato',
-    note:'Nota', ph:'Scrivi qui, oppure premi Parla…', speak:'Parla · IT', tidying:'Sistemo il testo…', saidLink:'Cosa hai detto', stop:'Stop', photo:'Foto',
+    note:'Nota', ph:'Scrivi qui, oppure premi Parla…', speak:'Parla · IT', tidying:'Sistemo il testo…', saidLink:'Cosa hai detto', listening:'Sto ascoltando… premi Stop quando hai finito', micStopped:'Il microfono si è fermato. Premi Parla per continuare.', stop:'Stop', photo:'Foto',
     action:'Azione', ok:'Ok così', fix:'Da correggere', urgent:'Urgente',
     next:'Avanti', done:'Fatto', back:'Indietro', home:'Sezioni',
     saved:'Salvato', saving:'Salvo…', notSaved:'Non salvato — riprovo', inProgress:'in corso', avg:'media', na:'N/A',
@@ -279,7 +284,7 @@ var T = {
     final:'Final comment', finalSub:'Overall visit · improvements · top 3',
     piattiSub:'Dish by dish: keep / fix / take off', flagBtn:'Photo · Flag',
     of:'of', score:'Score', anchor:'3 = acceptable, not Bartolini level · 5 = Michelin standard',
-    note:'Note', ph:'Type here, or press Speak…', speak:'Speak · EN', tidying:'Tidying the text…', saidLink:'What you said', stop:'Stop', photo:'Photo',
+    note:'Note', ph:'Type here, or press Speak…', speak:'Speak · EN', tidying:'Tidying the text…', saidLink:'What you said', listening:'Listening… tap Stop when you finish', micStopped:'The microphone stopped. Tap Speak to carry on.', stop:'Stop', photo:'Photo',
     action:'Action', ok:'OK as is', fix:'To fix', urgent:'Urgent',
     next:'Next', done:'Done', back:'Back', home:'Sections',
     saved:'Saved', saving:'Saving…', notSaved:'Not saved — retrying', inProgress:'in progress', avg:'avg', na:'N/A',
@@ -523,7 +528,7 @@ function noteBlock(o){
   return '<div class="card note">' +
     '<textarea id="' + o.id + '" data-save="' + o.target + '" data-ref="' + esc(o.ref) + '" class="' + (o.small ? 'small' : '') + '" placeholder="' + esc(o.ph || t('ph')) + '" aria-label="' + esc(o.label || t('note')) + '">' + esc(o.it || '') + '</textarea>' +
     (o.nopics ? '' : pics(o.row, o.target, o.ref)) +
-    '<div class="tools"><button class="mic" data-act="mic" data-for="' + o.id + '">' + MIC_SVG + '<span>' + t('speak') + '</span></button>' +
+    '<div class="tools"><button class="mic" data-act="mic" data-for="' + o.id + '">' + MIC_SVG + '<span>' + speakLabel() + '</span></button><button class="mic dict" data-act="dict" aria-label="Dictation language">' + DICT.toUpperCase() + '</button>' +
     (o.nopics ? '' : '<button class="cam" data-act="photo" data-target="' + o.target + '" data-ref="' + esc(o.ref) + '">' + CAM_SVG + '<span>' + t('photo') + '</span></button>') +
     '</div>' + saidLine(o.id, o.target + ':' + o.ref, o.it) + en + '</div>';
 }
@@ -531,7 +536,7 @@ function noteBlock(o){
 // what was actually said stays one tap away until the note is changed again.
 var SAID = {};
 function saidLine(id, k, cur){
-  var x = SAID[k], inner = x && x.busy ? esc(t('tidying')) : x && x.tidy === cur ? '<button class="link" data-act="said" data-k="' + esc(k) + '" data-for="' + id + '">' + t('saidLink') + '</button>' : '';
+  var x = SAID[k], inner = x && x.listening ? '<span class="listen"><i></i>' + esc(t('listening')) + '</span>' : x && x.busy ? esc(t('tidying')) : x && x.tidy === cur ? '<button class="link" data-act="said" data-k="' + esc(k) + '" data-for="' + id + '">' + t('saidLink') + '</button>' : '';
   return '<div class="said" data-said="' + id + '">' + inner + '</div>';
 }
 function setSaid(el){ var d = root.querySelector('.said[data-said="' + el.id + '"]'); if (d) d.outerHTML = saidLine(el.id, el.getAttribute('data-save') + ':' + el.getAttribute('data-ref'), el.value); }
@@ -539,7 +544,7 @@ function tidyDictation(el, base, said){
   if (!said || said.split(/\s+/).length < 3) return;   // a word or two needs no tidying
   var k = el.getAttribute('data-save') + ':' + el.getAttribute('data-ref'), id = el.id, before = el.value;
   SAID[k] = { busy: true }; setSaid(el);
-  api('tidy', { text: said, lang: LANG, target: el.getAttribute('data-save'), ref: el.getAttribute('data-ref') }).then(function(d){
+  api('tidy', { text: said, lang: DICT, target: el.getAttribute('data-save'), ref: el.getAttribute('data-ref') }).then(function(d){
     var cur = document.getElementById(id) || el;
     // Typed or dictated again meanwhile, or nothing to change: leave it exactly as it is.
     if (cur.value !== before || !d || typeof d.text !== 'string' || d.text === said) { delete SAID[k]; setSaid(cur); return; }
@@ -731,7 +736,8 @@ function norm(s){ return String(s || '').toLowerCase().normalize('NFD').replace(
 function presHtml(mode){
   // The whole menu shows before anything is typed (an empty box read as "it doesn't work", 22 Oct 2026),
   // this visit's own menu first; typing narrows it.
-  var raw = (S.q || '').trim(), q = norm(raw);
+  var raw = (S.q || '').trim(), q = norm(raw), chosen = {};
+  D.dishes.forEach(function(d){ if (d.recipe_id) chosen[d.recipe_id] = 1; });
   var mine = function(m){ return D.kind === 'scala' ? m.where === 'scala' : D.kind === 'restaurant' ? m.where !== 'scala' : true; };
   var hits = D.menu.filter(function(m){ return !q || norm(m.name).indexOf(q) !== -1; })
     .sort(function(a, b){ return (mine(a) ? 0 : 1) - (mine(b) ? 0 : 1) || a.name.localeCompare(b.name); }).slice(0, q ? 12 : 200), h = '';
@@ -744,11 +750,11 @@ function presHtml(mode){
       var open = S.msec === s;
       h += '<button class="msec' + (open ? ' on' : '') + '" data-act="msec" data-s="' + esc(s) + '" aria-expanded="' + open + '"><span>' + esc(s) + '</span><small>' + by[s].length + '</small>' +
            '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="' + (open ? 'M6 15l6-6 6 6' : 'M6 9l6 6 6-6') + '"/></svg></button>';
-      if (open) by[s].forEach(function(m){ h += '<button class="opt in" data-act="pickdish" data-mode="' + mode + '" data-id="' + m.id + '" data-name="' + esc(m.name) + '">' + esc(m.name) + '</button>'; });
+      if (open) by[s].forEach(function(m){ h += '<button class="opt in' + (chosen[m.id] ? ' on' : '') + '" data-act="pickdish" data-mode="' + mode + '" data-id="' + m.id + '" data-name="' + esc(m.name) + '">' + esc(m.name) + '</button>'; });
     });
     return '<div class="muted" style="margin:2px 2px 6px">' + t('orSection') + '</div><div class="menu">' + h + '</div>';
   }
-  hits.forEach(function(m){ h += '<button class="opt" data-act="pickdish" data-mode="' + mode + '" data-id="' + m.id + '" data-name="' + esc(m.name) + '">' + esc(m.name) + '<small>' + (m.where === 'scala' ? 'Scala' : '') + '</small></button>'; });
+  hits.forEach(function(m){ h += '<button class="opt' + (chosen[m.id] ? ' on' : '') + '" data-act="pickdish" data-mode="' + mode + '" data-id="' + m.id + '" data-name="' + esc(m.name) + '">' + esc(m.name) + '<small>' + (m.where === 'scala' ? 'Scala' : '') + '</small></button>'; });
   return h + '<button class="opt" data-act="pickdish" data-mode="' + mode + '" data-id="" data-name="' + esc(raw) + '">' + t('useName') + ': <b>' + esc(raw) + '</b></button>';
 }
 
@@ -1109,6 +1115,7 @@ root.addEventListener('click', function(e){
     return;
   }
   if (act === 'mic') { toggleMic(b); return; }
+  if (act === 'dict') { stopMic(); DICT = DICT === 'it' ? 'en' : 'it'; ls('auditDict', DICT); root.querySelectorAll('.mic.dict').forEach(function(x){ x.textContent = DICT.toUpperCase(); }); return; }
   if (act === 'said') {
     var sk = b.getAttribute('data-k'), se = document.getElementById(b.getAttribute('data-for'));
     // Only while the box still holds the tidied text: anything typed since is never thrown away.
@@ -1264,7 +1271,7 @@ function delPhoto(target, ref, path){
 /* ── dictation: the iPhone's own speech recognition, Italian ──────────── */
 var REC = null, REC_ID = null;
 function low(s){ return String(s).toLowerCase().replace(/\s+/g, ' ').trim(); }
-function stopMic(){ if (REC) { try { REC.stop(); } catch(e){} } }
+function stopMic(){ if (REC) { try { REC._byUser = true; REC.stop(); } catch(e){} } }
 function markMic(){
   if (!REC_ID) return;
   var b = root.querySelector('.mic[data-for="' + REC_ID + '"]');
@@ -1277,10 +1284,10 @@ function toggleMic(btn){
   var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SR) { toast(t('noMic')); ta.focus(); return; }
   var rec = new SR(); REC = rec; REC_ID = id;
-  delete SAID[ta.getAttribute('data-save') + ':' + ta.getAttribute('data-ref')]; setSaid(ta);
+  SAID[ta.getAttribute('data-save') + ':' + ta.getAttribute('data-ref')] = { listening: true }; setSaid(ta);
   // Listens in the language on screen (IT/EN at the top): an English speaker on an Italian listener
   // came out as half-English nonsense (Francesco's test, 15 Oct 2026).
-  rec.lang = LANG === 'en' ? 'en-GB' : 'it-IT';
+  rec.lang = DICT === 'en' ? 'en-GB' : 'it-IT';
   rec.continuous = true; rec.interimResults = true;
   // The text is rebuilt from the whole result list on every event, never appended to. The iPhone
   // sends each "final" result as the whole sentence so far ("Sì", "Sì allora", "Sì allora tutto
@@ -1306,8 +1313,10 @@ function toggleMic(btn){
   rec.onerror = function(ev){ if (ev.error === 'not-allowed' || ev.error === 'service-not-allowed') toast(t('micBlocked'), true); };
   rec.onend = function(){
     if (REC === rec) { REC = null; REC_ID = null; }
-    var b = document.querySelector('.mic.live'); if (b) { b.classList.remove('live'); b.querySelector('span').textContent = t('speak'); }
-    var el = document.getElementById(id); if (el) { el.value = el.value.replace(/\s+$/, ''); saveNote(el);
+    var b = document.querySelector('.mic.live'); if (b) { b.classList.remove('live'); b.querySelector('span').textContent = speakLabel(); }
+    var kk = ta.getAttribute('data-save') + ':' + ta.getAttribute('data-ref'); delete SAID[kk];
+    if (!rec._byUser) toast(t('micStopped'));   // the phone ended it, not the guest
+    var el = document.getElementById(id); if (el) { el.value = el.value.replace(/\s+$/, ''); saveNote(el); setSaid(el);
       if (el.value.indexOf(base) === 0 || !base) tidyDictation(el, base, el.value.slice(base.length).trim()); }
   };
   try { rec.start(); } catch(e){ toast(t('noMic')); return; }
