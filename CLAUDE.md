@@ -13,7 +13,7 @@ Vanilla HTML/JS, no build step. Supabase `paoaivwtkzujmrgrfjuq` (FOH data) — a
 - Read the current file before editing. Never rebuild a file from memory.
 - UI change → show a mockup first, wait for OK.
 - Change DEV only. LIVE only after Francesco says OK, via `/deploy`. LIVE and DEV must be byte-identical after.
-- IMPORTANT: SQL is additive only (`ALTER TABLE … ADD COLUMN IF NOT EXISTS`, then `NOTIFY pgrst, 'reload schema'`). No DELETE/TRUNCATE/DROP without his written OK.
+- IMPORTANT: SQL is additive only (`ALTER TABLE … ADD COLUMN IF NOT EXISTS`, then `NOTIFY pgrst, 'reload schema'`). No DELETE/TRUNCATE/DROP without his written OK. These house rules beat the Supabase skills if they ever disagree.
 - Dubai is UTC+4. Never use `toISOString()` for "today".
 - Reuse brand tokens (`--vino`, `--sabbia`, `--gold`). No secrets in client code.
 
