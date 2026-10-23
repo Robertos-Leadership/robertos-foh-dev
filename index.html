@@ -134,7 +134,7 @@ if ('serviceWorker' in navigator) {
 }
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<link rel="stylesheet" href="foh-styles.css?v=20261022mgroom">
+<link rel="stylesheet" href="foh-styles.css?v=20261023duty">
 </head>
 <body>
 
@@ -202,7 +202,7 @@ if ('serviceWorker' in navigator) {
     <div class="foh-hero-content">
       <img class="foh-hero-logo" src="robertos-logo-white.svg" alt="Roberto's">
     </div>
-    <div id="foh-build" style="position:absolute;bottom:6px;right:10px;font-size:9px;letter-spacing:.08em;color:rgba(255,255,255,.4);z-index:3;font-variant-numeric:tabular-nums;">build 2026-10-22.5</div>
+    <div id="foh-build" style="position:absolute;bottom:6px;right:10px;font-size:9px;letter-spacing:.08em;color:rgba(255,255,255,.4);z-index:3;font-variant-numeric:tabular-nums;">build 2026-10-23.1</div>
   </div>
 
   <!-- main scroll area -->
@@ -563,9 +563,9 @@ if ('serviceWorker' in navigator) {
      Loaded here, not with the foh-*.js at the foot of the body, because the
      inline Admin code below READS it rather than just calling into it. -->
 <script src="foh-rounds.js?v=20261022apadm"></script>
-<script src="foh-core.js?v=20261022types"></script>
+<script src="foh-core.js?v=20261023duty"></script>
 <script src="foh-bible.js?v=20261022apadm"></script>
-<script src="foh-sched-xlsx.js?v=20261022apadm"></script>
+<script src="foh-sched-xlsx.js?v=20261023duty"></script>
 <script src="foh-events.js?v=20261022audits"></script>
 <script src="foh-privateevents.js?v=20261022brandxl"></script>
 <script src="foh-revenue.js?v=20261022apadm"></script>
@@ -681,7 +681,7 @@ window.FB_INBOX = {
     <div id="foh-sch-time-fields">
       <div style="margin-bottom:10px">
         <label style="font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--vino-light);font-family:var(--font-sans)">Working in section</label>
-        <select id="foh-sch-section-sel" title="Cover a different section for this day only — their real section stays the same" style="width:100%;margin-top:4px;padding:8px;border:1px solid var(--sabbia-dark);border-radius:4px;font-family:var(--font-sans);background:var(--sabbia-light);color:var(--ink);font-size:14px"></select>
+        <select id="foh-sch-section-sel" onchange="fohSchedDutyTeamRefresh()" title="Cover a different section for this day only — their real section stays the same" style="width:100%;margin-top:4px;padding:8px;border:1px solid var(--sabbia-dark);border-radius:4px;font-family:var(--font-sans);background:var(--sabbia-light);color:var(--ink);font-size:14px"></select>
       </div>
       <div style="display:flex;gap:10px;margin-bottom:10px">
         <div style="flex:1">
@@ -737,8 +737,10 @@ window.FB_INBOX = {
       </div>
     </div>
     <div style="margin-bottom:14px">
-      <label style="font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--vino-light);font-family:var(--font-sans)">Notes</label>
-      <input id="foh-sch-notes-inp" type="text" placeholder="Optional note..." style="width:100%;box-sizing:border-box;margin-top:4px;padding:8px;border:1px solid var(--sabbia-dark);border-radius:4px;font-family:var(--font-sans);background:var(--sabbia-light);color:var(--ink);font-size:14px">
+      <label style="font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--vino-light);font-family:var(--font-sans)">Training / outside event</label>
+      <div id="foh-sch-duty-picks" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px"></div>
+      <input id="foh-sch-notes-inp" type="text" placeholder="e.g. Wine training 15:00" oninput="fohSchedDutyTeamRefresh()" style="width:100%;box-sizing:border-box;margin-top:4px;padding:8px;border:1px solid var(--sabbia-dark);border-radius:4px;font-family:var(--font-sans);background:var(--sabbia-light);color:var(--ink);font-size:14px">
+      <label id="foh-sch-duty-team" style="display:none;align-items:center;gap:8px;margin-top:8px;font-size:13px;color:var(--ink);font-family:var(--font-sans);cursor:pointer"><input type="checkbox" id="foh-sch-duty-team-cb" style="width:18px;height:18px;margin:0;accent-color:var(--vino)"><span id="foh-sch-duty-team-txt"></span></label>
     </div>
     <button id="foh-sch-copy-btn" onclick="fohSchedCopyShift()" style="width:100%;box-sizing:border-box;margin-bottom:10px;padding:9px;background:transparent;border:1px dashed var(--vino);border-radius:4px;cursor:pointer;font-family:var(--font-sans);color:var(--vino);font-weight:600">&#128203; Copy shift — then tap cells to paste</button>
     <div style="display:flex;gap:10px">

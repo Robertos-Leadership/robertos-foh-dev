@@ -115,24 +115,26 @@ async function fohSchedSendToHR(_downloadOnly){
         var rowData = [staff.name, staff.role];
         var wHours=0, wDays=0;
         var cellStatuses=[];
-        var hasSplitRow=false;
+        var hasSplitRow=false, hasNoteRow=false;   // a training / outside event adds a line
         for(var dj=0;dj<days.length;dj++){
           var ds = formatDate(days[dj]);
           var entry = fohSchedRoster[fohSchedRosterKey(staff.id,ds)];
           if(!entry || entry.status==='working'){
             var ts=entry?formatTime(entry.shift_start):'', te=entry?formatTime(entry.shift_end):'';
             var ts2=entry?formatTime(entry.shift_start2):'', te2=entry?formatTime(entry.shift_end2):'';   // split shift — same as the Print view
-            if(ts&&te){ var h=calcHours(ts,te,ts2,te2); wHours+=h; wDays++; if(ts2&&te2) hasSplitRow=true; rowData.push(ts+'–'+te+(ts2&&te2?('\n'+ts2+'–'+te2):'')); cellStatuses.push('working'); }
-            else { rowData.push(''); cellStatuses.push('empty'); }
+            if(ts&&te){ var h=calcHours(ts,te,ts2,te2); wHours+=h; wDays++; if(ts2&&te2) hasSplitRow=true; rowData.push(ts+'–'+te+(ts2&&te2?('\n'+ts2+'–'+te2):'')+(entry&&entry.notes?('\n'+entry.notes):'')); cellStatuses.push('working'); }
+            else { rowData.push(entry&&entry.notes?entry.notes:''); cellStatuses.push(entry&&entry.notes?'working':'empty'); }   // a note on a day with no times still reads in dark text
+            if(entry&&entry.notes) hasNoteRow=true;
           } else {
             var meta=FOH_STATUS_META[entry.status]||{label:entry.status.toUpperCase()};
             if(entry.status!=='off') wDays++;
-            rowData.push(meta.label); cellStatuses.push(entry.status);
+            rowData.push(meta.label+(entry.notes?('\n'+entry.notes):'')); cellStatuses.push(entry.status);
+            if(entry.notes) hasNoteRow=true;
           }
         }
         rowData.push(wHours>0?(Math.round(wHours*10)/10)+'h':'', wDays||'');
         var dataRow=sheet.addRow(rowData);
-        dataRow.height=hasSplitRow?33:19;   // two lines when someone has a split shift
+        dataRow.height=19+(hasSplitRow?14:0)+(hasNoteRow?14:0);   // two lines when someone has a split shift
         dataRow.eachCell({includeEmpty:true},function(cell,colNumber){
           var baseFont={size:12,name:'Calibri'};
           var col=colNumber-1;
@@ -228,6 +230,11 @@ async function fohSchedSendToHR(_downloadOnly){
 }
 
 // ── Print (A3 landscape, one sheet; split shifts in full, same weight) ──
+// Training / outside event under a shift on the printed roster — wraps, never cut off.
+function fohPrintDuty(row, onColour){
+  if(!row || !row.notes) return '';
+  return '<div style="margin-top:2px;font-size:11px;font-weight:700;white-space:normal;line-height:1.15;'+(onColour?'color:#fff':'color:#400207')+'">'+fohEvEsc(row.notes)+'</div>';
+}
 function fohSchedPrint(){
   var today=formatDate(new Date());
   var days=[]; for(var i=0;i<7;i++) days.push(addDays(fohSchedWeekStart,i));
@@ -266,13 +273,13 @@ function fohSchedPrint(){
           var ts=row?formatTime(row.shift_start):'', te=row?formatTime(row.shift_end):'';
           var ts2=row?formatTime(row.shift_start2):'', te2=row?formatTime(row.shift_end2):'';
           var h=calcHours(ts,te,ts2,te2); if(ts&&te){ wh+=h; wd++; }
-          var cell = ts&&te ? (ts+'–'+te + (ts2&&te2 ? '<br>'+ts2+'–'+te2 : '')) : '';
+          var cell = (ts&&te ? (ts+'–'+te + (ts2&&te2 ? '<br>'+ts2+'–'+te2 : '')) : '') + fohPrintDuty(row);
           html+='<td style="padding:2px 4px;text-align:center;border:1px solid #ccc;font-size:14px;font-weight:600;white-space:nowrap'+(ts2&&te2?';background:#fbf6ec':'')+'">'+cell+'</td>';
         } else {
           var meta=FOH_STATUS_META[row.status]||{label:row.status.toUpperCase()};
           if(row.status!=='off') wd++;
           var pcol=FOH_STATUS_PRINT_COLOR[row.status]||'#777';
-          html+='<td style="padding:2px 4px;text-align:center;border:1px solid #ccc;background:'+pcol+';color:#fff;font-weight:700;font-size:13px">'+meta.label+'</td>';
+          html+='<td style="padding:2px 4px;text-align:center;border:1px solid #ccc;background:'+pcol+';color:#fff;font-weight:700;font-size:13px">'+meta.label+fohPrintDuty(row,true)+'</td>';
         }
       });
       html+='<td style="padding:2px 4px;text-align:center;font-weight:700;border:1px solid #ccc;font-size:14px">'+(wh>0?(Math.round(wh*10)/10)+'h':'—')+'</td>'+

@@ -5712,6 +5712,9 @@ function fohSchedDayCellHtml(staff, sid, ds2, today){
   }
   var coverKey = rrow && rrow.station_override;
   if(coverKey && coverKey !== staff.section){ inner += '<div class="sch-cover-tag">&rarr; '+fohSchedSecLabel(coverKey)+'</div>'; }
+  // Training / outside event for this person this day (the shift's note) — shown under
+  // the shift on any status, so an OFF day with a training still says so.
+  if(rrow && rrow.notes){ inner += '<div class="sch-duty-tag" title="'+fohEvEsc(rrow.notes)+'">'+fohEvEsc(rrow.notes)+'</div>'; }
   var html = '<td class="sch-cell'+(isTod?' sch-cell-today':'')+planChg+'" onclick="fohSchedOpenEdit(\''+sid+'\',\''+ds2+'\')">'+inner+'</td>';
   return { html: html, hours: wHours, days: wDays };
 }
@@ -5874,6 +5877,7 @@ function fohRenderSchedDay(){
         '<span class="sch-day-shift">'+(ts&&te?ts+' – '+te:'<em style="color:#bbb">No time set</em>')+'</span>'+
         '<span class="sch-day-hours">'+(hVal>0?hVal+'h':'')+'</span>'+
         '<span class="sch-day-att'+(attTxt?' sch-att '+attCls:'')+'">'+(attTxt||'')+'</span>'+
+        (row && row.notes ? '<span class="sch-duty-tag sch-day-duty">'+fohEvEsc(row.notes)+'</span>' : '')+
         '</div>';
     });
     sections += '</div>';
@@ -5942,9 +5946,47 @@ function fohSchedOpenEdit(staffId, date){
   var homeSec = staff ? (staff.section || '') : '';
   var secSel = document.getElementById('foh-sch-section-sel');
   if(secSel){ secSel.innerHTML = fohSchedSectionOptions((row && row.station_override) ? row.station_override : homeSec); secSel.setAttribute('data-home', homeSec); }
+  var tcb = document.getElementById('foh-sch-duty-team-cb'); if(tcb) tcb.checked = false;
+  fohSchedRenderDutyPicks();
+  fohSchedDutyTeamRefresh();
   fohSchedRenderPresets();
   fohSchedStatusChange();
   document.getElementById('foh-sch-modal').style.display='flex';
+}
+// ── Training / outside event under a shift (stored in the shift's notes) ──
+var FOH_DUTY_PICKS = ['Training','Outside event','Meeting','Villa shift'];
+function fohSchedRenderDutyPicks(){
+  var host=document.getElementById('foh-sch-duty-picks'); if(!host) return;
+  host.innerHTML = FOH_DUTY_PICKS.map(function(p){
+    return '<button type="button" class="sch-duty-pick" onclick="fohSchedPickDuty(\''+p.replace(/'/g,"\\'")+'\')">'+fohEvEsc(p)+'</button>';
+  }).join('');
+}
+function fohSchedPickDuty(p){
+  var inp=document.getElementById('foh-sch-notes-inp'); if(!inp) return;
+  inp.value = p + ' ';
+  inp.focus();
+  fohSchedDutyTeamRefresh();
+}
+// The others in the same section who are WORKING that day — the people a team
+// training or outside event is for. Their own times and status are never touched.
+function fohSchedDutyTeam(staffId, date, secKey){
+  return fohSchedVisibleIn(fohSchedStaff, [date]).filter(function(s){
+    if(s.id === staffId) return false;
+    var r = fohSchedRoster[fohSchedRosterKey(s.id, date)];
+    if(!r || r.status !== 'working') return false;
+    return (r.station_override || s.section) === secKey;
+  });
+}
+function fohSchedDutyTeamRefresh(){
+  var wrap=document.getElementById('foh-sch-duty-team'), txt=document.getElementById('foh-sch-duty-team-txt');
+  if(!wrap || !txt || !fohSchedEditTarget) return;
+  var inp=document.getElementById('foh-sch-notes-inp');
+  var secSel=document.getElementById('foh-sch-section-sel');
+  var secKey=secSel ? secSel.value : '';
+  var team=fohSchedDutyTeam(fohSchedEditTarget.staffId, fohSchedEditTarget.date, secKey);
+  if(!team.length || !inp || !inp.value.trim()){ wrap.style.display='none'; return; }
+  txt.textContent = 'Also add to the '+team.length+' other'+(team.length===1?'':'s')+' working in '+fohSchedSecLabel(secKey)+' this day';
+  wrap.style.display='flex';
 }
 function fohSchedToggleSplit(){
   var f=document.getElementById('foh-sch-split-fields');
@@ -5978,6 +6020,9 @@ async function fohSchedSaveShift(){
   var homeSec=secSel?(secSel.getAttribute('data-home')||''):'';
   var chosenSec=secSel?secSel.value:'';
   var stationOverride=(status==='working' && chosenSec && chosenSec!==homeSec)?chosenSec:null;
+  var teamCb=document.getElementById('foh-sch-duty-team-cb');
+  var team=(notes && teamCb && teamCb.checked && document.getElementById('foh-sch-duty-team').style.display!=='none')
+    ? fohSchedDutyTeam(staffId, date, chosenSec || homeSec) : [];
   document.getElementById('foh-sch-modal').style.display='none';
   var key=fohSchedRosterKey(staffId,date);
   // "Blank (+ add)" puts the day back to an empty cell — the row is removed, not
@@ -5993,16 +6038,27 @@ async function fohSchedSaveShift(){
     notes:notes||null, updated_at:new Date().toISOString()
   });
   var prevRow=fohSchedRoster[key];   // snapshot for revert on failure
-  fohSchedPushUndo([{staffId:staffId, date:date}], 'edit '+((fohSchedStaff.find(function(x){return x.id===staffId;})||{}).name||'staff')+', '+fohSchedDayLabel(date));   // snapshot BEFORE the write so this edit is undoable
+  // "Also add to the team": the same note on each teammate working that day — only
+  // their notes change, so it is one undo step and one write with this shift.
+  var teamPrev={}, teamRows=team.map(function(s){
+    var tk=fohSchedRosterKey(s.id,date); teamPrev[tk]=fohSchedRoster[tk];
+    return Object.assign({},fohSchedRoster[tk],{ staff_id:s.id, work_date:date, notes:notes, updated_at:payload.updated_at });
+  });
+  var undoCells=[{staffId:staffId, date:date}].concat(team.map(function(s){ return {staffId:s.id, date:date}; }));
+  fohSchedPushUndo(undoCells, 'edit '+((fohSchedStaff.find(function(x){return x.id===staffId;})||{}).name||'staff')+(team.length?' + '+team.length+' more':'')+', '+fohSchedDayLabel(date));   // snapshot BEFORE the write so this edit is undoable
   fohSchedRoster[key]=payload;
+  teamRows.forEach(function(r){ fohSchedRoster[fohSchedRosterKey(r.staff_id,date)]=r; });
   fohRenderSchedWeek();
   if(fohSchedPlanMode){ fohSchedEditTarget=null; return; }   // planning: the render above captured it into the draft (fohKrtNextLabel set by fohSchedPushUndo) — no DB write
-  var res=await fohRosterUpsert(payload);
+  var res=await fohRosterUpsert([payload].concat(teamRows));
   if(res.error){
     // Put the grid back to the saved value so it never shows an unsaved shift as real.
     if(prevRow) fohSchedRoster[key]=prevRow; else delete fohSchedRoster[key];
+    Object.keys(teamPrev).forEach(function(tk){ if(teamPrev[tk]) fohSchedRoster[tk]=teamPrev[tk]; else delete fohSchedRoster[tk]; });
     fohRenderSchedWeek();
     console.error('Save error:',res.error); alert('Could not save the shift — NOT stored (reverted on screen): '+res.error.message);
+  } else if(team.length){
+    toast('Added to '+(team.length+1)+' people in '+fohSchedSecLabel(chosenSec || homeSec)+' — '+fohSchedDayLabel(date));
   }
   fohSchedEditTarget=null;
 }
