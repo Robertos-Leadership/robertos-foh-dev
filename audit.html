@@ -467,8 +467,11 @@ function afterSection(area){
   for (var j = i + 1; j < ORDER.length; j++) {
     var a = ORDER[j];
     if (a === 'piatti') return { v: 'dishes' };
-    if (foodWithDishes(a)) return { v: 'area', area: a };   // opens on "What did you order?"
     var open = cat(a).filter(function(c){ return !isDone(c.code); })[0];
+    // Opens on "What did you order?" — but only while something there is still to do: with the dishes
+    // named and every food question answered it sent you back through them all (Antonio, 23 Oct 2026).
+    if (foodWithDishes(a) && (open || !D.dishes.length)) return { v: 'area', area: a };
+    if (foodWithDishes(a)) continue;
     if (open) return { v: 'item', code: open.code };
   }
   return { v: 'final' };
@@ -493,6 +496,9 @@ function like(area){
 function signed(x){ return (x >= 0 ? '+' : '') + x; }
 function prevScore(code){ if (!D.previous) return null; for (var i = 0; i < D.previous.scores.length; i++) if (D.previous.scores[i].code === code) return D.previous.scores[i]; return null; }
 function isDone(code){ var r = scoreRow(code); return !!(has(r) || r.na); }
+// The next question still open after position i in a section. Next skips the answered ones, so a
+// question reached from the last screen's open list does not walk you back through them (Antonio, 23 Oct 2026).
+function nextOpen(items, i){ return items.slice(i + 1).filter(function(c){ return !isDone(c.code); })[0] || null; }
 function areaStats(a){
   var items = cat(a), n = 0, s = 0, k = 0;
   items.forEach(function(c){ var r = scoreRow(c.code); if (has(r) || r.na) n++; if (has(r)) { s += r.score; k++; } });
@@ -667,8 +673,10 @@ function vArea(){
   if (open) h += '<button class="link" data-act="areana" data-a="' + a + '">' + t('allNa') + '</button>';
   else if (nas) h += '<button class="link" data-act="areaclear" data-a="' + a + '">' + t('undoNa') + '</button>';
   h += '</div>';
-  var next = items.filter(function(c){ return !isDone(c.code); })[0] || items[0];
-  h += '<div class="foot"><button class="big vino" data-act="item" data-code="' + next.code + '">' + (st.done ? t('cont2') : t('startS')) + '</button></div>';
+  var next = items.filter(function(c){ return !isDone(c.code); })[0];
+  // A finished section's Continue moves on; it used to start the section again from question 1.
+  h += '<div class="foot">' + (next ? '<button class="big vino" data-act="item" data-code="' + next.code + '">' + (st.done ? t('cont2') : t('startS')) + '</button>'
+    : '<button class="big vino" data-act="go" data-to=\'' + esc(JSON.stringify(afterSection(a))) + '\'>' + t('cont2') + '</button>') + '</div>';
   return h;
 }
 
@@ -704,7 +712,7 @@ function vItem(){
   h += '</div>';
   var prev = idx > 0 ? { v: 'item', code: items[idx - 1].code } : { v: 'area', area: c.area };
   h += '<div class="foot"><button class="big light" style="flex:1" data-act="go" data-to=\'' + esc(JSON.stringify(prev)) + '\'>' + t('back') + '</button>' +
-       '<button class="big vino" style="flex:2" data-act="nextitem">' + (idx === items.length - 1 ? t('nextSec') : t('nextQ')) + '</button></div>';
+       '<button class="big vino" style="flex:2" data-act="nextitem">' + (nextOpen(items, idx) ? t('nextQ') : t('nextSec')) + '</button></div>';
   return h;
 }
 
@@ -1110,7 +1118,8 @@ root.addEventListener('click', function(e){
   if (act === 'verdict') { var r2 = scoreRow(S.code), vv = b.getAttribute('data-v'); r2.verdict = r2.verdict === vv ? null : vv; queue('score:' + S.code + ':v', 'score', { code: S.code, verdict: r2.verdict }); render(); return; }
   if (act === 'nextitem') {
     var c = D.catalog.filter(function(x){ return x.code === S.code; })[0], items = cat(c.area), i = items.indexOf(c);
-    if (i < items.length - 1) go({ v: 'item', code: items[i + 1].code }, true);
+    var nx = nextOpen(items, i);
+    if (nx) go({ v: 'item', code: nx.code }, true);
     else go(afterSection(c.area));
     return;
   }
