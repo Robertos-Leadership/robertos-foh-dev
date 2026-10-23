@@ -1,0 +1,19 @@
+{
+  "name": "robertos-foh",
+  "private": true,
+  "description": "Dev tooling only. The app itself has no build step and does not use this file.",
+  "config": {
+    "devUrl": "https://robertos-foh-dev.pages.dev/",
+    "liveUrl": "https://robertos-leadership.github.io/robertos-foh/"
+  },
+  "scripts": {
+    "smoke": "node tests/smoke.mjs",
+    "smoke:live": "node tests/smoke.mjs https://robertos-leadership.github.io/robertos-foh/",
+    "bump": "node scripts/bump.mjs",
+    "precheck": "node scripts/precheck.mjs",
+    "setup": "npm install && npx playwright install chromium"
+  },
+  "devDependencies": {
+    "playwright": "1.63.0"
+  }
+}
