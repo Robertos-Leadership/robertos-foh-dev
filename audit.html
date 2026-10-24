@@ -265,9 +265,9 @@ var T = {
     where:'Dove sei stato?', kRest:'Ristorante', kRestSub:'Prenotazione, accoglienza, sala, vino, cibo, bagno, conto', kScala:'Scala', kScalaSub:'Bar & lounge: prenotazione, accoglienza, servizio, drink, bagno, conto', pickKind:'Scegli Ristorante o Scala',
     doneN:'Fatto', nextUp:'Prossima', qs:'domande', tasted:'assaggiati', piattiG:'I piatti assaggiati', piattiSubG:'Un voto per ogni piatto',
     finalG:'Prima di inviare', finalSubG:'Il momento migliore, una cosa da migliorare', addPhoto:'Aggiungi una foto', cont2:'Continua', startS:'Inizia',
-    noted:'nota', photos:'foto', yes:'Sì', no:'No', notSeen:"Non l'ho visto", anything:'Vuoi aggiungere qualcosa?', optional:'Facoltativo',
-    nextQ:'Domanda successiva', nextSec:'Sezione successiva', kRest:'Il ristorante', kRestSub:'Dalla prenotazione al saluto · 44 domande',
-    kScala:'Scala, bar & lounge', kScalaSub:"Dall'accoglienza al conto · 36 domande", kVenue:'Tutto il locale', atTable:'Al tavolo', atScala:'Alla Scala',
+    noted:'nota', photos:'foto', yes:'Sì', no:'No', notSeen:"Non l'ho visto", noIsNo:"Non è successo? Tocca No. «Non l'ho visto» solo se non potevi saperlo.", bagnoR:'Bagno del ristorante', bagnoS:'Bagno della Scala', anything:'Vuoi aggiungere qualcosa?', optional:'Facoltativo',
+    nextQ:'Domanda successiva', nextSec:'Sezione successiva', kRest:'Il ristorante', kRestSub:'Dalla prenotazione al saluto · 46 domande',
+    kScala:'Scala, bar & lounge', kScalaSub:"Dall'accoglienza al conto · 39 domande", kVenue:'Tutto il locale', atTable:'Al tavolo', atScala:'Alla Scala',
     best:'Il momento migliore', fixone:'Una cosa da migliorare', other:'Altro', bestPh:'Cosa ti è piaciuto di più?', fixonePh:'Se potessi cambiare una cosa…', otherPh:'Qualsiasi altra cosa', formfb:'Feedback su questo audit', formfbPh:'Cosa cambieresti nelle domande o nella app?',
     youSent:'Cosa hai inviato', answeredW:'risposte', notSeenW:'non viste', stillEdit:'Puoi ancora aggiungere o correggere qualcosa dalle sezioni: si salva da solo.',
     orSection:'Oppure apri una sezione del menu:',
@@ -303,9 +303,9 @@ var T = {
     where:'Where did you go?', kRest:'Restaurant', kRestSub:'Booking, welcome, service, wine, food, washroom, bill', kScala:'Scala', kScalaSub:'Bar & lounge: booking, welcome, service, drinks, washroom, bill', pickKind:'Choose Restaurant or Scala',
     doneN:'Done', nextUp:'Next up', qs:'questions', tasted:'tasted', piattiG:'Dishes you tasted', piattiSubG:'A score for each dish',
     finalG:'Before you send', finalSubG:'The best moment, one thing to fix', addPhoto:'Add a photo', cont2:'Continue', startS:'Start',
-    noted:'note', photos:'photos', yes:'Yes', no:'No', notSeen:"I didn't see this", anything:'Anything to add?', optional:'Optional',
-    nextQ:'Next question', nextSec:'Next section', kRest:'The restaurant', kRestSub:'Booking to goodbye · 44 questions',
-    kScala:'Scala, bar & lounge', kScalaSub:'Welcome to the bill · 36 questions', kVenue:'Whole venue', atTable:'At the table', atScala:'At Scala',
+    noted:'note', photos:'photos', yes:'Yes', no:'No', notSeen:"I didn't see this", noIsNo:"Didn't happen? Tap No. «I didn't see this» only if you couldn't tell.", bagnoR:'Restaurant washroom', bagnoS:'Scala washroom', anything:'Anything to add?', optional:'Optional',
+    nextQ:'Next question', nextSec:'Next section', kRest:'The restaurant', kRestSub:'Booking to goodbye · 46 questions',
+    kScala:'Scala, bar & lounge', kScalaSub:'Welcome to the bill · 39 questions', kVenue:'Whole venue', atTable:'At the table', atScala:'At Scala',
     best:'The best moment', fixone:'One thing to fix', other:'Anything else', bestPh:'What did you enjoy most?', fixonePh:'If you could change one thing…', otherPh:'Anything else', formfb:'Feedback on this audit', formfbPh:'What would you change in the questions or the app?',
     youSent:'What you sent', answeredW:'answered', notSeenW:'not seen', stillEdit:'You can still add or correct anything from the sections: it saves by itself.',
     orSection:'Or open a section of the menu:',
@@ -325,6 +325,7 @@ function areaName(a){
   if (a === 'cucina' && k && k !== 'venue') return t('food');
   if (a === 'ristorante' && k === 'restaurant') return t('atTable');
   if (a === 'scala' && k === 'scala') return t('atScala');
+  if (a === 'bagno' && (k === 'restaurant' || k === 'scala')) return t(k === 'scala' ? 'bagnoS' : 'bagnoR');   // two washrooms (24 Oct 2026)
   return t(a);
 }
 // The sections come from the visit's type (22 Oct 2026: whole venue / Restaurant / Scala); the lists
@@ -351,7 +352,7 @@ var root = document.getElementById('root');
 
 /* ── API ─────────────────────────────────────────────────────────────────── */
 function api(action, payload){
-  var body = Object.assign({ action: action, pv: 3, qset: 3 }, TOK, payload || {});
+  var body = Object.assign({ action: action, pv: 3, qset: 4 }, TOK, payload || {});
   return fetch(FN + (action === 'load' ? '?read=1' : ''), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY },
@@ -693,6 +694,8 @@ function vItem(){
     h += '<div class="yn"><button class="ybtn yes' + (has(r) && r.score > 0 ? ' on' : '') + '" data-act="yn" data-v="yes" aria-pressed="' + (has(r) && r.score > 0) + '">' + (has(r) && r.score > 0 ? CHECK_SVG : '') + t('yes') + '</button>' +
          '<button class="ybtn no' + (has(r) && r.score === 0 ? ' on' : '') + '" data-act="yn" data-v="no" aria-pressed="' + (has(r) && r.score === 0) + '">' + t('no') + '</button>' +
          '<button class="ybtn seen' + (r.na ? ' on' : '') + '" data-act="yn" data-v="na" aria-pressed="' + !!r.na + '">' + t('notSeen') + '</button></div>';
+    // A guest tapped "I didn't see this" when the manager simply never came, and the miss left the % (24 Oct 2026).
+    if (!isEnrico()) h += '<p class="hint" style="margin:-2px 2px 0;font-size:13.5px;line-height:1.45;color:var(--muted)">' + esc(t('noIsNo')) + '</p>';
   } else {
     h += '<div class="scores five">';
     [1, 2, 3, 4, 5].forEach(function(n){ h += '<button class="sbtn' + (r.score === n && !r.na ? ' on' : '') + '" data-act="score" data-v="' + n + '" aria-pressed="' + (r.score === n) + '">' + n + '</button>'; });
