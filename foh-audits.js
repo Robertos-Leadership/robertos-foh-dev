@@ -22,7 +22,7 @@ var AU = { me: null, list: null, err: null, loading: false, open: null, report: 
 var AU_KINDS = [
   { k: 'restaurant', n: 'Restaurant visit', short: 'Restaurant', c: '#0093B0' },
   { k: 'scala',      n: 'Scala visit',      short: 'Scala',      c: '#B8860B' },
-  { k: 'venue',      n: 'Whole venue',      short: 'Whole venue', c: '#A8283E' }
+  { k: 'venue',      n: 'Chef Bartolini audit', short: 'Chef Bartolini', c: '#A8283E' }   // the whole venue: only his audit (24 Oct 2026)
 ];
 function auKind(k){ for(var i = 0; i < AU_KINDS.length; i++) if(AU_KINDS[i].k === k) return AU_KINDS[i]; return AU_KINDS[2]; }
 
@@ -130,12 +130,37 @@ function auBody(){
   if(AU.err && !AU.me) return '<div class="au-wrap"><div class="au-bad">Audits could not be read: ' + auEsc(AU.err) + ' <button class="au-btn quiet" onclick="AU.err=null;auLoad()">Try again</button></div></div>';
   if(!AU.me) return '<div class="au-wrap"><div class="loading">Reading the audits&hellip;</div></div>';
   if(AU.open) return '<div class="au-wrap">' + auReportView() + '</div>';
-  return '<div class="au-wrap">' + (AU.err ? '<div class="au-bad">' + auEsc(AU.err) + '</div>' : '') + auLinkCard() + (AU.me.read ? auListView() : '') + '</div>';
+  return '<div class="au-wrap">' + (AU.err ? '<div class="au-bad">' + auEsc(AU.err) + '</div>' : '') + auLinkCard() + auBartCard() + (AU.me.read ? auListView() : '') + '</div>';
+}
+
+// Chef Bartolini's own link (24 Oct 2026, Francesco: "has to be a different link"). His audit is the whole
+// venue, in Italian, with his own sections; the link opens it as him, so audit-api gives it to Admins only.
+function auBartCard(){
+  var b = AU.me && AU.me.bartolini; if(!b) return '';
+  var st = b.status === 'sent' ? 'Report sent to Amin' : b.status === 'submitted' ? 'He has finished: his report is waiting for you' : 'Not finished yet';
+  return '<div class="au-card"><div class="au-lbl">Chef Bartolini\'s audit link</div>'
+    + '<div class="au-sub" style="margin:-2px 0 8px">' + (b.visit_date ? 'Visit ' + auEsc(auDate(b.visit_date)) + ' &middot; ' : '') + auEsc(st) + '</div>'
+    + '<div class="au-link">' + auEsc(b.link) + '</div>'
+    + '<div class="au-btns">'
+    + (navigator.share ? '<button class="au-btn pri" onclick="auBartShare()">Share</button>' : '')
+    + '<button class="au-btn' + (navigator.share ? '' : ' pri') + '" onclick="auBartCopy()">' + (AU.bartCopied ? 'Copied &#10003;' : 'Copy link') + '</button>'
+    + '<a class="au-btn" style="text-decoration:none;display:inline-flex;align-items:center" target="_blank" rel="noopener" href="https://wa.me/?text=' + encodeURIComponent(auBartText() + '\n' + b.link) + '">WhatsApp</a>'
+    + '</div>'
+    + '<div class="au-hint">Only for Chef Bartolini. It opens his own audit of the whole venue, in Italian. When he finishes, it comes to you; you send it to Amin.</div></div>';
+}
+function auBartText(){ return "Chef, ecco il link per il suo audit di Roberto's DIFC."; }
+function auBartShare(){
+  try { navigator.share({ title: "Roberto's DIFC — audit", text: auBartText(), url: AU.me.bartolini.link }).catch(function(){}); } catch(e){ auBartCopy(); }
+}
+function auBartCopy(){
+  var l = AU.me.bartolini.link, done = function(){ AU.bartCopied = true; auRepaint(); setTimeout(function(){ AU.bartCopied = false; auRepaint(); }, 2500); };
+  var old = function(){ var t = document.createElement('textarea'); t.value = l; t.style.position = 'fixed'; t.style.opacity = '0'; document.body.appendChild(t); t.select(); try { document.execCommand('copy'); } catch(e){} t.remove(); };
+  try { navigator.clipboard.writeText(l).then(done, function(){ old(); done(); }); } catch(e){ old(); done(); }
 }
 
 function auLinkCard(){
   var link = AU.me.link || '';
-  var h = '<div class="au-card"><div class="au-lbl">Your audit link</div>'
+  var h = '<div class="au-card"><div class="au-lbl">Your guest audit link &middot; Restaurant or Scala</div>'
     + '<div class="au-link">' + auEsc(link) + '</div>'
     + '<div class="au-btns">'
     + (navigator.share ? '<button class="au-btn pri" onclick="auShare()">Share</button>' : '')
