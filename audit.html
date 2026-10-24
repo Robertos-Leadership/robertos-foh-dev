@@ -942,8 +942,21 @@ function vList(){
 var AREA_EN = { arrivo: 'Arrival & welcome', cucina: 'Kitchen', ristorante: 'Restaurant', vino: 'Wine', scala: 'Scala', piatto: 'Dish' };
 function vReport(){
   var ov = overallPct(), pv = D.previous, lfAll = like();
-  var urgent = D.scores.filter(function(s){ return s.verdict === 'urgent'; }).length + D.dishes.filter(function(x){ return x.verdict === 'remove'; }).length;
-  var tofix = D.scores.filter(function(s){ return s.verdict === 'fix'; }).length + D.dishes.filter(function(x){ return x.verdict === 'fix'; }).length + D.flags.filter(function(f){ return f.kind === 'attention'; }).length;
+  // Action plan, by the same rule as the email Amin gets: a No, a quality score of 1-2, a dish of 1-2,
+  // Enrico's to fix / urgent / take off, a photo flag. A guest sets no verdicts, so before 24 Oct 2026
+  // a guest's seven No answers showed "To fix 0".
+  var acts = [];
+  D.scores.forEach(function(s){
+    var c = D.catalog.filter(function(x){ return x.code === s.code; })[0]; if (!c) return;
+    var low = !s.na && s.score != null && (c.qtype === 'standard' ? Number(s.score) === 0 : Number(s.score) <= 2);
+    if (s.verdict === 'urgent' || s.verdict === 'fix' || low)
+      acts.push({ lvl: s.verdict === 'urgent' ? 0 : 1, v: s.verdict === 'urgent' ? 'urgent' : 'fix', badge: s.verdict ? null : ansLabel(c, s, 'en'), where: AREA_EN[c.area], what: c.label_en, row: s, target: 'score', ref: s.code });
+  });
+  D.dishes.forEach(function(x){ if (x.verdict === 'fix' || x.verdict === 'remove' || (!x.verdict && x.score != null && Number(x.score) <= 2))
+    acts.push({ lvl: x.verdict === 'remove' ? 0 : 1, v: x.verdict === 'remove' ? 'remove' : 'fix', badge: x.verdict ? null : x.score + ' / 5', where: 'Dish', what: x.dish_name, row: x, target: 'dish', ref: x.id }); });
+  D.flags.forEach(function(f){ if (f.kind === 'attention') acts.push({ lvl: 1, v: 'attention', where: AREA_EN[f.area], what: f.dish_name || 'Photo note', row: f, target: 'flag', ref: f.id }); });
+  acts.sort(function(a, b){ return a.lvl - b.lvl; });
+  var urgent = acts.filter(function(a){ return a.lvl === 0; }).length, tofix = acts.length - urgent;
   var st = D.visit.status;
   var stline = st === 'sent' ? 'Sent to Amin ' + (D.visit.sent_at ? new Date(D.visit.sent_at).toLocaleString('en-GB', { timeZone: 'Asia/Dubai', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '') :
                st === 'submitted' ? who() + ' has finished. Check the English, set owners, then send.' :
@@ -960,13 +973,23 @@ function vReport(){
   }
   h += '<div class="muted">English is editable: change any line and it saves. The original stays underneath.</div>';
 
-  ['overall', 'improve'].forEach(function(k){
-    var r = textRow(k);
-    h += '<div class="lbl">' + (k === 'overall' ? 'Overall visit' : 'Suggested improvements') + '</div><div class="card rtext">' + enEdit('text', k, r.en, r.it) + pics(r, 'text', k) + '</div>';
-  });
-  h += '<div class="lbl">' + esc(who()) + '\'s top 3</div><div class="card rtext">';
-  ['p1', 'p2', 'p3'].forEach(function(k, i){ var r = textRow(k); h += '<div class="muted">' + (i + 1) + '</div>' + enEdit('text', k, r.en, r.it); });
-  h += '</div>';
+  if (isEnrico()) {
+    ['overall', 'improve'].forEach(function(k){
+      var r = textRow(k);
+      h += '<div class="lbl">' + (k === 'overall' ? 'Overall visit' : 'Suggested improvements') + '</div><div class="card rtext">' + enEdit('text', k, r.en, r.it) + pics(r, 'text', k) + '</div>';
+    });
+    h += '<div class="lbl">' + esc(who()) + '\'s top 3</div><div class="card rtext">';
+    ['p1', 'p2', 'p3'].forEach(function(k, i){ var r = textRow(k); h += '<div class="muted">' + (i + 1) + '</div>' + enEdit('text', k, r.en, r.it); });
+    h += '</div>';
+  } else {
+    // A guest writes the best moment, one thing to fix, anything else and feedback on the form, not
+    // Enrico's overall / improvements / top 3 (those boxes stood empty on a guest's report).
+    [['best', 'The best moment'], ['fixone', 'One thing to fix'], ['other', 'Anything else'], ['formfb', 'Feedback on the audit form']].forEach(function(x){
+      var r = textRow(x[0]);
+      if (!r.it && !r.en && (x[0] === 'other' || x[0] === 'formfb')) return;
+      h += '<div class="lbl">' + x[1] + '</div><div class="card rtext">' + (r.it || r.en ? enEdit('text', x[0], r.en, r.it) : '<div class="muted">Not written yet.</div>') + pics(r, 'text', x[0]) + '</div>';
+    });
+  }
 
   h += '<div class="lbl">Scores by area</div><div class="card" style="padding:4px 12px"><table class="tbl"><tr><th>Area</th><th>Score</th>' + (pv ? '<th>' + esc(pv.title) + '</th><th>Trend</th>' : '') + '</tr>';
   AREAS.forEach(function(a){
@@ -977,16 +1000,11 @@ function vReport(){
   h += '</table></div>';
   if (pv) h += '<div class="muted">Trend compares only the items scored in both visits (how many in brackets), so the two visits are measured on the same things.</div>';
 
-  // Action plan
-  var acts = [];
-  D.scores.forEach(function(s){ if (s.verdict === 'urgent' || s.verdict === 'fix') { var c = D.catalog.filter(function(x){ return x.code === s.code; })[0] || {}; acts.push({ lvl: s.verdict === 'urgent' ? 0 : 1, v: s.verdict, where: AREA_EN[c.area], what: c.label_en, row: s, target: 'score', ref: s.code }); } });
-  D.dishes.forEach(function(x){ if (x.verdict === 'fix' || x.verdict === 'remove') acts.push({ lvl: x.verdict === 'remove' ? 0 : 1, v: x.verdict, where: 'Dish', what: x.dish_name, row: x, target: 'dish', ref: x.id }); });
-  D.flags.forEach(function(f){ if (f.kind === 'attention') acts.push({ lvl: 1, v: 'attention', where: AREA_EN[f.area], what: f.dish_name || 'Photo note', row: f, target: 'flag', ref: f.id }); });
-  acts.sort(function(a, b){ return a.lvl - b.lvl; });
+  // Action plan (built at the top)
   h += '<div class="lbl">Action plan · ' + acts.length + '</div>';
-  if (!acts.length) h += '<div class="muted">Nothing marked to fix yet.</div>';
+  if (!acts.length) h += '<div class="muted">Nothing below standard yet.</div>';
   acts.forEach(function(a){
-    var badge = { urgent: 'Urgent', fix: 'To fix', remove: 'Take off', attention: 'Attention' }[a.v];
+    var badge = a.badge || { urgent: 'Urgent', fix: 'To fix', remove: 'Take off', attention: 'Attention' }[a.v];
     h += '<div class="card act"><div class="h"><span class="n">' + esc(a.what) + '</span><span class="badge ' + a.v + '">' + badge + '</span></div><div class="muted">' + esc(a.where) + '</div>' +
       enEdit(a.target, a.ref, a.row.note_en, a.row.note_it) + pics(a.row, a.target, a.ref) +
       '<div class="who"><input aria-label="Owner" placeholder="Owner" value="' + esc(a.row.owner || '') + '" data-set="owner" data-target="' + a.target + '" data-ref="' + esc(a.ref) + '">' +
