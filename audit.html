@@ -288,7 +288,7 @@ var T = {
     dish5:'Lo riordineresti domani', dish3:'Buono', dish1:"L'hai lasciato", startTitle:'Audit ospite', begin:"Inizia l'audit",
     startSub:"Circa 15 minuti. Rispondi da ospite: quello che hai visto, sentito e assaggiato. Quello che non hai visto, saltalo.",
     allNa:'Non ho visto niente di questa sezione', undoNa:'Annulla i "non visto"', saved:'Salvato', food:'Il cibo',
-    sendTeam:'Invia al team di direzione', sentTeamTitle:'Grazie', sentTeamLine:"Il team di direzione di Roberto's vede già il tuo audit. Puoi ancora aggiungere o correggere qualcosa: si salva da solo.", begin:"Inizia l'audit", cont:'Continua il tuo audit', newOne:'oppure inizia un nuovo audit'
+    sendTeam:'Invia al team di direzione', sentTeamTitle:'Grazie', scoreRest:'Il tuo punteggio per il ristorante', scoreScala:'Il tuo punteggio per Scala', scoreNote:'La media di tutto ciò che hai valutato. Ciò che hai segnato N/A non conta.', sentTeamLine:"Il team di direzione di Roberto's vede già il tuo audit. Puoi ancora aggiungere o correggere qualcosa: si salva da solo.", begin:"Inizia l'audit", cont:'Continua il tuo audit', newOne:'oppure inizia un nuovo audit'
   },
   en: {
     hello:'Hello Enrico', visit:'Visit', autosave:'type or speak, it saves by itself', sections:'Sections',
@@ -326,7 +326,7 @@ var T = {
     dish5:"You'd order it again tomorrow", dish3:'Fine', dish1:'You left it', startTitle:'Guest audit', begin:'Start the audit',
     startSub:"About 15 minutes. Answer as a guest: what you saw, heard and tasted. Anything you didn't see, skip.",
     allNa:"I didn't see any of this section", undoNa:'Clear the "didn\'t see"', saved:'Saved', food:'The food',
-    sendTeam:"Send to Roberto's management team", sentTeamTitle:'Thank you', sentTeamLine:"Roberto's management team can already see your audit. You can still add or correct anything: it saves by itself.", begin:'Start the audit', cont:'Continue your audit', newOne:'or start a new audit'
+    sendTeam:"Send to Roberto's management team", sentTeamTitle:'Thank you', scoreRest:'Your score for the restaurant', scoreScala:'Your score for Scala', scoreNote:"The average of everything you scored. Anything marked N/A isn't counted.", sentTeamLine:"Roberto's management team can already see your audit. You can still add or correct anything: it saves by itself.", begin:'Start the audit', cont:'Continue your audit', newOne:'or start a new audit'
   }
 };
 function t(k){ return (T[LANG] && T[LANG][k]) || T.it[k] || k; }
@@ -857,13 +857,17 @@ function vThanks(){
   var title = isEnrico() ? t('sentTitle') : t('sentTeamTitle') + ', ' + esc(who()) + '.';
   var h = topBar('<div><h1>' + title + '</h1></div><div class="sub">' + (isEnrico() ? t('sentLine') : t('sentTeamLine')) + '</div>') + '<div class="body">';
   // A guest sees what they sent, so it visibly went through: answers by section, the dishes, their words.
-  // No % here: the score is for Roberto's management team (Francesco, 22 Oct 2026).
+  // The guest sees their overall score and each section's (Francesco, 26 Oct 2026: "when the person finishes
+  // the report he should see the overall score he gave"; on 22 Oct it was kept from them). The numbers are the
+  // server's, the same as the report; overallPct() is only a fallback for a page opened before they existed.
   if (!isEnrico()) {
+    var ov = D.pct && D.pct.overall != null ? D.pct.overall : overallPct();
+    if (ov != null) h += '<div class="card" style="padding:18px 20px;display:flex;align-items:center;gap:18px;background:var(--door)"><span style="font-family:var(--display);font-size:64px;line-height:.9;color:var(--vino)">' + ov + '%</span><span style="display:flex;flex-direction:column;gap:4px"><span style="font-family:var(--display);font-size:21px;color:var(--vino);line-height:1.2">' + t(D.kind === 'restaurant' ? 'scoreRest' : 'scoreScala') + '</span><span class="muted" style="font-size:13.5px">' + t('scoreNote') + '</span></span></div>';
     h += '<div class="lbl" style="margin:0">' + t('youSent') + '</div><div class="card">';
     AREAS.forEach(function(a, i){
-      var st = areaStats(a), seen = cat(a).filter(function(c){ return scoreRow(c.code).na; }).length;
+      var st = areaStats(a), seen = cat(a).filter(function(c){ return scoreRow(c.code).na; }).length, ap = D.pct && D.pct.area && D.pct.area[a] != null ? D.pct.area[a] : st.pct;
       h += '<div class="sec" style="border:0;border-top:' + (i ? '1px solid var(--soft)' : '0') + ';border-radius:0;min-height:52px"><span class="dot' + (st.done === st.total ? ' done' : '') + '">' + (st.done === st.total ? CHECK_SVG : i + 1) + '</span>' +
-           '<span class="grow"><span class="t" style="font-size:17px">' + esc(areaName(a)) + '</span><span class="s">' + (st.done - seen) + ' ' + t('of') + ' ' + st.total + ' ' + t('answeredW') + (seen ? ' · ' + seen + ' ' + t('notSeenW') : '') + '</span></span></div>';
+           '<span class="grow"><span class="t" style="font-size:17px">' + esc(areaName(a)) + '</span><span class="s">' + (st.done - seen) + ' ' + t('of') + ' ' + st.total + ' ' + t('answeredW') + (seen ? ' · ' + seen + ' ' + t('notSeenW') : '') + '</span></span>' + (ap != null ? '<span class="sc">' + ap + '%</span>' : '') + '</div>';
     });
     h += '</div>';
     if (D.dishes.length) h += '<div class="lbl">' + t(D.kind === 'restaurant' ? 'ordered' : 'piattiG') + '</div><div class="card">' + D.dishes.map(function(d, i){
@@ -1232,7 +1236,7 @@ function pickDish(mode, id, name){
 function submit(b){
   if (!b._sure) { b._sure = true; b.textContent = t('sendSure'); setTimeout(function(){ if (b.isConnected) { b._sure = false; b.textContent = isEnrico() ? t('send') : t('sendTeam'); } }, 5000); return; }
   b.disabled = true; b.textContent = t('saving');
-  waitSaved().then(function(){ return api('submit', { page: location.origin + location.pathname }); }).then(function(){ D.visit.status = D.visit.status === 'test' ? 'test' : 'submitted'; go({ v: 'thanks' }); }, function(er){ b.disabled = false; b._sure = false; b.textContent = t('send'); toast(er.message, true); });
+  waitSaved().then(function(){ return api('submit', { page: location.origin + location.pathname }); }).then(function(r){ if (r && r.pct) D.pct = r.pct; D.visit.status = D.visit.status === 'test' ? 'test' : 'submitted'; go({ v: 'thanks' }); }, function(er){ b.disabled = false; b._sure = false; b.textContent = t('send'); toast(er.message, true); });
 }
 function waitSaved(){
   return new Promise(function(res, rej){
