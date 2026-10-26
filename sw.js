@@ -15,7 +15,7 @@
    controllerchange reload), a fresh deploy reaches every screen with no manual
    tap. To force a clean cache rebuild, bump the CACHE version string below. */
 
-const CACHE = 'robertos-foh-v20260930lockmc-20261006marelink-eqx-learnfoh-maint-bizlunch2-frame-20261007bl3-noframe-fc-fc-moda-fold-nofc-moda2-look-fcclean-moda3-swap-fbwine-bible1212-biblelight-mncomp-mnitems-t611-mnchecks-blsim-blcomp-bltodate-blweeks3-fbsend-brief1012-maint30-mare1013-mareA-eqopen-order1014-ap20261016ap-ap20261018ap6-visits2-apB5-apM1-st1019dup-apM2-apM3-apM4-norecon-leads-firstever-20261022apadm-mgroom-blroom-mytasks-gap12-mytasks2-gap12b-audits4-types-redesign6-prshift-20261022clients-aupurge2-20261022brandxl-202610231009-20261023duty-20261024bart';
+const CACHE = 'robertos-foh-v20260930lockmc-20261006marelink-eqx-learnfoh-maint-bizlunch2-frame-20261007bl3-noframe-fc-fc-moda-fold-nofc-moda2-look-fcclean-moda3-swap-fbwine-bible1212-biblelight-mncomp-mnitems-t611-mnchecks-blsim-blcomp-bltodate-blweeks3-fbsend-brief1012-maint30-mare1013-mareA-eqopen-order1014-ap20261016ap-ap20261018ap6-visits2-apB5-apM1-st1019dup-apM2-apM3-apM4-norecon-leads-firstever-20261022apadm-mgroom-blroom-mytasks-gap12-mytasks2-gap12b-audits4-types-redesign6-prshift-20261022clients-aupurge2-20261022brandxl-202610231009-20261023duty-20261024bart-20261026hev';
 
 // Best-effort warm cache. The bare paths are precached on install; the real
 // runtime requests (some carry a ?v= cache-buster) are cached on the fly by the
@@ -57,6 +57,7 @@ const ASSETS = [
   './foh-modanight.js',   // Moda Night, read from the checks (7 Oct 2026)
   './foh-bizlunch.js',
   './foh-audits.js',       // Audits (22 Oct 2026)
+  './foh-homeevents.js',   // Team Home upcoming events (26 Oct 2026)
   './foh-actionplan.js',   // Roberto's 3.0 Action Plan (16 Oct 2026)   // Business Lunch (took the Activations slot, 7 Oct 2026)
   './site.webmanifest',
   './apple-touch-icon.png',
