@@ -188,6 +188,18 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,a:focus-visible{
 .when input{width:100%;box-sizing:border-box}
 @media (max-width:420px){.tiles{grid-template-columns:repeat(2,minmax(0,1fr))}.top h1{font-size:32px}}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+/* The look of Roberto's (26 Oct 2026, Francesco: "more like Roberto's, fill the space without being noisy"):
+   a photo of the room behind the page, wine-tinted so it stays quiet, and the audit as a cream panel on top.
+   The questions themselves are untouched: plain cream, same size, nothing behind the text. On a phone the
+   panel is the whole screen and the photo is a slim band above the title of the first screens only. */
+.top::before{content:'';display:block;height:104px;margin:-24px -20px 2px;
+  background:linear-gradient(180deg,rgba(69,2,7,.35),rgba(69,2,7,.62)),url(venue-ristorante.jpg) center 40%/cover}
+@media (min-width:760px){
+  html{background:#2a0104}
+  body{background:linear-gradient(rgba(42,1,4,.62),rgba(42,1,4,.72)),url(venue-ristorante.jpg) center/cover fixed no-repeat;min-height:100vh}
+  .app{margin:36px auto;min-height:calc(100vh - 72px);border-radius:18px;overflow:hidden;box-shadow:0 24px 70px rgba(0,0,0,.45),0 0 0 1px rgba(250,247,241,.12)}
+  .top::before{height:150px}
+}
 </style>
 </head>
 <body>
