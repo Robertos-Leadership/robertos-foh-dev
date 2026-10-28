@@ -625,6 +625,16 @@ function peToday(){ return localISO(new Date()); }
 function peMonthKey(d){ return String(d).slice(0,7); }
 function peDishById(id){ for(var i=0;i<peState.dishes.length;i++) if(peState.dishes[i].id===id) return peState.dishes[i]; return null; }
 function peBevById(id){ for(var i=0;i<peState.bevs.length;i++) if(peState.bevs[i].id===id) return peState.bevs[i]; return null; }
+// A booking can carry TWO beverage packages: one with alcohol and one alcohol-free,
+// on the same hours (Eva, 26 Oct 2026). The second only exists beside a first one,
+// so every "does this booking have a beverage?" test still reads bev_package_id.
+function peBev2Of(e){ return (e.bev_package_id && e.bev_package_id_2) ? peBevById(e.bev_package_id_2) : null; }
+// Can `cand` sit beside `first` as the second package? One of each kind, same hours.
+function peBev2Fits(first, cand){
+  if(!first || !cand || cand.id===first.id) return false;
+  if(!!cand.non_alcoholic === !!first.non_alcoholic) return false;
+  return (Number(cand.duration_hours)||0) === (Number(first.duration_hours)||0);
+}
 // A canapé package (event_packages) by id — the ticked keys come back from the
 // DOM as strings, so compare as strings or a ticked package resolves to nothing.
 function peCanapePackById(id){
@@ -3205,7 +3215,9 @@ function peCalcTotals(e){
   // explicitly flagged alcohol-free may carry a price on a dry event.
   var dry = e.bev_mode==='dry';
   var bevCounts = bev && !(dry && !bev.non_alcoholic);
-  var bevPP = bevCounts ? Number(bev.price_pp) : 0;
+  var bev2 = peBev2Of(e);
+  var bev2Counts = bev2 && !(dry && !bev2.non_alcoholic);
+  var bevPP = (bevCounts ? Number(bev.price_pp) : 0) + (bev2Counts ? (Number(bev2.price_pp)||0) : 0);
   var perGuest = (foodPP||0)+bevPP;
   var subtotal = e.guests ? perGuest*Number(e.guests) : null;
   // A courtesy discount comes off the very end — never taking the total below 0.
@@ -3573,6 +3585,7 @@ function peRenderEvent(){
       ? '<div style="font-size:12px;color:#8A2A1A;background:#FBE9E7;border-radius:8px;padding:8px 10px;margin-top:8px">No alcohol will be served — this is stated on every document and the beverage charge is AED 0.</div>'
       : '')+
     (e.bev_package_id && peBevById(e.bev_package_id) ? '<div style="font-size:11.5px;color:#4F4535;margin-top:6px">'+peEsc(peBevById(e.bev_package_id).includes||'')+'</div>' : '')+
+    peBev2CardHTML(e, ce)+
     '</div></div>';
   // agreement (terms Valentina adjusts per event; guest signs via the link)
   var agBase = peAgBase(e);                        // already has any courtesy discount taken off
@@ -4537,11 +4550,61 @@ async function peSetBeverage(id, val){
   if(val==='dry'){ patch.bev_package_id = null; patch.bev_mode = 'dry'; }
   else if(!val){ patch.bev_package_id = null; patch.bev_mode = null; }
   else { patch.bev_package_id = val; patch.bev_mode = null; }
+  // The second package has to keep fitting the first (one of each kind, same hours).
+  // If the first one changed so it no longer does, the second goes — and we say so,
+  // because the price just dropped by its amount.
+  var dropped2 = null;
+  if(e.bev_package_id_2){
+    var nf = (val && val!=='dry') ? peBevById(val) : null;
+    if(!nf || !peBev2Fits(nf, peBevById(e.bev_package_id_2))){
+      dropped2 = peBevById(e.bev_package_id_2);
+      patch.bev_package_id_2 = null;
+    }
+  }
   var r = await sb.from('events_desk').update(patch).eq('id', id);
   if(r.error){ peToast('NOT saved — check connection', true); return; }
   Object.keys(patch).forEach(function(k){ e[k] = patch[k]; });
+  peToast(dropped2 ? 'Saved ✓ — the second package ('+dropped2.name+') was taken off: it no longer matches the first' : 'Saved ✓', !!dropped2);
+  renderMain();
+}
+// The second beverage package. '' = none. Saved on its own so a missing column
+// (SQL not run yet) reads as exactly that, not as a connection problem.
+async function peSetBeverage2(id, val){
+  if(!peCanEdit()){ peToast('View only — ask Sophie, Ouafaa or Francesco to make changes', true); return; }
+  var e = peEvById(id); if(!e) return;
+  var first = e.bev_package_id ? peBevById(e.bev_package_id) : null;
+  var cand = val ? peBevById(val) : null;
+  if(val && !peBev2Fits(first, cand)){ peToast('That package does not match the first one — it needs the opposite kind and the same hours', true); renderMain(); return; }
+  var patch = { bev_package_id_2: val || null, updated_at:new Date().toISOString() };
+  var r = await sb.from('events_desk').update(patch).eq('id', id);
+  if(r.error){
+    if(peColMissing(r.error, 'bev_package_id_2')) peToast('Second package needs foh-events-bev-second.sql run on the database first', true);
+    else peToast('NOT saved — check connection', true);
+    renderMain(); return;
+  }
+  e.bev_package_id_2 = patch.bev_package_id_2; e.updated_at = patch.updated_at;
+  sb.from('event_log').insert({event_id:id, action:'beverage', actor:peActor(), detail: cand ? 'second beverage package: '+cand.name : 'second beverage package removed'});
   peToast('Saved ✓');
   renderMain();
+}
+// The "add the other drinks package" row under the Beverage dropdown: only offers
+// packages that fit the first one, so a mismatch cannot be picked in the first place.
+function peBev2CardHTML(e, ce){
+  var first = e.bev_package_id ? peBevById(e.bev_package_id) : null;
+  if(!first) return '';
+  var kindWord = first.non_alcoholic ? 'alcoholic' : 'alcohol-free';
+  var cur = e.bev_package_id_2 ? peBevById(e.bev_package_id_2) : null;
+  var fits = peState.bevs.filter(function(b){ return (b.active!==false || (cur && b.id===cur.id)) && peBev2Fits(first, b); });
+  if(!fits.length && !cur){
+    return '<div style="font-size:11.5px;color:#4F4535;margin-top:10px">To add an '+kindWord+' package on the same '+(first.duration_hours?first.duration_hours+' hours':'hours')+', one has to exist in Beverage Corner first.</div>';
+  }
+  return '<div style="margin-top:12px"><div class="pe-lbl">Second package — '+kindWord+', same '+(first.duration_hours?first.duration_hours+' hours':'hours')+'</div>'+
+    '<select class="pe-in" id="pe-f-bev_package_id_2" onchange="peSetBeverage2(\''+e.id+'\',this.value)"'+(ce?'':' disabled')+'>'+
+      '<option value=""'+(cur?'':' selected')+'>No second package</option>'+
+      fits.map(function(b){ return '<option value="'+b.id+'"'+(cur&&cur.id===b.id?' selected':'')+'>'+peEsc(b.name)+' — '+(b.duration_hours?b.duration_hours+'h — ':'')+(b.price_pp!=null?'AED '+peMoney(b.price_pp)+'/guest':'price on the proposal')+(b.non_alcoholic?' · alcohol-free':'')+(b.active===false?' (retired)':'')+'</option>'; }).join('')+
+    '</select>'+
+    (cur ? '<div style="font-size:11.5px;color:#4F4535;margin-top:6px">'+peEsc(cur.includes||'')+'</div>' : '')+
+    '</div>';
 }
 async function peDeleteEvent(id){
   if(!peCanEdit()){ peToast('View only — ask Sophie, Ouafaa or Francesco to make changes', true); return; }
@@ -5345,6 +5408,12 @@ function peProposalHTML(e, noPrice){
   } else if(e.bev_mode==='dry'){
     body += '<div class="sec">Beverage</div><div class="dish">A dry event — no alcohol will be served<br><span class="d">Soft drinks and water throughout</span></div>';
   }
+  var bev2g = peBev2Of(e);
+  if(bev2g){
+    body += '<div class="dish">'+peEsc(bev2g.name)+(bev2g.duration_hours?' — '+bev2g.duration_hours+' hours':'')+
+      (bev2g.includes?'<br><span class="d">'+peEsc(bev2g.includes)+'</span>':'')+'</div>'+
+      (bev2g.pdf?'<div style="text-align:center;margin:8px 0 4px"><a href="'+(/^https?:/i.test(bev2g.pdf)?bev2g.pdf:peBaseUrl()+bev2g.pdf)+'" style="display:inline-block;background:#400207;color:#E8D9C7;padding:8px 22px;border-radius:20px;text-decoration:none;font-size:12px;letter-spacing:1px">View the second beverage package</a></div>':'');
+  }
   // #12 — "Send me three options and I'll pick one." ONE proposal carries them
   // all, so the guest gets one email instead of three, and we keep one enquiry
   // instead of three to reconcile afterwards. Each option shows its own single
@@ -5379,7 +5448,7 @@ function peProposalHTML(e, noPrice){
     body += '<div class="rule" style="margin-top:26px"></div><div class="sec">Your event</div>'+
       '<div class="dish" style="font-size:15px">'+priceLine+
       (t.discount>0?'<br><span class="d" style="color:#5B6737">including a courtesy of AED '+peMoney(t.discount)+'</span>':'')+
-      '<br><span class="d">'+(t.items.length?'Canapé selection':'Menu')+(bev?' and '+(bev.duration_hours?bev.duration_hours+'-hour ':'')+'beverage package':'')+(t.feeOn?' — service charge and VAT included':' — everything included')+'</span>'+
+      '<br><span class="d">'+(t.items.length?'Canapé selection':'Menu')+(bev?' and '+(bev.duration_hours?bev.duration_hours+'-hour ':'')+(peBev2Of(e)?'beverage packages':'beverage package'):'')+(t.feeOn?' — service charge and VAT included':' — everything included')+'</span>'+
       peFeeLineHTML(e, t.total)+'</div>';
   } else if(e.min_spend){
     // The minimum the guest is actually charged. A courtesy discount comes off it
@@ -5451,6 +5520,8 @@ function peBriefBodyHTML(e){
     : rowHTML('Food', '<b style="color:#B00020">NO MENU YET — do not prep</b>');
   var bev = e.bev_package_id ? peBevById(e.bev_package_id) : null;
   body += row('Beverage', bev ? bev.name+(bev.price_pp!=null?' · AED '+peMoney(bev.price_pp)+'/guest':' · price on the proposal') : (e.bev_mode==='dry'?'DRY EVENT — no alcohol served (soft drinks & water)':'—'));
+  var bevB = peBev2Of(e);
+  if(bevB) body += row('Beverage (2nd)', bevB.name+(bevB.price_pp!=null?' · AED '+peMoney(bevB.price_pp)+'/guest':' · price on the proposal'));
   body += row('Estimated total', t.total ? 'AED '+peMoney(t.total)+(t.fee?' + 7% DIFC fee AED '+peMoney(t.fee)+' = AED '+peMoney(t.payable):'') : '—')+
     row('Minimum spend', e.min_spend?'AED '+peMoney(e.min_spend)+(peFeeOn(e, e.min_spend)?' + 7% DIFC fee = AED '+peMoney(pePayable(e, e.min_spend)):''):'—');
   body += row('Dietary', e.dietary)+row('Payment', e.payment_terms);

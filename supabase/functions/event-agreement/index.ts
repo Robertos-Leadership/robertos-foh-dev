@@ -84,7 +84,7 @@ function dLabel(ds: unknown): string {
 }
 
 // deno-lint-ignore no-explicit-any
-function calcTotals(ev: any, items: any[], dishById: Record<string, any>, bev: any) {
+function calcTotals(ev: any, items: any[], dishById: Record<string, any>, bev: any, bev2: any = null) {
   let foodComputed = 0;
   for (const it of items) {
     const d = dishById[it.dish_id];
@@ -92,7 +92,8 @@ function calcTotals(ev: any, items: any[], dishById: Record<string, any>, bev: a
     if (d && !it.comp) foodComputed += (Number(d.sell_price) || 0) * (Number(it.pcs_per_guest) || 0);
   }
   const foodPP = (ev.food_price_pp != null && ev.food_price_pp !== "") ? Number(ev.food_price_pp) : (foodComputed || 0);
-  const bevPP = bev ? Number(bev.price_pp) || 0 : 0;
+  // Two packages at most (one alcoholic, one alcohol-free): both are charged per guest.
+  const bevPP = (bev ? Number(bev.price_pp) || 0 : 0) + (bev2 ? Number(bev2.price_pp) || 0 : 0);
   const subtotal = ev.guests ? Math.round((foodPP + bevPP) * Number(ev.guests)) : null;
   // A courtesy discount comes off the very end, never below 0.
   const discount = subtotal != null ? Math.min(Math.max(0, Number(ev.discount) || 0), subtotal) : Math.max(0, Number(ev.discount) || 0);
@@ -189,7 +190,7 @@ function termsHtml(ev: any, bev: any, totals: { total: number | null; discount?:
 // The full signed document (booking summary + menu + terms + signature) —
 // stored as the frozen snapshot and emailed to both sides.
 // deno-lint-ignore no-explicit-any
-function signedDocHtml(ev: any, items: any[], dishById: Record<string, any>, bev: any,
+function signedDocHtml(ev: any, items: any[], dishById: Record<string, any>, bev: any, bev2: any,
   totals: { foodPP: number; bevPP: number; total: number | null; discount?: number },
   signed: { name: string; designation: string; at: string }): string {
   const n = agreementNumbers(ev, totals);
@@ -218,7 +219,7 @@ function signedDocHtml(ev: any, items: any[], dishById: Record<string, any>, bev
     row("Area", esc(ev.area)) +
     row("Guests reserved for", esc(ev.guests)) + row("Minimum guaranteed guests", esc(n.guestsMin)) +
     row("Food", esc(ev.package_label || (items.length ? "Canapé selection" : ""))) +
-    row("Beverage", bev ? esc(bev.name) + (bev.duration_hours ? " — " + bev.duration_hours + " hours" : "") : (ev.bev_mode === "dry" ? "Dry event — no alcohol served (soft drinks &amp; water)" : "—")) +
+    row("Beverage", bev ? esc(bev.name) + (bev.duration_hours ? " — " + bev.duration_hours + " hours" : "") + (bev2 ? "<br>" + esc(bev2.name) + (bev2.duration_hours ? " — " + bev2.duration_hours + " hours" : "") : "") : (ev.bev_mode === "dry" ? "Dry event — no alcohol served (soft drinks &amp; water)" : "—")) +
     row(n.pricingType === "min_spend" ? "Minimum spend" : "Quoted price",
       n.quoted != null ? "AED " + money(n.quoted) + (n.discount > 0 ? " — includes a courtesy of AED " + money(n.discount) : "") +
         (n.fee ? " — inclusive of service and VAT, plus 7% DIFC Authority Fee AED " + money(n.fee) + " = AED " + money(n.payable) + " payable" : " — inclusive of all taxes and service") : "—") +
@@ -279,6 +280,13 @@ Deno.serve(async (req) => {
       const bs = await bR.json();
       bev = Array.isArray(bs) && bs.length ? bs[0] : null;
     }
+    // The second package only counts beside a first one, same rule as the app (peBev2Of).
+    let bev2 = null;
+    if (ev.bev_package_id && ev.bev_package_id_2) {
+      const b2R = await sb("event_bev_packages?id=eq." + ev.bev_package_id_2 + "&select=id,name,duration_hours,price_pp,includes&limit=1");
+      const b2s = await b2R.json();
+      bev2 = Array.isArray(b2s) && b2s.length ? b2s[0] : null;
+    }
     // A set-menu booking carries its food in events_desk.set_menu, NOT in
     // event_items — every set-menu event in the database has zero items. This
     // function only ever read event_items, so those clients were being shown an
@@ -298,7 +306,7 @@ Deno.serve(async (req) => {
         };
       }
     }
-    const totals = calcTotals(ev, items, dishById, bev);
+    const totals = calcTotals(ev, items, dishById, bev, bev2);
     const nums = agreementNumbers(ev, totals);
 
     if (req.method === "GET") {
@@ -316,6 +324,7 @@ Deno.serve(async (req) => {
         menu,
         setMenu,
         bev: bev ? { name: bev.name, duration_hours: bev.duration_hours, includes: bev.includes } : null,
+        bev2: bev2 ? { name: bev2.name, duration_hours: bev2.duration_hours, includes: bev2.includes } : null,
         quoted: nums.quoted, pricing_type: nums.pricingType, deposit_pct: nums.pct, deposit: nums.deposit,
         fee: nums.fee || 0, payable: nums.payable, price_note: feeApplies(ev) ? NOTE_NEW : NOTE_OLD,
         termsHtml: termsHtml(ev, bev, totals),
@@ -340,7 +349,7 @@ Deno.serve(async (req) => {
     const signedAtISO = new Date().toISOString();
     const dubai = new Date(Date.now() + 4 * 3600 * 1000);
     const signedLabel = dubai.toISOString().slice(0, 10) + " " + dubai.toISOString().slice(11, 16);
-    const doc = signedDocHtml(ev, items, dishById, bev, totals, { name, designation, at: signedLabel });
+    const doc = signedDocHtml(ev, items, dishById, bev, bev2, totals, { name, designation, at: signedLabel });
 
     const newStatus = (ev.status === "draft" || ev.status === "sent") ? "confirmed" : ev.status;
     const patchR = await sb("events_desk?id=eq." + ev.id + "&signed_at=is.null", {

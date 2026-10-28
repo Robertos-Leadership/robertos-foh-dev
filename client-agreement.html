@@ -186,12 +186,17 @@ function render(data){
     h += '<div class="sect"><div class="sect-h">The beverages</div>'+
       '<div class="dish">A dry event — no alcohol will be served<br><span class="ds">Soft drinks and water throughout</span></div></div>';
   }
+  if(data.bev && data.bev2){
+    h += '<div class="sect">'+
+      '<div class="dish">'+esc(data.bev2.name)+(data.bev2.duration_hours?' — '+data.bev2.duration_hours+' hours':'')+
+      (data.bev2.includes?'<br><span class="ds">'+esc(data.bev2.includes)+'</span>':'')+'</div></div>';
+  }
 
   // the one figure
   if(data.quoted!=null){
     // Name only what's actually on the event — a beverage-only booking has no food.
     var hasFoodDoc = (data.menu && data.menu.length) || (sm && (sm.courses||[]).length) || ev.package_label;
-    var incl = hasFoodDoc ? (data.bev ? 'food and beverage package' : 'food') : (data.bev ? 'beverage package' : 'everything');
+    var incl = hasFoodDoc ? (data.bev ? (data.bev2 ? 'food and beverage packages' : 'food and beverage package') : 'food') : (data.bev ? (data.bev2 ? 'beverage packages' : 'beverage package') : 'everything');
     h += '<div class="sect"><div class="total"><b>'+
       (data.pricing_type==='min_spend' ? 'Minimum spend — AED '+money(data.quoted) : (ev.guests?ev.guests+' guests · ':'')+'AED '+money(data.quoted))+
       '</b><div class="d">'+(data.fee
