@@ -635,6 +635,20 @@ function peBev2Fits(first, cand){
   if(!!cand.non_alcoholic === !!first.non_alcoholic) return false;
   return (Number(cand.duration_hours)||0) === (Number(first.duration_hours)||0);
 }
+// How many guests a package is for. Blank = every guest (how every booking worked
+// before), so only a number below the guest count splits the party — e.g. 19 on the
+// Standard Bar and the other 12 à la carte (Eva's colleague, 28 Oct 2026). A number
+// above the guest count can never charge for guests who are not coming.
+function peBevN(e, field){
+  var g = Number(e.guests)||0, n = parseInt(e[field],10);
+  return (n>=1 && g && n<g) ? n : g;
+}
+function peBevSplit(e){ return !!e.guests && (peBevN(e,'bev_guests')<Number(e.guests) || (!!peBev2Of(e) && peBevN(e,'bev_guests_2')<Number(e.guests))); }
+// " — for 19 of 31 guests" when this package is not for the whole party, else "".
+function peBevFor(e, field){
+  var g = Number(e.guests)||0, n = peBevN(e, field);
+  return (g && n<g) ? ' — for '+n+' of '+g+' guests' : '';
+}
 // A canapé package (event_packages) by id — the ticked keys come back from the
 // DOM as strings, so compare as strings or a ticked package resolves to nothing.
 function peCanapePackById(id){
@@ -3220,6 +3234,18 @@ function peCalcTotals(e){
   var bevPP = (bevCounts ? Number(bev.price_pp) : 0) + (bev2Counts ? (Number(bev2.price_pp)||0) : 0);
   var perGuest = (foodPP||0)+bevPP;
   var subtotal = e.guests ? perGuest*Number(e.guests) : null;
+  // A package for only some of the guests: charge it for those guests alone. Unsplit
+  // bookings keep the exact sum above, so no existing quote moves by a fils.
+  var bevLines = [];
+  if(bevCounts) bevLines.push({b:bev, n:peBevN(e,'bev_guests'), amt:(Number(bev.price_pp)||0)*peBevN(e,'bev_guests')});
+  if(bev2Counts) bevLines.push({b:bev2, n:peBevN(e,'bev_guests_2'), amt:(Number(bev2.price_pp)||0)*peBevN(e,'bev_guests_2')});
+  var bevSplit = peBevSplit(e);
+  var bevTotal = bevLines.reduce(function(s,l){ return s+l.amt; }, 0);
+  if(bevSplit && e.guests){
+    subtotal = (foodPP||0)*Number(e.guests) + bevTotal;
+    bevPP = bevTotal/Number(e.guests);          // the average, for the one-line displays
+    perGuest = subtotal/Number(e.guests);
+  }
   // A courtesy discount comes off the very end — never taking the total below 0.
   var discount = subtotal!=null ? Math.min(Math.max(0, Number(e.discount)||0), subtotal) : Math.max(0, Number(e.discount)||0);
   var total = subtotal!=null ? Math.max(0, subtotal - discount) : null;
@@ -3233,6 +3259,7 @@ function peCalcTotals(e){
   // quoted `total` above (and the signed agreement + deposit) never move.
   var actual = (e.actual_revenue!=null && e.actual_revenue!=='') ? Math.max(0, Number(e.actual_revenue)) : null;
   return { foodComputed:foodComputed, foodPP:foodPP, bevPP:bevPP, perGuest:perGuest,
+           bevSplit:bevSplit, bevLines:bevLines, bevTotal:bevTotal,
            subtotal:subtotal, discount:discount, total:total, actual:actual,
            feeOn:feeOn, fee:fee, payable:payable,
            pcs:pcs, foodCostPct:foodCostPct, missingAllergens:missing,
@@ -3585,7 +3612,9 @@ function peRenderEvent(){
       ? '<div style="font-size:12px;color:#8A2A1A;background:#FBE9E7;border-radius:8px;padding:8px 10px;margin-top:8px">No alcohol will be served — this is stated on every document and the beverage charge is AED 0.</div>'
       : '')+
     (e.bev_package_id && peBevById(e.bev_package_id) ? '<div style="font-size:11.5px;color:#4F4535;margin-top:6px">'+peEsc(peBevById(e.bev_package_id).includes||'')+'</div>' : '')+
+    peBevGuestsHTML(e, ce, 'bev_guests', !!e.bev_package_id)+
     peBev2CardHTML(e, ce)+
+    peBevGuestsHTML(e, ce, 'bev_guests_2', !!peBev2Of(e))+
     '</div></div>';
   // agreement (terms Valentina adjusts per event; guest signs via the link)
   var agBase = peAgBase(e);                        // already has any courtesy discount taken off
@@ -3680,10 +3709,16 @@ function peRenderEvent(){
           (msAmt ? 'AED '+peMoney(msAmt) : '— set it above')+'</b></div>'+
         '<div style="font-size:11px;color:#4F4535;margin:-3px 0 7px">This is what they are charged. Below is what the menu comes to so far.</div>'
       : '')+
-    '<div class="pe-tot-row"><span>Food / guest</span><b>AED '+peMoney(t.foodPP||0)+(e.food_price_pp!=null&&e.food_price_pp!==''?' (set)':'')+'</b></div>'+
-    '<div class="pe-tot-row"><span>Beverage / guest</span><b>AED '+peMoney(t.bevPP)+'</b></div>'+
-    '<div class="pe-tot-row" style="border-top:1px solid #DCC9B2;margin-top:4px;padding-top:7px"><span>Per guest</span><b>AED '+peMoney(t.perGuest)+'</b></div>'+
-    '<div class="pe-tot-row"><span>× '+(e.guests||'—')+' guests</span><b>AED '+peMoney(t.subtotal)+'</b></div>';
+    (t.bevSplit
+      // Some guests have no package, so "per guest" would be an average nobody pays.
+      // Show what is actually charged, line by line.
+      ? '<div class="pe-tot-row"><span>Food '+peMoney(t.foodPP||0)+' × '+e.guests+' guests</span><b>AED '+peMoney((t.foodPP||0)*Number(e.guests))+'</b></div>'+
+        t.bevLines.map(function(l){ return '<div class="pe-tot-row"><span>'+peEsc(l.b.name)+' '+peMoney(l.b.price_pp)+' × '+l.n+' guests</span><b>AED '+peMoney(l.amt)+'</b></div>'; }).join('')+
+        '<div class="pe-tot-row" style="border-top:1px solid #DCC9B2;margin-top:4px;padding-top:7px"><span>Subtotal</span><b>AED '+peMoney(t.subtotal)+'</b></div>'
+      : '<div class="pe-tot-row"><span>Food / guest</span><b>AED '+peMoney(t.foodPP||0)+(e.food_price_pp!=null&&e.food_price_pp!==''?' (set)':'')+'</b></div>'+
+        '<div class="pe-tot-row"><span>Beverage / guest</span><b>AED '+peMoney(t.bevPP)+'</b></div>'+
+        '<div class="pe-tot-row" style="border-top:1px solid #DCC9B2;margin-top:4px;padding-top:7px"><span>Per guest</span><b>AED '+peMoney(t.perGuest)+'</b></div>'+
+        '<div class="pe-tot-row"><span>× '+(e.guests||'—')+' guests</span><b>AED '+peMoney(t.subtotal)+'</b></div>');
   // A courtesy discount shows as its own line, then the discounted total below it.
   if(t.discount>0){
     h += '<div class="pe-tot-row"><span>Discount / courtesy</span><b style="color:#4A6B2E">− AED '+peMoney(t.discount)+'</b></div>'+
@@ -4554,11 +4589,13 @@ async function peSetBeverage(id, val){
   // If the first one changed so it no longer does, the second goes — and we say so,
   // because the price just dropped by its amount.
   var dropped2 = null;
+  if((!val || val==='dry') && e.bev_guests) patch.bev_guests = null;
   if(e.bev_package_id_2){
     var nf = (val && val!=='dry') ? peBevById(val) : null;
     if(!nf || !peBev2Fits(nf, peBevById(e.bev_package_id_2))){
       dropped2 = peBevById(e.bev_package_id_2);
       patch.bev_package_id_2 = null;
+      if(e.bev_guests_2) patch.bev_guests_2 = null;
     }
   }
   var r = await sb.from('events_desk').update(patch).eq('id', id);
@@ -4576,6 +4613,7 @@ async function peSetBeverage2(id, val){
   var cand = val ? peBevById(val) : null;
   if(val && !peBev2Fits(first, cand)){ peToast('That package does not match the first one — it needs the opposite kind and the same hours', true); renderMain(); return; }
   var patch = { bev_package_id_2: val || null, updated_at:new Date().toISOString() };
+  if(!val && e.bev_guests_2) patch.bev_guests_2 = null;
   var r = await sb.from('events_desk').update(patch).eq('id', id);
   if(r.error){
     if(peColMissing(r.error, 'bev_package_id_2')) peToast('Second package needs foh-events-bev-second.sql run on the database first', true);
@@ -4584,6 +4622,38 @@ async function peSetBeverage2(id, val){
   }
   e.bev_package_id_2 = patch.bev_package_id_2; e.updated_at = patch.updated_at;
   sb.from('event_log').insert({event_id:id, action:'beverage', actor:peActor(), detail: cand ? 'second beverage package: '+cand.name : 'second beverage package removed'});
+  peToast('Saved ✓');
+  renderMain();
+}
+// "How many guests is this package for?" Blank = all of them.
+function peBevGuestsHTML(e, ce, field, show){
+  if(!show) return '';
+  var g = Number(e.guests)||0, raw = parseInt(e[field],10);
+  var over = (raw>=g && g) ? ' — that is every guest' : '';
+  return '<div style="margin-top:8px"><div class="pe-lbl">Guests on this package'+(g?' (blank = all '+g+')':'')+'</div>'+
+    '<input class="pe-in" id="pe-f-'+field+'" type="number" min="1" '+(g?'max="'+g+'" ':'')+'inputmode="numeric" placeholder="'+(g?'all '+g:'all guests')+'" value="'+peEsc(e[field]==null?'':e[field])+'"'+
+    ' onchange="peSetBevGuests(\''+e.id+'\',\''+field+'\',this.value)"'+(ce?'':' disabled')+'>'+
+    (peBevN(e,field)<g ? '<div style="font-size:11.5px;color:#4F4535;margin-top:5px">The other '+(g-peBevN(e,field))+' guests have no '+(field==='bev_guests'?'package':'second package')+' — the price counts '+peBevN(e,field)+' guests for it.</div>' : '')+
+    (over?'<div style="font-size:11.5px;color:#4F4535;margin-top:5px">'+over.replace(' — ','')+'.</div>':'')+
+    '</div>';
+}
+async function peSetBevGuests(id, field, val){
+  if(!peCanEdit()){ peToast('View only — ask Sophie, Ouafaa or Francesco to make changes', true); return; }
+  var e = peEvById(id); if(!e) return;
+  var s = String(val==null?'':val).trim(), n = s==='' ? null : Number(s);
+  if(n!==null && (!isFinite(n) || n<1 || Math.floor(n)!==n)){ peToast('Type a whole number of guests, 1 or more — or leave it blank for all guests', true); renderMain(); return; }
+  if(n!==null && e.guests && n>Number(e.guests)){ peToast('That is more than the '+e.guests+' guests on the booking — leave it blank for all guests', true); renderMain(); return; }
+  if(n!==null && e.guests && n===Number(e.guests)) n = null;          // everyone = blank
+  var patch = {}; patch[field] = n; patch.updated_at = new Date().toISOString();
+  var r = await sb.from('events_desk').update(patch).eq('id', id);
+  if(r.error){
+    if(peColMissing(r.error, field)) peToast('Guests per package needs foh-events-bev-guests.sql run on the database first', true);
+    else peToast('NOT saved — check connection', true);
+    renderMain(); return;
+  }
+  e[field] = n; e.updated_at = patch.updated_at;
+  var b = peBevById(field==='bev_guests' ? e.bev_package_id : e.bev_package_id_2);
+  sb.from('event_log').insert({event_id:id, action:'beverage', actor:peActor(), detail:(b?b.name:'package')+' for '+(n==null?'all guests':n+' of '+(e.guests||'?')+' guests')});
   peToast('Saved ✓');
   renderMain();
 }
@@ -5400,7 +5470,7 @@ function peProposalHTML(e, noPrice){
   if(/class="codes"/.test(body)) body += '<div class="d" style="font-size:10.5px;color:#4F4535;margin:6px 0 2px">'+PE_ALG_KEY_LINE+'</div>';
   var bev = e.bev_package_id ? peBevById(e.bev_package_id) : null;
   if(bev){
-    body += '<div class="sec">Beverage</div><div class="dish">'+peEsc(bev.name)+(bev.duration_hours?' — '+bev.duration_hours+' hours':'')+
+    body += '<div class="sec">Beverage</div><div class="dish">'+peEsc(bev.name)+(bev.duration_hours?' — '+bev.duration_hours+' hours':'')+peBevFor(e,'bev_guests')+
       (bev.includes?'<br><span class="d">'+peEsc(bev.includes)+'</span>':'')+'</div>'+
       // A package built from a designed PDF (no typed "includes") still needs to
       // reach the guest — link the PDF so the beverage selection is never missing.
@@ -5408,9 +5478,12 @@ function peProposalHTML(e, noPrice){
   } else if(e.bev_mode==='dry'){
     body += '<div class="sec">Beverage</div><div class="dish">A dry event — no alcohol will be served<br><span class="d">Soft drinks and water throughout</span></div>';
   }
+  // One package for part of the party: say what the rest of the guests are on.
+  if(bev && !peBev2Of(e) && peBevN(e,'bev_guests')<(Number(e.guests)||0))
+    body += '<div class="dish"><span class="d">The other '+(Number(e.guests)-peBevN(e,'bev_guests'))+' guests order à la carte — no beverage package</span></div>';
   var bev2g = peBev2Of(e);
   if(bev2g){
-    body += '<div class="dish">'+peEsc(bev2g.name)+(bev2g.duration_hours?' — '+bev2g.duration_hours+' hours':'')+
+    body += '<div class="dish">'+peEsc(bev2g.name)+(bev2g.duration_hours?' — '+bev2g.duration_hours+' hours':'')+peBevFor(e,'bev_guests_2')+
       (bev2g.includes?'<br><span class="d">'+peEsc(bev2g.includes)+'</span>':'')+'</div>'+
       (bev2g.pdf?'<div style="text-align:center;margin:8px 0 4px"><a href="'+(/^https?:/i.test(bev2g.pdf)?bev2g.pdf:peBaseUrl()+bev2g.pdf)+'" style="display:inline-block;background:#400207;color:#E8D9C7;padding:8px 22px;border-radius:20px;text-decoration:none;font-size:12px;letter-spacing:1px">View the second beverage package</a></div>':'');
   }
@@ -5519,9 +5592,9 @@ function peBriefBodyHTML(e){
     ? row('Food', (e.package_label||'Bespoke selection')+(t.foodPP?' · AED '+peMoney(t.foodPP)+'/guest':'')+(t.pcs?' · '+(Math.round(t.pcs*10)/10)+' pieces/guest':''))
     : rowHTML('Food', '<b style="color:#B00020">NO MENU YET — do not prep</b>');
   var bev = e.bev_package_id ? peBevById(e.bev_package_id) : null;
-  body += row('Beverage', bev ? bev.name+(bev.price_pp!=null?' · AED '+peMoney(bev.price_pp)+'/guest':' · price on the proposal') : (e.bev_mode==='dry'?'DRY EVENT — no alcohol served (soft drinks & water)':'—'));
+  body += row('Beverage', bev ? bev.name+(bev.price_pp!=null?' · AED '+peMoney(bev.price_pp)+'/guest':' · price on the proposal')+peBevFor(e,'bev_guests').replace(' — ',' · ') : (e.bev_mode==='dry'?'DRY EVENT — no alcohol served (soft drinks & water)':'—'));
   var bevB = peBev2Of(e);
-  if(bevB) body += row('Beverage (2nd)', bevB.name+(bevB.price_pp!=null?' · AED '+peMoney(bevB.price_pp)+'/guest':' · price on the proposal'));
+  if(bevB) body += row('Beverage (2nd)', bevB.name+(bevB.price_pp!=null?' · AED '+peMoney(bevB.price_pp)+'/guest':' · price on the proposal')+peBevFor(e,'bev_guests_2').replace(' — ',' · '));
   body += row('Estimated total', t.total ? 'AED '+peMoney(t.total)+(t.fee?' + 7% DIFC fee AED '+peMoney(t.fee)+' = AED '+peMoney(t.payable):'') : '—')+
     row('Minimum spend', e.min_spend?'AED '+peMoney(e.min_spend)+(peFeeOn(e, e.min_spend)?' + 7% DIFC fee = AED '+peMoney(pePayable(e, e.min_spend)):''):'—');
   body += row('Dietary', e.dietary)+row('Payment', e.payment_terms);

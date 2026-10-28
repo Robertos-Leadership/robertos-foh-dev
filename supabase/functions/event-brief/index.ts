@@ -44,7 +44,7 @@ const EVENT_COLS = [
   "id", "client_name", "company", "contact_name", "contact_phone", "contact_email",
   "event_date", "event_type", "time_from", "time_to", "area", "spaces",
   "guests", "package_label", "food_price_pp", "set_menu", "off_menu",
-  "bev_package_id", "bev_package_id_2", "bev_mode", "min_spend", "discount", "actual_revenue",
+  "bev_package_id", "bev_package_id_2", "bev_guests", "bev_guests_2", "bev_mode", "min_spend", "discount", "actual_revenue",
   "pricing_type", "price_display", "dietary", "payment_terms", "status",
   "updated_at", "brief_html",
 ].join(",");

@@ -180,15 +180,18 @@ function render(data){
   // beverage
   if(data.bev){
     h += '<div class="sect"><div class="sect-h">The beverages</div>'+
-      '<div class="dish">'+esc(data.bev.name)+(data.bev.duration_hours?' — '+data.bev.duration_hours+' hours':'')+
+      '<div class="dish">'+esc(data.bev.name)+(data.bev.duration_hours?' — '+data.bev.duration_hours+' hours':'')+(data.bev.for_label||'')+
       (data.bev.includes?'<br><span class="ds">'+esc(data.bev.includes)+'</span>':'')+'</div></div>';
   } else if(ev.bev_mode==='dry'){
     h += '<div class="sect"><div class="sect-h">The beverages</div>'+
       '<div class="dish">A dry event — no alcohol will be served<br><span class="ds">Soft drinks and water throughout</span></div></div>';
   }
+  if(data.bev && data.bev.rest_guests){
+    h += '<div class="sect"><div class="dish"><span class="ds">The other '+data.bev.rest_guests+' guests order à la carte — no beverage package</span></div></div>';
+  }
   if(data.bev && data.bev2){
     h += '<div class="sect">'+
-      '<div class="dish">'+esc(data.bev2.name)+(data.bev2.duration_hours?' — '+data.bev2.duration_hours+' hours':'')+
+      '<div class="dish">'+esc(data.bev2.name)+(data.bev2.duration_hours?' — '+data.bev2.duration_hours+' hours':'')+(data.bev2.for_label||'')+
       (data.bev2.includes?'<br><span class="ds">'+esc(data.bev2.includes)+'</span>':'')+'</div></div>';
   }
 

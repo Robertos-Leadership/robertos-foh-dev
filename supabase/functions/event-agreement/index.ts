@@ -84,6 +84,21 @@ function dLabel(ds: unknown): string {
 }
 
 // deno-lint-ignore no-explicit-any
+// Guests a package is for: blank or >= the party = every guest. MUST match peBevN in
+// foh-privateevents.js.
+// deno-lint-ignore no-explicit-any
+function bevN(ev: any, field: string): number {
+  const g = Number(ev.guests) || 0;
+  const n = parseInt(ev[field], 10);
+  return (n >= 1 && g && n < g) ? n : g;
+}
+// deno-lint-ignore no-explicit-any
+function forLabel(ev: any, field: string): string {
+  const g = Number(ev.guests) || 0;
+  const n = bevN(ev, field);
+  return (g && n < g) ? " — for " + n + " of " + g + " guests" : "";
+}
+// deno-lint-ignore no-explicit-any
 function calcTotals(ev: any, items: any[], dishById: Record<string, any>, bev: any, bev2: any = null) {
   let foodComputed = 0;
   for (const it of items) {
@@ -94,7 +109,14 @@ function calcTotals(ev: any, items: any[], dishById: Record<string, any>, bev: a
   const foodPP = (ev.food_price_pp != null && ev.food_price_pp !== "") ? Number(ev.food_price_pp) : (foodComputed || 0);
   // Two packages at most (one alcoholic, one alcohol-free): both are charged per guest.
   const bevPP = (bev ? Number(bev.price_pp) || 0 : 0) + (bev2 ? Number(bev2.price_pp) || 0 : 0);
-  const subtotal = ev.guests ? Math.round((foodPP + bevPP) * Number(ev.guests)) : null;
+  // A package for only some guests is charged for those guests alone; unsplit
+  // bookings keep the exact original sum.
+  const split = !!ev.guests && (bevN(ev, "bev_guests") < Number(ev.guests) || (!!bev2 && bevN(ev, "bev_guests_2") < Number(ev.guests)));
+  const subtotal = ev.guests
+    ? (split
+        ? Math.round(foodPP * Number(ev.guests) + (bev ? (Number(bev.price_pp) || 0) * bevN(ev, "bev_guests") : 0) + (bev2 ? (Number(bev2.price_pp) || 0) * bevN(ev, "bev_guests_2") : 0))
+        : Math.round((foodPP + bevPP) * Number(ev.guests)))
+    : null;
   // A courtesy discount comes off the very end, never below 0.
   const discount = subtotal != null ? Math.min(Math.max(0, Number(ev.discount) || 0), subtotal) : Math.max(0, Number(ev.discount) || 0);
   const total = subtotal != null ? Math.max(0, subtotal - discount) : null;
@@ -219,7 +241,7 @@ function signedDocHtml(ev: any, items: any[], dishById: Record<string, any>, bev
     row("Area", esc(ev.area)) +
     row("Guests reserved for", esc(ev.guests)) + row("Minimum guaranteed guests", esc(n.guestsMin)) +
     row("Food", esc(ev.package_label || (items.length ? "Canapé selection" : ""))) +
-    row("Beverage", bev ? esc(bev.name) + (bev.duration_hours ? " — " + bev.duration_hours + " hours" : "") + (bev2 ? "<br>" + esc(bev2.name) + (bev2.duration_hours ? " — " + bev2.duration_hours + " hours" : "") : "") : (ev.bev_mode === "dry" ? "Dry event — no alcohol served (soft drinks &amp; water)" : "—")) +
+    row("Beverage", bev ? esc(bev.name) + (bev.duration_hours ? " — " + bev.duration_hours + " hours" : "") + forLabel(ev, "bev_guests") + (bev2 ? "<br>" + esc(bev2.name) + (bev2.duration_hours ? " — " + bev2.duration_hours + " hours" : "") + forLabel(ev, "bev_guests_2") : "") + (!bev2 && bevN(ev, "bev_guests") < (Number(ev.guests) || 0) ? "<br>The other " + (Number(ev.guests) - bevN(ev, "bev_guests")) + " guests order à la carte — no beverage package" : "") : (ev.bev_mode === "dry" ? "Dry event — no alcohol served (soft drinks &amp; water)" : "—")) +
     row(n.pricingType === "min_spend" ? "Minimum spend" : "Quoted price",
       n.quoted != null ? "AED " + money(n.quoted) + (n.discount > 0 ? " — includes a courtesy of AED " + money(n.discount) : "") +
         (n.fee ? " — inclusive of service and VAT, plus 7% DIFC Authority Fee AED " + money(n.fee) + " = AED " + money(n.payable) + " payable" : " — inclusive of all taxes and service") : "—") +
@@ -323,8 +345,9 @@ Deno.serve(async (req) => {
         },
         menu,
         setMenu,
-        bev: bev ? { name: bev.name, duration_hours: bev.duration_hours, includes: bev.includes } : null,
-        bev2: bev2 ? { name: bev2.name, duration_hours: bev2.duration_hours, includes: bev2.includes } : null,
+        bev: bev ? { name: bev.name, duration_hours: bev.duration_hours, includes: bev.includes, for_label: forLabel(ev, "bev_guests"),
+          rest_guests: (!bev2 && bevN(ev, "bev_guests") < (Number(ev.guests) || 0)) ? Number(ev.guests) - bevN(ev, "bev_guests") : 0 } : null,
+        bev2: bev2 ? { name: bev2.name, duration_hours: bev2.duration_hours, includes: bev2.includes, for_label: forLabel(ev, "bev_guests_2") } : null,
         quoted: nums.quoted, pricing_type: nums.pricingType, deposit_pct: nums.pct, deposit: nums.deposit,
         fee: nums.fee || 0, payable: nums.payable, price_note: feeApplies(ev) ? NOTE_NEW : NOTE_OLD,
         termsHtml: termsHtml(ev, bev, totals),
