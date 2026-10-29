@@ -5645,7 +5645,7 @@ function peSetMenuPrepHTML(e){
       });
       if(g && sum!==g) h += '<tr><td colspan="2" style="color:#B00020;font-size:11px">▲ choices total '+sum+' of '+g+' guests — confirm the split with the events desk</td></tr>';
     } else {
-      (c.items||[]).forEach(function(it){ h += '<tr>'+pCell(it)+'<td><b>'+(g?g+' portions':'per guest')+'</b></td></tr>'; });
+      (c.items||[]).forEach(function(it){ var q = peCmPortionsOf(m, it); h += '<tr>'+pCell(it)+'<td><b>'+(q?q+' portions':(g?g+' portions':'per guest'))+'</b></td></tr>'; });
     }
   });
   h += '</table>';
@@ -5658,6 +5658,19 @@ function peSetMenuPrepHTML(e){
 // A customised menu prints its courses like any other, so the kitchen already
 // sees the RIGHT dishes. What it must also see is what changed: a chef who
 // knows this menu will otherwise plate the dish that used to be there.
+// A dish added to a customised menu can be for FEWER than all the guests (a
+// pre-order of 4 Margherita for a party of 31). The menu then carries that count
+// beside the dish, and the kitchen documents print it instead of the headcount.
+// Null when nothing was recorded — the line keeps meaning "one per guest".
+function peCmPortionsOf(m, name){
+  var d = m && m.custom ? m.detail : null;
+  if(!d) return null;
+  var all = (d.adds||[]).concat(d.swaps||[]);
+  for(var i=0;i<all.length;i++){
+    if(all[i] && all[i].name===name && Number(all[i].portions)>0) return Number(all[i].portions);
+  }
+  return null;
+}
 function peCmSwapsHTML(m){
   var d = m && m.custom ? m.detail : null;
   if(!d || ((!d.swaps || !d.swaps.length) && (!d.adds || !d.adds.length))) return '';
@@ -5685,7 +5698,7 @@ function peCoordSetMenuHTML(e){
       });
       if(g && sum!==g) h += '<tr><td colspan="2" style="padding:3px 8px;border:1px solid #ddd;color:#B00020;font-size:11px">choices total '+sum+' of '+g+' — to be confirmed</td></tr>';
     } else {
-      (c.items||[]).forEach(function(it){ h += '<tr><td style="padding:3px 8px;border:1px solid #ddd">'+it+'</td><td style="padding:3px 8px;border:1px solid #ddd"><b>'+(g?g+' portions':'per guest')+'</b></td></tr>'; });
+      (c.items||[]).forEach(function(it){ var q = peCmPortionsOf(m, it); h += '<tr><td style="padding:3px 8px;border:1px solid #ddd">'+it+'</td><td style="padding:3px 8px;border:1px solid #ddd"><b>'+(q?q+' portions':(g?g+' portions':'per guest'))+'</b></td></tr>'; });
     }
   });
   h += '</table>';
@@ -7428,16 +7441,18 @@ function peQuickCourses(){
     });
     if(lines.length) courses.push({ name:g[1], choose:false, lines:lines });
   });
-  var bySection = {};
+  var bySection = {}, qtyOf = {};
   peQuickAlcLines().forEach(function(l){
     (bySection[l.a.section] = bySection[l.a.section] || []).push(l.a);
+    qtyOf[l.a.id] = l.qty;
   });
   peAlcSections().forEach(function(s){
     if(!bySection[s]) return;
     courses.push({ name: peAlcSecLabel(s), choose:false,
       lines: bySection[s].map(function(a){
         return { name:a.name, from:'alacarte', price:peAlcPrice(a), alcId:a.id,
-                 supplement:0, out:null, added:true, suggested:false, diff:null, forGuests:null };
+                 supplement:0, out:null, added:true, suggested:false, diff:null, forGuests:null,
+                 portions:(qtyOf[a.id]||null) };
       }) });
   });
   return courses;
@@ -7646,7 +7661,8 @@ function peCmTotals(){
       if(l.from!=='set'){
         if(l.price==null) unpriced.push(l.name); else sum += Number(l.price);
         (l.added ? adds : swaps).push({ course:c.name, name:l.name, out:l.out||null,
-          price:(l.price==null?null:Number(l.price)), supplement:Number(l.supplement)||0 });
+          price:(l.price==null?null:Number(l.price)), supplement:Number(l.supplement)||0,
+          portions:(Number(l.portions)>0 ? Number(l.portions) : null) });
       } else {
         var p = peCmSetDishPrice(l.name, kind);
         if(p==null) unpriced.push(l.name); else sum += p;
