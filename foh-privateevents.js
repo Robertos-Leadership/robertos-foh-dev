@@ -7527,6 +7527,7 @@ function peCmSwap(ci, li, alcId){
   l.price = inPrice;
   l.diff = (inPrice!=null && outPrice!=null) ? Math.max(0, inPrice-outPrice) : null;
   l.forGuests = null;
+  l.portions = null;   // a different dish: the old count does not carry over
   // A swap does NOT move the price. Valentina asked for this explicitly: a
   // guest on the Mare menu who swaps a dish stays on AED 440 unless SHE decides
   // otherwise. The à la carte difference is worked out and offered — one tap to
@@ -7554,6 +7555,16 @@ function peCmApplyDiff(ci, li, on){
   else l.supplement = (l.forGuests!=null && cm.guests)
     ? Math.round(l.diff * l.forGuests / Number(cm.guests))
     : l.diff;
+  renderMain();
+}
+// Kitchen portions of an added dish. Whole numbers of 1 or more; anything else
+// clears it back to "one per guest". Never touches the price.
+function peCmPortions(ci, li, v){
+  var cm = peState.cm;
+  var l = cm && cm.courses[ci] && cm.courses[ci].lines[li];
+  if(!l) return;
+  var n = (v===''||v==null) ? 0 : Math.floor(Number(v));
+  l.portions = (n>0) ? n : null;
   renderMain();
 }
 function peCmForGuests(ci, li, v){
@@ -7773,6 +7784,19 @@ function peRenderCustomise(){
                   : ''))
           : '<input class="pe-in" style="width:100%;max-width:320px" value="'+peEsc(l.name)+'" placeholder="Dish name" oninput="peCmLineName('+ci+','+li+',this.value)">'+
             '<br><span style="font-size:11px;color:#4F4535">from the set menu — no supplement</span>')+
+        // How many portions the kitchen makes of an added dish. Blank keeps the old
+        // meaning (one per guest); a pre-order for 4 of a party of 31 types 4.
+        (isAlc
+          ? '<div style="margin-top:6px;padding:5px 8px;background:#FBF6EA;border-left:3px solid #C9A84C;font-size:11.5px;color:#6B4A33">Kitchen makes '+
+            '<input class="pe-in" style="width:56px;padding:3px 5px;text-align:center;display:inline-block" type="number" min="1" step="1" placeholder="all"'+
+              ' value="'+(Number(l.portions)>0?Number(l.portions):'')+'" onchange="peCmPortions('+ci+','+li+',this.value)"> portions'+
+            ' <span style="font-size:11px">'+
+              (cm.guests ? 'of '+cm.guests+' guests' : '(guest count not set yet)')+
+              (Number(l.portions)>0 ? '' : ' — blank means one per guest')+'</span>'+
+            (Number(l.portions)>0 && cm.guests && Number(l.portions)>Number(cm.guests)
+              ? '<br><span style="color:#B00020">▲ more than the '+cm.guests+' guests — check the number</span>' : '')+
+            '</div>'
+          : '')+
         '<div style="margin-top:6px"><select class="pe-in" style="width:auto;max-width:100%;font-size:11.5px" onchange="peCmSwap('+ci+','+li+',this.value);this.selectedIndex=0">'+
           '<option value="">Swap for an à la carte dish…</option>'+
           peCmAlcOptions(alc, c)+
