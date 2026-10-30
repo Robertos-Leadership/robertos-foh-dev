@@ -146,7 +146,8 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,a:focus-visible{
 .msec span{flex:1}
 .msec small{font-family:var(--sans);font-size:13px;color:var(--muted)}
 .msec.on{background:var(--door)}
-.opt.in{padding:13px 14px 13px 28px;font-size:16px;min-height:48px}
+.chip small{opacity:.7;margin-left:2px}
+.opt.in{padding:13px 14px;font-size:16px;min-height:48px}
 .kcard{display:flex;align-items:center;gap:14px;text-align:left;padding:16px;border:1px solid var(--line);border-radius:14px;background:#fff;min-height:76px;width:100%}
 .kcard.on{border:2px solid var(--vino);padding:15px}
 .kcard .r{flex:none;width:22px;height:22px;border-radius:50%;border:2px solid var(--line);display:flex;align-items:center;justify-content:center}
@@ -777,13 +778,16 @@ function presHtml(mode){
   if (!q) {
     var secs = [], by = {};
     D.menu.filter(mine).forEach(function(m){ var s = m.section || 'Other'; if (!by[s]) { by[s] = []; secs.push(s); } by[s].push(m); });
+    // Section chips stay on screen all together; the chosen section's dishes sit right under them, so
+    // there is no long accordion to scroll through (Francesco, 30 Oct 2026).
+    var cur = by[S.msec] ? S.msec : secs[0];
+    h += '<div class="chips msecs" role="tablist">';
     secs.forEach(function(s){
-      var open = S.msec === s;
-      h += '<button class="msec' + (open ? ' on' : '') + '" data-act="msec" data-s="' + esc(s) + '" aria-expanded="' + open + '"><span>' + esc(s) + '</span><small>' + by[s].length + '</small>' +
-           '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="' + (open ? 'M6 15l6-6 6 6' : 'M6 9l6 6 6-6') + '"/></svg></button>';
-      if (open) by[s].forEach(function(m){ h += '<button class="opt in' + (chosen[m.id] ? ' on' : '') + '" data-act="pickdish" data-mode="' + mode + '" data-id="' + m.id + '" data-name="' + esc(m.name) + '">' + esc(m.name) + '</button>'; });
+      h += '<button class="chip' + (s === cur ? ' on' : '') + '" role="tab" data-act="msec" data-s="' + esc(s) + '" aria-selected="' + (s === cur) + '">' + esc(s) + ' <small>' + by[s].length + '</small></button>';
     });
-    return '<div class="muted" style="margin:2px 2px 6px">' + t('orSection') + '</div><div class="menu">' + h + '</div>';
+    h += '</div>';
+    if (cur) { h += '<div class="menu" style="margin-top:8px">'; by[cur].forEach(function(m){ h += '<button class="opt in' + (chosen[m.id] ? ' on' : '') + '" data-act="pickdish" data-mode="' + mode + '" data-id="' + m.id + '" data-name="' + esc(m.name) + '">' + esc(m.name) + '</button>'; }); h += '</div>'; }
+    return '<div class="muted" style="margin:2px 2px 6px">' + t('orSection') + '</div>' + h;
   }
   hits.forEach(function(m){ h += '<button class="opt' + (chosen[m.id] ? ' on' : '') + '" data-act="pickdish" data-mode="' + mode + '" data-id="' + m.id + '" data-name="' + esc(m.name) + '">' + esc(m.name) + '<small>' + (m.where === 'scala' ? 'Scala' : '') + '</small></button>'; });
   return h + '<button class="opt" data-act="pickdish" data-mode="' + mode + '" data-id="" data-name="' + esc(raw) + '">' + t('useName') + ': <b>' + esc(raw) + '</b></button>';
@@ -1146,7 +1150,7 @@ root.addEventListener('click', function(e){
   var b = e.target.closest('[data-act]'); if (!b) return;
   var act = b.getAttribute('data-act');
   if (act === 'pq') return;
-  if (act === 'msec') { var sv = b.getAttribute('data-s'); S.msec = S.msec === sv ? null : sv; var box = document.getElementById('pres'); if (box) box.innerHTML = presHtml(document.getElementById('pq').getAttribute('data-mode')); return; }
+  if (act === 'msec') { var sv = b.getAttribute('data-s'); S.msec = sv; var box = document.getElementById('pres'); if (box) box.innerHTML = presHtml(document.getElementById('pq').getAttribute('data-mode')); return; }
   if (act === 'lang') { LANG = b.getAttribute('data-l'); ls('auditLang', LANG); document.documentElement.lang = LANG; render(); return; }
   if (act === 'go') { e.preventDefault(); go(JSON.parse(b.getAttribute('data-to'))); return; }
   if (act === 'area') { go({ v: 'area', area: b.getAttribute('data-a') }); return; }
