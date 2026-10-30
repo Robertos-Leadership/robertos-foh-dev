@@ -137,16 +137,16 @@ function auBody(){
 // venue, in Italian, with his own sections; the link opens it as him, so audit-api gives it to Admins only.
 function auBartCard(){
   var b = AU.me && AU.me.bartolini; if(!b) return '';
-  var st = b.status === 'sent' ? 'Report sent to Amin' : b.status === 'submitted' ? 'He has finished: his report is waiting for you' : 'Not finished yet';
+  var st = b.status === 'invite' ? 'No audit started yet' : b.status === 'sent' ? 'Report sent to Amin' : b.status === 'submitted' ? 'He has finished: his report is waiting for you' : 'Not finished yet';
   return '<div class="au-card"><div class="au-lbl">Chef Bartolini\'s audit link</div>'
-    + '<div class="au-sub" style="margin:-2px 0 8px">' + (b.visit_date ? 'Visit ' + auEsc(auDate(b.visit_date)) + ' &middot; ' : '') + auEsc(st) + '</div>'
+    + '<div class="au-sub" style="margin:-2px 0 8px">' + (b.visit_date ? (b.invite ? 'Latest visit ' : 'Visit ') + auEsc(auDate(b.visit_date)) + ' &middot; ' : '') + auEsc(st) + '</div>'
     + '<div class="au-link">' + auEsc(b.link) + '</div>'
     + '<div class="au-btns">'
     + (navigator.share ? '<button class="au-btn pri" onclick="auBartShare()">Share</button>' : '')
     + '<button class="au-btn' + (navigator.share ? '' : ' pri') + '" onclick="auBartCopy()">' + (AU.bartCopied ? 'Copied &#10003;' : 'Copy link') + '</button>'
     + '<a class="au-btn" style="text-decoration:none;display:inline-flex;align-items:center" target="_blank" rel="noopener" href="https://wa.me/?text=' + encodeURIComponent(auBartText() + '\n' + b.link) + '">WhatsApp</a>'
     + '</div>'
-    + '<div class="au-hint">Only for Chef Bartolini. It opens his own audit of the whole venue, in Italian. When he finishes, it comes to you; you send it to Amin.</div></div>';
+    + '<div class="au-hint">' + (b.invite ? 'Only for Chef Bartolini. Each time he opens it he types the date and starts a new audit of the whole venue, in Italian. When he finishes one, it comes to you; you send it to Amin.' : 'Only for Chef Bartolini. It opens his own audit of the whole venue, in Italian. When he finishes, it comes to you; you send it to Amin.') + '</div></div>';
 }
 function auBartText(){ return "Chef, ecco il link per il suo audit di Roberto's DIFC."; }
 function auBartShare(){

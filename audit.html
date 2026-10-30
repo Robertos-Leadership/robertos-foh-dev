@@ -249,6 +249,7 @@ var ENRICO = 'Chef Enrico Bartolini';
 function isEnrico(){ return !D || !D.visit || D.visit.auditor === ENRICO; }
 function who(){ return String((D && D.visit && D.visit.auditor) || ENRICO).replace(/^Chef\s+/i, '').trim().split(/\s+/)[0]; }
 function dubaiNow(){ var d = new Date(Date.now() + 4 * 3600 * 1000).toISOString(); return { date: d.slice(0, 10), time: d.slice(11, 16) }; }   // Dubai is UTC+4, no DST
+function addDays(ds, n){ var d = new Date(ds + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); }
 function dubaiTime(iso){ try { return new Date(iso).toLocaleString(LANG === 'en' ? 'en-GB' : 'it-IT', { timeZone: 'Asia/Dubai', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }); } catch(e){ return ''; } }
 
 var T = {
@@ -283,7 +284,7 @@ var T = {
     best:'Il momento migliore', fixone:'Una cosa da migliorare', other:'Altro', bestPh:'Cosa ti è piaciuto di più?', fixonePh:'Se potessi cambiare una cosa…', otherPh:'Qualsiasi altra cosa', formfb:'Feedback su questo audit', formfbPh:'Cosa cambieresti nelle domande o nella app?',
     youSent:'Cosa hai inviato', answeredW:'risposte', notSeenW:'non viste', stillEdit:'Puoi ancora aggiungere o correggere qualcosa dalle sezioni: si salva da solo.',
     orSection:'Oppure apri una sezione del menu:',
-    startNew:'Nuovo audit', earlier:'I tuoi audit precedenti su questo telefono', openIt:'Apri', another:'Inizia un altro audit',
+    startNew:'Nuovo audit', earlier:'I tuoi audit precedenti su questo telefono', openIt:'Apri', another:'Inizia un altro audit', startTitleE:'Nuovo audit', startSubE:'Scegli quando sei venuto: data e ora. Si apre un nuovo audit di tutto il locale.',
     ordered:'Cosa hai ordinato?', orderedSub:'Scegli ogni piatto dal menu e dagli un voto.', thenFood:'Poi, il cibo in generale', scoreIt:'Da votare', dish1n:'piatto', dishesN:'piatti',
     dish5:'Lo riordineresti domani', dish3:'Buono', dish1:"L'hai lasciato", startTitle:'Audit ospite', begin:"Inizia l'audit",
     startSub:"Circa 15 minuti. Rispondi da ospite: quello che hai visto, sentito e assaggiato. Quello che non hai visto, saltalo.",
@@ -321,7 +322,7 @@ var T = {
     best:'The best moment', fixone:'One thing to fix', other:'Anything else', bestPh:'What did you enjoy most?', fixonePh:'If you could change one thing…', otherPh:'Anything else', formfb:'Feedback on this audit', formfbPh:'What would you change in the questions or the app?',
     youSent:'What you sent', answeredW:'answered', notSeenW:'not seen', stillEdit:'You can still add or correct anything from the sections: it saves by itself.',
     orSection:'Or open a section of the menu:',
-    startNew:'New audit', earlier:'Your earlier audits on this phone', openIt:'Open', another:'Start another audit',
+    startNew:'New audit', earlier:'Your earlier audits on this phone', openIt:'Open', another:'Start another audit', startTitleE:'New audit', startSubE:'Choose when you visited: date and time. A new audit of the whole venue opens.',
     ordered:'What did you order?', orderedSub:'Pick each dish from the menu and give it a score.', thenFood:'Then, the food overall', scoreIt:'To score', dish1n:'dish', dishesN:'dishes',
     dish5:"You'd order it again tomorrow", dish3:'Fine', dish1:'You left it', startTitle:'Guest audit', begin:'Start the audit',
     startSub:"About 15 minutes. Answer as a guest: what you saw, heard and tasted. Anything you didn't see, skip.",
@@ -880,7 +881,7 @@ function vThanks(){
   }
   h += '<button class="sec" data-act="go" data-to=\'{"v":"home"}\'><span class="grow"><span class="t">' + t('sections') + '</span></span>' + CHEV_SVG + '</button></div>';
   // Another audit from the same link (this phone remembers which link this audit came from).
-  var from = !isEnrico() && TOK && TOK.k ? ls('auditFrom:' + TOK.k) : null;
+  var from = TOK && TOK.k ? ls('auditFrom:' + TOK.k) : null;
   if (from) h += '<div class="foot"><a class="big vino" style="text-decoration:none" href="' + esc(location.pathname + '?n=' + encodeURIComponent(from)) + '">' + t('another') + '</a></div>';
   return h;
 }
@@ -895,12 +896,13 @@ function mineAll(){
   return list;
 }
 function vStart(){
-  var earlier = mineAll();
-  var h = topBar('<div style="display:flex;flex-direction:column;gap:6px"><div class="kick">Roberto\'s DIFC</div><h1>' + t(earlier.length ? 'startNew' : 'startTitle') + '</h1><div class="sub">' + t('startSub') + '</div></div>') + '<div class="body" style="gap:16px">';
-  h += '<label style="display:flex;flex-direction:column;gap:8px"><span class="lbl" style="margin:0">' + t('yourName') + '</span>' +
-       '<input id="aname" autocomplete="name" autocapitalize="words" maxlength="60" value="' + esc(S.name || '') + '" style="font-size:17px;padding:13px 14px;border:1px solid var(--line);border-radius:10px;background:#fff"></label>' +
-       '<div class="when"><label><span class="lbl" style="margin:0">' + t('visitDate') + '</span><input id="adate" type="date" max="' + dubaiNow().date + '" value="' + esc(S.vdate || dubaiNow().date) + '" style="font-size:17px;padding:12px;border:1px solid var(--line);border-radius:10px;background:#fff"></label>' +
+  var earlier = mineAll(), E = !!(D && D.enrico);   // E: Chef Bartolini's own invite: no name, no Restaurant/Scala, just the date
+  var h = topBar('<div style="display:flex;flex-direction:column;gap:6px"><div class="kick">Roberto\'s DIFC</div><h1>' + t(E ? 'startTitleE' : earlier.length ? 'startNew' : 'startTitle') + '</h1><div class="sub">' + t(E ? 'startSubE' : 'startSub') + '</div></div>') + '<div class="body" style="gap:16px">';
+  h += (E ? '' : '<label style="display:flex;flex-direction:column;gap:8px"><span class="lbl" style="margin:0">' + t('yourName') + '</span>' +
+       '<input id="aname" autocomplete="name" autocapitalize="words" maxlength="60" value="' + esc(S.name || '') + '" style="font-size:17px;padding:13px 14px;border:1px solid var(--line);border-radius:10px;background:#fff"></label>') +
+       '<div class="when"><label><span class="lbl" style="margin:0">' + t('visitDate') + '</span><input id="adate" type="date" max="' + (E ? addDays(dubaiNow().date, 30) : dubaiNow().date) + '" value="' + esc(S.vdate || dubaiNow().date) + '" style="font-size:17px;padding:12px;border:1px solid var(--line);border-radius:10px;background:#fff"></label>' +
        '<label><span class="lbl" style="margin:0">' + t('visitTime') + '</span><input id="atime" type="time" value="' + esc(S.vtime || dubaiNow().time) + '" style="font-size:17px;padding:12px;border:1px solid var(--line);border-radius:10px;background:#fff"></label></div>';
+  if (!E) {
   h += '<div style="display:flex;flex-direction:column;gap:10px"><span class="lbl" style="margin:0">' + t('where') + '</span>';
   [['restaurant', 'kRest'], ['scala', 'kScala']].forEach(function(k){
     var on = S.kind === k[0];
@@ -908,6 +910,7 @@ function vStart(){
          '<span><span class="t">' + t(k[1]) + '</span><span class="s">' + t(k[1] + 'Sub') + '</span></span></button>';
   });
   h += '</div>';
+  }
   if (earlier.length) {
     h += '<div style="display:flex;flex-direction:column;gap:8px;margin-top:6px"><span class="lbl" style="margin:0">' + t('earlier') + '</span><div class="card">';
     earlier.forEach(function(x, i){
@@ -921,15 +924,16 @@ function vStart(){
   return h;
 }
 function begin(b){
-  var el = document.getElementById('aname'), name = el ? el.value.trim() : '';
+  var E = !!(D && D.enrico);
+  var el = document.getElementById('aname'), name = E ? ENRICO : (el ? el.value.trim() : '');
   if (name.length < 2) { if (el) el.focus(); toast(t('yourName'), true); return; }
   var dd = (document.getElementById('adate') || {}).value || '', tt = (document.getElementById('atime') || {}).value || '';
   S.name = name; S.vdate = dd; S.vtime = tt;
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(dd) || dd > dubaiNow().date || !/^\d{2}:\d{2}$/.test(tt)) { toast(t('badDate'), true); return; }
-  if (S.kind !== 'restaurant' && S.kind !== 'scala') { toast(t('pickKind'), true); return; }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dd) || dd > (E ? addDays(dubaiNow().date, 30) : dubaiNow().date) || !/^\d{2}:\d{2}$/.test(tt)) { toast(t('badDate'), true); return; }
+  if (!E && S.kind !== 'restaurant' && S.kind !== 'scala') { toast(t('pickKind'), true); return; }
   b.disabled = true; b.textContent = t('saving');
-  api('start', { name: name, visit_date: dd, visit_time: tt, kind: S.kind }).then(function(r){
-    var me = { k: r.k, name: name, at: new Date().toISOString() };
+  api('start', { name: name, visit_date: dd, visit_time: tt, kind: E ? 'venue' : S.kind }).then(function(r){
+    var me = { k: r.k, name: E ? dd.split('-').reverse().join('/') + ' · ' + tt : name, at: new Date().toISOString() };
     ls('auditMine:' + TOK.n, JSON.stringify(me));
     ls('auditList:' + TOK.n, JSON.stringify([me].concat(mineAll().filter(function(x){ return x.k !== r.k; })).slice(0, 10)));
     ls('auditFrom:' + r.k, TOK.n);   // so "Start another audit" after sending knows which link to open
@@ -1372,7 +1376,12 @@ function toggleMic(btn){
 /* ── start ──────────────────────────────────────────────────────────────── */
 function reload(){
   return api('load').then(function(d){
-    if (d.role === 'invite' || d.role === 'invite_admin') { D = d; render(); return; }
+    if (d.role === 'invite' || d.role === 'invite_admin') {
+      D = d;
+      // Chef Bartolini's own invite (30 Oct 2026): Italian first, like his own audit, unless he chose otherwise.
+      if (d.enrico && !ls('auditLang') && LANG !== 'it') { LANG = 'it'; document.documentElement.lang = 'it'; }
+      render(); return;
+    }
     // Keep anything typed but not yet saved.
     var local = {};
     if (D) { D.scores.forEach(function(r){ if (r._local != null) local['s:' + r.code] = r._local; }); D.texts.forEach(function(r){ if (r._local != null) local['t:' + r.key] = r._local; });
