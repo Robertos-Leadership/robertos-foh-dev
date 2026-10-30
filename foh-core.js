@@ -5205,17 +5205,139 @@ function fohSchedAsk(){           // opens the ID box for a write that did not c
 }
 function fohSchedAskCancelled(){ var r=fohSchedAskResolve; fohSchedAskResolve=null; if(r) r(false); }
 var FOH_SCHED_LOCKED_ERR = { message:'Editing is locked - a manager has to unlock it with their employee ID.' };
-async function fohRosterUpsert(rows, overwrite){
-  if(!fohSchedEditor && !(await fohSchedAsk())) return { error:FOH_SCHED_LOCKED_ERR };
-  var r = await sb.rpc('foh_roster_upsert', { p_emp:fohSchedEditor.emp_id, p_rows:[].concat(rows), p_overwrite: overwrite!==false });
+// ── Save safety net ─────────────────────────────────────────────────────────
+// A schedule change that does not land must NEVER look as if it did (Giorgia, 30 Oct 2026: "the
+// changes were not saving"). Every schedule write goes through fohRosterUpsert / fohRosterDelete
+// below, so this is the one place that (1) reads the rows back to prove they are in the database,
+// (2) keeps a red "NOT SAVED — Try again" bar on screen until the change lands or is dismissed,
+// (3) marks the day red in the grid, and (4) logs the failure to reset_log so the cause can be read
+// afterwards instead of asked for. opts.quiet = the caller reports its own failure (multi-step
+// writes that roll back); opts.label = what to call the change in the bar.
+var fohSchedFailed = [];          // [{id, op:'upsert'|'delete'|'note', arg, label, why}]
+var fohSchedFailedKeys = {};      // 'staffId|date' -> true, drawn red by fohSchedDayCellHtml
+var fohSchedFailSeq = 0;
+function fohSchedFailWhy(err){
+  var m = String((err && err.message) || err || '');
+  if(/failed to fetch|networkerror|load failed|network request/i.test(m) || (typeof navigator!=='undefined' && navigator.onLine===false)) return 'No connection to the server.';
+  return m || 'Unknown error.';
+}
+function fohSchedFailLabel(op, arg){
+  if(op==='upsert'){
+    var r=arg.rows||[], a=r[0]||{}, d=String(a.work_date||'').slice(0,10);
+    return r.length===1 ? fohSchedStaffName(a.staff_id)+', '+fohSchedDayLabel(d) : r.length+' shifts (from '+fohSchedStaffName(a.staff_id)+', '+fohSchedDayLabel(d)+')';
+  }
+  if(arg.ids && arg.ids.length===1 && arg.from && arg.from===arg.to) return 'clearing '+fohSchedStaffName(arg.ids[0])+', '+fohSchedDayLabel(arg.from);
+  return 'removing shifts'+(arg.from?' '+arg.from:'')+(arg.to&&arg.to!==arg.from?' to '+arg.to:'');
+}
+function fohSchedFailKeys(op, arg){
+  var keys=[];
+  if(op==='upsert') (arg.rows||[]).forEach(function(x){ keys.push(fohSchedRosterKey(x.staff_id, String(x.work_date).slice(0,10))); });
+  else if(op==='delete' && arg.ids && arg.from && arg.from===arg.to) arg.ids.forEach(function(id){ keys.push(fohSchedRosterKey(id, arg.from)); });
+  return keys;
+}
+function fohSchedLogFail(f, arg){
+  try{
+    var n = f.op==='upsert' ? (arg.rows||[]).length : ((arg && arg.ids) ? arg.ids.length : 0);
+    var who = fohSchedEditor || {};
+    var dev = /iPhone|iPad|Android/i.test(navigator.userAgent||'') ? 'mobile' : 'desktop';
+    sb.from('reset_log').insert({ app:'foh', action:'sched_save_failed', scope:(f.label+' | '+f.why+' | '+dev).slice(0,300), item_count:n, emp_id:who.emp_id||'-', emp_name:who.name||'unknown' }).then(function(){},function(){});
+  }catch(e){}
+}
+function fohSchedReportFail(op, arg, err, label){
+  var f={ id:++fohSchedFailSeq, op:op, arg:arg, label:label||fohSchedFailLabel(op,arg), why:fohSchedFailWhy(err) };
+  fohSchedFailed.push(f);
+  fohSchedFailKeys(op,arg).forEach(function(k){ fohSchedFailedKeys[k]=true; });
+  console.error('Schedule save failed:', f.label, err);
+  fohSchedLogFail(f, arg);
+  fohSchedRenderFailBar();
+  return f;
+}
+function fohSchedDropFail(id){
+  fohSchedFailed = fohSchedFailed.filter(function(x){ return x.id!==id; });
+  fohSchedFailedKeys = {};
+  fohSchedFailed.forEach(function(x){ fohSchedFailKeys(x.op,x.arg).forEach(function(k){ fohSchedFailedKeys[k]=true; }); });
+  fohSchedRenderFailBar();
+  try{ fohRenderSchedView(); }catch(e){}
+}
+function fohSchedDismissFail(id){ fohSchedDropFail(id); }
+async function fohSchedRetryFail(id){
+  var f=fohSchedFailed.find(function(x){ return x.id===id; }); if(!f || f.op==='note') return;
+  fohSchedDropFail(id);
+  var res = f.op==='upsert' ? await fohRosterUpsert(f.arg.rows, f.arg.overwrite, {label:f.label}) : await fohRosterDelete(f.arg, {label:f.label});
+  if(!res.error){ toast('Saved — '+f.label); try{ await fohLoadSchedData(); fohRenderSchedView(); }catch(e){} }
+}
+function fohSchedRenderFailBar(){
+  var bar=document.getElementById('foh-save-fail-bar');
+  if(!fohSchedFailed.length){ if(bar) bar.remove(); return; }
+  if(!bar){ bar=document.createElement('div'); bar.id='foh-save-fail-bar'; bar.setAttribute('role','alert'); document.body.appendChild(bar); }
+  bar.style.cssText='position:fixed;top:0;left:0;right:0;z-index:100000;background:#8f1d12;color:#fff;padding:10px 14px;font:600 14px/1.4 Inter,system-ui,sans-serif;box-shadow:0 3px 12px rgba(0,0,0,.35);max-height:45vh;overflow:auto';
+  var btn='style="min-height:36px;padding:6px 14px;border-radius:8px;border:1px solid #fff;font:700 13px Inter,system-ui,sans-serif;cursor:pointer;';
+  bar.innerHTML = fohSchedFailed.map(function(f){
+    return '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:4px 0">'+
+      '<div style="flex:1 1 220px"><b>NOT SAVED</b> — '+fohEvEsc(f.label)+'. '+fohEvEsc(f.why)+(f.op==='note'?'':' <span style="font-weight:400">The schedule still shows the old value.</span>')+'</div>'+
+      (f.op==='note'?'':'<button type="button" onclick="fohSchedRetryFail('+f.id+')" '+btn+'background:#fff;color:#8f1d12">Try again</button>')+
+      '<button type="button" onclick="fohSchedDismissFail('+f.id+')" '+btn+'background:transparent;color:#fff">Dismiss</button></div>';
+  }).join('');
+}
+// Read the rows back: "no error" from the server is not proof they are there. Returns how many are
+// missing or different; 0 when everything is there OR when the check itself could not run — a check
+// that cannot run must never veto a save that worked.
+async function fohSchedVerifyUpsert(rows, overwrite){
+  try{
+    var ids={}, dmin='9999-12-31', dmax='0000-01-01';
+    rows.forEach(function(x){ ids[x.staff_id]=1; var d=String(x.work_date).slice(0,10); if(d<dmin) dmin=d; if(d>dmax) dmax=d; });
+    var r=await sb.from('foh_roster').select('staff_id,work_date,status').in('staff_id',Object.keys(ids)).gte('work_date',dmin).lte('work_date',dmax);
+    if(r.error || !r.data || r.data.length>=1000) return 0;   // PostgREST caps at 1000 — a truncated read proves nothing
+    var have={}; r.data.forEach(function(x){ have[x.staff_id+'|'+String(x.work_date).slice(0,10)]=x.status; });
+    var bad=0;
+    rows.forEach(function(x){ var k=x.staff_id+'|'+String(x.work_date).slice(0,10); if(!(k in have) || (overwrite!==false && x.status && have[k]!==x.status)) bad++; });
+    return bad;
+  }catch(e){ return 0; }
+}
+async function fohSchedVerifyDelete(f){
+  try{
+    var q=sb.from('foh_roster').select('staff_id',{count:'exact',head:true});
+    if(f.ids) q=q.in('staff_id',f.ids);
+    if(f.from) q=q.gte('work_date',f.from);
+    if(f.to) q=q.lte('work_date',f.to);
+    if(f.after) q=q.gt('work_date',f.after);
+    var r=await q; if(r.error) return 0; return r.count||0;
+  }catch(e){ return 0; }
+}
+async function fohRosterUpsert(rows, overwrite, opts){
+  opts = opts || {}; rows = [].concat(rows);
+  var arg = { rows:rows, overwrite:overwrite };
+  if(!fohSchedEditor && !(await fohSchedAsk())){
+    if(!opts.quiet) fohSchedReportFail('upsert', arg, FOH_SCHED_LOCKED_ERR, opts.label);
+    return { error:FOH_SCHED_LOCKED_ERR };
+  }
+  var r;
+  try{ r = await sb.rpc('foh_roster_upsert', { p_emp:fohSchedEditor.emp_id, p_rows:rows, p_overwrite: overwrite!==false }); }
+  catch(e){ r = { error:e }; }
   if(r.error && r.error.code==='42501'){ fohSchedLockNow(); r.error = { message:'That manager ID is no longer allowed to edit the schedule.' }; }
+  if(!r.error && !opts.quiet){
+    var miss = await fohSchedVerifyUpsert(rows, overwrite);
+    if(miss) r.error = { message: miss+' of '+rows.length+' did not reach the database.' };
+  }
+  if(r.error && !opts.quiet) fohSchedReportFail('upsert', arg, r.error, opts.label);
   return { error:r.error };
 }
 // f = {ids:[uuid], from:'YYYY-MM-DD', to:'YYYY-MM-DD', after:'YYYY-MM-DD'} — at least one is required
-async function fohRosterDelete(f){
-  if(!fohSchedEditor && !(await fohSchedAsk())) return { error:FOH_SCHED_LOCKED_ERR };
-  var r = await sb.rpc('foh_roster_delete', { p_emp:fohSchedEditor.emp_id, p_staff_ids:f.ids||null, p_from:f.from||null, p_to:f.to||null, p_after:f.after||null });
+async function fohRosterDelete(f, opts){
+  opts = opts || {};
+  if(!fohSchedEditor && !(await fohSchedAsk())){
+    if(!opts.quiet) fohSchedReportFail('delete', f, FOH_SCHED_LOCKED_ERR, opts.label);
+    return { error:FOH_SCHED_LOCKED_ERR };
+  }
+  var r;
+  try{ r = await sb.rpc('foh_roster_delete', { p_emp:fohSchedEditor.emp_id, p_staff_ids:f.ids||null, p_from:f.from||null, p_to:f.to||null, p_after:f.after||null }); }
+  catch(e){ r = { error:e }; }
   if(r.error && r.error.code==='42501'){ fohSchedLockNow(); r.error = { message:'That manager ID is no longer allowed to edit the schedule.' }; }
+  if(!r.error && !opts.quiet){
+    var left = await fohSchedVerifyDelete(f);
+    if(left) r.error = { message: left+' shift'+(left===1?'':'s')+' are still in the database.' };
+  }
+  if(r.error && !opts.quiet) fohSchedReportFail('delete', f, r.error, opts.label);
   return { error:r.error };
 }
 const FOH_SCHED_LOCK_TIMEOUT = 5 * 60 * 1000;
@@ -5403,7 +5525,11 @@ function fohSchedGuard(fn){
 }
 function fohSchedTouchLock(){
   if(fohSchedLockTimer) clearTimeout(fohSchedLockTimer);
-  fohSchedLockTimer = setTimeout(fohSchedLockNow, FOH_SCHED_LOCK_TIMEOUT);
+  fohSchedLockTimer = setTimeout(function(){
+    // never lock under an open edit window: Save would then pop the ID box over a grid that already shows the change
+    var open = ['foh-sch-modal','foh-sch-ev-modal'].some(function(id){ var m=document.getElementById(id); return m && getComputedStyle(m).display!=='none'; });
+    if(open) fohSchedTouchLock(); else fohSchedLockNow();
+  }, FOH_SCHED_LOCK_TIMEOUT);
 }
 function fohSchedLockNow(){
   fohSchedUnlocked = false; fohSchedEditor = null;
@@ -5715,7 +5841,7 @@ function fohSchedDayCellHtml(staff, sid, ds2, today){
   // Training / outside event for this person this day (the shift's note) — shown under
   // the shift on any status, so an OFF day with a training still says so.
   if(rrow && rrow.notes){ inner += '<div class="sch-duty-tag" title="'+fohEvEsc(rrow.notes)+'">'+fohEvEsc(rrow.notes)+'</div>'; }
-  var html = '<td class="sch-cell'+(isTod?' sch-cell-today':'')+planChg+'" onclick="fohSchedOpenEdit(\''+sid+'\',\''+ds2+'\')">'+inner+'</td>';
+  var html = '<td class="sch-cell'+(isTod?' sch-cell-today':'')+planChg+(fohSchedFailedKeys[fohSchedRosterKey(sid, ds2)]?' sch-cell-unsaved':'')+'" onclick="fohSchedOpenEdit(\''+sid+'\',\''+ds2+'\')">'+inner+'</td>';
   return { html: html, hours: wHours, days: wDays };
 }
 
@@ -6056,7 +6182,7 @@ async function fohSchedSaveShift(){
     if(prevRow) fohSchedRoster[key]=prevRow; else delete fohSchedRoster[key];
     Object.keys(teamPrev).forEach(function(tk){ if(teamPrev[tk]) fohSchedRoster[tk]=teamPrev[tk]; else delete fohSchedRoster[tk]; });
     fohRenderSchedWeek();
-    console.error('Save error:',res.error); alert('Could not save the shift — NOT stored (reverted on screen): '+res.error.message);
+    console.error('Save error:',res.error);
   } else if(team.length){
     toast('Added to '+(team.length+1)+' people in '+fohSchedSecLabel(chosenSec || homeSec)+' — '+fohSchedDayLabel(date));
   }
@@ -6210,7 +6336,7 @@ async function fohSchedWriteClipboard(targets){
     // Put every pasted cell back so the grid never shows unsaved shifts as real.
     Object.keys(prev).forEach(function(key){ if(prev[key]) fohSchedRoster[key]=prev[key]; else delete fohSchedRoster[key]; });
     fohRenderSchedWeek();
-    console.error('Paste error:',res.error); alert('Could not paste the shift — NOT stored (reverted on screen): '+res.error.message); return 0;
+    console.error('Paste error:',res.error); return 0;
   }
   return payloads.length;
 }
@@ -6285,8 +6411,8 @@ async function fohSchedUndoLast(){
   fohSchedRenderUndoBtn();
   if(!FOH_DEV_READ_ONLY && !fohSchedPlanMode){
     try{
-      if(upserts.length){ var r=await fohRosterUpsert(upserts); if(r.error) throw r.error; }
-      for(var i=0;i<deletes.length;i++){ var d=deletes[i]; var dr=await fohRosterDelete({ids:[d.staffId],from:d.date,to:d.date}); if(dr.error) throw dr.error; }
+      if(upserts.length){ var r=await fohRosterUpsert(upserts,true,{quiet:true}); if(r.error) throw r.error; }
+      for(var i=0;i<deletes.length;i++){ var d=deletes[i]; var dr=await fohRosterDelete({ids:[d.staffId],from:d.date,to:d.date},{quiet:true}); if(dr.error) throw dr.error; }
       // Undoing a "remove person" has to put the PERSON back, not only their days.
       if(u.reactivate){ var ra=await sb.from('foh_staff').update({active:true}).eq('id',u.reactivate); if(ra.error) throw ra.error; }
     }catch(e){ console.error('Undo sync error',e); alert('Undo could not reach the server: '+(e.message||e)+'\nReopen the schedule to be sure it matches.'); }
@@ -7261,9 +7387,9 @@ async function fohKplDoPublish(){
   if(!confirm('Bring '+lbl+rangeTxt+' live?\n\n'+mainTxt+extraTxt+'\n\nYou can undo this straight after.')) return;
   var goBtn=document.getElementById('foh-kpl-pub-go'); if(goBtn){ goBtn.disabled=true; goBtn.textContent='Publishing…'; }
   var statusEl=document.getElementById('foh-kpl-pub-status');
+  var rosterReplaced=false, snapRows=[];
   try{
     // 1) snapshot current live rows in range (for revert)
-    var snapRows=[];
     if(dates.length){ var snapRes = await sb.from('foh_roster').select('*').gte('work_date',minD).lte('work_date',maxD).in('staff_id', existingIds).limit(8000); if(snapRes.error) throw snapRes.error; snapRows = snapRes.data||[]; }
     var priorSections={}; moves.forEach(function(id){ var s=fohKplStaff.find(function(x){return x.id===id;}); priorSections[id]=s?s.section:null; });
     var priorOrders={}; reorders.forEach(function(id){ var s=fohKplStaff.find(function(x){return x.id===id;}); priorOrders[id]=s?s.sort_order:null; });
@@ -7294,9 +7420,10 @@ async function fohKplDoPublish(){
     for(var q=0;q<reorders.length;q++){ var rid=reorders[q]; var rr=await sb.from('foh_staff').update({ sort_order:fohKplDraftOrd[rid] }).eq('id',rid); if(rr.error) throw rr.error; }
     // 6) replace the roster rows in range, then insert the plan
     if(dates.length){
-      var del = await fohRosterDelete({ids:existingIds,from:minD,to:maxD});
+      var del = await fohRosterDelete({ids:existingIds,from:minD,to:maxD},{quiet:true});
       if(del.error) throw del.error;
-      if(payloads.length){ var ins = await fohRosterUpsert(payloads); if(ins.error) throw ins.error; }
+      rosterReplaced = true;
+      if(payloads.length){ var ins = await fohRosterUpsert(payloads, true, {quiet:true}); if(ins.error) throw ins.error; }
     }
     // applied — clear the draft team + section changes so they don't re-apply
     fohKplDraftSec={}; fohKplDraftOrd={}; fohKplNewStaff=[]; fohKplSecRename={}; fohKplSecNew=[]; fohSchedPlanSaveDraft();
@@ -7305,7 +7432,13 @@ async function fohKplDoPublish(){
     await fohSchedPlanAfterWrite();
   }catch(err){
     console.error('Publish error', err);
-    if(statusEl){ statusEl.style.color='#a8342a'; statusEl.textContent='Could not publish: '+(err.message||err); }
+    var putBack='';
+    if(rosterReplaced){
+      var rb=await fohRosterUpsert(snapRows, true, {quiet:true});
+      putBack = (rb && !rb.error) ? ' The live schedule was put back exactly as it was.' : ' WARNING: the live schedule could not be put back and may be incomplete — check these weeks now.';
+    }
+    fohSchedReportFail('note',null,err,'Bring live'+putBack);
+    if(statusEl){ statusEl.style.color='#a8342a'; statusEl.textContent='Could not publish: '+(err.message||err)+putBack; }
     if(goBtn){ goBtn.disabled=false; goBtn.textContent='Put these weeks on the schedule'; }
   }
 }
@@ -7317,9 +7450,9 @@ async function fohKplRevert(){
   try{
     if(snap.minD){
       var allIds = (snap.staffIds||[]).concat(snap.insertedIds||[]);
-      var del = await fohRosterDelete({ids:allIds,from:snap.minD,to:snap.maxD});
+      var del = await fohRosterDelete({ids:allIds,from:snap.minD,to:snap.maxD},{quiet:true});
       if(del.error) throw del.error;
-      if(snap.rows && snap.rows.length){ var rows=snap.rows.map(function(r){ return Object.assign({},r); }); var ins=await fohRosterUpsert(rows); if(ins.error) throw ins.error; }
+      if(snap.rows && snap.rows.length){ var rows=snap.rows.map(function(r){ return Object.assign({},r); }); var ins=await fohRosterUpsert(rows,true,{quiet:true}); if(ins.error) throw ins.error; }
     }
     var ps = snap.priorSections||{};
     for(var id in ps){ if(ps.hasOwnProperty(id)){ var r=await sb.from('foh_staff').update({ section:ps[id] }).eq('id',id); if(r.error) throw r.error; } }
@@ -7331,7 +7464,7 @@ async function fohKplRevert(){
     }
     if(snap.insertedSecKeys && snap.insertedSecKeys.length){ var sdel=await sb.from('foh_sections').update({ active:false }).in('section_key', snap.insertedSecKeys); if(sdel.error) throw sdel.error; }
     if(snap.insertedIds && snap.insertedIds.length){
-      var rd=await fohRosterDelete({ids:snap.insertedIds}); if(rd.error) throw rd.error;
+      var rd=await fohRosterDelete({ids:snap.insertedIds},{quiet:true}); if(rd.error) throw rd.error;
       var sd=await sb.from('foh_staff').update({ active:false, in_schedule:false }).in('id', snap.insertedIds); if(sd.error) throw sd.error;
     }
     localStorage.removeItem(FOH_KPL_SNAP_LS);
@@ -7527,7 +7660,7 @@ async function fohKrtWriteRoster(payloads){
   fohKrtRender();
   if(!FOH_DEV_READ_ONLY){
     var res = await fohRosterUpsert(payloads);
-    if(res.error){ alert('Could not save: '+res.error.message); return -1; }
+    if(res.error){ try{ await fohLoadSchedData(); fohRenderSchedView(); }catch(e){} return -1; }
   }
   return payloads.length;
 }
@@ -7605,6 +7738,7 @@ function FOH_KRT_SHELL(){
   #foh-kpl-full .krt-undo{background:#fff;color:var(--vino);border:1.5px solid #fff;border-radius:8px;padding:8px 14px;font-size:13.5px;font-weight:700;cursor:pointer;white-space:nowrap}
   #foh-kpl-full .krt-undo:disabled{background:rgba(255,255,255,.5);color:rgba(65,2,7,.45);border-color:rgba(255,255,255,.55);cursor:default}
   #foh-kpl-full .krt-bring:hover{filter:brightness(1.06)}
+  .sch-cell-unsaved{outline:3px solid #8f1d12!important;outline-offset:-3px;background:#fbe9e7!important}
   #foh-kpl-full .sch-plan-changed{position:relative}
   #foh-kpl-full .sch-plan-changed .sch-shift{box-shadow:0 0 0 2px var(--gold)}
   #foh-kpl-full .sch-plan-changed::after{content:'';position:absolute;top:3px;right:3px;width:9px;height:9px;background:var(--gold);border-radius:50%;border:2px solid var(--cream);z-index:2}
@@ -7775,9 +7909,13 @@ async function fohSchedConfirmDuplicate(){
   var offsetDays=Math.round((target-fohSchedWeekStart)/86400000);
   var days=[]; for(var i=0;i<7;i++) days.push(addDays(fohSchedWeekStart,i));
   var existingSet={};
+  var dupSnap=null;
   if(overwrite){
-    var del=await fohRosterDelete({from:tFrom,to:tTo});
-    if(del.error){ console.error('Overwrite clear error:',del.error); alert('Could not clear target week.'); return; }
+    var sn=await sb.from('foh_roster').select('*').gte('work_date',tFrom).lte('work_date',tTo);
+    if(sn.error){ fohSchedReportFail('note',null,sn.error,'Duplicate week — could not read the target week first, so nothing was changed'); return; }
+    dupSnap=sn.data||[];
+    var del=await fohRosterDelete({from:tFrom,to:tTo},{quiet:true});
+    if(del.error){ console.error('Overwrite clear error:',del.error); fohSchedReportFail('note',null,del.error,'Duplicate week — could not clear the target week, nothing was changed'); return; }
   } else {
     var ex=await sb.from('foh_roster').select('staff_id,work_date').gte('work_date',tFrom).lte('work_date',tTo);
     (ex.data||[]).forEach(function(r){ existingSet[r.staff_id+'|'+String(r.work_date).slice(0,10)]=true; });
@@ -7796,8 +7934,15 @@ async function fohSchedConfirmDuplicate(){
     });
   });
   if(!upserts.length){ alert('Nothing to duplicate — source week is empty or target is fully set.'); return; }
-  var res=await fohRosterUpsert(upserts, overwrite);
-  if(res.error){ console.error('Duplicate error:',res.error); alert('Could not duplicate the week: '+res.error.message); return; }
+  var res=await fohRosterUpsert(upserts, overwrite, {quiet:true});
+  if(res.error){
+    console.error('Duplicate error:',res.error);
+    var back=null;
+    if(dupSnap){ back=await fohRosterUpsert(dupSnap, true, {quiet:true}); }
+    fohSchedReportFail('note',null,res.error, 'Duplicate week'+(dupSnap ? (back && !back.error ? ' — the target week was put back exactly as it was' : ' — the target week could NOT be restored and may be empty, check it') : ''));
+    try{ await fohLoadSchedData(); fohRenderSchedView(); }catch(e){}
+    return;
+  }
   // Duplicate the day-events to the target week (best-effort; table is optional)
   try{
     var evRows=[];
