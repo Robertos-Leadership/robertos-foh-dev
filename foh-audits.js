@@ -34,7 +34,7 @@ async function auApi(action, payload){
   var s = await sb.auth.getSession();
   var jwt = s && s.data && s.data.session && s.data.session.access_token;
   if(!jwt) throw new Error('Please sign in again.');
-  var r = await fetch(KITCHEN_URL + '/functions/v1/audit-api', {
+  var r = await fetch(KITCHEN_URL + '/functions/v1/audit-api?forceFunctionRegion=ap-southeast-2', {   // runs in Sydney, next to the database (30 Oct 2026)
     method: 'POST',
     headers: { 'Content-Type': 'application/json', apikey: KITCHEN_KEY, Authorization: 'Bearer ' + KITCHEN_KEY },
     body: JSON.stringify(Object.assign({ action: action, foh: jwt, page: auPage() }, payload || {}))

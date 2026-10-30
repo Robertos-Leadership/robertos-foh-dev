@@ -242,8 +242,8 @@ var FN = SB_URL + '/functions/v1/audit-api';
 var Q = new URLSearchParams(location.search);
 var TOK = Q.get('a') ? { a: Q.get('a') } : (Q.get('k') ? { k: Q.get('k') } : (Q.get('n') ? { n: Q.get('n') } : null));
 var ADMIN = !!(TOK && TOK.a);
-var AREAS = ['arrivo', 'cucina', 'ristorante', 'vino', 'scala'];
-var ORDER = ['arrivo', 'cucina', 'piatti', 'ristorante', 'vino', 'scala'];
+var AREAS = ['arrivo', 'ristorante', 'cucina', 'vino', 'scala'];
+var ORDER = ['arrivo', 'ristorante', 'cucina', 'piatti', 'vino', 'scala'];
 
 function ls(k, v){ try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch(e){ return null; } }
 // Italian first for Enrico; English first for anyone a shared link reaches (staff or a guest). The IT/EN switch stays.
@@ -298,7 +298,7 @@ var T = {
   },
   en: {
     hello:'Hello Enrico', visit:'Visit', autosave:'type or speak, it saves by itself', sections:'Sections',
-    arrivo:'Arrival & welcome', cucina:'Kitchen', piatti:'Dishes — tasting', ristorante:'Restaurant', vino:'Wine', scala:'Scala',
+    arrivo:'Arrival & welcome', cucina:'Inside the kitchen', piatti:'Dishes — tasting', ristorante:'Restaurant', vino:'Wine', scala:'Scala',
     final:'Final comment', finalSub:'Overall visit · improvements · top 3',
     piattiSub:'Dish by dish: keep / fix / take off', flagBtn:'Photo · Flag',
     of:'of', score:'Score', anchor:'3 = acceptable, not Bartolini level · 5 = Michelin standard',
@@ -371,7 +371,9 @@ var root = document.getElementById('root');
 /* ── API ─────────────────────────────────────────────────────────────────── */
 function api(action, payload){
   var body = Object.assign({ action: action, pv: 3, qset: 4 }, TOK, payload || {});
-  return fetch(FN + (action === 'load' ? '?read=1' : ''), {
+  // forceFunctionRegion: the function runs in Sydney, next to the database. From Mumbai every database query was a
+  // long round trip and a load took 1.5-7 s; here it takes about 0.5 s (30 Oct 2026).
+  return fetch(FN + '?forceFunctionRegion=ap-southeast-2' + (action === 'load' ? '&read=1' : ''), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY },
     body: JSON.stringify(body)
@@ -967,7 +969,7 @@ function vList(){
 }
 
 /* ── Francesco's report (English) ───────────────────────────────────────── */
-var AREA_EN = { arrivo: 'Arrival & welcome', cucina: 'Kitchen', ristorante: 'Restaurant', vino: 'Wine', scala: 'Scala', piatto: 'Dish' };
+var AREA_EN = { arrivo: 'Arrival & welcome', cucina: 'Inside the kitchen', ristorante: 'Restaurant', vino: 'Wine', scala: 'Scala', piatto: 'Dish' };
 function vReport(){
   var ov = overallPct(), pv = D.previous, lfAll = like();
   // Action plan, by the same rule as the email Amin gets: a No, a quality score of 1-2, a dish of 1-2,
