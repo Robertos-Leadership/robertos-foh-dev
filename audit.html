@@ -344,7 +344,8 @@ function areaName(a){
   if (a === 'cucina' && k && k !== 'venue') return t('food');
   if (a === 'ristorante' && k === 'restaurant') return t('atTable');
   if (a === 'scala' && k === 'scala') return t('atScala');
-  if (a === 'bagno' && (k === 'restaurant' || k === 'scala')) return t(k === 'scala' ? 'bagnoS' : 'bagnoR');   // two washrooms (24 Oct 2026)
+  if (a === 'bagno' && (k === 'restaurant' || k === 'scala' || k === 'venue')) return t(k === 'scala' ? 'bagnoS' : 'bagnoR');   // two washrooms (24 Oct 2026)
+  if (a === 'bagnos') return t('bagnoS');   // the whole venue has both: this is Scala's (30 Oct 2026)
   return t(a);
 }
 // The sections come from the visit's type (22 Oct 2026: whole venue / Restaurant / Scala); the lists
