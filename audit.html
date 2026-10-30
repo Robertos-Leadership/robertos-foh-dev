@@ -260,7 +260,7 @@ function dubaiTime(iso){ try { return new Date(iso).toLocaleString(LANG === 'en'
 var T = {
   it: {
     hello:'Ciao Enrico', visit:'Visita', autosave:'scrivi o parla, salva da solo', sections:'Sezioni',
-    arrivo:'Arrivo & Benvenuto', cucina:'Cucina', piatti:'Piatti — degustazione', ristorante:'Ristorante', vino:'Vino', scala:'Scala',
+    arrivo:'Arrivo & Benvenuto', decor:'Decor interni', cucina:'Cucina', piatti:'Piatti — degustazione', ristorante:'Ristorante', vino:'Vino', scala:'Scala',
     final:'Commento finale', finalSub:'Visita in generale · miglioramenti · 3 priorità',
     piattiSub:'Piatto per piatto: tieni / correggi / togli', flagBtn:'Foto · Segnala',
     of:'di', score:'Voto', anchor:'3 = accettabile, non da Bartolini · 5 = standard stellato',
@@ -298,7 +298,7 @@ var T = {
   },
   en: {
     hello:'Hello Enrico', visit:'Visit', autosave:'type or speak, it saves by itself', sections:'Sections',
-    arrivo:'Arrival & welcome', cucina:'Inside the kitchen', piatti:'Dishes — tasting', ristorante:'Restaurant', vino:'Wine', scala:'Scala',
+    arrivo:'Arrival & welcome', decor:'Interior decor', cucina:'Inside the kitchen', piatti:'Dishes — tasting', ristorante:'Restaurant', vino:'Wine', scala:'Scala',
     final:'Final comment', finalSub:'Overall visit · improvements · top 3',
     piattiSub:'Dish by dish: keep / fix / take off', flagBtn:'Photo · Flag',
     of:'of', score:'Score', anchor:'3 = acceptable, not Bartolini level · 5 = Michelin standard',
@@ -969,7 +969,7 @@ function vList(){
 }
 
 /* ── Francesco's report (English) ───────────────────────────────────────── */
-var AREA_EN = { arrivo: 'Arrival & welcome', cucina: 'Inside the kitchen', ristorante: 'Restaurant', vino: 'Wine', scala: 'Scala', piatto: 'Dish' };
+var AREA_EN = { arrivo: 'Arrival & welcome', decor: 'Interior decor', cucina: 'Inside the kitchen', ristorante: 'Restaurant', vino: 'Wine', scala: 'Scala', piatto: 'Dish' };
 function vReport(){
   var ov = overallPct(), pv = D.previous, lfAll = like();
   // Action plan, by the same rule as the email Amin gets: a No, a quality score of 1-2, a dish of 1-2,
