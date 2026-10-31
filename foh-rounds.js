@@ -147,6 +147,76 @@ FB_WORK_ANSWERS[FB_A.ADDS] = 1;
 
 // ── The rounds. Newest first. ───────────────────────────────────────────────
 var FB_ROUNDS = {
+  // ── Food & Beverage knowledge test, for Alessandro Longhi (Restaurant Manager) — 31 Oct 2026 ──────────
+  // Born from his "Tell us" idea of 6 Oct 2026 (inbox 0f27d406): tests on what the team knows, starting with the
+  // Food Bible. Built on FOH DEV (food-test.html + the fbtest function). He tries it and answers
+  // "Works well / Change something / Add something". The test draws only on what the Bible shows a reader, from
+  // the running menu (A la carte 2026), so nobody is asked what they could not have read. Not live. SEND FROM THE DEV ADMIN.
+  'fb-test': {
+    name: 'Food & Beverage test — try it and tell us (Alessandro)',
+    email: {
+      subject: 'Food & Beverage test — please try it first',
+      body: ['The test on the Food & Beverage Bible is ready for you to try. 20 questions, from basic to advanced, with a timer on each one.',
+             'It is on the test version of the app, so press anything. Take the practice test yourself, then open a test session for the team. Your own app login opens the manager side.',
+             'The button below takes you through it in 10 short steps. On each one tap <b>Works well</b>, <b>Change something</b> or <b>Add something</b> and write how in the note.',
+             'Nothing goes to the team until you say so.',
+             'Thanks,<br>Francesco'],
+      cta: 'Try the test',
+      wa: 'The Food & Beverage test is ready for you to try: 20 questions, basic to advanced, a timer on each one. It is on the test version of the app, so press anything. The link walks you through it in 10 short steps: tap Works well, Change something or Add something, and tell us how in the note. Nothing goes to the team until you say so.'
+    },
+    title: 'Food & Beverage test — try it and tell us',
+    ask: FB_ASK.TRY,
+    intro: [
+      '<b>What it is.</b> The test you asked for on 6 October, starting with the Food &amp; Beverage Bible: 20 questions, from basic to advanced. Every question is built from what the Bible shows the team, so nobody is asked something they could not have read. It uses the <b>A la carte 2026</b> dishes and the wine list.',
+      '<b>Where to open it.</b> Open the <a href="https://robertos-foh-dev.pages.dev/">test version of the app</a> and sign in with your email and password. Tap <b>Food &amp; Beverage Bible</b>. To take the test yourself, type your Employee ID (<b>100217</b>) and tap <b>Test</b> at the top right. If you would rather not leave a result under your name, type <b>1111</b> instead (a test person). To run the team, tap <b>Manager: test sessions and results</b> on the same screen: it opens with your own login, no ID needed.',
+      '<b>Press anything.</b> It is the test version. Practice tests count for nothing. Tell us if a question looks wrong, too easy, too hard, or about something the team was never shown.',
+      '<b>The team:</b> they sign in the same way and use their own Employee ID. A test session code from you is what makes a test count.'
+    ],
+    howto: 'Tap <b>Works well</b> if it is right as it is, or <b>Change something</b> / <b>Add something</b> and write what in the note. The note is the most useful part.<br><br>Your answers are kept on this phone as you go, so you can stop and come back. Tap <b>Send my answers</b> when you are done.',
+    lastQ: 'What is missing? For example: questions on the SOPs, a test by role (host, runner, waiter, bar), a pass mark that blocks something, a retake rule, a certificate. And what do guests ask that the team struggles to answer today?',
+    items: [
+      { id:'t-open',
+        said: 'Opening the test',
+        today: 'Sign in to the test version, tap <b>Food &amp; Beverage Bible</b>, type your Employee ID, then tap <b>Test</b> (top right). Choose <b>Practice test</b>. Is it clear where to start, on a phone?',
+        label: 'Opening it' },
+      { id:'t-questions',
+        said: 'The questions',
+        today: 'Take a practice test and read all 20. They ask about a dish&rsquo;s <b>story</b> (which dish is it, which sentence is from it, complete it), its <b>service note</b>, its <b>garnish</b> and <b>ingredients</b>, the <b>guest description</b>, the <b>allergens</b>, and the <b>wines</b> (where from, what it tastes of, what goes with what). No two questions in a test are the same kind, and no dish is asked about twice. Are these the right things to ask? Which feel useless?',
+        label: 'The questions' },
+      { id:'t-levels',
+        said: 'Basic to advanced',
+        today: 'Each test has <b>4 basic</b> (recall), <b>7 intermediate</b> (know the dish and the wine) and <b>9 advanced</b> (a guest at the table: an allergy, a vegetarian, no red wine, one bottle for two dishes). Is the mix right? Is advanced hard enough, or too hard?',
+        label: 'Levels' },
+      { id:'t-time',
+        said: 'The timer on each question',
+        today: '20 to 25 seconds on a basic question, 30 to 50 on intermediate, 45 to 75 on advanced. When the time is up the question is marked unanswered and the test moves on. The clock is kept by the server, not the phone. Your score counts first, then the total time: a fast wrong answer never beats a slower right one. Is the time right?',
+        label: 'Timer' },
+      { id:'t-cheat',
+        said: 'Stopping copying',
+        today: 'Each person gets a <b>different test</b> built on the spot, with the answers in a different order. Questions come <b>one at a time</b>, with no going back, and the right answers are never on the phone until the test is handed in. The app counts how often someone leaves the test screen. A second phone cannot be stopped by software, so the real protection is the test session below. Is that enough?',
+        label: 'No copying' },
+      { id:'t-session',
+        said: 'A test session: you open it, the team takes the test',
+        today: 'On the Bible screen tap <b>Manager: test sessions and results</b>. Tap <b>Open a session</b>, give it a name, choose the menu the team was trained on, and how many minutes the code stays open. You get a 6-digit code to give to the team. They type it before they start, and then the test counts. Each person can take a session once. <b>Close this session</b> when you are done.',
+        label: 'Test session' },
+      { id:'t-results',
+        said: 'The results',
+        today: 'Same screen: everyone who took the session, ranked by score then time, with the basic / intermediate / advanced scores. A flag appears when someone answered right in the last 10% of the time on several questions, or too fast to have read them, or left the test screen. A flag is a reason to talk, never a verdict. Below it: who has not taken it yet. What else do you need to see?',
+        label: 'Results' },
+      { id:'t-rating',
+        said: 'Foundation, Competent, Expert',
+        today: 'Our proposal: <b>Foundation</b> = 3 of 4 basic. <b>Competent</b> = Foundation and 4 of 7 intermediate. <b>Expert</b> = Competent and 7 of 9 advanced. Under 3 basic is <b>Not yet passed</b>. Are these the right pass marks? Should anything depend on them?',
+        label: 'Ratings' },
+      { id:'t-after',
+        said: 'What the team sees after the test',
+        today: 'After handing in, each person sees their score, the rating, their time on every question, and the right answer with a short note for each one. Should they see the right answers straight away, or not?',
+        label: 'After the test' },
+      { id:'t-menu',
+        said: 'Which menu',
+        today: 'The test uses only the dishes on one menu. By default it is <b>A la carte 2026</b> (66 dishes), because that is what the Bible opens on. The smaller menus (Business lunch, canapés, the months) have too few dishes for a full test, so they are not offered. Is A la carte 2026 what the team was trained on?',
+        label: 'Which menu' }
+    ]
+  },
   // ── Roberto's Mare Ordering — for Milica (14 Oct 2026) ───────────────────
   // Her request: the kitchen and bar article lists with suppliers and prices in the app, prices
   // updated by uploading the stock list, kitchen and bar ordering from the app. Built on FOH DEV
