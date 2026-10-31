@@ -44,6 +44,7 @@ table{width:100%;border-collapse:collapse;font-size:13px;margin-top:8px}
 th,td{padding:7px 4px;border-bottom:1px solid var(--sab);text-align:left;vertical-align:top}
 th{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#544418}
 td.n{text-align:right;font-variant-numeric:tabular-nums}
+.quote{margin:12px 0 4px;padding:10px 14px;background:var(--sabl);border-left:3px solid var(--oro);font-family:var(--serif);font-style:italic;font-size:16px;line-height:1.5;color:var(--ink)}
 .ans{margin:8px 0;padding-top:8px;border-top:1px dashed var(--sab);font-size:13px}
 </style></head><body><div class="wrap"><div id="app"><div class="card"><div class="hint">Loading…</div></div></div></div>
 <script>
@@ -155,7 +156,7 @@ function ready(){
 function draw(r){
   var q = r.q, multi = q.type === 'multi';
   var h = '<div class="top"><span>Question ' + (r.idx+1) + ' of ' + r.total + '</span><span class="lvl">' + esc(q.level) + '</span><span class="clock">' + q.secs + 's</span></div><div class="bar"><i></i></div>' +
-    '<div class="card"><div class="eyebrow">' + esc(q.area) + (r.mode === 'practice' ? ' · practice' : ' · official') + (r.menu ? ' · ' + esc(r.menu) : '') + '</div><h2>' + esc(q.text) + '</h2>';
+    '<div class="card"><div class="eyebrow">' + esc(q.area) + (r.mode === 'practice' ? ' · practice' : ' · official') + (r.menu ? ' · ' + esc(r.menu) : '') + '</div><h2>' + esc(q.text) + '</h2>' + (q.quote ? '<div class="quote">“' + esc(q.quote) + '”</div>' : '');
   if(q.type === 'match'){
     h += '<p class="hint">One wine is not used.</p>' + q.lefts.map(function(l, i){
       return '<div style="margin-top:12px"><div style="font-weight:600">' + esc(l) + '</div><select class="sel" data-i="' + i + '"><option value="">Choose a wine…</option>' +
@@ -215,7 +216,7 @@ function result(R, fresh){
       return '<div class="row"><span>' + (i+1) + '. ' + esc(q.area) + '</span><span class="' + (q.right ? 'good' : 'no') + '">' + (q.out ? 'time out' : q.right ? 'right' : 'wrong') + ' · ' + (q.ms/1000).toFixed(1) + 's</span></div>'; }).join('') +
     '<details><summary>Show the answers</summary>' + R.review.map(function(q, i){
       var right = q.type === 'match' ? q.lefts.map(function(l, k){ return l + ' → ' + q.opts[q.correct[k]]; }).join('; ') : q.correct.map(function(k){ return q.opts[k]; }).join(' + ');
-      return '<div class="ans"><b>' + (i+1) + '.</b> ' + esc(q.text) + '<br><span class="good">' + esc(right) + '</span><br><span class="hint">' + esc(q.note) + '</span></div>'; }).join('') + '</details></div>' +
+      return '<div class="ans"><b>' + (i+1) + '.</b> ' + esc(q.text) + (q.quote ? '<br><i>“' + esc(q.quote) + '”</i>' : '') + '<br><span class="good">' + esc(right) + '</span><br><span class="hint">' + esc(q.note) + '</span></div>'; }).join('') + '</details></div>' +
     '<button class="btn" id="back">Back</button>';
   app.innerHTML = h; window.scrollTo(0, 0);
   document.getElementById('back').onclick = home;

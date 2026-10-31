@@ -51,7 +51,7 @@ async function foodData(): Promise<Book> {
     kall("recipes?kind=eq.main&archived=is.false&select=id,name,section,method,allergens&order=name"),
     kall("recipes?select=id,allergens&order=id"),
     kall("recipe_lines?child_recipe_id=not.is.null&select=recipe_id,child_recipe_id&order=id"),
-    kall("fb_wines?active=is.true&select=id,style,name,region,grapes&order=position"),
+    kall("fb_wines?active=is.true&select=id,style,name,region,grapes,notes&order=position"),
     kall("fb_wine_pairings?select=wine_id,recipe_id,rank,why&order=recipe_id"),
     // the menus the Bible lets a reader open: this is what decides which dishes they could have read
     kall("menus?venue_id=eq.robertos-difc&archived=is.false&active=is.true&select=id,name,running,position,parent_id&order=position,name"),
@@ -77,6 +77,9 @@ async function foodData(): Promise<Book> {
     dishes.push({
       id: r.id, name: String(r.name).trim(), section: r.section || "", diet: m.diet === "vegan" || m.diet === "vegetarian" ? m.diet : "",
       all: inherited(r.id, r.allergens), ing: String(m.ing).split("\n").map((s) => s.trim()).filter(Boolean),
+      // the other things the Bible page shows a reader: the guest description, the story, the garnish, the service note
+      desc: String(m.foh || "").trim(), story: String(m.story || "").trim(),
+      garnish: String(m.garnish || "").split("\n").map((s) => s.trim()).filter(Boolean), more: String(m.more || "").trim(),
     });
   });
   const data: Data = { dishes, wines: wines as any, pairings: pairs as any };
