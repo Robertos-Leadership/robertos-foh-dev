@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Food &amp; Beverage Test</title>
+<style>
+/* Food & Beverage Test (31 Oct 2026) — opened from the Food & Beverage Bible, same Employee ID door.
+   Everything that matters happens on the server (fbtest edge function): the 20 questions are built from
+   the live Food Bible, sent one at a time, timed by the server, marked by the server. This page only
+   shows the question on screen and sends back what was ticked. */
+:root{--vino:#410207;--vino-mid:#5e0a10;--vino-light:#7a1218;--sab:#e1d3c2;--sabl:#ede5d8;--paper:#F8F4EC;--oro:#C9A84C;--ink:#2C1810;--ok:#2F5D32;--bad:#8B1A1A;--serif:'Playfair Display',Georgia,serif}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--sabl);color:var(--ink);font:16px/1.45 system-ui,'Segoe UI',sans-serif}
+.wrap{max-width:480px;margin:0 auto;padding:14px 16px 48px}
+h1,h2,h3{font-family:var(--serif);font-weight:500;margin:.2em 0;color:var(--ink)}
+h1{font-size:26px}h2{font-size:21px;line-height:1.25}h3{font-size:17px}
+.card{background:#fff;border:1px solid rgba(65,2,7,.14);border-top:3px solid var(--oro);padding:20px 18px;margin-top:10px}
+.eyebrow{font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:#544418;font-weight:700}
+.hint{font-size:13px;color:#4F4535}
+input[type=text],input[type=password],input[type=number],select{width:100%;height:46px;border:1px solid #b9ab94;background:#fff;padding:0 12px;font-size:17px;margin-top:8px;color:var(--ink)}
+input.code{text-align:center;letter-spacing:.2em}
+select{font-size:15px}
+.btn{width:100%;min-height:46px;background:var(--vino);color:var(--paper);border:0;font-size:15px;letter-spacing:.06em;cursor:pointer;margin-top:12px}
+.btn:disabled{opacity:.4;cursor:default}
+.btn.ghost{background:none;color:var(--vino);border:1px solid var(--vino)}
+.link{background:none;border:0;color:var(--vino);text-decoration:underline;font-size:13px;cursor:pointer;padding:8px 0}
+.top{display:flex;justify-content:space-between;align-items:center;font-size:13px;color:#4F4535;gap:8px}
+.lvl{padding:2px 9px;border:1px solid var(--oro);font-size:11px;letter-spacing:.12em;text-transform:uppercase}
+.bar{height:6px;background:var(--sab);margin:10px 0 2px}.bar i{display:block;height:100%;background:var(--vino);width:100%}
+.bar.low i{background:var(--bad)}
+.clock{font-variant-numeric:tabular-nums;font-weight:700;min-width:36px;text-align:right}
+.opt{display:flex;gap:12px;align-items:center;width:100%;text-align:left;background:#fff;border:1px solid #b9ab94;padding:14px;margin-top:9px;font:inherit;font-size:16px;cursor:pointer;color:var(--ink)}
+.opt .k{width:22px;height:22px;border:1.5px solid var(--vino);border-radius:50%;flex:none}
+.multi .k{border-radius:3px}
+.opt.on{background:var(--sab);border-color:var(--vino)}.opt.on .k{background:var(--vino)}
+.row{display:flex;justify-content:space-between;gap:10px;padding:9px 0;border-bottom:1px solid var(--sab);font-size:14px}
+.row b{font-weight:600}.good{color:var(--ok)}.no{color:var(--bad)}
+.big{font-family:var(--serif);font-size:44px;color:var(--vino);line-height:1}
+.chip{display:inline-block;background:var(--vino);color:var(--paper);padding:3px 12px;font-size:12px;letter-spacing:.14em;text-transform:uppercase;margin:6px 0}
+.msg{margin-top:10px;font-size:14px;padding:8px 10px;border-left:3px solid var(--bad);background:#fbeeee;color:var(--bad)}
+.flag{background:#fff3cf;border-left:3px solid var(--oro);padding:8px 10px;font-size:13px;margin-top:8px}
+details{margin-top:12px;font-size:13px;color:#4F4535}summary{cursor:pointer;color:var(--vino);text-decoration:underline}
+.code-big{font-family:var(--serif);font-size:44px;letter-spacing:.25em;color:var(--vino);text-align:center;margin:6px 0}
+table{width:100%;border-collapse:collapse;font-size:13px;margin-top:8px}
+th,td{padding:7px 4px;border-bottom:1px solid var(--sab);text-align:left;vertical-align:top}
+th{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#544418}
+td.n{text-align:right;font-variant-numeric:tabular-nums}
+.ans{margin:8px 0;padding-top:8px;border-top:1px dashed var(--sab);font-size:13px}
+</style></head><body><div class="wrap"><div id="app"><div class="card"><div class="hint">Loading…</div></div></div></div>
+<script>
+var FN = 'https://paoaivwtkzujmrgrfjuq.supabase.co/functions/v1/fbtest';
+var KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBhb2Fpdnd0a3p1am1yZ3JmanVxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEwNzAxMzAsImV4cCI6MjA5NjY0NjEzMH0.VynG9PBeIaqRG2lkMEuzskkcB11EhR-UfO9eGYsaUxk';
+var WHO = 'foh-bible-who';
+var S = { emp:'', name:'', staff:false, admin:false, jwt:'', busy:false, err:'', t:null, away:0, pick:null, cur:null, at:null };
+var app = document.getElementById('app');
+
+function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function call(body){
+  return fetch(FN, { method:'POST', headers:{ 'Content-Type':'application/json', apikey:KEY, Authorization:'Bearer '+KEY }, body:JSON.stringify(body), cache:'no-store' })
+    .then(function(r){ return r.json().catch(function(){ return { ok:false, error:'error' }; }); })
+    .catch(function(){ return { ok:false, error:'net' }; });
+}
+function say(e){
+  return ({ no_emp:'That Employee ID is not on the staff list.', bad_code:'That session code is not open. Ask your manager.', already_sat:'You have already taken this session.',
+    not_ready:'The test cannot be built right now. Try again in a minute.', stale:'That answer arrived late. The test carried on.', not_admin:'Sign in to the FOH app as a manager to see results.',
+    net:'No connection. Nothing was lost; try again.', no_attempt:'That test is no longer open.', official:'An official test cannot be left.' })[e] || 'Something went wrong. Try again.';
+}
+function mmss(ms){ var s = Math.round(ms/1000); return Math.floor(s/60) + ':' + ('0'+(s%60)).slice(-2); }
+// The manager's own FOH app login: supabase-js keeps the session in localStorage on this same origin.
+// The function checks the token itself; nothing here decides who is a manager.
+function appToken(){
+  try{
+    for(var i = 0; i < localStorage.length; i++){
+      var k = localStorage.key(i);
+      if(/^sb-.*-auth-token$/.test(k)){
+        var v = JSON.parse(localStorage.getItem(k) || 'null');
+        var t = v && (v.access_token || (v.currentSession && v.currentSession.access_token));
+        if(t) return t;
+      }
+    }
+  }catch(e){}
+  return '';
+}
+function remembered(){ try{ return sessionStorage.getItem(WHO) || ''; }catch(e){ return ''; } }
+
+/* ---------- start ---------- */
+function boot(){
+  S.emp = remembered(); S.jwt = appToken();
+  if(!S.emp && !S.jwt){ app.innerHTML = '<div class="card"><h2>Open the Bible first</h2><p class="hint">Enter your Employee ID at the Food &amp; Beverage Bible door, then open the test.</p></div>'; return; }
+  call({ action:'me', emp:S.emp, jwt:S.jwt }).then(function(r){
+    if(!r.ok){ S.err = say(r.error); return home(); }
+    S.name = r.name || ''; S.staff = !!r.staff; S.admin = !!r.admin;
+    if(S.staff){ return call({ action:'resume', emp:S.emp }).then(function(x){ if(x.ok && x.resumed) show(x); else home(); }); }
+    home();
+  });
+}
+
+/* ---------- home ---------- */
+function home(){
+  clearInterval(S.t);
+  var h = '<div class="card" style="text-align:center"><div class="eyebrow">Food &amp; Beverage Bible</div><h1>Knowledge test</h1>' +
+    (S.name ? '<div class="hint">' + esc(S.name) + (S.admin ? ' · manager' : '') + '</div>' : '') +
+    '<p class="hint">20 questions, basic to advanced. One at a time, each with its own timer. No going back.</p>';
+  if(S.staff){
+    h += '<button class="btn" id="prac">Practice test</button><div class="hint" style="margin-top:6px">Counts for nothing. Learn where you are.</div>' +
+      '<div style="margin-top:18px;border-top:1px solid var(--sab);padding-top:14px"><div class="eyebrow">Official test session</div>' +
+      '<input class="code" id="code" type="text" inputmode="numeric" autocomplete="off" placeholder="Session code from your manager">' +
+      '<button class="btn" id="off">Start the official test</button></div>';
+  } else if(!S.admin){
+    h += '<div class="msg">' + esc(S.err || 'Your Employee ID is not on the staff list.') + '</div>';
+  } else {
+    h += '<p class="hint">You are signed in as a manager. Open a test session and read the results here. Staff take the test with their Employee ID.</p>';
+  }
+  if(S.err && S.staff) h += '<div class="msg" role="alert">' + esc(S.err) + '</div>';
+  h += '<details><summary>How is it scored?</summary><p>One point per question; ticking several or matching pairs must be completely right. Your score counts first and your speed second: a fast wrong answer never beats a slower right one. The clock is kept by the server, not your phone. Foundation needs ' +
+    '3 of 4 basic; Competent adds 4 of 7 intermediate; Expert adds 7 of 9 advanced.</p></details>' +
+    (S.admin ? '<button class="btn" id="board">Test sessions and team results</button>' : '') +
+    '</div>';
+  app.innerHTML = h;
+  S.err = '';
+  var p = document.getElementById('prac'), o = document.getElementById('off');
+  if(p) p.onclick = function(){ begin(''); };
+  if(o) o.onclick = function(){ var c = document.getElementById('code').value.trim(); if(!c){ S.err = 'Enter the session code your manager gave you.'; return home(); } begin(c); };
+  var b = document.getElementById('board'); if(b) b.onclick = function(){ boardView(null); };
+}
+/* ---------- a test ---------- */
+function begin(code){
+  if(S.busy) return; S.busy = true;
+  call({ action:'start', emp:S.emp, code:code }).then(function(r){
+    S.busy = false;
+    if(!r.ok){ S.err = say(r.error); return home(); }
+    show(r);
+  });
+}
+function show(r){
+  S.cur = r; S.pick = r.q.type === 'multi' ? [] : r.q.type === 'match' ? r.q.lefts.map(function(){ return null; }) : null; S.away = 0;
+  S.at = performance.now(); S.left = r.left_ms;
+  draw(r);
+  clearInterval(S.t);
+  S.t = setInterval(function(){
+    var left = S.left - (performance.now() - S.at);
+    if(left <= 0){ clearInterval(S.t); lock(true); } else tick(left);
+  }, 100);
+}
+function tick(left){
+  var q = S.cur.q, b = document.querySelector('.bar'), c = document.querySelector('.clock'); if(!b) return;
+  b.firstChild.style.width = Math.max(0, left/(q.secs*1000)*100) + '%'; b.className = 'bar' + (left < 6000 ? ' low' : '');
+  c.textContent = Math.max(0, Math.ceil(left/1000)) + 's';
+}
+function ready(){
+  var q = S.cur.q;
+  if(q.type === 'multi') return S.pick.length > 0;
+  if(q.type === 'match') return S.pick.every(function(x){ return x !== null; });
+  return S.pick !== null;
+}
+function draw(r){
+  var q = r.q, multi = q.type === 'multi';
+  var h = '<div class="top"><span>Question ' + (r.idx+1) + ' of ' + r.total + '</span><span class="lvl">' + esc(q.level) + '</span><span class="clock">' + q.secs + 's</span></div><div class="bar"><i></i></div>' +
+    '<div class="card"><div class="eyebrow">' + esc(q.area) + (r.mode === 'practice' ? ' · practice' : ' · official') + (r.menu ? ' · ' + esc(r.menu) : '') + '</div><h2>' + esc(q.text) + '</h2>';
+  if(q.type === 'match'){
+    h += '<p class="hint">One wine is not used.</p>' + q.lefts.map(function(l, i){
+      return '<div style="margin-top:12px"><div style="font-weight:600">' + esc(l) + '</div><select class="sel" data-i="' + i + '"><option value="">Choose a wine…</option>' +
+        q.opts.map(function(o, k){ return '<option value="' + k + '">' + esc(o) + '</option>'; }).join('') + '</select></div>'; }).join('');
+  } else {
+    if(multi) h += '<p class="hint">Tick every one that applies.</p>';
+    h += '<div class="' + (multi ? 'multi' : '') + '">' + q.opts.map(function(o, k){ return '<button class="opt" data-k="' + k + '"><span class="k"></span>' + esc(o) + '</button>'; }).join('') + '</div>';
+  }
+  h += '<div id="e"></div><button class="btn" id="next" disabled>' + (r.idx === r.total-1 ? 'Hand in' : 'Lock answer') + '</button>' +
+    (r.mode === 'practice' ? '<button class="link" id="leave">Leave this practice</button>' : '') + '</div>';
+  app.innerHTML = h;
+  Array.prototype.forEach.call(document.querySelectorAll('.opt'), function(b){
+    b.onclick = function(){
+      var k = +b.dataset.k;
+      if(multi){ var ix = S.pick.indexOf(k); if(ix < 0) S.pick.push(k); else S.pick.splice(ix, 1); b.classList.toggle('on'); }
+      else { S.pick = k; Array.prototype.forEach.call(document.querySelectorAll('.opt'), function(x){ x.classList.remove('on'); }); b.classList.add('on'); }
+      document.getElementById('next').disabled = !ready();
+    };
+  });
+  Array.prototype.forEach.call(document.querySelectorAll('.sel'), function(s){
+    s.onchange = function(){ S.pick[+s.dataset.i] = s.value === '' ? null : +s.value; document.getElementById('next').disabled = !ready(); };
+  });
+  document.getElementById('next').onclick = function(){ lock(false); };
+  var lv = document.getElementById('leave');
+  if(lv) lv.onclick = function(){ clearInterval(S.t); call({ action:'abandon', emp:S.emp, attempt:r.attempt }).then(home); };
+  tick(S.left - (performance.now() - S.at));
+}
+// leaving the test screen is counted and shown to Alessandro; it never fails anyone by itself
+document.addEventListener('visibilitychange', function(){ if(document.hidden && S.cur && S.t) S.away++; });
+
+function lock(timeout){
+  if(S.busy) return; S.busy = true; clearInterval(S.t);
+  var sendPick = S.cur.q.type === 'multi' ? (S.pick.length ? S.pick : null) : S.cur.q.type === 'match' ? (S.pick.every(function(x){ return x !== null; }) ? S.pick : null) : S.pick;
+  call({ action:'answer', emp:S.emp, attempt:S.cur.attempt, idx:S.cur.idx, pick:sendPick, away:S.away }).then(function(r){
+    S.busy = false;
+    if(!r.ok){
+      if(r.error === 'net'){ var e = document.getElementById('e'); if(e) e.innerHTML = '<div class="msg">' + esc(say('net')) + '</div>'; S.cur.left_ms = 0; return retry(); }
+      S.err = say(r.error); return resume();
+    }
+    if(r.done) return result(r.result, true);
+    show(r);
+  });
+}
+function retry(){ var e = document.getElementById('next'); if(e){ e.disabled = false; e.onclick = function(){ lock(false); }; } }
+function resume(){ call({ action:'start', emp:S.emp }).then(function(r){ if(r.ok) show(r); else home(); }); }
+
+/* ---------- result ---------- */
+function result(R, fresh){
+  clearInterval(S.t); S.cur = null;
+  var lv = ['Basic','Intermediate','Advanced'];
+  var h = '<div class="card" style="text-align:center"><div class="eyebrow">' + (R.mode === 'official' ? 'Official result' : 'Practice result') + ' · ' + esc(R.name || '') + (R.menu ? '<br>' + esc(R.menu) : '') + '</div>' +
+    '<div class="big">' + R.score + ' / ' + R.total + '</div><div class="chip">' + esc(R.rating) + '</div>' +
+    '<p class="hint">Total time ' + mmss(R.total_ms) + ' · average ' + (R.total_ms/R.total/1000).toFixed(1) + ' s per question</p></div>' +
+    '<div class="card"><div class="eyebrow">By level</div>' + lv.map(function(l){ var b = R.by[l]; return '<div class="row"><b>' + l + '</b><span>' + b.r + ' / ' + b.n + ' · ' + mmss(b.ms) + '</span></div>'; }).join('') +
+    '<div class="eyebrow" style="margin-top:14px">By area</div>' + Object.keys(R.area).map(function(a){ return '<div class="row"><span>' + esc(a) + '</span><span>' + R.area[a].r + ' / ' + R.area[a].n + '</span></div>'; }).join('') + '</div>' +
+    '<div class="card"><div class="eyebrow">Question by question</div>' + R.review.map(function(q, i){
+      return '<div class="row"><span>' + (i+1) + '. ' + esc(q.area) + '</span><span class="' + (q.right ? 'good' : 'no') + '">' + (q.out ? 'time out' : q.right ? 'right' : 'wrong') + ' · ' + (q.ms/1000).toFixed(1) + 's</span></div>'; }).join('') +
+    '<details><summary>Show the answers</summary>' + R.review.map(function(q, i){
+      var right = q.type === 'match' ? q.lefts.map(function(l, k){ return l + ' → ' + q.opts[q.correct[k]]; }).join('; ') : q.correct.map(function(k){ return q.opts[k]; }).join(' + ');
+      return '<div class="ans"><b>' + (i+1) + '.</b> ' + esc(q.text) + '<br><span class="good">' + esc(right) + '</span><br><span class="hint">' + esc(q.note) + '</span></div>'; }).join('') + '</details></div>' +
+    '<button class="btn" id="back">Back</button>';
+  app.innerHTML = h; window.scrollTo(0, 0);
+  document.getElementById('back').onclick = home;
+}
+
+/* ---------- admin: sittings and results ---------- */
+function boardView(sitting){
+  call({ action:'board', emp:S.emp, jwt:S.jwt, sitting:sitting }).then(function(r){
+    if(!r.ok){ S.admin = false; S.jwt = ''; S.err = say(r.error); return home(); }
+    var h = '<div class="top"><button class="link" id="back">‹ Back</button><span class="eyebrow">Team results</span></div>';
+    h += '<div class="card"><div class="eyebrow">Test session</div>';
+    if(r.current){
+      h += '<div class="code-big">' + esc(r.current.code) + '</div><div class="hint" style="text-align:center">Give this code to the team. Open until ' +
+        new Date(r.current.closes_at).toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit', timeZone:'Asia/Dubai' }) + (r.current.label ? ' · ' + esc(r.current.label) : '') + ' (Dubai time)</div>' +
+        '<button class="btn ghost" id="close">Close this session</button>';
+    } else {
+      h += '<p class="hint">No test session is open. Open one when the team is together and ready to start.</p>' +
+        '<input type="text" id="lab" placeholder="Name it, e.g. Food Bible, November" maxlength="60">' +
+        '<select id="menu">' + r.menus.map(function(m){ return '<option value="' + esc(m.id) + '"' + (m.running ? ' selected' : '') + '>' + esc(m.name) + ' · ' + m.dishes + ' dishes' + (m.running ? ' (running)' : '') + '</option>'; }).join('') + '</select>' +
+        '<div class="hint">The menu the team was trained on. Questions use only its dishes.</div>' +
+        '<input type="number" id="min" value="90" min="15" max="480" inputmode="numeric">' +
+        '<div class="hint">Minutes the code stays open</div><button class="btn" id="open">Open a session</button>';
+    }
+    h += '</div>';
+    var cut = r.cut;
+    h += '<div class="card"><div class="eyebrow">Official results</div>' + (r.sittings.length > 1 ? '<select id="pick">' + r.sittings.map(function(s){
+      return '<option value="' + s.id + '"' + (s.id === r.viewing ? ' selected' : '') + '>' + new Date(s.created_at).toLocaleDateString('en-GB', { day:'numeric', month:'short', timeZone:'Asia/Dubai' }) + (s.label ? ' · ' + esc(s.label) : '') + '</option>'; }).join('') + '</select>' : '');
+    if(!r.rows.length) h += '<p class="hint">Nobody has taken this session yet.</p>';
+    else {
+      h += '<table><tr><th>#</th><th>Name</th><th class="n">Score</th><th class="n">B</th><th class="n">I</th><th class="n">A</th><th class="n">Time</th></tr>' + r.rows.map(function(x, i){
+        var b = x.by_level || {}; var done = !!x.finished_at;
+        return '<tr><td>' + (i+1) + '</td><td>' + esc(x.name) + (x.flags && x.flags.length ? ' <span title="flag" style="color:#8a6a00">⚑</span>' : '') + '<div class="hint">' + esc(done ? x.rating : 'in progress') + '</div></td>' +
+          '<td class="n">' + (done ? x.score : '–') + '</td><td class="n">' + (b.Basic ? b.Basic.r + '/' + b.Basic.n : '–') + '</td><td class="n">' + (b.Intermediate ? b.Intermediate.r + '/' + b.Intermediate.n : '–') +
+          '</td><td class="n">' + (b.Advanced ? b.Advanced.r + '/' + b.Advanced.n : '–') + '</td><td class="n">' + (done ? mmss(x.total_ms) : '–') + '</td></tr>' +
+          (x.flags && x.flags.length ? '<tr><td></td><td colspan="6">' + x.flags.map(function(f){ return '<div class="flag">' + esc(f) + '</div>'; }).join('') + '<button class="link" data-res="' + x.id + '">See their answers</button></td></tr>' : ''); }).join('') + '</table>' +
+        '<div class="hint" style="margin-top:8px">Ranked by score, then total time. B, I, A = basic, intermediate, advanced. Foundation needs ' + cut.Basic + ' basic; Competent adds ' + cut.Intermediate + ' intermediate; Expert adds ' + cut.Advanced + ' advanced. A flag is a reason to talk, never a verdict.</div>';
+    }
+    h += '</div>';
+    if(r.not_yet.length) h += '<div class="card"><details><summary>Not yet taken this session (' + r.not_yet.length + ', all active FOH staff)</summary><p>' + r.not_yet.map(esc).join(', ') + '</p></details></div>';
+    if(r.practice.length) h += '<div class="card"><details><summary>Latest practice tests (' + r.practice.length + ')</summary>' + r.practice.map(function(p){
+      return '<div class="row"><span>' + esc(p.name) + '</span><span>' + p.score + '/20 · ' + esc(p.rating) + '</span></div>'; }).join('') + '</details></div>';
+    app.innerHTML = h;
+    document.getElementById('back').onclick = home;
+    var o = document.getElementById('open'); if(o) o.onclick = function(){
+      call({ action:'sitting_open', emp:S.emp, jwt:S.jwt, label:document.getElementById('lab').value, menu:document.getElementById('menu').value, minutes:document.getElementById('min').value }).then(function(){ boardView(null); }); };
+    var c = document.getElementById('close'); if(c) c.onclick = function(){ call({ action:'sitting_close', emp:S.emp, jwt:S.jwt }).then(function(){ boardView(null); }); };
+    var p = document.getElementById('pick'); if(p) p.onchange = function(){ boardView(p.value); };
+    Array.prototype.forEach.call(document.querySelectorAll('[data-res]'), function(b){
+      b.onclick = function(){ call({ action:'result', emp:S.emp, jwt:S.jwt, attempt:b.dataset.res }).then(function(x){ if(x.ok) result(x.result, false); }); };
+    });
+  });
+}
+boot();
+</script></body></html>

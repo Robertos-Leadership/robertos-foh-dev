@@ -54,11 +54,15 @@
       + '<input id="bible-id" type="text" inputmode="numeric" autocomplete="off" placeholder="Employee ID" style="width:100%;box-sizing:border-box;height:42px;border:1px solid #b9ab94;background:#fff;padding:0 12px;font-size:16px;text-align:center">'
       + '<div id="bible-err" style="min-height:18px;font-size:12px;color:#8B1A1A;margin:8px 0 4px"></div>'
       + '<button id="bible-go" style="width:100%;height:42px;background:#6B1F2A;color:#F8F4EC;border:0;font-size:14px;letter-spacing:.06em;cursor:pointer">Open</button>'
+      + '<button id="bible-mgr" style="display:none;margin-top:10px;width:100%;height:38px;background:none;border:1px solid #6B1F2A;color:#6B1F2A;font-size:12px;letter-spacing:.06em;cursor:pointer">Manager: test sessions and results</button>'
       + '<button id="bible-cancel" style="margin-top:10px;background:none;border:0;color:#6B1F2A;font-size:12px;text-decoration:underline;cursor:pointer">Cancel</button>'
       + '</div>';
     document.body.appendChild(overlay);
     overlay.addEventListener('click', function(e){ if(e.target === overlay) close(); });
     document.getElementById('bible-cancel').onclick = close;
+    // A manager signed in to the FOH app opens the test page straight, with no Employee ID: the fbtest function
+    // checks the login itself and shows results only to an Admin or a title with "manager".
+    document.getElementById('bible-mgr').onclick = function(){ close(); show('Manager', true); };
     document.getElementById('bible-go').onclick = go;
     document.getElementById('bible-id').addEventListener('keydown', function(e){ if(e.key === 'Enter') go(); });
   }
@@ -80,7 +84,7 @@
     setTimeout(function(){ try{ inp.focus(); inp.select(); }catch(e){} }, 30);
   }
 
-  function show(name){
+  function show(name, testFirst){
     if(frameWrap){ frameWrap.remove(); frameWrap = null; }
     frameWrap = document.createElement('div');
     frameWrap.id = 'bible-view';
@@ -88,11 +92,19 @@
     frameWrap.innerHTML =
       '<div style="flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 14px;background:#6B1F2A;border-bottom:2px solid #C9A84C;color:#F8F4EC">'
       + '<div style="font-family:' + SERIF + ';font-size:15px">Food &amp; Beverage Bible <span style="font-size:11px;opacity:.7;letter-spacing:.08em">&nbsp;· ' + esc(name || '') + '</span></div>'
-      + '<button id="bible-close" style="background:none;border:1px solid #C9A84C;color:#C9A84C;font-size:12px;letter-spacing:.06em;padding:6px 12px;cursor:pointer">Close</button>'
+      + '<span><button id="bible-test" style="background:none;border:1px solid #C9A84C;color:#C9A84C;font-size:12px;letter-spacing:.06em;padding:6px 12px;cursor:pointer;margin-right:8px">Test</button>'
+      + '<button id="bible-close" style="background:none;border:1px solid #C9A84C;color:#C9A84C;font-size:12px;letter-spacing:.06em;padding:6px 12px;cursor:pointer">Close</button></span>'
       + '</div>'
-      + '<iframe title="Food and Beverage Bible" src="food-bible.html?embed=1&v=20261008light" style="flex:1 1 auto;width:100%;border:0;background:#cdbba6"></iframe>';
+      + '<iframe title="Food and Beverage Bible" src="' + (testFirst ? 'food-test.html?embed=1&v=20261031test' : 'food-bible.html?embed=1&v=20261008light') + '" style="flex:1 1 auto;width:100%;border:0;background:#cdbba6"></iframe>';
     document.body.appendChild(frameWrap);
     document.getElementById('bible-close').onclick = function(){ frameWrap.remove(); frameWrap = null; };
+    // The knowledge test (fbtest edge function) opens in the same frame, behind the same Employee ID door.
+    var tb = document.getElementById('bible-test'), onTest = !!testFirst; if(onTest) tb.textContent = 'Bible';
+    tb.onclick = function(){
+      var fr = frameWrap.querySelector('iframe'); onTest = !onTest;
+      fr.src = onTest ? 'food-test.html?embed=1&v=20261031test' : 'food-bible.html?embed=1&v=20261008light';
+      tb.textContent = onTest ? 'Bible' : 'Test';
+    };
   }
 
   window.fohBibleOpen = function(){
@@ -101,6 +113,7 @@
     document.getElementById('bible-err').textContent = '';
     inp.value = remembered();
     overlay.style.display = 'flex';
+    var mg = document.getElementById('bible-mgr'); if(mg) mg.style.display = (typeof state !== 'undefined' && state && state.userEmail) ? 'block' : 'none';
     // A remembered ID is still checked against the live lists, so a person taken off the
     // list stops getting in on their next open, not only at the next sign-in.
     if(inp.value){ go(); } else { setTimeout(function(){ inp.focus(); }, 50); }
