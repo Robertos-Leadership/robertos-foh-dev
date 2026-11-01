@@ -92,7 +92,14 @@ function revPeriodOf(d){ return String(d).slice(0,7); }
 function revLatestPeriod(){ var R=revInit(); var ps=R.daily.map(function(d){return revPeriodOf(d.service_date);}); if(ps.length) return ps.sort().slice(-1)[0]; var n=new Date(); return n.getFullYear()+'-'+String(n.getMonth()+1).padStart(2,'0'); }
 function revWeekday(ds){ return new Date(ds+'T12:00:00').toLocaleDateString('en-US',{weekday:'long'}); }
 function revDailyMap(){ var m={}; revInit().daily.forEach(function(d){ m[String(d.service_date).slice(0,10)]=d; }); return m; }
-function revRatesBudget(ds){ var r=revInit().rates[revWeekday(ds)]; if(!r) return 0; return (Number(r.cover_target)||0)*(Number(r.avg_spend)||0); }   // weekday pattern weight = cover_target × avg_spend
+// A weekday row carries its CURRENT pattern plus an optional next_* pattern that takes over from period next_from
+// (Oct 2026: Sunday opens and the week is re-shaped). Earlier months keep reading the current pattern, so history never re-splits.
+function revRateFor(ds){ var r=revInit().rates[revWeekday(ds)]; if(!r) return null; if(r.next_from && revPeriodOf(ds)>=r.next_from) return {cover_target:r.next_cover_target, avg_spend:r.next_avg_spend}; return r; }
+function revRatesBudget(ds){ var r=revRateFor(ds); if(!r) return 0; return (Number(r.cover_target)||0)*(Number(r.avg_spend)||0); }
+// A Sunday trades when the pattern in force for that month gives it a weight. DATA decides, not a hardcoded date.
+function revSunOpen(ds){ return revWeekday(ds)==='Sunday' && revRatesBudget(ds)>0; }
+// First Sunday of period p that trades, or null — used to size Sunday off Monday where Sunday has no history yet.
+function revSunWeightRatio(p){ var dim=revDaysInMonth(p), sun=null, mon=null; for(var d=1; d<=dim&&(!sun||!mon); d++){ var ds=p+'-'+String(d).padStart(2,'0'), wd=revWeekday(ds); if(wd==='Sunday'&&!sun) sun=ds; if(wd==='Monday'&&!mon) mon=ds; } if(!sun||!mon||!revSunOpen(sun)) return 0; var m=revRatesBudget(mon); return m?revRatesBudget(sun)/m:0; }   // weekday pattern weight = cover_target × avg_spend
 function revMonthlyBudget(p){ var R=revInit(); return (R.budgets&&R.budgets[p]!=null)?Number(R.budgets[p]):null; }
 function revPatternTotal(p){ var dim=revDaysInMonth(p), s=0; for(var d=1; d<=dim; d++){ s+=revRatesBudget(p+'-'+String(d).padStart(2,'0')); } return s; }
 // Auto daily budget: if a monthly budget is set, scale the weekday pattern to hit it exactly; else fall back to the rates pattern.
@@ -183,7 +190,7 @@ function revMonthData(p){
   var R=revInit(), map=revDailyMap(), dim=revDaysInMonth(p), days=[];
   var mtdNet=0, budgetTotal=0, coversAct=0, tradingDays=0, windowDay=0;
   for(var d=1; d<=dim; d++){
-    var ds=p+'-'+String(d).padStart(2,'0'); var wd=revWeekday(ds); var closed=(wd==='Sunday');
+    var ds=p+'-'+String(d).padStart(2,'0'); var wd=revWeekday(ds); var closed=(wd==='Sunday' && !revSunOpen(ds));
     var row=map[ds]||null; var budget=revBudget(ds);
     var net=(row&&row.net_actual!=null)?Number(row.net_actual):null;
     var rc=(row&&row.rest_covers_actual!=null)?Number(row.rest_covers_actual):null;
@@ -250,7 +257,7 @@ function revUnfiledNights(p){
     // set and no row entered leaves NO signal anywhere in the data, so this cannot claim to
     // catch every unfiled Sunday — only the ones that were planned.
     var plannedSun=(row && row.budget_override!=null && Number(row.budget_override)>0);
-    if(revWeekday(ds)==='Sunday' && !plannedSun) continue;
+    if(revWeekday(ds)==='Sunday' && !revSunOpen(ds) && !plannedSun) continue;
     if(!row || row.net_actual==null) out.push(d);
   }
   return out;
@@ -342,7 +349,7 @@ function revReview(p){
   // this month's own trading. That is what the basis line under the forecast must say out loud —
   // a forecast built from May–July nights must never read as if this month produced it.
   var dim=revDaysInMonth(p), proj=0, remaining=0, usedWindow=false;
-  for(var d=W+1; d<=dim; d++){ var wd=revWeekday(p+'-'+String(d).padStart(2,'0')); if(wd==='Sunday') continue; if(cAvg[wd]==null) usedWindow=true; proj+=projRate(wd); remaining++; }
+  for(var d=W+1; d<=dim; d++){ var wd=revWeekday(p+'-'+String(d).padStart(2,'0')); if(wd==='Sunday' && !revSunOpen(p+'-'+String(d).padStart(2,'0'))) continue; if(cAvg[wd]==null) usedWindow=true; proj+=projRate(wd); remaining++; }
   var forecast=cur.mtdNet+proj;
   function ac(o){ return o.tdays?o.net/o.tdays:0; }
   return {
@@ -583,7 +590,7 @@ function revBriefing(){
   // — the same day, the same app, a 14% gap, out of a panel that exports a board summary.
   // Every day's real budget now travels on its own DAILY ACTUALS line below.
   L.push('\nWEEKDAY PATTERN (a SHAPE only = cover_target × avg_spend. NEVER quote a pattern weight as a day\'s budget):');
-  ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'].forEach(function(wd){ var r=R.rates[wd]; if(r) L.push('  '+wd+': avg_spend '+Number(r.avg_spend)+', cover_target '+Number(r.cover_target)+', pattern weight '+(Number(r.cover_target)*Number(r.avg_spend))); });
+  ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'].forEach(function(wd){ var r=R.rates[wd]; if(r) L.push('  '+wd+': avg_spend '+Number(r.avg_spend)+', cover_target '+Number(r.cover_target)+', pattern weight '+(Number(r.cover_target)*Number(r.avg_spend))+(r.next_from?' | FROM '+r.next_from+': avg_spend '+Number(r.next_avg_spend)+', cover_target '+Number(r.next_cover_target)+', pattern weight '+(Number(r.next_cover_target)*Number(r.next_avg_spend)):'')); });
   L.push('A day\'s REAL budget = this pattern scaled so the month sums to the monthly budget below (or the manual override, when one is set). The scaled figure is on each DAILY ACTUALS line as "budget" — quote THAT, never the pattern weight, and never scale it yourself.');
   L.push('\nMONTHLY TARGETS / BUDGETS:');
   Object.keys(R.targets||{}).sort().forEach(function(per){ L.push('  '+per+': target '+Math.round(R.targets[per]||0)+((R.budgets&&R.budgets[per]!=null)?', monthly budget '+Math.round(R.budgets[per]):'')); });
@@ -1448,7 +1455,7 @@ function revRenderYear(){
 //  FORECAST — forward projection of a FUTURE month (no actuals yet).
 //  Pure math, app-side: each trading day = the recent weekday run-rate from
 //  ACTUAL till data × a seasonality factor the user sets (Dubai summer etc.).
-//  Sundays closed. Shows forecast vs target and the Mon–Wed "weak night" lever.
+//  Sundays closed until the pattern opens them (rev_rates.next_from). Shows forecast vs target and the Mon–Wed "weak night" lever.
 // ══════════════════════════════════════════════
 function revDateMinusDays(ds,n){ var d=new Date(ds+'T12:00:00'); d.setDate(d.getDate()-n); return d.toISOString().slice(0,10); }
 // Recent weekday averages (net/night) from actuals strictly BEFORE period p, within ~10 weeks of the latest actual.
@@ -1462,22 +1469,24 @@ function revFcWeekdayAvgs(p){
     rows.forEach(function(r){ var ds=String(r.service_date).slice(0,10); if(ds<cutoff) return; var wd=revWeekday(ds); acc[wd]=(acc[wd]||0)+Number(r.net_actual); counts[wd]=(counts[wd]||0)+1; used.push(ds); });
   }
   var avg={}; Object.keys(acc).forEach(function(wd){ avg[wd]=acc[wd]/counts[wd]; });
+  // A Sunday that trades this month but has no history yet is sized off Monday by the budget pattern's own Sunday:Monday ratio.
+  var sunProxy=false; if(avg.Sunday==null && avg.Monday!=null){ var q=revSunWeightRatio(p); if(q>0){ avg.Sunday=avg.Monday*q; sunProxy=true; } }
   used.sort();
-  return {avg:avg, counts:counts, from:used[0]||null, to:used[used.length-1]||null, days:used.length};
+  return {avg:avg, counts:counts, sunProxy:sunProxy, from:used[0]||null, to:used[used.length-1]||null, days:used.length};
 }
 function revForecastData(p, seasonPct){
   var W=revFcWeekdayAvgs(p), avg=W.avg, dim=revDaysInMonth(p), f=1+(Number(seasonPct)||0)/100;
-  var order=['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  var order=['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']; if(revSunWeightRatio(p)>0) order.push('Sunday');
   var rows={}; order.forEach(function(wd){ rows[wd]={wd:wd,count:0,avg:avg[wd]||0,adj:(avg[wd]||0)*f,subtotal:0}; });
   var trend=0, season=0, trading=0;
-  for(var d=1; d<=dim; d++){ var ds=p+'-'+String(d).padStart(2,'0'); var wd=revWeekday(ds); if(wd==='Sunday') continue; trading++; var a=avg[wd]||0; rows[wd].count++; rows[wd].subtotal+=a*f; trend+=a; season+=a*f; }
+  for(var d=1; d<=dim; d++){ var ds=p+'-'+String(d).padStart(2,'0'); var wd=revWeekday(ds); if(wd==='Sunday' && !revSunOpen(ds)) continue; trading++; var a=avg[wd]||0; rows[wd].count++; rows[wd].subtotal+=a*f; trend+=a; season+=a*f; }
   var weak=rows.Monday.subtotal+rows.Tuesday.subtotal+rows.Wednesday.subtotal;
   var strong=rows.Thursday.subtotal+rows.Friday.subtotal+rows.Saturday.subtotal;
   var target=(revInit().targets&&revInit().targets[p])||0;
   var gap=target?target-season:0;
   var weakNights=rows.Monday.count+rows.Tuesday.count+rows.Wednesday.count;
   return {period:p, season:Number(seasonPct)||0, window:W, dim:dim, trading:trading, rows:order.map(function(wd){return rows[wd];}),
-    trend:trend, seasonTotal:season, weak:weak, strong:strong, target:target, gap:gap,
+    sunProxy:!!W.sunProxy, trend:trend, seasonTotal:season, weak:weak, strong:strong, target:target, gap:gap,
     weakNights:weakNights, weakUpliftPct:(weak&&gap>0)?gap/weak:0, weakPerNight:(weakNights&&gap>0)?gap/weakNights:0};
 }
 // ── Forecast nav/state ──
@@ -1515,7 +1524,7 @@ function revRenderForecast(){
   if(atMin) h.push('<div class="rev-alloc rev-mut" style="display:block;margin:0 0 10px;font-size:12px">'+revMonthLabel(p)+' is the earliest month that can be forecast &mdash; it is the first with no actuals yet. For a month that has already traded, use <b>Month</b> or <b>Year</b>: they show what it really did.</div>');
   if(!fc.window.days){ h.push('<div class="rev-setup"><p>No actual revenue is recorded before '+revMonthLabel(p)+' yet, so there is nothing to project the forecast from. Enter some daily actuals first.</p></div></div>'); return h.join(''); }
   // basis
-  h.push('<div class="rev-alloc rev-mut" style="display:block;margin:0 0 10px">Projected from your <b>real till data</b> — the recent run-rate per weekday over '+fc.window.days+' trading days ('+revMonthLabel(revPeriodOf(fc.window.from)).split(' ')[0]+'&nbsp;'+Number(fc.window.from.slice(8))+' → '+revMonthLabel(revPeriodOf(fc.window.to)).split(' ')[0]+'&nbsp;'+Number(fc.window.to.slice(8))+'). Sundays closed.</div>');
+  h.push('<div class="rev-alloc rev-mut" style="display:block;margin:0 0 10px">Projected from your <b>real till data</b> — the recent run-rate per weekday over '+fc.window.days+' trading days ('+revMonthLabel(revPeriodOf(fc.window.from)).split(' ')[0]+'&nbsp;'+Number(fc.window.from.slice(8))+' → '+revMonthLabel(revPeriodOf(fc.window.to)).split(' ')[0]+'&nbsp;'+Number(fc.window.to.slice(8))+').'+(fc.rows.some(function(r){return r.wd==='Sunday';})?(fc.sunProxy?' Sunday has no trading history yet, so it is sized off Monday by the budget pattern.':''):' Sundays closed.')+'</div>');
   // seasonality control
   var presets=[['Flat',0],['Mild −10%',-10],['Summer −18%',-18],['Deep −25%',-25]];
   h.push('<div class="rev-budget-bar"><label class="rev-lbl" style="margin:0">Seasonality</label>');
