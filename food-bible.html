@@ -675,7 +675,7 @@ function load(){
     sb('menu_items?archived=is.false&select=menu_id,name,recipe_id,position&order=position')
       .catch(function(){ return []; }),
     /* wine by the glass: never allowed to take the dishes down with it */
-    sb('fb_wines?active=is.true&select=id,position,style,name,region,grapes,notes,story,photo&order=position,name')
+    sb('fb_wines?edition=eq.2026-11&select=id,position,style,name,region,grapes,notes,story,photo&order=position,name')
       .catch(function(e){ wineErr = (e && e.message) || 'no answer'; return []; }),
     sb('fb_wine_pairings?select=wine_id,recipe_id,rank,why').catch(function(){ return []; })
   ]).then(function(res){
@@ -1306,7 +1306,7 @@ function wineSheet(w){
   return '<div class="sheet">' +
     '<div class="rh">' +
       '<span class="cat">' + esc(WSTYLE[w.style] || '') + ' · by the glass</span>' +
-      '<span class="house">Roberto’s DIFC &nbsp;·&nbsp; Wine by the glass 2026</span>' +
+      '<span class="house">Roberto’s DIFC &nbsp;·&nbsp; Wine by the glass &nbsp;·&nbsp; November 2026</span>' +
     '</div>' +
     '<div class="hero">' +
       '<div class="shot bottle' + (w.photo ? '' : ' empty') + '">' +
@@ -1332,7 +1332,7 @@ function wineSheet(w){
             (also.length ? list(also, false) : '<div class="todo">No dish on the menu is paired with it yet.</div>') + '</div>') +
       '</div>' +
     '</div>' +
-    '<div class="foot"><span>Paired against each dish as the kitchen wrote it</span>' +
+    '<div class="foot"><span>November 2026 list · dish pairings are a draft, to be checked by Alessandro Longhi</span>' +
       '<span class="r">Tap a dish to open its page</span></div>' +
   '</div>';
 }

@@ -95,14 +95,14 @@
       + '<span><button id="bible-test" style="background:none;border:1px solid #C9A84C;color:#C9A84C;font-size:12px;letter-spacing:.06em;padding:6px 12px;cursor:pointer;margin-right:8px">Test</button>'
       + '<button id="bible-close" style="background:none;border:1px solid #C9A84C;color:#C9A84C;font-size:12px;letter-spacing:.06em;padding:6px 12px;cursor:pointer">Close</button></span>'
       + '</div>'
-      + '<iframe title="Food and Beverage Bible" src="' + (testFirst ? 'food-test.html?embed=1&v=20261031test' : 'food-bible.html?embed=1&v=20261008light') + '" style="flex:1 1 auto;width:100%;border:0;background:#cdbba6"></iframe>';
+      + '<iframe title="Food and Beverage Bible" src="' + (testFirst ? 'food-test.html?embed=1&v=20261031test' : 'food-bible.html?embed=1&v=20261102nov') + '" style="flex:1 1 auto;width:100%;border:0;background:#cdbba6"></iframe>';
     document.body.appendChild(frameWrap);
     document.getElementById('bible-close').onclick = function(){ frameWrap.remove(); frameWrap = null; };
     // The knowledge test (fbtest edge function) opens in the same frame, behind the same Employee ID door.
     var tb = document.getElementById('bible-test'), onTest = !!testFirst; if(onTest) tb.textContent = 'Bible';
     tb.onclick = function(){
       var fr = frameWrap.querySelector('iframe'); onTest = !onTest;
-      fr.src = onTest ? 'food-test.html?embed=1&v=20261031test' : 'food-bible.html?embed=1&v=20261008light';
+      fr.src = onTest ? 'food-test.html?embed=1&v=20261031test' : 'food-bible.html?embed=1&v=20261102nov';
       tb.textContent = onTest ? 'Bible' : 'Test';
     };
   }
