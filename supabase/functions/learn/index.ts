@@ -37,7 +37,7 @@ async function kall(path: string): Promise<Row[]> {
   }
   return out;
 }
-interface Book { data: Data; menus: Row[]; on: Record<string, string[]> }
+interface Book { data: Data; menus: Row[]; on: Record<string, string[]>; allWines: Row[] }
 let CACHE: { at: number; book: Book } | null = null;
 async function foodData(): Promise<Book> {
   if (CACHE && Date.now() - CACHE.at < 600000) return CACHE.book;
@@ -45,7 +45,7 @@ async function foodData(): Promise<Book> {
     kall("recipes?kind=eq.main&archived=is.false&select=id,name,section,method,allergens&order=name"),
     kall("recipes?select=id,allergens&order=id"),
     kall("recipe_lines?child_recipe_id=not.is.null&select=recipe_id,child_recipe_id&order=id"),
-    kall("fb_wines?active=is.true&select=id,style,name,region,grapes,notes&order=position"),
+    kall("fb_wines?select=id,style,name,region,grapes,notes,edition,active&order=position"),
     kall("fb_wine_pairings?select=wine_id,recipe_id,rank,why&order=recipe_id"),
     // the menus the Bible lets a reader open: this is what decides which dishes they could have read
     kall("menus?venue_id=eq.robertos-difc&archived=is.false&active=is.true&select=id,name,running,position,parent_id&order=position,name"),
@@ -79,17 +79,28 @@ async function foodData(): Promise<Book> {
   const data: Data = { dishes, wines: wines as any, pairings: pairs as any };
   const on: Record<string, string[]> = {};
   rmenus.forEach((r) => (on[r.recipe_id] = (on[r.recipe_id] || []).concat(r.menu_id)));
-  const book: Book = { data, menus, on };
+  const book: Book = { data, menus, on, allWines: wines };
   CACHE = { at: Date.now(), book };
   return book;
 }
 
 // What the team could have read: the dishes on one menu (a month inside it counts, as in the Bible's own picker).
 // The wines are the whole by-the-glass list, because the Bible's wine side shows all of it.
-function scoped(book: Book, menuId: string): Data {
+// ---- the wine test setup the sommelier keeps: which edition the Wine test is built from, and which wines are left out --
+interface WineSet { edition: string; off: string[] }
+async function wineSet(db: ReturnType<typeof sb>): Promise<WineSet> {
+  const r = await db.from("learn_settings").select("key,val").in("key", ["wine_edition", "wine_off"]);
+  const g = (k: string) => ((r.data || []).find((x: Row) => x.key === k) || {}).val;
+  return { edition: typeof g("wine_edition") === "string" ? g("wine_edition") : "", off: Array.isArray(g("wine_off")) ? g("wine_off") : [] };
+}
+// no edition chosen = the Kitchen's own active wines, as before
+function testWines(book: Book, set: WineSet): Row[] {
+  return book.allWines.filter((w) => (set.edition ? w.edition === set.edition : w.active) && !set.off.includes(w.id));
+}
+function scoped(book: Book, menuId: string, set: WineSet): Data {
   const kid: Record<string, string> = {}; book.menus.forEach((m) => { if (m.parent_id) kid[m.id] = m.parent_id; });
   const dishes = book.data.dishes.filter((d) => (book.on[d.id] || []).some((id) => id === menuId || kid[id] === menuId));
-  return { dishes, wines: book.data.wines, pairings: book.data.pairings };
+  return { dishes, wines: testWines(book, set) as any, pairings: book.data.pairings };
 }
 function runningMenu(book: Book): Row | null {
   return book.menus.find((m) => m.running && !m.parent_id) || book.menus.find((m) => m.running) || null;
@@ -203,6 +214,7 @@ Deno.serve(async (req) => {
       }
       // a checker (by job title) sees the topics waiting for their check; an Admin sees the ones waiting for approval
       const mayCheck = (t: Row) => !!((st && new RegExp(t.checker_re, "i").test(st.role)) || (au && new RegExp(t.checker_re, "i").test(au.title)));
+      out.wine_editor = !!((st && /sommelier/i.test(st.role)) || (au && (au.admin || /sommelier/i.test(au.title))));
       out.review = TOPICS.filter((t) => t.built).map((t) => ({ key: t.key, name: t.name, status: t.status, checker_for: t.checker_for, checked_by: t.checked_by, approved_by: t.approved_by,
         mine: mayCheck(t), can_check: mayCheck(t) && t.status === "draft", can_approve: !!au?.admin && t.status === "checked", can_reopen: !!au?.admin && t.status !== "draft" })).filter((x) => x.can_check || x.can_approve || x.can_reopen || x.mine || (au && au.manager));
       return json(out);
@@ -239,8 +251,49 @@ Deno.serve(async (req) => {
       const book = await foodData();
       const menu = book.menus.find((m) => m.running && /a la carte/i.test(String(m.name))) || runningMenu(book);
       if (!menu) return json({ ok: false, error: "not_ready" });
-      const qs = buildTopic(scoped(book, menu.id), t.key, Math.floor(Math.random() * 4294967295), 10);
+      const qs = buildTopic(scoped(book, menu.id, await wineSet(db)), t.key, Math.floor(Math.random() * 4294967295), 10);
       return json({ ok: true, topic: t.key, topic_name: t.name, menu: menu.name, review: qs.map((q) => ({ ...publicQ(q), correct: q.correct, note: q.note })) });
+    }
+
+    // ----------------------------------------------------------------- the sommelier keeps the wine test setup
+    if (action === "wines" || action === "wine_set") {
+      const [st, au] = await Promise.all([fohStaff(db, emp), appUser(db, b.jwt)]);
+      const who = st && /sommelier/i.test(st.role) ? st.name : au && (au.admin || /sommelier/i.test(au.title)) ? au.name : null;
+      if (!who) return json({ ok: false, error: "not_sommelier" }, 403);
+      const book = await foodData();
+      const eds = Array.from(new Set(book.allWines.map((w) => String(w.edition)))).sort();
+      const activeEd = (book.allWines.find((w) => w.active) || {}).edition || "";
+      let reset = false;
+      if (action === "wine_set") {
+        const cur = await wineSet(db);
+        const now = new Date().toISOString();
+        if (typeof b.edition === "string" && b.edition !== (cur.edition || activeEd)) {
+          if (!eds.includes(b.edition)) return json({ ok: false, error: "no_edition" });
+          const w = await db.from("learn_settings").upsert({ key: "wine_edition", val: b.edition, by: who, at: now });
+          if (w.error) return json({ ok: false, error: "db" }, 500);
+          // a different list is new content: it has to be checked again before the team sees it
+          const t = TOPICS.find((x) => x.key === "wine");
+          if (t && t.status !== "draft") { await db.from("learn_topics").update({ status: "draft", checked_by: null, checked_at: null, approved_by: null, approved_at: null }).eq("key", "wine"); t.status = "draft"; reset = true; }
+        }
+        if (Array.isArray(b.off)) {
+          const ids = new Set(book.allWines.map((w) => w.id));
+          const off = b.off.map(String).filter((id: string) => ids.has(id));
+          const w = await db.from("learn_settings").upsert({ key: "wine_off", val: off, by: who, at: now });
+          if (w.error) return json({ ok: false, error: "db" }, 500);
+        }
+        CACHE = null;
+      }
+      const set = await wineSet(db);
+      const ed = set.edition || activeEd;
+      const inTest = testWines(book, set);
+      const pairCount = (id: string) => book.data.pairings.filter((p: Row) => p.wine_id === id).length;
+      let can = false;
+      const menu = book.menus.find((m) => m.running && /a la carte/i.test(String(m.name))) || runningMenu(book);
+      if (menu) { try { can = inTest.length >= 8 && buildTopic(scoped(book, menu.id, set), "wine", 1).length === QUESTIONS_PER_TEST; } catch (_e) { can = false; } }
+      const wt = TOPICS.find((x) => x.key === "wine");
+      return json({ ok: true, by: who, edition: ed, editions: eds.map((e) => ({ edition: e, n: book.allWines.filter((w) => w.edition === e).length, active: book.allWines.some((w) => w.edition === e && w.active) })),
+        status: wt ? wt.status : "draft", reset, can_build: can, in_test: inTest.length, off: set.off,
+        wines: book.allWines.filter((w) => w.edition === ed).map((w) => ({ id: w.id, name: w.name, style: w.style, region: w.region, pairs: pairCount(w.id), out: set.off.includes(w.id) })) });
     }
 
     // ----------------------------------------------------------------- managers: who has passed what, scores and times
@@ -281,7 +334,7 @@ Deno.serve(async (req) => {
       const book = await foodData();
       const menu = book.menus.find((m) => m.running && /a la carte/i.test(String(m.name))) || runningMenu(book);
       if (!menu) return json({ ok: false, error: "not_ready" });
-      const data = scoped(book, menu.id);
+      const data = scoped(book, menu.id, await wineSet(db));
       if (data.dishes.length < 25 || data.wines.length < 8) return json({ ok: false, error: "not_ready" });
       const qs = buildTopic(data, t.key, Math.floor(Math.random() * 4294967295));
       if (qs.length !== QUESTIONS_PER_TEST) return json({ ok: false, error: "not_ready" });

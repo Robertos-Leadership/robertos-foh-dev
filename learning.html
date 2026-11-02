@@ -68,7 +68,7 @@ function call(body){
 function say(e){
   return ({ no_emp:'That Employee ID is not on the FOH staff list.', coming_soon:'This topic is not open yet. It is waiting to be checked.', not_ready:'The test cannot be built right now. Try again in a minute.',
     stale:'That answer arrived late. The test carried on.', net:'No connection. Nothing was lost; try again.', no_attempt:'That test is no longer open.',
-    not_checker:'Only the person who checks this topic can do that.', not_admin:'Only an Admin can do that.', not_manager:'Sign in to the FOH app as a manager to see the team.', state:'That topic has already moved on. Reload.' })[e] || 'Something went wrong. Try again.';
+    not_checker:'Only the person who checks this topic can do that.', not_admin:'Only an Admin can do that.', not_sommelier:'Only a sommelier or an Admin can change the wine list.', no_edition:'That wine list does not exist.', not_manager:'Sign in to the FOH app as a manager to see the team.', state:'That topic has already moved on. Reload.' })[e] || 'Something went wrong. Try again.';
 }
 function mmss(ms){ var s = Math.round(ms/1000); return Math.floor(s/60) + ':' + ('0'+(s%60)).slice(-2); }
 function dmy(iso){ return new Date(iso).toLocaleDateString('en-GB', { day:'numeric', month:'short', year:'numeric', timeZone:'Asia/Dubai' }); }
@@ -157,6 +157,7 @@ function home(){
           (t.can_approve ? ' <button class="link" data-act="approve" data-t="' + t.key + '">Approve for the team</button>' : '') +
           (t.can_reopen ? ' <button class="link" data-act="reopen" data-t="' + t.key + '">Take it back to draft</button>' : '') + '</div></div>'; }).join('') + '</div>';
   }
+  if(me.wine_editor) h += '<button class="btn" id="wines">The wine list for the Wine test</button>';
   if(me.manager) h += '<button class="btn" id="board">Who has passed what</button>';
   h += '<button class="link" id="out">Not you? Use another Employee ID</button>';
   app.innerHTML = h;
@@ -166,6 +167,7 @@ function home(){
     b.onclick = function(){ b.disabled = true; call({ action:b.dataset.act, topic:b.dataset.t, emp:S.emp, jwt:S.jwt }).then(function(r){ if(!r.ok) S.err = say(r.error); signIn(S.emp); }); };
   });
   var bd = document.getElementById('board'); if(bd) bd.onclick = boardView;
+  var wb = document.getElementById('wines'); if(wb) wb.onclick = function(){ wineView(); };
   document.getElementById('out').onclick = function(){ remember(''); S.me = null; S.emp = ''; door(); };
 }
 function topicBtn(t){
@@ -277,6 +279,30 @@ function sample(topic){
       reviewHtml(r) + '<button class="btn ghost" id="again">Another ten</button></div>';
     document.getElementById('back').onclick = home;
     document.getElementById('again').onclick = function(){ sample(topic); };
+  });
+}
+
+/* ---------- the sommelier keeps the wine list the Wine test is built from ---------- */
+function wineView(body){
+  call(Object.assign({ action: body ? 'wine_set' : 'wines', emp:S.emp, jwt:S.jwt }, body || {})).then(function(r){
+    if(!r.ok){ S.err = say(r.error); return home(); }
+    var h = '<div class="top"><button class="link" id="back">‹ Back</button><span class="eyebrow">Wine list</span></div>' +
+      '<div class="card"><p class="hint">The Wine test is built from one wine list at a time. Pick the list, then take out any wine you do not want asked about. The Food &amp; Beverage Bible is not changed here.</p>' +
+      '<div class="eyebrow">Which list</div>' + r.editions.map(function(e){
+        return '<label class="row" style="cursor:pointer"><span><input type="radio" name="ed" value="' + esc(e.edition) + '"' + (e.edition === r.edition ? ' checked' : '') + '> ' + esc(e.edition) + ' &middot; ' + e.n + ' wines' + (e.active ? ' &middot; in use in the Kitchen' : '') + '</span></label>'; }).join('') +
+      '<p class="hint">Choosing a different list sends the Wine test back to &ldquo;waiting for the check&rdquo;.</p></div>' +
+      '<div class="card"><div class="eyebrow">Wines asked about (' + r.in_test + ' of ' + r.wines.length + ')</div>' +
+      r.wines.map(function(w){ return '<label class="row" style="cursor:pointer"><span><input type="checkbox" data-w="' + esc(w.id) + '"' + (w.out ? '' : ' checked') + '> ' + esc(w.name) + '<div class="hint">' + esc(w.style || '') + (w.region ? ' &middot; ' + esc(w.region) : '') + ' &middot; ' + w.pairs + (w.pairs === 1 ? ' pairing' : ' pairings') + '</div></span></label>'; }).join('') +
+      '<div class="hint ' + (r.can_build ? 'good' : '') + '" style="margin-top:8px">' + (r.can_build ? 'A test can be built from this list.' : 'A test cannot be built from this list yet: it needs at least 8 wines and enough notes and pairings.') + '</div>' +
+      '<button class="btn" id="save">Save</button></div>';
+    app.innerHTML = h;
+    document.getElementById('back').onclick = home;
+    document.getElementById('save').onclick = function(){
+      var ed = document.querySelector('input[name=ed]:checked');
+      var off = Array.prototype.filter.call(document.querySelectorAll('[data-w]'), function(c){ return !c.checked; }).map(function(c){ return c.dataset.w; });
+      var keepOff = (r.off || []).filter(function(id){ return !r.wines.some(function(w){ return w.id === id; }); });
+      this.disabled = true; wineView({ edition: ed ? ed.value : r.edition, off: off.concat(keepOff) });
+    };
   });
 }
 

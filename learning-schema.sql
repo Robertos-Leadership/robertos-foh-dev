@@ -50,3 +50,14 @@ insert into learn_topics (key,name,blurb,position,built,checker_re,checker_for,e
 on conflict (key) do nothing;
 
 notify pgrst, 'reload schema';
+
+-- Wine test setup (2 Nov 2026): which Kitchen wine edition the Wine test is built from, and which wines are
+-- left out of it. Written only by the `learn` function (sommelier or Admin). Absent = the Kitchen's active wines.
+create table if not exists learn_settings (
+  key text primary key,
+  val jsonb not null,
+  by  text,
+  at  timestamptz not null default now()
+);
+alter table learn_settings enable row level security;
+revoke all on learn_settings from anon, authenticated;
