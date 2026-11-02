@@ -15,7 +15,7 @@
    controllerchange reload), a fresh deploy reaches every screen with no manual
    tap. To force a clean cache rebuild, bump the CACHE version string below. */
 
-const CACHE = 'robertos-foh-v20260930lockmc-20261006marelink-eqx-learnfoh-maint-bizlunch2-frame-20261007bl3-noframe-fc-fc-moda-fold-nofc-moda2-look-fcclean-moda3-swap-fbwine-bible1212-biblelight-mncomp-mnitems-t611-mnchecks-blsim-blcomp-bltodate-blweeks3-fbsend-brief1012-maint30-mare1013-mareA-eqopen-order1014-ap20261016ap-ap20261018ap6-visits2-apB5-apM1-st1019dup-apM2-apM3-apM4-norecon-leads-firstever-20261022apadm-mgroom-blroom-mytasks-gap12-mytasks2-gap12b-audits4-types-redesign6-prshift-20261022clients-aupurge2-20261022brandxl-202610231009-20261023duty-20261026hev-20261028bev2-20261028bevn-202610291344-20261030bartinv-20261030fast-20261030savesafe-202610311943-winenov';
+const CACHE = 'robertos-foh-v20260930lockmc-20261006marelink-eqx-learnfoh-maint-bizlunch2-frame-20261007bl3-noframe-fc-fc-moda-fold-nofc-moda2-look-fcclean-moda3-swap-fbwine-bible1212-biblelight-mncomp-mnitems-t611-mnchecks-blsim-blcomp-bltodate-blweeks3-fbsend-brief1012-maint30-mare1013-mareA-eqopen-order1014-ap20261016ap-ap20261018ap6-visits2-apB5-apM1-st1019dup-apM2-apM3-apM4-norecon-leads-firstever-20261022apadm-mgroom-blroom-mytasks-gap12-mytasks2-gap12b-audits4-types-redesign6-prshift-20261022clients-aupurge2-20261022brandxl-202610231009-20261023duty-20261026hev-20261028bev2-20261028bevn-202610291344-20261030bartinv-20261030fast-20261030savesafe-202610311943-winenov-learning1';
 
 // Best-effort warm cache. The bare paths are precached on install; the real
 // runtime requests (some carry a ?v= cache-buster) are cached on the fly by the
@@ -28,6 +28,7 @@ const ASSETS = [
   // It is now a ~47KB shell: without these two the offline app is a blank page.
   // Any future extraction out of index.html MUST be added here as well.
   './foh-core.js',
+  './foh-learning.js',
   './foh-bible.js',    // Food Bible door (Employee ID); the page itself is online-only
   './foh-sched-xlsx.js',   // roster Print + Excel hotfix — overrides fohSchedPrint + fohSchedSendToHR
   './foh-styles.css',
@@ -124,7 +125,7 @@ self.addEventListener('fetch', e => {
   // Roberto's Mare pages (mare.html, mare-clock.html) are their own app for
   // another restaurant: never let the FOH worker answer them with index.html.
   // audit.html (22 Oct 2026) is the audit link we send to staff and guests: same trap.
-  if (/\/(client-[a-z0-9-]+|foh-feedback(-[a-z0-9-]+)?|print-brief|mare(-[a-z0-9-]+)?|audit)(\.html)?$/i.test(url.pathname)) return;
+  if (/\/(client-[a-z0-9-]+|foh-feedback(-[a-z0-9-]+)?|print-brief|mare(-[a-z0-9-]+)?|audit|learning)(\.html)?$/i.test(url.pathname)) return;
 
   e.respondWith(
     fetch(e.request, { cache: 'no-store' })

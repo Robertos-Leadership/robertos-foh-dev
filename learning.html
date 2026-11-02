@@ -1,0 +1,305 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Learning</title>
+<style>
+/* FOH Learning (2 Nov 2026) — same door and look as the Food & Beverage test. Everything that matters is on the
+   server (learn edge function): questions are built from the live Food Bible, timed and marked there. */
+:root{--vino:#410207;--vino-mid:#5e0a10;--vino-light:#7a1218;--sab:#e1d3c2;--sabl:#ede5d8;--paper:#F8F4EC;--oro:#C9A84C;--ink:#2C1810;--ok:#2F5D32;--bad:#8B1A1A;--serif:'Playfair Display',Georgia,serif}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--sabl);color:var(--ink);font:16px/1.45 system-ui,'Segoe UI',sans-serif}
+.wrap{max-width:480px;margin:0 auto;padding:14px 16px 48px}
+h1,h2,h3{font-family:var(--serif);font-weight:500;margin:.2em 0;color:var(--ink)}
+h1{font-size:26px}h2{font-size:21px;line-height:1.25}h3{font-size:17px}
+.card{background:#fff;border:1px solid rgba(65,2,7,.14);border-top:3px solid var(--oro);padding:20px 18px;margin-top:10px}
+.eyebrow{font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:#544418;font-weight:700}
+.hint{font-size:13px;color:#4F4535}
+input[type=text],input[type=password],input[type=number],select{width:100%;height:46px;border:1px solid #b9ab94;background:#fff;padding:0 12px;font-size:17px;margin-top:8px;color:var(--ink)}
+input.code{text-align:center;letter-spacing:.2em}
+select{font-size:15px}
+.btn{width:100%;min-height:46px;background:var(--vino);color:var(--paper);border:0;font-size:15px;letter-spacing:.06em;cursor:pointer;margin-top:12px}
+.btn:disabled{opacity:.4;cursor:default}
+.btn.ghost{background:none;color:var(--vino);border:1px solid var(--vino)}
+.link{background:none;border:0;color:var(--vino);text-decoration:underline;font-size:13px;cursor:pointer;padding:8px 0}
+.top{display:flex;justify-content:space-between;align-items:center;font-size:13px;color:#4F4535;gap:8px}
+.lvl{padding:2px 9px;border:1px solid var(--oro);font-size:11px;letter-spacing:.12em;text-transform:uppercase}
+.bar{height:6px;background:var(--sab);margin:10px 0 2px}.bar i{display:block;height:100%;background:var(--vino);width:100%}
+.bar.low i{background:var(--bad)}
+.clock{font-variant-numeric:tabular-nums;font-weight:700;min-width:36px;text-align:right}
+.opt{display:flex;gap:12px;align-items:center;width:100%;text-align:left;background:#fff;border:1px solid #b9ab94;padding:14px;margin-top:9px;font:inherit;font-size:16px;cursor:pointer;color:var(--ink)}
+.opt .k{width:22px;height:22px;border:1.5px solid var(--vino);border-radius:50%;flex:none}
+.multi .k{border-radius:3px}
+.opt.on{background:var(--sab);border-color:var(--vino)}.opt.on .k{background:var(--vino)}
+.row{display:flex;justify-content:space-between;gap:10px;padding:9px 0;border-bottom:1px solid var(--sab);font-size:14px}
+.row b{font-weight:600}.good{color:var(--ok)}.no{color:var(--bad)}
+.big{font-family:var(--serif);font-size:44px;color:var(--vino);line-height:1}
+.chip{display:inline-block;background:var(--vino);color:var(--paper);padding:3px 12px;font-size:12px;letter-spacing:.14em;text-transform:uppercase;margin:6px 0}
+.msg{margin-top:10px;font-size:14px;padding:8px 10px;border-left:3px solid var(--bad);background:#fbeeee;color:var(--bad)}
+.flag{background:#fff3cf;border-left:3px solid var(--oro);padding:8px 10px;font-size:13px;margin-top:8px}
+details{margin-top:12px;font-size:13px;color:#4F4535}summary{cursor:pointer;color:var(--vino);text-decoration:underline}
+.code-big{font-family:var(--serif);font-size:44px;letter-spacing:.25em;color:var(--vino);text-align:center;margin:6px 0}
+table{width:100%;border-collapse:collapse;font-size:13px;margin-top:8px}
+th,td{padding:7px 4px;border-bottom:1px solid var(--sab);text-align:left;vertical-align:top}
+th{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#544418}
+td.n{text-align:right;font-variant-numeric:tabular-nums}
+.quote{margin:12px 0 4px;padding:10px 14px;background:var(--sabl);border-left:3px solid var(--oro);font-family:var(--serif);font-style:italic;font-size:16px;line-height:1.5;color:var(--ink)}
+.ans{margin:8px 0;padding-top:8px;border-top:1px dashed var(--sab);font-size:13px}
+
+.tag{display:inline-block;padding:2px 9px;font-size:11px;letter-spacing:.1em;text-transform:uppercase;border:1px solid var(--oro);margin-left:6px}
+.tag.ok{background:var(--ok);color:#fff;border-color:var(--ok)}.tag.warn{background:#fff3cf}.tag.soon{opacity:.7}
+.topic{display:block;width:100%;text-align:left;background:#fff;border:1px solid #b9ab94;padding:14px;margin-top:9px;font:inherit;color:var(--ink);cursor:pointer}
+.topic[disabled]{opacity:.6;cursor:default}
+.topic b{font-family:var(--serif);font-size:17px;font-weight:500}
+</style>
+</head><body><div class="wrap"><div id="app"><div class="card"><div class="hint">Loading…</div></div></div></div>
+<script>
+var FN = 'https://paoaivwtkzujmrgrfjuq.supabase.co/functions/v1/learn';
+var KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBhb2Fpdnd0a3p1am1yZ3JmanVxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEwNzAxMzAsImV4cCI6MjA5NjY0NjEzMH0.VynG9PBeIaqRG2lkMEuzskkcB11EhR-UfO9eGYsaUxk';
+var WHO = 'foh-learning-who';
+var S = { emp:'', jwt:'', me:null, busy:false, err:'', t:null, away:0, pick:null, cur:null, at:null, left:0 };
+var app = document.getElementById('app');
+
+function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function call(body){
+  return fetch(FN, { method:'POST', headers:{ 'Content-Type':'application/json', apikey:KEY, Authorization:'Bearer '+KEY }, body:JSON.stringify(body), cache:'no-store' })
+    .then(function(r){ return r.json().catch(function(){ return { ok:false, error:'error' }; }); })
+    .catch(function(){ return { ok:false, error:'net' }; });
+}
+function say(e){
+  return ({ no_emp:'That Employee ID is not on the FOH staff list.', coming_soon:'This topic is not open yet. It is waiting to be checked.', not_ready:'The test cannot be built right now. Try again in a minute.',
+    stale:'That answer arrived late. The test carried on.', net:'No connection. Nothing was lost; try again.', no_attempt:'That test is no longer open.',
+    not_checker:'Only the person who checks this topic can do that.', not_admin:'Only an Admin can do that.', not_manager:'Sign in to the FOH app as a manager to see the team.', state:'That topic has already moved on. Reload.' })[e] || 'Something went wrong. Try again.';
+}
+function mmss(ms){ var s = Math.round(ms/1000); return Math.floor(s/60) + ':' + ('0'+(s%60)).slice(-2); }
+function dmy(iso){ return new Date(iso).toLocaleDateString('en-GB', { day:'numeric', month:'short', year:'numeric', timeZone:'Asia/Dubai' }); }
+// A manager's own FOH app login: supabase-js keeps the session in localStorage on this same origin. The function
+// checks the token itself; nothing in this page decides who is a manager.
+function appToken(){
+  try{
+    for(var i = 0; i < localStorage.length; i++){
+      var k = localStorage.key(i);
+      if(/^sb-.*-auth-token$/.test(k)){
+        var v = JSON.parse(localStorage.getItem(k) || 'null');
+        var t = v && (v.access_token || (v.currentSession && v.currentSession.access_token));
+        if(t) return t;
+      }
+    }
+  }catch(e){}
+  return '';
+}
+function remembered(){ try{ return sessionStorage.getItem(WHO) || ''; }catch(e){ return ''; } }
+function remember(v){ try{ if(v) sessionStorage.setItem(WHO, v); else sessionStorage.removeItem(WHO); }catch(e){} }
+
+/* ---------- sign in ---------- */
+function boot(){
+  S.emp = remembered(); S.jwt = appToken();
+  if(S.emp || S.jwt) return signIn(S.emp);
+  door();
+}
+function door(){
+  app.innerHTML = '<div class="card" style="text-align:center"><div class="eyebrow">Roberto&rsquo;s</div><h1>Learning</h1>' +
+    '<p class="hint">Enter your Employee ID to open it.</p><input class="code" id="id" type="text" inputmode="numeric" autocomplete="off" placeholder="Employee ID">' +
+    (S.err ? '<div class="msg" role="alert">' + esc(S.err) + '</div>' : '') + '<button class="btn" id="go">Open</button>' +
+    (S.jwt ? '<button class="btn ghost" id="mgr">I am signed in to the app as a manager</button>' : '') + '</div>';
+  S.err = '';
+  var i = document.getElementById('id'); setTimeout(function(){ try{ i.focus(); }catch(e){} }, 50);
+  document.getElementById('go').onclick = function(){ var v = i.value.trim(); if(!v){ S.err = 'Enter your Employee ID.'; return door(); } signIn(v); };
+  i.addEventListener('keydown', function(e){ if(e.key === 'Enter') document.getElementById('go').click(); });
+  var m = document.getElementById('mgr'); if(m) m.onclick = function(){ signIn(''); };
+}
+function signIn(emp){
+  S.emp = emp;
+  call({ action:'me', emp:emp, jwt:S.jwt }).then(function(r){
+    if(!r.ok){ remember(''); S.err = say(r.error); S.emp = ''; return door(); }
+    remember(emp); S.me = r;
+    if(r.staff) return call({ action:'resume', emp:emp }).then(function(x){ if(x.ok && x.resumed) show(x); else home(); });
+    home();
+  });
+}
+
+/* ---------- home ---------- */
+function chip(t){
+  if(!t.open) return '<span class="tag soon">Coming soon</span>';
+  if(t.state === 'passed') return '<span class="tag ok">Passed</span>';
+  if(t.state === 'expired') return '<span class="tag warn">Renew</span>';
+  if(t.state === 'tried') return '<span class="tag warn">Not passed yet</span>';
+  return t.required ? '<span class="tag warn">To do</span>' : '';
+}
+function line(t){
+  if(!t.open) return 'Waiting to be checked before the team sees it.';
+  if(t.state === 'passed') return 'Passed ' + dmy(t.passed_at) + (t.best ? ' · best ' + t.best.score + '/5 in ' + mmss(t.best.ms) : '') + (t.expires ? ' · valid until ' + dmy(t.expires) : '');
+  if(t.state === 'expired') return 'Passed ' + dmy(t.passed_at) + ' · expired ' + dmy(t.expires) + ', take it again';
+  if(t.state === 'tried') return t.tries + (t.tries === 1 ? ' try' : ' tries') + ' · best ' + (t.best ? t.best.score : 0) + '/5 · you need 4';
+  return t.blurb || '';
+}
+function home(){
+  clearInterval(S.t); S.cur = null;
+  var me = S.me, h = '<div class="card" style="text-align:center"><div class="eyebrow">Roberto&rsquo;s</div><h1>Learning</h1><div class="hint">' + esc(me.name || '') +
+    (me.role ? ' · ' + esc(me.role) : '') + (me.admin ? ' · admin' : me.manager ? ' · manager' : '') + '</div></div>';
+  if(S.err) h += '<div class="msg" role="alert">' + esc(S.err) + '</div>'; S.err = '';
+  if(me.staff){
+    var req = me.topics.filter(function(t){ return t.required; }), opt = me.topics.filter(function(t){ return !t.required; });
+    var todo = req.filter(function(t){ return t.open && t.state !== 'passed'; }).length;
+    h += '<div class="card"><div class="eyebrow">You must pass</div>' +
+      (req.length ? (todo ? '<p class="hint">' + todo + ' still to do.</p>' : req.some(function(t){ return t.open; }) ? '<p class="hint good">You are up to date.</p>' : '<p class="hint">Nothing is open yet. These topics are waiting to be checked.</p>') : '<p class="hint">Nothing is compulsory for your role.</p>') +
+      req.map(topicBtn).join('') + '</div>';
+    if(opt.length) h += '<div class="card"><div class="eyebrow">Also open to you</div>' + opt.map(topicBtn).join('') + '</div>';
+    h += '<p class="hint" style="padding:0 6px">5 questions, one at a time, each with its own timer. 4 right passes. You can take a test again as often as you like; your best score is kept.</p>';
+  }
+  var rv = me.review || [];
+  if(rv.length){
+    h += '<div class="card"><div class="eyebrow">Checking and approving</div><p class="hint">A topic reaches the team only after the person who owns it has checked it, and an Admin has approved it.</p>' +
+      rv.map(function(t){
+        var st = t.status === 'approved' ? '<span class="tag ok">Open to the team</span>' : t.status === 'checked' ? '<span class="tag warn">Checked by ' + esc(t.checked_by || '') + ' · waiting for approval</span>' : '<span class="tag soon">Waiting for ' + esc(t.checker_for || 'the checker') + '</span>';
+        return '<div class="row" style="flex-direction:column"><div><b>' + esc(t.name) + '</b> ' + st + '</div><div>' +
+          '<button class="link" data-sample="' + t.key + '">Read a sample with the answers</button>' +
+          (t.can_check ? ' <button class="link" data-act="check" data-t="' + t.key + '">I have checked it &mdash; it is right</button>' : '') +
+          (t.can_approve ? ' <button class="link" data-act="approve" data-t="' + t.key + '">Approve for the team</button>' : '') +
+          (t.can_reopen ? ' <button class="link" data-act="reopen" data-t="' + t.key + '">Take it back to draft</button>' : '') + '</div></div>'; }).join('') + '</div>';
+  }
+  if(me.manager) h += '<button class="btn" id="board">Who has passed what</button>';
+  h += '<button class="link" id="out">Not you? Use another Employee ID</button>';
+  app.innerHTML = h;
+  Array.prototype.forEach.call(document.querySelectorAll('[data-topic]'), function(b){ b.onclick = function(){ begin(b.dataset.topic); }; });
+  Array.prototype.forEach.call(document.querySelectorAll('[data-sample]'), function(b){ b.onclick = function(){ sample(b.dataset.sample); }; });
+  Array.prototype.forEach.call(document.querySelectorAll('[data-act]'), function(b){
+    b.onclick = function(){ b.disabled = true; call({ action:b.dataset.act, topic:b.dataset.t, emp:S.emp, jwt:S.jwt }).then(function(r){ if(!r.ok) S.err = say(r.error); signIn(S.emp); }); };
+  });
+  var bd = document.getElementById('board'); if(bd) bd.onclick = boardView;
+  document.getElementById('out').onclick = function(){ remember(''); S.me = null; S.emp = ''; door(); };
+}
+function topicBtn(t){
+  return '<button class="topic" data-topic="' + t.key + '"' + (t.open ? '' : ' disabled') + '><b>' + esc(t.name) + '</b> ' + chip(t) + '<div class="hint">' + esc(line(t)) + '</div></button>';
+}
+
+/* ---------- a test ---------- */
+function begin(topic){
+  if(S.busy) return; S.busy = true;
+  call({ action:'start', emp:S.emp, topic:topic }).then(function(r){
+    S.busy = false;
+    if(!r.ok){ S.err = say(r.error); return signIn(S.emp); }
+    show(r);
+  });
+}
+function show(r){
+  S.cur = r; S.pick = r.q.type === 'multi' ? [] : r.q.type === 'match' ? r.q.lefts.map(function(){ return null; }) : null; S.away = 0;
+  S.at = performance.now(); S.left = r.left_ms;
+  draw(r);
+  clearInterval(S.t);
+  S.t = setInterval(function(){
+    var left = S.left - (performance.now() - S.at);
+    if(left <= 0){ clearInterval(S.t); lock(true); } else tick(left);
+  }, 100);
+}
+function tick(left){
+  var q = S.cur.q, b = document.querySelector('.bar'), c = document.querySelector('.clock'); if(!b) return;
+  b.firstChild.style.width = Math.max(0, left/(q.secs*1000)*100) + '%'; b.className = 'bar' + (left < 6000 ? ' low' : '');
+  c.textContent = Math.max(0, Math.ceil(left/1000)) + 's';
+}
+function ready(){
+  var q = S.cur.q;
+  if(q.type === 'multi') return S.pick.length > 0;
+  if(q.type === 'match') return S.pick.every(function(x){ return x !== null; });
+  return S.pick !== null;
+}
+function draw(r){
+  var q = r.q, multi = q.type === 'multi';
+  var h = '<div class="top"><span>Question ' + (r.idx+1) + ' of ' + r.total + '</span><span class="lvl">' + esc(r.topic_name) + '</span><span class="clock">' + q.secs + 's</span></div><div class="bar"><i></i></div>' +
+    '<div class="card"><div class="eyebrow">' + esc(q.area) + '</div><h2>' + esc(q.text) + '</h2>' + (q.quote ? '<div class="quote">“' + esc(q.quote) + '”</div>' : '');
+  if(q.type === 'match'){
+    h += '<p class="hint">One wine is not used.</p>' + q.lefts.map(function(l, i){
+      return '<div style="margin-top:12px"><div style="font-weight:600">' + esc(l) + '</div><select class="sel" data-i="' + i + '"><option value="">Choose a wine…</option>' +
+        q.opts.map(function(o, k){ return '<option value="' + k + '">' + esc(o) + '</option>'; }).join('') + '</select></div>'; }).join('');
+  } else {
+    if(multi) h += '<p class="hint">Tick every one that applies.</p>';
+    h += '<div class="' + (multi ? 'multi' : '') + '">' + q.opts.map(function(o, k){ return '<button class="opt" data-k="' + k + '"><span class="k"></span>' + esc(o) + '</button>'; }).join('') + '</div>';
+  }
+  h += '<div id="e"></div><button class="btn" id="next" disabled>' + (r.idx === r.total-1 ? 'Hand in' : 'Lock answer') + '</button></div>';
+  app.innerHTML = h;
+  Array.prototype.forEach.call(document.querySelectorAll('.opt'), function(b){
+    b.onclick = function(){
+      var k = +b.dataset.k;
+      if(multi){ var ix = S.pick.indexOf(k); if(ix < 0) S.pick.push(k); else S.pick.splice(ix, 1); b.classList.toggle('on'); }
+      else { S.pick = k; Array.prototype.forEach.call(document.querySelectorAll('.opt'), function(x){ x.classList.remove('on'); }); b.classList.add('on'); }
+      document.getElementById('next').disabled = !ready();
+    };
+  });
+  Array.prototype.forEach.call(document.querySelectorAll('.sel'), function(s){
+    s.onchange = function(){ S.pick[+s.dataset.i] = s.value === '' ? null : +s.value; document.getElementById('next').disabled = !ready(); };
+  });
+  document.getElementById('next').onclick = function(){ lock(false); };
+  tick(S.left - (performance.now() - S.at));
+}
+// leaving the test screen is counted and shown to the managers; it never fails anyone by itself
+document.addEventListener('visibilitychange', function(){ if(document.hidden && S.cur && S.t) S.away++; });
+
+function lock(timeout){
+  if(S.busy) return; S.busy = true; clearInterval(S.t);
+  var sendPick = S.cur.q.type === 'multi' ? (S.pick.length ? S.pick : null) : S.cur.q.type === 'match' ? (S.pick.every(function(x){ return x !== null; }) ? S.pick : null) : S.pick;
+  call({ action:'answer', emp:S.emp, attempt:S.cur.attempt, idx:S.cur.idx, pick:sendPick, away:S.away }).then(function(r){
+    S.busy = false;
+    if(!r.ok){
+      if(r.error === 'net'){ var e = document.getElementById('e'); if(e) e.innerHTML = '<div class="msg">' + esc(say('net')) + '</div>'; S.cur.left_ms = 0; return retry(); }
+      S.err = say(r.error); return resume();
+    }
+    if(r.done) return result(r.result);
+    show(r);
+  });
+}
+function retry(){ var e = document.getElementById('next'); if(e){ e.disabled = false; e.onclick = function(){ lock(false); }; } }
+function resume(){ call({ action:'resume', emp:S.emp }).then(function(r){ if(r.ok && r.resumed) show(r); else signIn(S.emp); }); }
+
+/* ---------- result ---------- */
+function reviewHtml(R, withPick){
+  return R.review.map(function(q, i){
+    var right = q.type === 'match' ? q.lefts.map(function(l, k){ return l + ' → ' + q.opts[q.correct[k]]; }).join('; ') : q.correct.map(function(k){ return q.opts[k]; }).join(' + ');
+    return '<div class="ans"><b>' + (i+1) + '.</b> ' + esc(q.text) + (q.quote ? '<br><i>“' + esc(q.quote) + '”</i>' : '') + '<br><span class="good">' + esc(right) + '</span><br><span class="hint">' + esc(q.note) + '</span></div>'; }).join('');
+}
+function result(R){
+  clearInterval(S.t); S.cur = null;
+  var h = '<div class="card" style="text-align:center"><div class="eyebrow">' + esc(R.topic_name) + ' · ' + esc(R.name || '') + '</div>' +
+    '<div class="big">' + R.score + ' / ' + R.total + '</div><div class="chip">' + (R.passed ? 'Passed' : 'Not passed &mdash; ' + R.pass_mark + ' needed') + '</div>' +
+    '<p class="hint">Total time ' + mmss(R.total_ms) + '</p></div>' +
+    '<div class="card"><div class="eyebrow">Question by question</div>' + R.review.map(function(q, i){
+      return '<div class="row"><span>' + (i+1) + '. ' + esc(q.area) + '</span><span class="' + (q.right ? 'good' : 'no') + '">' + (q.out ? 'time out' : q.right ? 'right' : 'wrong') + ' · ' + (q.ms/1000).toFixed(1) + 's</span></div>'; }).join('') +
+    '<details open><summary>The answers</summary>' + reviewHtml(R) + '</details></div>' +
+    '<button class="btn" id="back">Back</button>';
+  app.innerHTML = h; window.scrollTo(0, 0);
+  document.getElementById('back').onclick = function(){ signIn(S.emp); };
+}
+
+/* ---------- a checker reads a sample ---------- */
+function sample(topic){
+  call({ action:'sample', topic:topic, emp:S.emp, jwt:S.jwt }).then(function(r){
+    if(!r.ok){ S.err = say(r.error); return home(); }
+    app.innerHTML = '<div class="top"><button class="link" id="back">‹ Back</button><span class="eyebrow">Sample &mdash; ' + esc(r.topic_name) + '</span></div>' +
+      '<div class="card"><p class="hint">Ten questions built just now from ' + esc(r.menu) + ' and the wine list, with the right answers. Every test is built the same way from what the Food &amp; Beverage Bible shows. Read them; if one is wrong, do not check this topic and tell Francesco.</p>' +
+      reviewHtml(r) + '<button class="btn ghost" id="again">Another ten</button></div>';
+    document.getElementById('back').onclick = home;
+    document.getElementById('again').onclick = function(){ sample(topic); };
+  });
+}
+
+/* ---------- managers: who has passed what ---------- */
+function boardView(){
+  call({ action:'board', emp:S.emp, jwt:S.jwt }).then(function(r){
+    if(!r.ok){ S.err = say(r.error); return home(); }
+    var h = '<div class="top"><button class="link" id="back">‹ Back</button><span class="eyebrow">Team</span></div>';
+    if(r.waiting.length) h += '<div class="card"><div class="eyebrow">Not open to the team yet</div>' + r.waiting.map(function(w){ return '<div class="row"><span>' + esc(w.name) + '</span><span>' + (w.status === 'checked' ? 'waiting for approval' : 'waiting for the check') + '</span></div>'; }).join('') + '</div>';
+    if(!r.topics.length) h += '<div class="card"><p class="hint">No topic is open to the team yet, so there is nothing to track.</p></div>';
+    else {
+      var open = 0, total = 0;
+      r.rows.forEach(function(p){ p.topics.forEach(function(t){ if(t.required){ total++; if(t.state === 'passed') open++; } }); });
+      h += '<div class="card"><div class="eyebrow">Compulsory topics passed</div><div class="big">' + open + ' / ' + total + '</div></div>';
+      h += '<div class="card"><div class="eyebrow">By person</div><table><tr><th>Name</th>' + r.topics.map(function(t){ return '<th>' + esc(t.name) + '</th>'; }).join('') + '</tr>' +
+        r.rows.map(function(p){
+          return '<tr><td>' + esc(p.name) + '<div class="hint">' + esc(p.role || '') + '</div></td>' + p.topics.map(function(t){
+            var s = t.state === 'passed' ? '<span class="good">Passed</span>' : t.state === 'expired' ? '<span class="no">Expired</span>' : t.state === 'tried' ? '<span class="no">Not passed</span>' : t.required ? '<span class="no">To do</span>' : '–';
+            return '<td>' + s + (t.best ? '<div class="hint">' + t.best.score + '/5 · ' + mmss(t.best.ms) + (t.tries > 1 ? ' · ' + t.tries + ' tries' : '') + '</div>' : '') + '</td>'; }).join('') + '</tr>'; }).join('') + '</table>' +
+        '<div class="hint" style="margin-top:8px">Best score and its time. &ldquo;To do&rdquo; = compulsory for that job title and not passed.</div></div>';
+    }
+    app.innerHTML = h; document.getElementById('back').onclick = home;
+  });
+}
+boot();
+</script></body></html>
