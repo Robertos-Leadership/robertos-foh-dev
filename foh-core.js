@@ -7390,7 +7390,7 @@ async function fohKplDoPublish(){
   var rosterReplaced=false, snapRows=[];
   try{
     // 1) snapshot current live rows in range (for revert)
-    if(dates.length){ var snapRes = await sb.from('foh_roster').select('*').gte('work_date',minD).lte('work_date',maxD).in('staff_id', existingIds).limit(8000); if(snapRes.error) throw snapRes.error; snapRows = snapRes.data||[]; }
+    if(dates.length){ var snapRes = await fohFetchAllPaged(function(){ return sb.from('foh_roster').select('*').gte('work_date',minD).lte('work_date',maxD).in('staff_id', existingIds).order('id'); }); if(snapRes.error) throw snapRes.error; snapRows = snapRes.data||[]; }
     var priorSections={}; moves.forEach(function(id){ var s=fohKplStaff.find(function(x){return x.id===id;}); priorSections[id]=s?s.section:null; });
     var priorOrders={}; reorders.forEach(function(id){ var s=fohKplStaff.find(function(x){return x.id===id;}); priorOrders[id]=s?s.sort_order:null; });
     // 2) sections FIRST (so people can sit in new ones)
@@ -7516,13 +7516,27 @@ function fohKrtRender(){
 }
 function fohKrtBusy(){ document.getElementById('foh-krt-grid').innerHTML='<div style="padding:36px;text-align:center;color:var(--vino-light);font-style:italic">Loading…</div>'; }
 function fohKrtLoad(){ return fohKrtWeeks>1 ? fohKrtLoadRange(fohKrtWeeks) : fohLoadSchedData(); }
+// The server caps every read at 1,000 rows whatever .limit() asks for; a multi-week roster is ~290 rows a week,
+// so a 4-week look back was silently cut short. Pages of 1,000 until a short page; makeQuery must carry a unique .order().
+async function fohFetchAllPaged(makeQuery){
+  var out=[], from=0, PAGE=1000;
+  for(;;){
+    var res=await makeQuery().range(from, from+PAGE-1);
+    if(res && res.error) return { data:out, error:res.error };
+    var batch=(res && res.data) || [];
+    out=out.concat(batch);
+    if(batch.length<PAGE) break;
+    from+=PAGE;
+  }
+  return { data:out, error:null };
+}
 async function fohKrtLoadRange(numWeeks){
   var from = formatDate(addDays(fohSchedWeekStart,-7));
   var to   = formatDate(addDays(fohSchedWeekStart, numWeeks*7+6));
   var res = await Promise.all([
     // Same as fohLoadSchedData -- active is applied below, against the roster.
     sb.from('foh_staff').select('*').order('sort_order'),
-    sb.from('foh_roster').select('*').gte('work_date',from).lte('work_date',to).limit(8000),
+    fohFetchAllPaged(function(){ return sb.from('foh_roster').select('*').gte('work_date',from).lte('work_date',to).order('id'); }),
     sb.from('foh_events').select('*').gte('event_date',from).lte('event_date',to).limit(3000)
   ]);
   // Same required-read guard as fohLoadSchedData — a failed fetch must not render
