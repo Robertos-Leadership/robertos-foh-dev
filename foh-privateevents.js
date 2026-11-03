@@ -121,16 +121,22 @@ function peFeeApplies(e){
   // She can include the 7% in the price on their proposal — only she (see peCanIncludeFee).
   if(e.fee_included === true) return false;
   if(e.id && PE_FEE_KEEP_INCLUSIVE.indexOf(e.id) >= 0) return false;
-  // Eva, 3 Nov 2026 (Tell us), decided by Francesco: a MINIMUM SPEND carries no 7% fee on top —
-  // the minimum is what the guest pays. Packages / set prices keep the fee. A booking whose deposit
-  // is already paid, or that is already signed, keeps the figure it was agreed on. Decided by
-  // DATE and a CLOSED id list (never by status/signed_at alone, which change after the fact).
-  if(e.pricing_type === 'min_spend' && e.event_date && String(e.event_date).slice(0,10) >= PE_MINSPEND_NOFEE_FROM
-     && !(e.id && PE_MINSPEND_KEEP_FEE.indexOf(e.id) >= 0)
-     && !(e.signed_at && String(e.signed_at).slice(0,10) < PE_MINSPEND_NOFEE_FROM)) return false;
   if(e.signed_at && String(e.signed_at).slice(0,10) < PE_FEE_FROM) return false;
   if(e.event_date && String(e.event_date).slice(0,10) < PE_FEE_FROM) return false;
   return true;
+}
+// Eva, 3 Nov 2026 (Tell us), decided by Francesco: the MINIMUM SPEND amount itself carries no
+// 7% fee on top. Packages, set prices and the menu items on a minimum-spend booking keep the fee.
+// Decided by DATE and a CLOSED id list (never by status/signed_at alone, which change after the
+// fact). peMinE(e) is the booking read for its minimum-spend amount only.
+function peMinNoFee(e){
+  return !!(e && e.pricing_type === 'min_spend' && e.event_date && String(e.event_date).slice(0,10) >= PE_MINSPEND_NOFEE_FROM
+    && !(e.id && PE_MINSPEND_KEEP_FEE.indexOf(e.id) >= 0)
+    && !(e.signed_at && String(e.signed_at).slice(0,10) < PE_MINSPEND_NOFEE_FROM));
+}
+function peMinE(e){
+  if(!peMinNoFee(e)) return e;
+  var c = {}; for(var k in e) c[k] = e[k]; c.fee_included = true; return c;
 }
 // The fee on an amount at menu prices, in whole dirhams, worked so the fee and the
 // total always add up on the page: fee = round(amount × 1.225/1.155) − amount.
@@ -2008,8 +2014,8 @@ function peEventValue(e){
     if(vals.length) return pePayable(e, Math.min.apply(null, vals));
   }
   var v = peAgBase(e);                       // respects pricing_type — min spend means the minimum
-  if(v != null && v !== 0) return pePayable(e, v);
-  if(e.min_spend) return pePayable(e, Number(e.min_spend));
+  if(v != null && v !== 0) return pePayable(peMinE(e), v);
+  if(e.min_spend) return pePayable(peMinE(e), Number(e.min_spend));
   // Minimum-spend pricing picked, amount not typed yet. peAgBase returns null
   // there ON PURPOSE — nothing can be signed against an empty minimum and that
   // gate stays. But for REPORTING, valuing it at nothing hid a real menu with
@@ -3287,7 +3293,7 @@ function peAgBase(e){
   return t.total;   // already has the discount taken off
 }
 // What the guest pays on the agreement: the quoted base plus the 7% fee when it applies.
-function peAgPayable(e){ return pePayable(e, peAgBase(e)); }
+function peAgPayable(e){ return pePayable(peMinE(e), peAgBase(e)); }
 function peDepositAmt(e){
   var base = peAgPayable(e);
   var pct = e.deposit_pct==null ? 50 : Number(e.deposit_pct);
@@ -3503,7 +3509,7 @@ function peRenderEvent(){
       ? 'AED '+peMoney(t.actual)+' <span style="font-size:10.5px;font-weight:400;color:#4F4535">· actual on the night</span>'
       : (t.total!=null
         ? 'AED '+peMoney(t.total)+' <span style="font-size:10.5px;font-weight:400;color:#4F4535">· '+peMoney(t.perGuest)+'/guest'+(t.fee?' · AED '+peMoney(t.payable)+' with the 7% fee':'')+'</span>'
-        : (e.min_spend ? 'Min spend AED '+peMoney(e.min_spend)+(peFeeOn(e, e.min_spend)?' <span style="font-size:10.5px;font-weight:400;color:#4F4535">· AED '+peMoney(pePayable(e, e.min_spend))+' with the 7% fee</span>':'') : 'AED — <span style="font-size:10.5px;font-weight:400;color:#4F4535">set food + guests</span>')))+'</b></div>';
+        : (e.min_spend ? 'Min spend AED '+peMoney(e.min_spend)+(peFeeOn(peMinE(e), e.min_spend)?' <span style="font-size:10.5px;font-weight:400;color:#4F4535">· AED '+peMoney(pePayable(peMinE(e), e.min_spend))+' with the 7% fee</span>':'') : 'AED — <span style="font-size:10.5px;font-weight:400;color:#4F4535">set food + guests</span>')))+'</b></div>';
 
   // facts — a new event shows only the 4 essentials; the rest live under
   // "More details" and auto-open the moment any of them holds real data.
@@ -3654,7 +3660,7 @@ function peRenderEvent(){
       (agBase!=null
         ? (e.pricing_type==='min_spend'?'Minimum spend':'Quoted price')+': <b style="color:#400207">AED '+peMoney(agBase)+'</b>'+
           (agDisc>0?' <span style="color:#4A6B2E">(after AED '+peMoney(agDisc)+' courtesy)</span>':'')+
-          (peFeeOn(e, agBase)?' + 7% DIFC fee AED '+peMoney(peFeeOn(e, agBase))+' = <b style="color:#400207">AED '+peMoney(peAgPayable(e))+'</b> to pay':'')+
+          (peFeeOn(peMinE(e), agBase)?' + 7% DIFC fee AED '+peMoney(peFeeOn(peMinE(e), agBase))+' = <b style="color:#400207">AED '+peMoney(peAgPayable(e))+'</b> to pay':'')+
           (agPct>0?' · deposit '+agPct+'%: <b style="color:#400207">AED '+peMoney(agDep)+'</b>':' · no deposit — balance on the day')
         : (e.pricing_type==='min_spend'
             ? '<span style="color:#B00020;cursor:pointer;text-decoration:underline" onclick="peScrollToField(\'min_spend\',\'Type the minimum spend in the facts above\')">▲ Set the minimum spend above first.</span>'
@@ -3738,16 +3744,16 @@ function peRenderEvent(){
     h += '<div class="pe-tot-row"><span>+ 7% DIFC Authority Fee</span><b>AED '+peMoney(t.fee)+'</b></div>'+
       '<div class="pe-tot-row" style="border-top:1px solid #DCC9B2;margin-top:4px;padding-top:7px"><span>Guest pays</span><b style="color:#400207">AED '+peMoney(t.payable)+'</b></div>';
   } else if(t.total && !t.feeOn){
-    h += '<div style="font-size:11px;color:#4F4535;margin-top:4px">All-inclusive — no 7% DIFC fee is added on top of this booking.</div>';
+    h += '<div style="font-size:11px;color:#4F4535;margin-top:4px">All-inclusive — this booking keeps the terms from before 16 Sep 2026 (no 7% fee on top).</div>';
   }
-  if(isMin && msAmt && peFeeOn(e, msAmt)){
-    h += '<div style="font-size:11.5px;color:#574232;margin-top:4px">Minimum spend AED '+peMoney(msAmt)+' + 7% DIFC fee = <b>AED '+peMoney(pePayable(e, msAmt))+'</b></div>';
+  if(isMin && msAmt && peFeeOn(peMinE(e), msAmt)){
+    h += '<div style="font-size:11.5px;color:#574232;margin-top:4px">Minimum spend AED '+peMoney(msAmt)+' + 7% DIFC fee = <b>AED '+peMoney(pePayable(peMinE(e), msAmt))+'</b></div>';
   }
   // Only compare once something is actually priced. Comparing against a total of 0
   // told her every untouched minimum-spend booking was short by its whole minimum —
   // which then made the warning meaningless on the bookings that genuinely fall short.
   if(e.min_spend && t.total){
-    var gap = Number(e.min_spend)-t.total;
+    var gap = Number(e.min_spend)-(peMinNoFee(e) ? t.payable : t.total);   // the minimum carries no fee, so compare it with what the guest actually pays
     h += gap>0 ? '<div class="pe-flag" style="color:#7A5500">▲ AED '+peMoney(gap)+' below the '+peMoney(e.min_spend)+' min spend</div>'
                : '<div class="pe-flag" style="color:#2E5B30">✓ Min spend covered</div>';
   }
@@ -4396,7 +4402,7 @@ function peAskFeeIncluded(id){
   var e = peEvById(id); if(!e) return;
   if(!peCanIncludeFee()){ peToast('Only Sophie can include the 7% fee in the price', true); return; }
   if(e.signed_at){ peToast('This agreement is signed — its terms are frozen', true); return; }
-  var waived = peFeeWaivedAmt(e, peAgBase(e));
+  var waived = peMinNoFee(e) ? null : peFeeWaivedAmt(e, peAgBase(e));
   var bg = document.createElement('div'); bg.className='pe-modal-bg';
   bg.addEventListener('click', function(ev){ if(ev.target===bg) bg.remove(); });
   bg.innerHTML = '<div class="pe-modal" style="max-width:440px">'+
@@ -5510,7 +5516,7 @@ function peProposalHTML(e, noPrice){
       body += '<div class="dish" style="font-size:15px">Option '+peEsc(o.key)+(o.name?' — '+peEsc(o.name):'')+
         '<br><span class="d">'+[o.area?peEsc(o.area):'', g?g+' guests':''].filter(Boolean).join(' · ')+
         (o.note?'<br>'+peEsc(o.note):'')+'</span>'+
-        ((tot!=null && !noPrice) ? '<br>'+(o.min_spend ? 'Minimum spend AED '+peMoney(tot) : 'AED '+peMoney(tot)+(peFeeApplies(e)?' — service charge and VAT included':' — everything included'))+peFeeLineHTML(e, tot) : '')+
+        ((tot!=null && !noPrice) ? '<br>'+(o.min_spend ? 'Minimum spend AED '+peMoney(tot) : 'AED '+peMoney(tot)+(peFeeApplies(e)?' — service charge and VAT included':' — everything included'))+peFeeLineHTML(o.min_spend?peMinE(e):e, tot) : '')+
         '</div>';
     });
     body += '<div class="d" style="margin-top:10px">Let us know which one you would like and we will hold it for you.</div>';
@@ -5542,7 +5548,7 @@ function peProposalHTML(e, noPrice){
     body += '<div class="rule" style="margin-top:26px"></div><div class="sec">Your event</div>'+
       '<div class="dish" style="font-size:15px">Minimum spend AED '+peMoney(msBase)+
       (msDisc>0?'<br><span class="d" style="color:#5B6737">including a courtesy of AED '+peMoney(msDisc)+'</span>':'')+
-      peFeeLineHTML(e, msBase)+'</div>';
+      peFeeLineHTML(peMinE(e), msBase)+'</div>';
   }
   // Nothing stands in for the money on a no-price proposal — no placeholder, no
   // "pricing to follow". The VAT sentence goes with it: it is a statement about
@@ -5605,7 +5611,7 @@ function peBriefBodyHTML(e){
   var bevB = peBev2Of(e);
   if(bevB) body += row('Beverage (2nd)', bevB.name+(bevB.price_pp!=null?' · AED '+peMoney(bevB.price_pp)+'/guest':' · price on the proposal')+peBevFor(e,'bev_guests_2').replace(' — ',' · '));
   body += row('Estimated total', t.total ? 'AED '+peMoney(t.total)+(t.fee?' + 7% DIFC fee AED '+peMoney(t.fee)+' = AED '+peMoney(t.payable):'') : '—')+
-    row('Minimum spend', e.min_spend?'AED '+peMoney(e.min_spend)+(peFeeOn(e, e.min_spend)?' + 7% DIFC fee = AED '+peMoney(pePayable(e, e.min_spend)):''):'—');
+    row('Minimum spend', e.min_spend?'AED '+peMoney(e.min_spend)+(peFeeOn(peMinE(e), e.min_spend)?' + 7% DIFC fee = AED '+peMoney(pePayable(peMinE(e), e.min_spend)):''):'—');
   body += row('Dietary', e.dietary)+row('Payment', e.payment_terms);
   // When the BOOKING last changed — not when the paper was printed. This used to be
   // new Date() plus whoever was holding the screen, so the one line a chef would use
