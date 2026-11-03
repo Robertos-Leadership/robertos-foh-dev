@@ -45,12 +45,18 @@ async function deskList(sb: any): Promise<string[]> {
 const FEE_FROM = "2026-09-16";
 const MENU_DIV = 1.155, BILL_DIV = 1.225;
 const FEE_KEEP_INCLUSIVE = ["bfaf6ab0-69ea-4ac0-846a-2dab6245d3fe"]; // deposit taken on the all-inclusive minimum
+const MINSPEND_NOFEE_FROM = "2026-11-03";
+const MINSPEND_KEEP_FEE = ["2d7174a2-0b60-4aa2-b03a-28dc430e74c6", "25ffc102-9658-440e-bf97-f56ab49ed21a"]; // deposit paid with the fee; closed list
 const NOTE_NEW = "All prices are in AED and inclusive of 10% service charge and 5% VAT, subject to an additional 7% DIFC Authority Fee.";
 const NOTE_OLD = "All prices are in AED, inclusive of 5% VAT, 7% DIFC authority fee and 10% service charge.";
 // deno-lint-ignore no-explicit-any
 function feeApplies(ev: any): boolean {
   if (ev.fee_included === true) return false; // Sophie included the 7% in the price for this client (15 Sep 2026)
   if (ev.id && FEE_KEEP_INCLUSIVE.indexOf(ev.id) >= 0) return false;
+  // 3 Nov 2026: a minimum spend carries no 7% fee on top (same rule as the FOH app); signed or deposit-paid bookings keep their figure.
+  if (ev.pricing_type === "min_spend" && ev.event_date && String(ev.event_date).slice(0, 10) >= MINSPEND_NOFEE_FROM
+    && MINSPEND_KEEP_FEE.indexOf(ev.id) < 0
+    && !(ev.signed_at && String(ev.signed_at).slice(0, 10) < MINSPEND_NOFEE_FROM)) return false;
   if (ev.signed_at && String(ev.signed_at).slice(0, 10) < FEE_FROM) return false;
   if (ev.event_date && String(ev.event_date).slice(0, 10) < FEE_FROM) return false;
   return true;

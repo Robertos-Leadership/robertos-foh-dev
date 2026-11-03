@@ -111,6 +111,11 @@ var PE_MENU_DIV = 1.155;
 var PE_FEE_KEEP_INCLUSIVE = [
   'bfaf6ab0-69ea-4ac0-846a-2dab6245d3fe'   // Gracia Valladian, 17 Sep — deposit paid on the all-inclusive minimum
 ];
+var PE_MINSPEND_NOFEE_FROM = '2026-11-03';
+var PE_MINSPEND_KEEP_FEE = [
+  '2d7174a2-0b60-4aa2-b03a-28dc430e74c6',  // Nilushi, 5 Nov — deposit paid on the figure with the fee
+  '25ffc102-9658-440e-bf97-f56ab49ed21a'   // Sarah Oakes, 20 Nov — deposit paid on the figure with the fee
+];  // closed list, never grows
 var PE_PRICE_NOTE = 'All prices are in AED and inclusive of 10% Service Charge and 5% VAT, subject to an additional 7% DIFC Authority Fee.';
 var PE_PRICE_NOTE_OLD = 'All prices are in AED inclusive of 5% VAT, 7% DIFC Authority Fee and 10% Service Charge.';
 function peFeeApplies(e){
@@ -119,6 +124,13 @@ function peFeeApplies(e){
   // She can include the 7% in the price on their proposal — only she (see peCanIncludeFee).
   if(e.fee_included === true) return false;
   if(e.id && PE_FEE_KEEP_INCLUSIVE.indexOf(e.id) >= 0) return false;
+  // Eva, 3 Nov 2026 (Tell us), decided by Francesco: a MINIMUM SPEND carries no 7% fee on top —
+  // the minimum is what the guest pays. Packages / set prices keep the fee. A booking whose deposit
+  // is already paid, or that is already signed, keeps the figure it was agreed on. Decided by
+  // DATE and a CLOSED id list (never by status/signed_at alone, which change after the fact).
+  if(e.pricing_type === 'min_spend' && e.event_date && String(e.event_date).slice(0,10) >= PE_MINSPEND_NOFEE_FROM
+     && !(e.id && PE_MINSPEND_KEEP_FEE.indexOf(e.id) >= 0)
+     && !(e.signed_at && String(e.signed_at).slice(0,10) < PE_MINSPEND_NOFEE_FROM)) return false;
   if(e.signed_at && String(e.signed_at).slice(0,10) < PE_FEE_FROM) return false;
   if(e.event_date && String(e.event_date).slice(0,10) < PE_FEE_FROM) return false;
   return true;
