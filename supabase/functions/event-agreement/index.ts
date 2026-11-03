@@ -46,7 +46,7 @@ const FEE_FROM = "2026-09-16";
 const MENU_DIV = 1.155, BILL_DIV = 1.225;
 const FEE_KEEP_INCLUSIVE = ["bfaf6ab0-69ea-4ac0-846a-2dab6245d3fe"]; // deposit taken on the all-inclusive minimum
 const MINSPEND_NOFEE_FROM = "2026-11-03";
-const MINSPEND_KEEP_FEE = ["2d7174a2-0b60-4aa2-b03a-28dc430e74c6", "25ffc102-9658-440e-bf97-f56ab49ed21a"]; // deposit paid with the fee; closed list
+const MINSPEND_KEEP_FEE: string[] = []; // emptied 3 Nov 2026: every minimum spend from 3 Nov is off the fee
 const NOTE_NEW = "All prices are in AED and inclusive of 10% service charge and 5% VAT, subject to an additional 7% DIFC Authority Fee.";
 const NOTE_OLD = "All prices are in AED, inclusive of 5% VAT, 7% DIFC authority fee and 10% service charge.";
 // deno-lint-ignore no-explicit-any

@@ -112,10 +112,7 @@ var PE_FEE_KEEP_INCLUSIVE = [
   'bfaf6ab0-69ea-4ac0-846a-2dab6245d3fe'   // Gracia Valladian, 17 Sep — deposit paid on the all-inclusive minimum
 ];
 var PE_MINSPEND_NOFEE_FROM = '2026-11-03';
-var PE_MINSPEND_KEEP_FEE = [
-  '2d7174a2-0b60-4aa2-b03a-28dc430e74c6',  // Nilushi, 5 Nov — deposit paid on the figure with the fee
-  '25ffc102-9658-440e-bf97-f56ab49ed21a'   // Sarah Oakes, 20 Nov — deposit paid on the figure with the fee
-];  // closed list, never grows
+var PE_MINSPEND_KEEP_FEE = [];  // 3 Nov 2026: emptied — every minimum spend from 3 Nov is off the fee, deposit paid or not
 var PE_PRICE_NOTE = 'All prices are in AED and inclusive of 10% Service Charge and 5% VAT, subject to an additional 7% DIFC Authority Fee.';
 var PE_PRICE_NOTE_OLD = 'All prices are in AED inclusive of 5% VAT, 7% DIFC Authority Fee and 10% Service Charge.';
 function peFeeApplies(e){
@@ -3741,7 +3738,7 @@ function peRenderEvent(){
     h += '<div class="pe-tot-row"><span>+ 7% DIFC Authority Fee</span><b>AED '+peMoney(t.fee)+'</b></div>'+
       '<div class="pe-tot-row" style="border-top:1px solid #DCC9B2;margin-top:4px;padding-top:7px"><span>Guest pays</span><b style="color:#400207">AED '+peMoney(t.payable)+'</b></div>';
   } else if(t.total && !t.feeOn){
-    h += '<div style="font-size:11px;color:#4F4535;margin-top:4px">All-inclusive — this booking keeps the terms from before 16 Sep 2026 (no 7% fee on top).</div>';
+    h += '<div style="font-size:11px;color:#4F4535;margin-top:4px">All-inclusive — no 7% DIFC fee is added on top of this booking.</div>';
   }
   if(isMin && msAmt && peFeeOn(e, msAmt)){
     h += '<div style="font-size:11.5px;color:#574232;margin-top:4px">Minimum spend AED '+peMoney(msAmt)+' + 7% DIFC fee = <b>AED '+peMoney(pePayable(e, msAmt))+'</b></div>';
