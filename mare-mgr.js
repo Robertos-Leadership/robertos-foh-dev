@@ -128,7 +128,8 @@
       '<label class="f" for="pw">' + E(T('Password')) + '<input id="pw" type="password" autocomplete="current-password" required></label>' +
       (err ? '<div class="err">' + E(err) + '</div>' : '') + '<button class="btn" type="submit">' + E(T('Sign in')) + '</button>' +
       '<details><summary>' + E(T('First time, or forgot your password?')) + '</summary><div class="small muted" style="margin-top:8px;line-height:1.6">' +
-      E(T('Open the link in your email and choose a password. If the link does not work any more, ask your admin to send a new one.')) + '</div></details>' +
+      E(T('Open the link in your email and choose a password. If the link does not work any more, ask your admin to send a new one.')) +
+      '</div><div class="row" style="margin-top:10px"><button class="btn ghost" type="button" id="fgo">' + E(T('Email me a reset code')) + '</button></div></details>' +
       '<details><summary>' + E(T('I have a master code')) + '</summary><div class="row" style="gap:10px;align-items:flex-end;margin-top:10px"><label class="f" for="mc" style="flex:1">' + E(T('Master code')) +
       '<input id="mc" type="text" inputmode="numeric" autocomplete="off" style="-webkit-text-security:disc"></label><button class="btn ghost" type="button" id="mcgo">' + E(T('Open')) + '</button></div></details></form></div></div>';
     // Master codes open everything (Francesco, 9 Oct 2026): the code signs in its holder's own login.
@@ -141,11 +142,67 @@
         .then(function (v) { if (v.error || !v.data.session) throw new Error('otp'); App.S.token = v.data.session.access_token; App.S.email = (v.data.session.user.email || '').toLowerCase(); App.boot(); },
               function () { App.signIn(T('That code is not right.')); });
     };
+    document.getElementById('fgo').onclick = function () { App.forgot(document.getElementById('em').value.trim()); };
     document.getElementById('f').onsubmit = function (ev) {
       ev.preventDefault();
       sb.auth.signInWithPassword({ email: document.getElementById('em').value.trim(), password: document.getElementById('pw').value }).then(function (r) {
         if (r.error) { App.signIn(T('Email or password not right.')); return; }
         App.S.token = r.data.session.access_token; App.S.email = (r.data.session.user.email || '').toLowerCase(); App.boot();
+      });
+    };
+  };
+  // Forgot password, no admin needed: the same `password-reset` edge function the FOH app uses (same Supabase
+  // project, same accounts). It emails a 6-digit code (15 min, 5 tries), then sets the password the person types.
+  // It never says whether an address has an account, so neither does this screen.
+  App.forgot = function (email, step, msg) {
+    var a = document.getElementById('app'), set = step === 'set';
+    a.innerHTML = '<div class="hero" style="min-height:100vh;justify-content:center"><div class="hero-top"><span></span>' + M.langSwitch() + '</div>' +
+      '<div style="padding:20px 16px 60px"><form class="signin card" id="rf" style="color:var(--ink)">' +
+      '<div class="row"><img src="mare-logo-teal.svg" alt="" style="width:56px;height:56px"><h2 class="serif">' + E(T('Forgot your password?')) + '</h2></div>' +
+      (set
+        ? '<p class="muted" style="margin:0">' + E(T('If {e} has an account, a 6-digit code is on its way. It works for 15 minutes. If it is not there in a minute, look in your junk folder.', { e: email })) + '</p>' +
+          '<label class="f" for="rc">' + E(T('6-digit code from the email')) + '<input id="rc" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" required></label>' +
+          '<label class="f" for="r1">' + E(T('New password')) + '<input id="r1" type="password" autocomplete="new-password" required minlength="8"></label>' +
+          '<label class="f" for="r2">' + E(T('The same password again')) + '<input id="r2" type="password" autocomplete="new-password" required minlength="8"></label>'
+        : '<p class="muted" style="margin:0">' + E(T('Type your email. We send you a 6-digit code, then you choose a new password.')) + '</p>' +
+          '<label class="f" for="re">' + E(T('Email')) + '<input id="re" type="email" autocomplete="username" required value="' + E(email || '') + '"></label>') +
+      '<div class="err" id="rerr">' + E(msg || '') + '</div>' +
+      '<button class="btn" type="submit" id="rgo">' + E(set ? T('Set new password') : T('Email me the code')) + '</button>' +
+      (set ? '<button class="btn ghost" type="button" id="rag">' + E(T('Send a new code')) + '</button>' : '') +
+      '<button class="btn ghost" type="button" id="rback">' + E(T('Back to sign in')) + '</button></form></div></div>';
+    function call(payload) {
+      return fetch(M.SB_URL + '/functions/v1/password-reset', { method: 'POST', headers: { 'Content-Type': 'application/json', apikey: M.SB_KEY, Authorization: 'Bearer ' + M.SB_KEY }, body: JSON.stringify(payload) })
+        .then(function (r) { return r.json().catch(function () { return {}; }); })
+        .then(function (d) { return d && d.ok ? { ok: true } : { ok: false, error: (d && d.error) || T('Something went wrong. Please try again.') }; },
+              function () { return { ok: false, error: T('No connection. Check the wifi and try again.') }; });
+    }
+    var er = document.getElementById('rerr'), go = document.getElementById('rgo');
+    document.getElementById('rback').onclick = function () { App.signIn(); };
+    if (set) document.getElementById('rag').onclick = function () {
+      this.disabled = true; call({ action: 'request', email: email }).then(function (r) { App.forgot(email, 'set', r.ok ? T('A new code is on its way.') : r.error); });
+    };
+    document.getElementById('rf').onsubmit = function (ev) {
+      ev.preventDefault(); er.textContent = '';
+      if (!set) {
+        var em = document.getElementById('re').value.trim().toLowerCase();
+        if (em.indexOf('@') < 0) { er.textContent = T('Enter the email address you sign in with.'); return; }
+        go.disabled = true;
+        call({ action: 'request', email: em }).then(function (r) { if (!r.ok) { go.disabled = false; er.textContent = r.error; return; } App.forgot(em, 'set'); });
+        return;
+      }
+      var code = document.getElementById('rc').value.replace(/\D/g, ''), p1 = document.getElementById('r1').value, p2 = document.getElementById('r2').value;
+      // Everything they can fix themselves is checked before a try is spent on the code (5 wrong tries kills it).
+      if (code.length !== 6) { er.textContent = T('Enter the 6-digit code from the email.'); return; }
+      if (p1.length < 8) { er.textContent = T('The password needs at least 8 characters.'); return; }
+      if (p1 !== p2) { er.textContent = T('The two passwords are not the same.'); return; }
+      go.disabled = true;
+      call({ action: 'confirm', email: email, code: code, password: p1 }).then(function (r) {
+        if (!r.ok) { go.disabled = false; er.textContent = r.error; return; }
+        // Straight in with the password they just chose.
+        sb.auth.signInWithPassword({ email: email, password: p1 }).then(function (x) {
+          if (x.error || !x.data.session) { App.signIn(null); App.say(T('Password changed. Sign in with your new one.')); return; }
+          App.S.token = x.data.session.access_token; App.S.email = (x.data.session.user.email || '').toLowerCase(); App.say(T('Password changed.')); App.boot();
+        });
       });
     };
   };
