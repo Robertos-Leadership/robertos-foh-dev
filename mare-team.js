@@ -1108,7 +1108,7 @@
   function orPaint() {
     var TABS = [['kitchen', 'Kitchen'], ['bar', 'Bar']], d = OR.d, q = OR.q.toLowerCase();
     var sups = {}; d.suppliers.forEach(function (x) { sups[x.id] = x; });
-    var arts = d.articles.filter(function (a) { return a.store === OR.store; });
+    var arts = d.articles.filter(function (a) { return a.store === OR.store; }).sort(function (x, y) { return orName(x).localeCompare(orName(y), M.lang() === 'me' ? 'sr-Latn' : 'en', { sensitivity: 'base', numeric: true }); });
     var list = arts.filter(function (a) { return !q || (a.name + ' ' + (a.name_me || '') + ' ' + (a.name_en || '') + ' ' + a.code).toLowerCase().indexOf(q) >= 0; });
     var inB = arts.filter(function (a) { return OR.b[a.id] > 0; });
     var tot = inB.reduce(function (s, a) { return s + (a.price != null ? a.price * OR.b[a.id] : 0); }, 0), ns = {};

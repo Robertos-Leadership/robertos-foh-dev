@@ -1180,6 +1180,7 @@ window.MARE_ME = {
 "{n} articles": "{n} artikala",
 "{n} articles have no supplier yet": "{n} artikala još nema dobavljača",
 "{n} articles on the app list are not in this file": "{n} artikala sa liste u aplikaciji nije u ovom fajlu",
+"{n} articles you took off the order list stay off": "{n} artikala koje ste skinuli sa liste za naručivanje ostaju skinuti",
 "{n} articles updated.": "Ažurirano artikala: {n}.",
 "{n} lines": "{n} stavki",
 "{n} lines read": "Pročitano stavki: {n}",

@@ -62,6 +62,11 @@
   function nm(a) { var s = split(a.name); return M.lang() === 'me' ? (a.name_me || s[0]) : (a.name_en || s[1]); }
   function nm2(a) { var s = split(a.name); var o = M.lang() === 'me' ? (a.name_en || s[1]) : (a.name_me || s[0]); return o !== nm(a) ? o : ''; }
   O.nm = nm;
+  // Every list is sorted by the name AS SHOWN (4 Nov 2026). The stored name often starts in Montenegrin
+  // ("Ananas / pineapple") while the screen shows the English half, so sorting the stored column read as
+  // "pineapple" between Amaretto and Avokado. Case-insensitive; Montenegrin letters sort as in Serbian Latin.
+  function byName(x, y) { return nm(x).localeCompare(nm(y), M.lang() === 'me' ? 'sr-Latn' : 'en', { sensitivity: 'base', numeric: true }); }
+  O.byName = byName;
   var STORES = { kitchen: 'Kitchen', bar: 'Bar' };
   var UNITS = { kom: 'pcs', KG: 'kg', L: 'L' };
   function unit(u) { return u ? T(UNITS[u] || u) : ''; }
@@ -120,7 +125,7 @@
       return '<button class="mo-chip ' + (cls || '') + (on ? ' on' : '') + '" ' + (store ? 'data-store="' + store + '"' : 'data-flt="' + f + '"') + '>' + E(T(label)) + ' · ' + (store ? (store === 'all' ? all.filter(function (a) { return a.active; }).length : all.filter(function (a) { return a.store === store && a.active; }).length) : count(f)) + '</button>';
     }
     function paint() {
-      var list = all.filter(function (a) { return pass(a); });
+      var list = all.filter(function (a) { return pass(a); }).sort(byName);
       var ticked = Object.keys(O.tick).filter(function (id) { return O.tick[id]; });
       var h = '<section class="stack">' +
         '<div class="row between"><h2 class="serif">' + E(T('Articles')) + '</h2><div class="row"><button class="btn ghost" data-go-up>' + E(T('Upload new prices')) + '</button><button class="btn" id="mo-newa">' + E(T('New article')) + '</button></div></div>' +
@@ -451,8 +456,8 @@
     function lineSup(a) { var ids = sids(a), v = O.bsup[a.id]; return v && ids.indexOf(v) >= 0 ? v : ids[0] || null; }
     function paint() {
       var q = O.nq.toLowerCase();
-      var list = arts.filter(function (a) { return a.store === O.bstore && (!q || (a.name + ' ' + (a.name_me || '') + ' ' + (a.name_en || '') + ' ' + a.code).toLowerCase().indexOf(q) >= 0); });
-      var inB = Object.keys(O.basket).filter(function (id) { return O.basket[id] > 0; }).map(function (id) { return arts.filter(function (a) { return a.id === id; })[0]; }).filter(Boolean);
+      var list = arts.filter(function (a) { return a.store === O.bstore && (!q || (a.name + ' ' + (a.name_me || '') + ' ' + (a.name_en || '') + ' ' + a.code).toLowerCase().indexOf(q) >= 0); }).sort(byName);
+      var inB = Object.keys(O.basket).filter(function (id) { return O.basket[id] > 0; }).map(function (id) { return arts.filter(function (a) { return a.id === id; })[0]; }).filter(Boolean).sort(byName);
       var tot = inB.reduce(function (s, a) { return s + (a.price != null ? a.price * O.basket[a.id] : 0); }, 0);
       var nsup = {}; inB.forEach(function (a) { nsup[lineSup(a) || 'none'] = 1; });
       var h = '<section class="stack"><div class="mo-chips">' + ['kitchen', 'bar'].map(function (s) { return '<button class="mo-chip' + (O.bstore === s ? ' on' : '') + '" data-bst="' + s + '">' + E(T(STORES[s])) + '</button>'; }).join('') + '</div>' +
@@ -539,6 +544,7 @@
           '<div><b>' + r.same + '</b><span>' + E(T('Same price').toUpperCase()) + '</span></div></div>';
         if (r.gone.length) h += '<div class="notice"><b>' + E(T('{n} articles on the app list are not in this file', { n: r.gone.length })) + '</b><span>' + E(r.gone.slice(0, 12).map(function (g) { return g.name; }).join(', ') + (r.gone.length > 12 ? ' …' : '')) + '</span>' +
           (r.applied ? '' : '<label class="row" style="gap:8px"><input type="checkbox" id="uret"' + (U.retire ? ' checked' : '') + ' style="width:22px;height:22px"> ' + E(T('Take them off the order list (they are kept, not deleted)')) + '</label>') + '</div>';
+        if (r.off && r.off.length) h += '<div class="notice"><b>' + E(T('{n} articles you took off the order list stay off', { n: r.off.length })) + '</b><span>' + E(r.off.slice(0, 12).map(function (g) { return g.name; }).join(', ') + (r.off.length > 12 ? ' …' : '')) + '</span></div>';
         if (ch.length) h += '<details' + (ch.length <= 30 ? ' open' : '') + '><summary>' + E(T('Price changes · {n}', { n: ch.length })) + '</summary><table class="mo-diff"><tr><th>' + E(T('Article')) + '</th><th>' + E(T('Was')) + '</th><th>' + E(T('Now')) + '</th><th></th></tr>' + ch.map(function (c) {
           var p = pc(c);
           return '<tr><td>' + E(nm({ name: c.name })) + '<div class="small muted">' + E(c.code) + '</div></td><td class="n">' + (c.old != null ? M.money(+c.old) : '—') + '</td><td class="n">' + (c['new'] != null ? M.money(+c['new']) : E(T('no price'))) + '</td><td class="n ' + (p > 0 ? 'mo-up' : p < 0 ? 'mo-down' : '') + '">' + (p != null && isFinite(p) ? (p > 0 ? '+' : '') + Math.round(p) + '%' : '') + '</td></tr>';
