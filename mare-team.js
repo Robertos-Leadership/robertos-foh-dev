@@ -1200,8 +1200,8 @@
       '<div class="grid2"><label class="f">' + E(T('The total is')) + '<select id="dvv"><option value="with">' + E(T('with PDV')) + '</option><option value="without">' + E(T('without PDV')) + '</option></select></label>' +
       '<label class="f">' + E(T('Invoice number (optional)')) + '<input type="text" id="dvi"></label></div>' +
       '<label class="f">' + E(T('Anything missing or damaged?')) + '<input type="text" id="dvn"></label>' +
-      '<div class="row"><button class="btn ghost" id="dvph">' + E(T('Take a photo of the invoice')) + '</button><span id="dvphs" class="muted"></span></div>' +
-      '<input type="file" accept="image/*" capture="environment" id="dvf" style="display:none">' +
+      '<div class="row"><button class="btn ghost" id="dvph">' + E(T('Take a photo of the invoice')) + '</button><button class="btn ghost" id="dvpg">' + E(T('Choose a photo')) + '</button></div><div id="dvphs" class="muted"></div>' +
+      '<input type="file" accept="image/*" capture="environment" id="dvf" style="display:none"><input type="file" accept="image/*" id="dvg" style="display:none">' +
       '<div class="msg err" id="dvm"></div><button class="btn" id="dvsave" style="align-self:flex-start">' + E(T('Save delivery')) + '</button></div>';
     var rec = d.deliveries.filter(function (x) { return !x.cancelled; });
     if (rec.length) h += '<div class="muted" style="letter-spacing:2px;font-weight:700;margin-top:6px">' + E(T('Recent').toUpperCase()) + '</div><div class="card">' + rec.slice(0, 8).map(function (x) {
@@ -1211,7 +1211,9 @@
     var $ = function (id) { return document.getElementById(id); };
     $('dvs').onchange = function () { $('dvol').style.display = this.value === '__other' ? '' : 'none'; };
     $('dvph').onclick = function () { $('dvf').click(); };
-    $('dvf').onchange = function () { var fl = this.files[0]; if (!fl) return; M.photoFromFile(fl, 1600).then(function (u) { photo = u; $('dvphs').textContent = T('Photo added.'); $('dvm').textContent = ''; }); };
+    $('dvpg').onclick = function () { $('dvg').click(); };
+    function dvPick() { var fl = this.files[0]; if (!fl) return; M.photoFromFile(fl, 1600).then(function (u) { photo = u; $('dvphs').innerHTML = '<img src="' + u + '" alt="" style="max-height:110px;border-radius:8px;vertical-align:middle"> ' + E(T('Photo added.')); $('dvm').textContent = ''; }); }
+    $('dvf').onchange = dvPick; $('dvg').onchange = dvPick;
     $('dvsave').onclick = function () {
       var msg = $('dvm'), sv = $('dvs').value, nm = sv === '__other' ? $('dvo').value.trim() : '';
       if (!sv || (sv === '__other' && nm.length < 2)) { msg.textContent = T('Choose or write the supplier.'); return; }

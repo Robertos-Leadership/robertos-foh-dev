@@ -49,12 +49,15 @@
         '<div class="grid2"><label class="f">' + E(T('The total is')) + '<select id="rv"><option value="with">' + E(T('with PDV')) + '</option><option value="without">' + E(T('without PDV')) + '</option></select></label>' +
         '<label class="f">' + E(T('Invoice number (optional)')) + '<input type="text" id="ri"></label></div>' +
         '<label class="f">' + E(T('Anything missing or damaged?')) + '<input type="text" id="rn"></label>' +
-        '<label class="f">' + E(T('Invoice photo')) + '<input type="file" accept="image/*" capture="environment" id="rp"></label>' +
+        '<div class="stack"><b>' + E(T('Invoice photo')) + '</b><div class="row"><button type="button" class="btn ghost" id="rph">' + E(T('Take a photo of the invoice')) + '</button><button type="button" class="btn ghost" id="rpg">' + E(T('Choose a photo')) + '</button></div><div id="rps" class="small muted"></div>' +
+        '<input type="file" accept="image/*" capture="environment" id="rp" style="display:none"><input type="file" accept="image/*" id="rg" style="display:none"></div>' +
         '<div class="small muted">' + E(T('Received by {n}', { n: App.S.me || '—' })) + '</div>' +
         '<div class="msg err" id="rm"></div><button class="btn" id="rsave" style="align-self:flex-start">' + E(T('Save delivery')) + '</button></div></section>';
       var $ = function (id) { return main.querySelector('#' + id); };
       $('rs').onchange = function () { $('rol').style.display = this.value === '__other' ? '' : 'none'; };
-      $('rp').onchange = function () { var fl = this.files[0]; if (!fl) return; M.photoFromFile(fl, 1600).then(function (u) { photo = u; $('rm').textContent = ''; App.say(T('Photo added.')); }); };
+      $('rph').onclick = function () { $('rp').click(); }; $('rpg').onclick = function () { $('rg').click(); };
+      function pick() { var fl = this.files[0]; if (!fl) return; M.photoFromFile(fl, 1600).then(function (u) { photo = u; $('rm').textContent = ''; $('rps').innerHTML = '<img src="' + u + '" alt="" style="max-height:110px;border-radius:8px;vertical-align:middle"> ' + E(T('Photo added.')); }); }
+      $('rp').onchange = pick; $('rg').onchange = pick;
       $('rsave').onclick = function () {
         var msg = $('rm'), sv = $('rs').value, nm = sv === '__other' ? $('ro').value.trim() : '';
         if (!sv || (sv === '__other' && nm.length < 2)) { msg.textContent = T('Choose or write the supplier.'); return; }
@@ -113,7 +116,7 @@
       '<label class="f">' + E(T('Invoice number')) + '<input type="text" id="fi" value="' + E(d.invoice_no || '') + '"></label></div>' +
       '<label class="f">' + E(T('Note')) + '<input type="text" id="fn" value="' + E(d.note || '') + '" placeholder="' + E(T('Missing or damaged goods')) + '"></label>' +
       (isNew ? '' : '<div class="small muted">' + E(T('Received by {n}', { n: d.received_by || '—' })) + (d.at ? ' · ' + E(M.niceDate(String(d.at).slice(0, 10))) : '') + '</div>') +
-      '<label class="f">' + E(T('Invoice photo')) + '<input type="file" accept="image/*" id="fp"></label>' +
+      '<label class="f">' + E(T('Add or replace the invoice photo')) + '<input type="file" accept="image/*" id="fp"></label>' +
       '<div class="row"><button class="btn" id="fsave">' + E(T('Save')) + '</button>' +
       (isNew ? '' : (d.cancelled ? '<button class="btn ghost" id="fcx">' + E(T('Bring back')) + '</button>' : '<button class="btn ghost" id="fcx">' + E(T('Cancel this delivery')) + '</button>')) + '</div>' +
       (isNew || d.cancelled ? (d.cancel_reason ? '<div class="small muted">' + E(T('Cancelled: {r}', { r: d.cancel_reason })) + '</div>' : '') : '<label class="f">' + E(T('Reason, if you cancel')) + '<input type="text" id="fr"></label>') +

@@ -1296,5 +1296,7 @@ window.MARE_ME = {
 "Delivery from {s}": "Isporuka od {s}",
 "Milica will see the delivery.": "Milica će vidjeti isporuku.",
 "Not saved. Check the date and the total.": "Nije sačuvano. Provjerite datum i iznos.",
-"Delivery report": "Izvještaj o isporukama"
+"Delivery report": "Izvještaj o isporukama",
+"Choose a photo": "Izaberite fotografiju",
+"Add or replace the invoice photo": "Dodaj ili zamijeni fotografiju fakture"
 };
