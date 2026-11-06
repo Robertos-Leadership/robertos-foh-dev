@@ -28,8 +28,8 @@
   function vatTxt(v) { return v === 'without' ? T('without PDV') : T('with PDV'); }
 
   App.register('deliveries', {
-    title: 'Deliveries', icon: 'stock', group: 'kitchen', desc: 'Goods received from suppliers: who, when, the invoice total and its photo.',
-    tabs: [['list', 'Deliveries'], ['receive', 'Receive a delivery']],
+    title: 'Delivery report', icon: 'stock', group: 'kitchen', desc: 'Goods received from suppliers: who, when, the invoice total and its photo.',
+    tabs: [['list', 'Report'], ['receive', 'Receive a delivery']],
     stat: function () { return [T('Recorded by the team'), false]; },
     render: function (main, sub) { css(); if (!DV.m) DV.m = M.monthStart(M.today()); return sub === 'receive' ? receive(main) : paint(main); }
   });

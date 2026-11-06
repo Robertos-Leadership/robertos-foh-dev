@@ -1295,5 +1295,6 @@ window.MARE_ME = {
 "No invoice photo yet. Tap Save again to save without it.": "Još nema fotografije fakture. Dodirnite Sačuvaj ponovo da sačuvate bez nje.",
 "Delivery from {s}": "Isporuka od {s}",
 "Milica will see the delivery.": "Milica će vidjeti isporuku.",
-"Not saved. Check the date and the total.": "Nije sačuvano. Provjerite datum i iznos."
+"Not saved. Check the date and the total.": "Nije sačuvano. Provjerite datum i iznos.",
+"Delivery report": "Izvještaj o isporukama"
 };
