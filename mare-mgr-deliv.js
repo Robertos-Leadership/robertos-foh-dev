@@ -12,7 +12,8 @@
     var s = document.createElement('style'); s.id = 'dv-css';
     s.textContent = '.dv-bar{display:flex;flex-wrap:wrap;gap:10px;align-items:center}.dv-bar select{min-height:40px;padding:8px 12px;border:1px solid #D6CABA;border-radius:8px;font:inherit;background:#fff}' +
       'tr.dv-x td{color:#9A8F83;text-decoration:line-through}tr.dv-x td.nostrike{text-decoration:none}.dv-tag{display:inline-block;font-size:11px;font-weight:700;border-radius:20px;padding:1px 8px;background:#F5E8C9;color:#7A5A12}' +
-      '.dv-tag.red{background:#F4DADA;color:#8A2E2E}.dv-tot{font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}';
+      '.dv-tag.red{background:#F4DADA;color:#8A2E2E}.dv-tot{font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}' +
+      'table.inv{border-collapse:collapse}table.inv th{font-size:11px;letter-spacing:1px;text-transform:uppercase;color:#6B6258;text-align:left;padding:4px 6px}table.inv td{padding:4px 6px;vertical-align:top;border-top:1px solid #EDE5D8}table.inv input{min-height:38px;font-size:14px}';
     document.head.appendChild(s);
   }
   function eur(v) { return v == null ? '—' : (+v).toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
@@ -108,7 +109,7 @@
   function form(d) {
     var isNew = !d.id, sups = (DV.data && DV.data.suppliers) || [];
     var o = App.overlay('<div class="row between"><h3>' + E(isNew ? T('Add a delivery') : d.supplier_name) + '</h3><button class="btn ghost sm" data-close>' + E(T('Close')) + '</button></div>' +
-      '<div id="dph"></div>' +
+      '<div id="dph"></div>' + (!isNew && d.has_photo ? '<div id="dinv"></div>' : '') +
       '<label class="f">' + E(T('Supplier')) + '<input type="text" id="fs" list="fsl" value="' + E(d.supplier_name || '') + '"><datalist id="fsl">' + sups.map(function (s) { return '<option value="' + E(s.name) + '">'; }).join('') + '</datalist></label>' +
       '<div class="grid2"><label class="f">' + E(T('Date')) + '<input type="date" id="fd" value="' + E(d.date || '') + '"></label>' +
       '<label class="f">' + E(T('Invoice total (€)')) + '<input type="text" inputmode="decimal" id="ft" value="' + (d.total != null ? E(String(+d.total)) : '') + '"></label></div>' +
@@ -127,6 +128,7 @@
         o.querySelector('#dph').innerHTML = '<img class="photo" src="' + u + '" alt="' + E(T('Invoice photo')) + '">';
       });
     }
+    if (!isNew && d.has_photo && w.MareInvoice) w.MareInvoice.mount(o, d);
     var photo = null;
     o.querySelector('#fp').onchange = function () { var fl = this.files[0]; if (!fl) return; M.photoFromFile(fl, 1600).then(function (u) { photo = u; App.say(T('Photo added.')); }); };
     function row() {
@@ -151,12 +153,21 @@
 
   function xl(rows, ms, btn) {
     btn.disabled = true;
-    App.xlsx(function () {
+    var me = M.addDays(M.addMonths(ms, 1), -1);
+    Promise.all([App.call('mare_m_deliv_lines_period', { p_from: ms, p_to: me }), new Promise(function (res) { App.xlsx(res, btn); })]).then(function (r) {
+      var lines = (r[0] && r[0].lines) || [];
       var aoa = [[T('Date'), T('Supplier'), T('Invoice number'), T('Received by'), T('Total (€)'), T('The total is'), T('Note'), T('Invoice photo'), T('Status')]];
       rows.forEach(function (d) { aoa.push([d.date, d.supplier_name, d.invoice_no || '', d.received_by || '', d.total == null ? '' : +d.total, vatTxt(d.vat), d.note || '', d.has_photo ? T('yes') : T('no'), d.cancelled ? T('cancelled') : '']); });
       var sh = XLSX.utils.aoa_to_sheet(aoa); sh['!cols'] = [12, 24, 16, 20, 12, 12, 30, 12, 12].map(function (n) { return { wch: n }; });
-      var wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, sh, T('Deliveries'));
-      XLSX.writeFile(wb, 'Robertos-Mare-deliveries-' + ms.slice(0, 7) + '.xlsx'); btn.disabled = false;
-    }, btn);
+      var wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, sh, T('Delivery report'));
+      if (lines.length) {
+        var shown = {}; rows.forEach(function (d) { shown[d.date + '|' + d.supplier_name + '|' + (d.invoice_no || '')] = 1; });
+        var la = [[T('Date'), T('Supplier'), T('Invoice number'), T('Code'), T('Item'), T('Unit'), T('Qty'), T('Unit price'), T('Discount %'), T('PDV %'), T('Line total'), T('Ordering article'), T('Status')]];
+        lines.forEach(function (l) { if (DV.sup && l.supplier !== DV.sup) return; la.push([l.date, l.supplier, l.invoice_no || '', l.code || '', l.name, l.unit || '', l.qty == null ? '' : +l.qty, l.unit_price == null ? '' : +l.unit_price, l.discount_pct == null ? '' : +l.discount_pct, l.vat_pct == null ? '' : +l.vat_pct, l.line_total == null ? '' : +l.line_total, l.article || '', l.status === 'checked' ? T('checked') : T('read by the computer, not checked yet')]); });
+        var s2 = XLSX.utils.aoa_to_sheet(la); s2['!cols'] = [12, 22, 14, 12, 34, 8, 9, 11, 10, 8, 11, 30, 18].map(function (n) { return { wch: n }; });
+        XLSX.utils.book_append_sheet(wb, s2, T('Invoice lines'));
+      }
+      XLSX.writeFile(wb, 'Robertos-Mare-delivery-report-' + ms.slice(0, 7) + '.xlsx'); btn.disabled = false;
+    });
   }
 })(window);
