@@ -29,9 +29,44 @@
 
   App.register('deliveries', {
     title: 'Deliveries', icon: 'stock', group: 'kitchen', desc: 'Goods received from suppliers: who, when, the invoice total and its photo.',
+    tabs: [['list', 'Deliveries'], ['receive', 'Receive a delivery']],
     stat: function () { return [T('Recorded by the team'), false]; },
-    render: function (main) { css(); if (!DV.m) DV.m = M.monthStart(M.today()); return paint(main); }
+    render: function (main, sub) { css(); if (!DV.m) DV.m = M.monthStart(M.today()); return sub === 'receive' ? receive(main) : paint(main); }
   });
+
+  // A manager takes a delivery in too (Francesco, 6 Nov 2026): the same form the team has, under the manager's own name.
+  function receive(main) {
+    var t = M.today();
+    return App.call('mare_m_deliv_data', { p_from: t, p_to: t }).then(function (r) {
+      if (!r) { main.innerHTML = App.empty(T('Could not load.')); return; }
+      var sups = r.suppliers || [], photo = null, warned = false;
+      main.innerHTML = '<section class="stack"><h2 class="serif">' + E(T('Receive a delivery')) + '</h2><div class="card stack">' +
+        '<label class="f">' + E(T('Supplier')) + '<select id="rs"><option value="">' + E(T('Choose the supplier')) + '</option>' + sups.map(function (s) { return '<option value="' + s.id + '">' + E(s.name) + '</option>'; }).join('') +
+        '<option value="__other">' + E(T('Another supplier…')) + '</option></select></label>' +
+        '<label class="f" id="rol" style="display:none">' + E(T('Supplier name')) + '<input type="text" id="ro"></label>' +
+        '<div class="grid2"><label class="f">' + E(T('Date of delivery')) + '<input type="date" id="rd" value="' + E(t) + '"></label>' +
+        '<label class="f">' + E(T('Invoice total (€)')) + '<input type="text" inputmode="decimal" id="rt"></label></div>' +
+        '<div class="grid2"><label class="f">' + E(T('The total is')) + '<select id="rv"><option value="with">' + E(T('with PDV')) + '</option><option value="without">' + E(T('without PDV')) + '</option></select></label>' +
+        '<label class="f">' + E(T('Invoice number (optional)')) + '<input type="text" id="ri"></label></div>' +
+        '<label class="f">' + E(T('Anything missing or damaged?')) + '<input type="text" id="rn"></label>' +
+        '<label class="f">' + E(T('Invoice photo')) + '<input type="file" accept="image/*" capture="environment" id="rp"></label>' +
+        '<div class="small muted">' + E(T('Received by {n}', { n: App.S.me || '—' })) + '</div>' +
+        '<div class="msg err" id="rm"></div><button class="btn" id="rsave" style="align-self:flex-start">' + E(T('Save delivery')) + '</button></div></section>';
+      var $ = function (id) { return main.querySelector('#' + id); };
+      $('rs').onchange = function () { $('rol').style.display = this.value === '__other' ? '' : 'none'; };
+      $('rp').onchange = function () { var fl = this.files[0]; if (!fl) return; M.photoFromFile(fl, 1600).then(function (u) { photo = u; $('rm').textContent = ''; App.say(T('Photo added.')); }); };
+      $('rsave').onclick = function () {
+        var msg = $('rm'), sv = $('rs').value, nm = sv === '__other' ? $('ro').value.trim() : '';
+        if (!sv || (sv === '__other' && nm.length < 2)) { msg.textContent = T('Choose or write the supplier.'); return; }
+        var a = parseAmt($('rt').value); if (a.err || a.v == null) { msg.textContent = T('Write the invoice total as a number, like 412.60'); return; }
+        if (!$('rd').value) { msg.textContent = T('Choose the date.'); return; }
+        if (!photo && !warned) { warned = true; msg.textContent = T('No invoice photo yet. Tap Save again to save without it.'); return; }
+        var sp = sv === '__other' ? null : sups.filter(function (s) { return s.id === sv; })[0], btn = this; btn.disabled = true;
+        App.call('mare_m_deliv_save', { p_row: { supplier_name: sp ? sp.name : nm, supplier_id: sp ? sp.id : '', date: $('rd').value, total: String(a.v), vat: $('rv').value, invoice_no: $('ri').value.trim(), note: $('rn').value.trim(), photo: photo || '', received_by: App.S.me }, p_by: App.S.me })
+          .then(function (x) { btn.disabled = false; if (!x) return; App.say(T('Saved.')); App.go('deliveries', 'list'); });
+      };
+    });
+  }
 
   function paint(main) {
     var ms = DV.m, me = M.addDays(M.addMonths(ms, 1), -1);
