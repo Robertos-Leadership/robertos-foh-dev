@@ -331,7 +331,7 @@
     var k = (App.S.mod || 'today') + (App.S.mod && App.S.sub ? '/' + App.S.sub : '');
     if (App.ping.last === k && Date.now() - (App.ping.at || 0) < 60000) return;
     App.ping.last = k; App.ping.at = Date.now();
-    try { M.rpc('mare_m_ping', { p_module: k, p_ua: os + ' · ' + br }, App.S.token); } catch (e) {}
+    try { M.rpc('mare_m_ping', { p_module: k, p_ua: os + ' · ' + br + (w.MareUpdate ? ' · ' + w.MareUpdate.build() : '') }, App.S.token); } catch (e) {}
   };
   App.render = function () {
     if (App.S.mod && !App.allowed(App.S.mod)) App.S.mod = null;

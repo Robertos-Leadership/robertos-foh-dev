@@ -132,37 +132,5 @@
     panel();
   });
 
-  // ── a newer version is ready ──
-  var lastCheck = 0, barShown = false;
-  function stamped(text) {
-    var out = [], re = /<script[^>]*\ssrc="([^"]*\?v=[^"]*)"/g, m;
-    while ((m = re.exec(text))) out.push(m[1]);
-    return out;
-  }
-  function have() {
-    var o = {};
-    Array.prototype.forEach.call(d.querySelectorAll('script[src]'), function (s) { o[s.getAttribute('src')] = 1; });
-    return o;
-  }
-  function bar() {
-    if (barShown) return; barShown = true; css();
-    var b = d.createElement('div'); b.className = 'mi-bar'; b.id = 'mi-bar'; b.setAttribute('role', 'status');
-    b.innerHTML = '<span>' + E(T('A newer version of the app is ready.')) + '</span><button type="button">' + E(T('Update')) + '</button>';
-    d.body.appendChild(b);
-    b.querySelector('button').onclick = function () { w.location.reload(); };
-  }
-  function check() {
-    if (barShown || d.visibilityState !== 'visible') return;
-    var now = Date.now(); if (now - lastCheck < 5 * 60 * 1000) return; lastCheck = now;
-    w.fetch(w.location.pathname, { cache: 'no-store' }).then(function (r) { return r.ok ? r.text() : ''; }).then(function (t) {
-      var want = stamped(t); if (!want.length) return;         // not the app's page (offline page, error): say nothing
-      var got = have();
-      for (var i = 0; i < want.length; i++) if (!got[want[i]]) { bar(); return; }
-    }).catch(function () {});
-  }
-  lastCheck = Date.now();                                        // the page has just loaded: nothing to compare yet
-  d.addEventListener('visibilitychange', check);
-  w.addEventListener('focus', check);
-
-  w.MareInstall = { html: html, open: panel, refresh: refresh, standalone: standalone, check: function () { lastCheck = 0; check(); } };
+  w.MareInstall = { html: html, open: panel, refresh: refresh, standalone: standalone, check: function () { if (w.MareUpdate) w.MareUpdate.check(); } };
 })(window);

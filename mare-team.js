@@ -384,7 +384,7 @@
   function lnDevice() {
     var u = navigator.userAgent || '', os = /iPhone/.test(u) ? 'iPhone' : /iPad/.test(u) ? 'iPad' : /Android/.test(u) ? 'Android' : /Windows/.test(u) ? 'Windows' : /Mac/.test(u) ? 'Mac' : 'Other';
     var br = /Edg\//.test(u) ? 'Edge' : /CriOS|Chrome\//.test(u) ? 'Chrome' : /FxiOS|Firefox\//.test(u) ? 'Firefox' : /Safari\//.test(u) ? 'Safari' : 'Browser';
-    return os + ' · ' + br;
+    return os + ' · ' + br + (window.MareUpdate ? ' · ' + window.MareUpdate.build() : '');
   }
   function ping(k) {
     if (PREVIEW || !meToken || !S.mePin) return;
