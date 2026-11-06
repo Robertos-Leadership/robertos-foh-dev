@@ -123,7 +123,7 @@
   };
   var MODS = [
     ['brief', 'brief', 'Today\'s briefing'], ['check', 'check', 'Checklists'], ['rota', 'rota', 'Schedule'], ['recipes', 'recipe', 'Recipes'],
-    ['kclose', 'closing', 'Closing report'], ['learn', 'check', 'Learning'], ['breakage', 'breakage', 'Breakage'], ['leave', 'leave', 'Ask for leave'], ['speak', 'speak', 'Speak up'], ['order', 'stock', 'Order']
+    ['kclose', 'closing', 'Closing report'], ['learn', 'check', 'Learning'], ['breakage', 'breakage', 'Breakage'], ['leave', 'leave', 'Ask for leave'], ['speak', 'speak', 'Speak up'], ['order', 'stock', 'Order'], ['deliveries', 'stock', 'Receive a delivery']
   ];
   function teamMods() {
     var tm = S.feed && S.feed.team_modules; if (!tm) return MODS;
@@ -308,6 +308,7 @@
       if (name === 'mare_s_recipe') return M.rpc('mare_m_recipe', { p_id: args.p_id }, PV_TOKEN).then(function (r) { return r.data || { ok: false }; });
       if (name === 'mare_s_ord_data') return M.rpc('mare_m_ord_data', { p_days: 14 }, PV_TOKEN).then(function (r) { var d = r.data; if (!d || !d.ok) return { ok: false };
         return { ok: true, today: d.today, my_team: null, articles: d.articles.filter(function (a) { return a.active; }), suppliers: d.suppliers.filter(function (x) { return x.active; }), orders: [] }; });
+      if (name === 'mare_s_deliv_data') return Promise.resolve({ ok: true, today: M.today(), suppliers: [], deliveries: [] });
       if (name === 'mare_s_media_get') return M.rpc('mare_m_media_get', { p_id: args.p_id }, PV_TOKEN).then(function (r) { return r.data || { ok: false }; });
       M.toast(T('Read only: you are viewing as someone else. Nothing is saved.')); return Promise.resolve({ ok: false, error: 'preview' });
     }
@@ -393,7 +394,7 @@
   function openMod(k, sub) {
     ping(k);
     S.mod = k; S.screen = 'mod'; if (sub) S.sub = sub; else if (k !== S.lastMod) S.sub = null; S.lastMod = k;
-    ({ brief: modBrief, check: modCheck, rota: modRota, recipes: modRecipes, kclose: modKclose, learn: modLearn, breakage: modBreakage, leave: modLeave, speak: modSpeak, hours: modHours, more: modMore, order: modOrder })[k]();
+    ({ brief: modBrief, check: modCheck, rota: modRota, recipes: modRecipes, kclose: modKclose, learn: modLearn, breakage: modBreakage, leave: modLeave, speak: modSpeak, hours: modHours, more: modMore, order: modOrder, deliveries: modDeliveries })[k]();
     if (meToken) bnav(k === 'rota' || k === 'recipes' || k === 'kclose' ? k : 'more');
   }
   function feed() { return S.feed || { briefing: null, reads: [], staff: [], shifts: [], check_items: [], ticks: [], recipes: [], actions: [], today: M.today() }; }
@@ -1167,6 +1168,65 @@
       askWho(T('The order went'), function (staff, pin) { return rpcS('mare_s_ord_mark', { p_device: dev(), p_token: meToken, p_staff: staff, p_pin: pin || pinArg(), p_id: id, p_via: 'app' }); })
         .then(function (x) { if (x && x.ok) { OR.made = OR.made.filter(function (o) { return o.id !== id; }); if (!OR.made.filter(function (o) { return o.status === 'direct'; }).length) OR.made = null; afterAction(T('Thank you.'), T('Marked as sent.')); } });
     });
+  }
+
+  // ── receive a delivery (6 Nov 2026, Milica) ──
+  // Whoever takes the goods records the supplier, the date, the invoice total and a photo of the
+  // invoice, under their own name + code. Milica sees them in Deliveries (management app).
+  var DVT = { d: null };
+  function dvAmt(s) {
+    s = String(s == null ? '' : s).trim().replace(/\s/g, ''); if (s === '') return { v: null };
+    if (/^\d{1,3}(\.\d{3})+,\d{1,2}$/.test(s)) s = s.replace(/\./g, '').replace(',', '.');
+    else if (/^\d{1,3}(,\d{3})+\.\d{1,2}$/.test(s)) s = s.replace(/,/g, '');
+    else if (/^\d+,\d{1,2}$/.test(s)) s = s.replace(',', '.');
+    else if (!/^\d+(\.\d{1,2})?$/.test(s)) return { err: true };
+    return { v: parseFloat(s) };
+  }
+  function modDeliveries() {
+    main.innerHTML = frame('Receive a delivery', '<div class="muted big">' + E(T('Loading…')) + '</div>'); bindFrame();
+    rpcS('mare_s_deliv_data', { p_device: dev(), p_token: meToken === '__preview__' ? null : meToken, p_staff: null, p_pin: pinArg() }).then(function (d) {
+      if (S.mod !== 'deliveries') return;
+      if (!d || !d.ok) { main.innerHTML = frame('Receive a delivery', '<div class="card muted big">' + E(T('Could not load. Try again in a moment.')) + '</div>'); bindFrame(); return; }
+      DVT.d = d; dvPaint();
+    });
+  }
+  function dvPaint() {
+    var d = DVT.d, photo = null, warned = false;
+    var h = '<div class="card stack"><label class="f">' + E(T('Supplier')) + '<select id="dvs"><option value="">' + E(T('Choose the supplier')) + '</option>' +
+      d.suppliers.map(function (s) { return '<option value="' + s.id + '">' + E(s.name) + '</option>'; }).join('') + '<option value="__other">' + E(T('Another supplier…')) + '</option></select></label>' +
+      '<label class="f" id="dvol" style="display:none">' + E(T('Supplier name')) + '<input type="text" id="dvo"></label>' +
+      '<div class="grid2"><label class="f">' + E(T('Date of delivery')) + '<input type="date" id="dvd" value="' + E(d.today) + '"></label>' +
+      '<label class="f">' + E(T('Invoice total (€)')) + '<input type="text" inputmode="decimal" id="dvt"></label></div>' +
+      '<div class="grid2"><label class="f">' + E(T('The total is')) + '<select id="dvv"><option value="with">' + E(T('with PDV')) + '</option><option value="without">' + E(T('without PDV')) + '</option></select></label>' +
+      '<label class="f">' + E(T('Invoice number (optional)')) + '<input type="text" id="dvi"></label></div>' +
+      '<label class="f">' + E(T('Anything missing or damaged?')) + '<input type="text" id="dvn"></label>' +
+      '<div class="row"><button class="btn ghost" id="dvph">' + E(T('Take a photo of the invoice')) + '</button><span id="dvphs" class="muted"></span></div>' +
+      '<input type="file" accept="image/*" capture="environment" id="dvf" style="display:none">' +
+      '<div class="msg err" id="dvm"></div><button class="btn" id="dvsave" style="align-self:flex-start">' + E(T('Save delivery')) + '</button></div>';
+    var rec = d.deliveries.filter(function (x) { return !x.cancelled; });
+    if (rec.length) h += '<div class="muted" style="letter-spacing:2px;font-weight:700;margin-top:6px">' + E(T('Recent').toUpperCase()) + '</div><div class="card">' + rec.slice(0, 8).map(function (x) {
+      return '<div class="or-row"><div class="tx"><b>' + E(x.supplier_name) + '</b><span>' + E(M.shortDate(x.date)) + ' · ' + E(x.received_by || '') + (x.has_photo ? '' : ' · ' + E(T('no photo'))) + '</span></div><div class="big">€' + (+x.total).toFixed(2) + '</div></div>';
+    }).join('') + '</div>';
+    main.innerHTML = frame('Receive a delivery', h); bindFrame();
+    var $ = function (id) { return document.getElementById(id); };
+    $('dvs').onchange = function () { $('dvol').style.display = this.value === '__other' ? '' : 'none'; };
+    $('dvph').onclick = function () { $('dvf').click(); };
+    $('dvf').onchange = function () { var fl = this.files[0]; if (!fl) return; M.photoFromFile(fl, 1600).then(function (u) { photo = u; $('dvphs').textContent = T('Photo added.'); $('dvm').textContent = ''; }); };
+    $('dvsave').onclick = function () {
+      var msg = $('dvm'), sv = $('dvs').value, nm = sv === '__other' ? $('dvo').value.trim() : '';
+      if (!sv || (sv === '__other' && nm.length < 2)) { msg.textContent = T('Choose or write the supplier.'); return; }
+      var a = dvAmt($('dvt').value); if (a.err || a.v == null) { msg.textContent = T('Write the invoice total as a number, like 412.60'); return; }
+      if (!$('dvd').value) { msg.textContent = T('Choose the date.'); return; }
+      if (!photo && !warned) { warned = true; msg.textContent = T('No invoice photo yet. Tap Save again to save without it.'); return; }
+      var sup = $('dvs').selectedOptions[0] ? $('dvs').selectedOptions[0].textContent : nm;
+      askWho(T('Delivery from {s}', { s: sv === '__other' ? nm : sup }), function (staff, pin) {
+        return rpcS('mare_s_deliv_save', { p_device: dev(), p_token: meToken, p_staff: staff, p_pin: pin || pinArg(), p_supplier: sv === '__other' ? null : sv, p_supplier_name: sv === '__other' ? nm : null,
+          p_date: $('dvd').value, p_total: a.v, p_vat: $('dvv').value, p_invoice_no: $('dvi').value.trim() || null, p_note: $('dvn').value.trim() || null, p_photo: photo });
+      }).then(function (x) {
+        if (x && x.ok) afterAction(T('Thank you.'), T('Milica will see the delivery.'));
+        else if (x && !x.ok && x.error && x.error !== 'wrong_pin' && x.error !== 'locked' && x.error !== 'preview') { dvPaint(); var m2 = document.getElementById('dvm'); if (m2) m2.textContent = T('Not saved. Check the date and the total.'); }
+      });
+    };
   }
 
   // ── leave ──
