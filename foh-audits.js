@@ -22,9 +22,24 @@ var AU = { me: null, list: null, err: null, loading: false, open: null, report: 
 var AU_KINDS = [
   { k: 'restaurant', n: 'Restaurant visit', short: 'Restaurant', c: '#0093B0' },
   { k: 'scala',      n: 'Scala visit',      short: 'Scala',      c: '#B8860B' },
-  { k: 'venue',      n: 'Chef Bartolini audit', short: 'Chef Bartolini', c: '#A8283E' }   // the whole venue: only his audit (24 Oct 2026)
+  { k: 'venue',      n: 'Chef Bartolini audit', short: 'Chef Bartolini', c: '#A8283E' },   // the whole venue: only his audit (24 Oct 2026)
+  { k: 'amman',      n: "Roberto's Amman audit", short: 'Amman', c: '#3B7D5B' }   // Andrea's audit of Roberto's Amman (9 Nov 2026): same whole-venue form, own link
 ];
+var AU_AMMAN = "Andrea · Roberto's Amman";
+function auKindOf(a){ return a && a.auditor === AU_AMMAN ? 'amman' : (a && a.kind); }
 function auKind(k){ for(var i = 0; i < AU_KINDS.length; i++) if(AU_KINDS[i].k === k) return AU_KINDS[i]; return AU_KINDS[2]; }
+// The Amman link lives in its own function (audit-amman), so Chef Bartolini's audit-api is untouched.
+async function auAmmanLink(){
+  var s = await sb.auth.getSession();
+  var jwt = s && s.data && s.data.session && s.data.session.access_token;
+  if(!jwt) return null;
+  var r = await fetch(KITCHEN_URL + '/functions/v1/audit-amman?forceFunctionRegion=ap-southeast-2', {
+    method: 'POST', headers: { 'Content-Type': 'application/json', apikey: KITCHEN_KEY, Authorization: 'Bearer ' + KITCHEN_KEY },
+    body: JSON.stringify({ action: 'amman_link', foh: jwt })
+  });
+  var j = await r.json().catch(function(){ return {}; });
+  return r.ok && j.token ? new URL('audit-amman.html', location.origin + location.pathname).href + '?n=' + j.token : null;
+}
 
 function auEsc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]; }); }
 // The audit page lives in this app (moved from the Kitchen app 22 Oct 2026), next to index.html:
@@ -51,6 +66,7 @@ async function auLoad(quiet){
   try {
     if(!AU.me) AU.me = await auApi('me');
     if(AU.me.read){ var l = await auApi('list'); AU.list = l.audits || []; }
+    if(AU.me.admin && AU.amman === undefined){ try { AU.amman = await auAmmanLink(); } catch(e){ AU.amman = null; } }
     AU.err = null;
   } catch(e){ if(!quiet || !AU.me) AU.err = e.message || String(e); }
   AU.loading = false;
@@ -130,7 +146,7 @@ function auBody(){
   if(AU.err && !AU.me) return '<div class="au-wrap"><div class="au-bad">Audits could not be read: ' + auEsc(AU.err) + ' <button class="au-btn quiet" onclick="AU.err=null;auLoad()">Try again</button></div></div>';
   if(!AU.me) return '<div class="au-wrap"><div class="loading">Reading the audits&hellip;</div></div>';
   if(AU.open) return '<div class="au-wrap">' + auReportView() + '</div>';
-  return '<div class="au-wrap">' + (AU.err ? '<div class="au-bad">' + auEsc(AU.err) + '</div>' : '') + auLinkCard() + auBartCard() + (AU.me.read ? auListView() : '') + '</div>';
+  return '<div class="au-wrap">' + (AU.err ? '<div class="au-bad">' + auEsc(AU.err) + '</div>' : '') + auLinkCard() + auBartCard() + auAmmanCard() + (AU.me.read ? auListView() : '') + '</div>';
 }
 
 // Chef Bartolini's own link (24 Oct 2026, Francesco: "has to be a different link"). His audit is the whole
@@ -147,6 +163,26 @@ function auBartCard(){
     + '<a class="au-btn" style="text-decoration:none;display:inline-flex;align-items:center" target="_blank" rel="noopener" href="https://wa.me/?text=' + encodeURIComponent(auBartText() + '\n' + b.link) + '">WhatsApp</a>'
     + '</div>'
     + '<div class="au-hint">' + (b.invite ? 'Only for Chef Bartolini. Each time he opens it he types the date and starts a new audit of the whole venue, in Italian. When he finishes one, it comes to you; you send it to Amin.' : 'Only for Chef Bartolini. It opens his own audit of the whole venue, in Italian. When he finishes, it comes to you; you send it to Amin.') + '</div></div>';
+}
+function auAmmanCard(){
+  var l = AU.amman; if(!l) return '';
+  return '<div class="au-card"><div class="au-lbl">Roberto\'s Amman audit link</div>'
+    + '<div class="au-link">' + auEsc(l) + '</div>'
+    + '<div class="au-btns">'
+    + (navigator.share ? '<button class="au-btn pri" onclick="auAmmanShare()">Share</button>' : '')
+    + '<button class="au-btn' + (navigator.share ? '' : ' pri') + '" onclick="auAmmanCopy()">' + (AU.ammanCopied ? 'Copied &#10003;' : 'Copy link') + '</button>'
+    + '<a class="au-btn" style="text-decoration:none;display:inline-flex;align-items:center" target="_blank" rel="noopener" href="https://wa.me/?text=' + encodeURIComponent(auAmmanText() + '\n' + l) + '">WhatsApp</a>'
+    + '</div>'
+    + '<div class="au-hint">For Andrea at Roberto\'s Amman. In English. Each time he opens it he picks the date and starts a new audit of the whole venue; there is no DIFC menu, he types each dish. When he finishes, it appears below as Amman.</div></div>';
+}
+function auAmmanText(){ return "Andrea, here is the link for the Roberto's Amman audit."; }
+function auAmmanShare(){
+  try { navigator.share({ title: "Roberto's Amman — audit", text: auAmmanText(), url: AU.amman }).catch(function(){}); } catch(e){ auAmmanCopy(); }
+}
+function auAmmanCopy(){
+  var l = AU.amman, done = function(){ AU.ammanCopied = true; auRepaint(); setTimeout(function(){ AU.ammanCopied = false; auRepaint(); }, 2500); };
+  var old = function(){ var t = document.createElement('textarea'); t.value = l; t.style.position = 'fixed'; t.style.opacity = '0'; document.body.appendChild(t); t.select(); try { document.execCommand('copy'); } catch(e){} t.remove(); };
+  try { navigator.clipboard.writeText(l).then(done, function(){ old(); done(); }); } catch(e){ old(); done(); }
 }
 function auBartText(){ return "Chef, ecco il link per il suo audit di Roberto's DIFC."; }
 function auBartShare(){
@@ -196,7 +232,7 @@ async function auReplace(){
 }
 
 function auListView(){
-  var all = (AU.list || []).filter(function(a){ return AU.kind === 'all' || a.kind === AU.kind; });
+  var all = (AU.list || []).filter(function(a){ return AU.kind === 'all' || auKindOf(a) === AU.kind; });
   var n = { all: all.length, open: 0, done: 0 };
   all.forEach(function(a){ var k = auState(a).k; if(k === 'open') n.open++; if(k === 'done') n.done++; });
   var rows = all.filter(function(a){ var k = auState(a).k; return AU.filter === 'all' || k === AU.filter; });
@@ -210,7 +246,7 @@ function auListView(){
     var st = auState(a), pct = a.overall_pct;
     h += '<button class="au-row" onclick="auOpen(\'' + auEsc(a.id) + '\')">'
       + '<div class="au-main"><div class="au-name">' + auEsc(a.auditor) + '</div>'
-      + '<div class="au-sub"><span class="au-ktag"><i style="background:' + auKind(a.kind).c + '"></i>' + auEsc(auKind(a.kind).n) + '</span></div>'
+      + '<div class="au-sub"><span class="au-ktag"><i style="background:' + auKind(auKindOf(a)).c + '"></i>' + auEsc(auKind(auKindOf(a)).n) + '</span></div>'
       + '<div class="au-sub">' + auEsc(a.visit_date ? auDate(a.visit_date) : (a.title || 'Date not given')) + (a.visit_time ? ' &middot; ' + auEsc(a.visit_time) : '') + ' &middot; ' + auEsc(auVia(a.sent_by)) + '</div>'
       + '<span class="au-tag ' + st.k + '">' + auEsc(st.t) + '</span>'
       + (st.k === 'open' && a.updated_at ? ' <span class="au-sub" style="display:inline">&middot; last change ' + auEsc(auAgo(a.updated_at)) + '</span>' : '')
@@ -292,7 +328,7 @@ function auSeries(){
   var months = auMonths(), done = (AU.list || []).filter(function(a){ return (a.status === 'submitted' || a.status === 'sent') && a.overall_pct != null && a.visit_date; });
   return { months: months, n: done.length, series: AU_KINDS.map(function(k){
     var pts = months.map(function(mo){
-      var xs = done.filter(function(a){ return a.kind === k.k && String(a.visit_date).slice(0, 7) === mo; });
+      var xs = done.filter(function(a){ return auKindOf(a) === k.k && String(a.visit_date).slice(0, 7) === mo; });
       if(!xs.length) return null;
       var sum = xs.reduce(function(t, a){ return t + Number(a.overall_pct); }, 0);
       return { v: Math.round(sum / xs.length), n: xs.length };
@@ -371,7 +407,7 @@ function admAuditsHTML(){
   AUA.list.forEach(function(a){
     var ask = AUA.asking === a.id;
     h += '<div class="au-card" style="padding:12px 14px;margin-bottom:8px"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">'
-      + '<div class="au-main"><div class="au-name">' + auEsc(a.auditor) + '</div><div class="au-sub"><span class="au-ktag"><i style="background:' + auKind(a.kind).c + '"></i>' + auEsc(auKind(a.kind).n) + '</span>'
+      + '<div class="au-main"><div class="au-name">' + auEsc(a.auditor) + '</div><div class="au-sub"><span class="au-ktag"><i style="background:' + auKind(auKindOf(a)).c + '"></i>' + auEsc(auKind(auKindOf(a)).n) + '</span>'
       + auEsc(auDate(a.visit_date)) + ' &middot; ' + auEsc(auState(a).t) + '</div></div>'
       + (ask ? '' : '<button class="au-btn quiet" onclick="admAuditAsk(\'' + auEsc(a.id) + '\')">Remove</button>') + '</div>'
       + (ask ? '<div class="au-btns"><input id="aua-why" class="au-link" style="flex:1;min-width:200px;font-family:Inter,system-ui,sans-serif" placeholder="Why? e.g. a test" maxlength="300" autocomplete="off">'
@@ -399,7 +435,7 @@ function admAuditsHTML(){
     var keep = a.status === 'archived', on = !keep && !!AUA.pick[a.id];
     h += '<div class="au-card" style="padding:12px 14px;margin-bottom:8px;background:' + (on ? '#f6e9e4' : '#fbf7f1') + (on ? ';border-color:#c9a59c' : '') + '"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">'
       + (keep ? '<div style="min-width:44px" title="Kept for the record"></div>' : '<label style="display:flex;align-items:center;min-width:44px;min-height:44px;justify-content:center;cursor:pointer;margin:-6px 0 -6px -8px"><input type="checkbox" style="width:22px;height:22px;accent-color:#8f1d12"' + (on ? ' checked' : '') + ' onchange="admAuditPick(\'' + auEsc(a.id) + '\',this.checked)" aria-label="Select"></label>')
-      + '<div class="au-main"' + (keep ? '' : ' style="cursor:pointer" onclick="admAuditPick(\'' + auEsc(a.id) + '\',' + !on + ')"') + '><div class="au-name" style="color:#6b5b50">' + auEsc(a.auditor) + '</div><div class="au-sub">' + auEsc(a.visit_date ? auDate(a.visit_date) : a.title) + ' &middot; ' + auEsc(auKind(a.kind).n) + '</div>'
+      + '<div class="au-main"' + (keep ? '' : ' style="cursor:pointer" onclick="admAuditPick(\'' + auEsc(a.id) + '\',' + !on + ')"') + '><div class="au-name" style="color:#6b5b50">' + auEsc(a.auditor) + '</div><div class="au-sub">' + auEsc(a.visit_date ? auDate(a.visit_date) : a.title) + ' &middot; ' + auEsc(auKind(auKindOf(a)).n) + '</div>'
       + '<div class="au-sub">Removed by ' + auEsc(admAuditWho(a.removed_by)) + ', ' + auEsc(auAgo(a.removed_at)) + (a.removed_reason ? ' &middot; &ldquo;' + auEsc(a.removed_reason) + '&rdquo;' : '') + '</div></div>'
       + '<button class="au-btn quiet"' + (AUA.busy ? ' disabled' : '') + ' onclick="admAuditRestore(\'' + auEsc(a.id) + '\')">Put back</button></div></div>';
   });
