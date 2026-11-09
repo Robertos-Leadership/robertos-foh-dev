@@ -1,0 +1,1431 @@
+<!DOCTYPE html>
+<html lang="it" translate="no">
+<head>
+<meta charset="utf-8">
+<meta name="google" content="notranslate">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Audit Roberto's">
+<meta name="theme-color" content="#FBF7F1">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<!-- Fonts and the server: connect early, and load the fonts without holding the page back (30 Oct 2026: the page took seconds to appear). Text shows at once in a plain font and swaps. -->
+<link rel="preconnect" href="https://zrpglswalgjbtghudmhu.supabase.co" crossorigin>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Forum&family=Outfit:wght@400;500;600;700&display=swap" media="print" onload="this.media='all'">
+<noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Forum&family=Outfit:wght@400;500;600;700&display=swap"></noscript>
+<title>Audit — Roberto's DIFC</title>
+<!-- Before any code below can call fetch(): on the DEV host this blocks every write. -->
+<style>
+/* Roberto's brand (redesign 22 Oct 2026, approved mock-up): wine #450207, cream, orange used sparingly,
+   tan hairlines; Forum for headings, Outfit for text. The older names below point at the new colours so
+   every screen follows. */
+:root{
+  --vino:#450207;--accent:#FA4700;--ink:#3A332C;--muted:#6E5A4C;--body:#4F4238;
+  --line:#D8C4AC;--soft:#EFE4D6;--sand:#E8D9C7;--paper:#FBF7F1;--door:#F6EFE6;
+  --sabbia:#E8D9C7;--sabbia-light:#EFE4D6;--sabbia-dark:#D8C4AC;--terra:#450207;--cream:#FBF7F1;--vino-mid:#6B1A20;
+  --ok:#2F6B2F;--ok-bg:#EEF4EA;--below:#8A5A00;--below-bg:#F6EBD4;--err:#B23A00;--err-bg:#FCEBE2;
+  --display:'Forum',Georgia,'Times New Roman',serif;
+  --sans:'Outfit',-apple-system,'Segoe UI',Roboto,sans-serif;
+  color-scheme:light;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:15px}
+button,input,textarea,select{font:inherit;color:inherit}
+button{cursor:pointer}
+button:focus-visible,input:focus-visible,textarea:focus-visible,a:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+[hidden]{display:none!important}
+.app{max-width:560px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column;background:var(--paper)}
+.app.wide{max-width:820px}
+.top{background:var(--paper);color:var(--ink);padding:24px 20px 18px;padding-top:max(24px,env(safe-area-inset-top));display:flex;flex-direction:column;gap:12px;border-bottom:1px solid var(--line)}
+.top .row{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.brand{display:flex;align-items:center;gap:10px}
+.brand img{height:22px;width:auto;display:block}
+.kick{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:500}
+.top h1{font-family:var(--display);font-weight:400;font-size:34px;line-height:1.08;margin:0;color:var(--vino)}
+.top .sub{font-size:15px;line-height:1.5;color:var(--body)}
+.lang{display:flex;border:1px solid var(--line);border-radius:999px;overflow:hidden}
+.lang button{font-size:13px;font-weight:500;padding:7px 12px;border:0;background:transparent;color:var(--muted);min-height:34px}
+.lang button.on{background:var(--vino);color:var(--paper)}
+.bar{display:flex;align-items:center;gap:12px}
+.bar .track{flex:1;height:6px;background:var(--sand);border-radius:3px;overflow:hidden}
+.bar .fill{height:6px;background:var(--vino)}
+.bar b{font-size:14px;font-weight:600;color:var(--vino);white-space:nowrap}
+.body{padding:16px;display:flex;flex-direction:column;gap:10px;flex:1}
+.lbl{font-size:13px;font-weight:600;color:var(--vino);padding:0 2px;margin-top:8px}
+.lbl small{font-weight:400;color:var(--muted)}
+.card{background:#fff;border:1px solid var(--line);border-radius:12px}
+.sec{display:flex;align-items:center;gap:14px;padding:13px 15px;width:100%;text-align:left;background:#fff;border:1px solid var(--line);border-radius:12px;min-height:64px}
+.sec:hover{border-color:var(--vino)}
+.sec.now{border:2px solid var(--vino);padding:12px 14px}
+.sec.final{background:var(--door)}
+.dot{flex:none;width:28px;height:28px;border-radius:14px;background:var(--sand);color:var(--vino);font-size:13px;font-weight:600;display:flex;align-items:center;justify-content:center}
+.dot.done{background:var(--vino);color:var(--paper)}
+.dot.go{background:transparent;border:2px solid var(--vino);color:var(--vino)}
+.dot.star{background:var(--vino);color:var(--paper)}
+.sec .t{display:block;font-family:var(--display);font-size:20px;color:var(--vino);line-height:1.2}
+.sec .s{display:block;font-size:13px;color:var(--muted);margin-top:2px}
+.sec .grow{flex:1;min-width:0}
+.sec .sc{font-weight:600;font-size:15px;white-space:nowrap;color:var(--vino)}
+.sec .chev{flex:none;color:var(--vino)}
+.head{padding:14px 20px 14px;padding-top:max(14px,env(safe-area-inset-top));background:var(--paper);border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:8px}
+.head .row{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.back{display:inline-flex;align-items:center;gap:6px;font-size:14px;font-weight:500;color:var(--vino);background:none;border:0;padding:0;min-height:44px}
+.head h2{font-family:var(--display);font-weight:400;font-size:28px;color:var(--vino);line-height:1.15;margin:0}
+.head .hint{font-size:15px;line-height:1.5;color:var(--body);margin:0}
+.head .prev{font-size:12.5px;color:var(--muted)}
+.qk{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.qk .kick{font-size:12px}
+.segs{display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end}
+.segs i{width:14px;height:4px;border-radius:2px;background:var(--sand)}
+.segs i.on{background:var(--vino)}
+.muted{color:var(--muted);font-size:13px}
+.scores{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px}
+.scores.five{grid-template-columns:repeat(5,minmax(0,1fr))}
+.sbtn{height:56px;border:1px solid var(--line);background:#fff;border-radius:12px;font-size:20px;font-weight:600;color:var(--ink)}
+.sbtn.na{font-size:13px;background:var(--door);color:var(--muted)}
+.sbtn.on{background:var(--vino);border-color:var(--vino);color:var(--paper)}
+.yn{display:flex;flex-direction:column;gap:10px}
+.ybtn{min-height:58px;border:1px solid var(--line);border-radius:12px;background:#fff;color:var(--ink);font-size:18px;font-weight:500;display:flex;align-items:center;justify-content:center;gap:10px}
+.ybtn.yes.on{border:2px solid var(--ok);background:var(--ok-bg);color:var(--ok);font-weight:600}
+.ybtn.no.on{border:2px solid var(--err);background:var(--err-bg);color:var(--err);font-weight:600}
+.ybtn.seen{min-height:48px;border-style:dashed;background:transparent;color:var(--muted);font-size:15px}
+.ybtn.seen.on{border:2px solid var(--muted);color:var(--ink);background:var(--door)}
+.anc{background:#fff;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.anc div{display:flex;gap:12px;padding:11px 14px;border-top:1px solid var(--soft);font-size:14px;line-height:1.4}
+.anc div:first-child{border-top:0}
+.anc div.on{background:var(--door)}
+.anc b{flex:none;width:14px;color:var(--vino);font-weight:600}
+.pill{min-height:44px;padding:0 14px;border:1px solid var(--line);border-radius:999px;background:#fff;color:var(--vino);font-size:14px;font-weight:500;display:inline-flex;align-items:center;gap:8px}
+.pill.dash{border-style:dashed;background:transparent;color:var(--muted)}
+.pill.on{border:2px solid var(--muted);color:var(--ink);background:var(--door)}
+.verd{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.vbtn{min-height:46px;border:1px solid var(--line);background:#fff;border-radius:12px;font-size:14px;padding:4px}
+.vbtn.ok{color:var(--ok)}.vbtn.fix{color:var(--below)}.vbtn.urgent{color:var(--err)}
+.vbtn.ok.on{background:var(--ok-bg);border:2px solid var(--ok);font-weight:600}
+.vbtn.fix.on{background:var(--below-bg);border:2px solid var(--below);font-weight:600}
+.vbtn.urgent.on{background:var(--err-bg);border:2px solid var(--err);font-weight:600}
+.note{padding:12px;display:flex;flex-direction:column;gap:10px}
+.note textarea{width:100%;min-height:72px;border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:16px;line-height:1.45;background:var(--paper);resize:vertical}
+.note textarea.small{min-height:52px}
+.note .tools{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.opt.on{background:var(--ok-bg);color:var(--ok);font-weight:600}.opt.on:before{content:'\2713  '}
+.note .said .listen{color:var(--err);font-weight:600}.note .said .listen i{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--err);margin-right:7px;animation:pulse 1.2s infinite}
+.mic.dict{min-width:46px;justify-content:center;padding:0 12px;font-weight:600}
+.note .said{font-size:13px;color:var(--muted);min-height:0}.note .said:empty{display:none}.note .said .link{padding:0;font-size:13px}
+.mic,.cam{min-height:44px;border-radius:999px;padding:0 14px;font-weight:500;font-size:14px;display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);background:#fff;color:var(--vino)}
+.mic.live{background:var(--err);border-color:var(--err);color:#fff;animation:pulse 1.2s infinite}
+@keyframes pulse{50%{opacity:.75}}
+.saved{font-size:13px;color:var(--ok);margin-left:auto;display:inline-flex;align-items:center;gap:5px}
+.saved.ok::before{content:'';width:12px;height:7px;border-left:2.4px solid currentColor;border-bottom:2.4px solid currentColor;transform:rotate(-45deg) translateY(-2px)}
+.saved.ing{color:var(--muted)}
+.saved.bad{color:var(--err);font-weight:600}
+.pics{display:flex;gap:6px;flex-wrap:wrap}
+.pic{position:relative;width:72px;height:72px;border-radius:8px;overflow:hidden;background:var(--sand)}
+.pic img{width:100%;height:100%;object-fit:cover;display:block}
+.pic button{position:absolute;top:2px;right:2px;width:26px;height:26px;border-radius:13px;border:0;background:rgba(58,51,44,.8);color:#fff;font-size:15px;line-height:26px;padding:0}
+.pic.up{display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--muted)}
+.en{font-size:13px;line-height:1.45;color:var(--muted);border-top:1px solid var(--soft);padding-top:8px}
+.en b{color:var(--vino);font-size:11px;letter-spacing:.12em}
+.foot{position:sticky;bottom:0;padding:12px 16px;padding-bottom:max(16px,env(safe-area-inset-bottom));background:var(--paper);border-top:1px solid var(--line);display:flex;gap:10px}
+.foot.static{position:static}
+.big{flex:1;min-height:52px;border-radius:12px;border:0;font-weight:500;font-size:16px;display:inline-flex;align-items:center;justify-content:center;gap:8px}
+.big.vino,.big.terra{background:var(--vino);color:var(--paper)}
+.big.light{background:#fff;border:1px solid var(--line);color:var(--vino)}
+.big:disabled{opacity:.55}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{border:1px solid var(--line);background:#fff;border-radius:999px;padding:9px 14px;font-size:14px;min-height:42px}
+.chip.on{background:var(--vino);color:var(--paper);border-color:var(--vino)}
+.pick{padding:14px;display:flex;flex-direction:column;gap:8px}
+.pick input{width:100%;border:1px solid var(--line);border-radius:10px;padding:13px 14px;font-size:17px;background:#fff;color:var(--ink)}
+.opt{display:block;width:100%;text-align:left;padding:12px;border:0;border-top:1px solid var(--soft);background:#fff;font-size:15px}
+.opt small{color:var(--muted);margin-left:6px}
+.menu{border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#fff}
+.msec{display:flex;align-items:center;gap:10px;width:100%;min-height:50px;padding:0 14px;border:0;border-top:1px solid var(--soft);background:#fff;text-align:left;font-family:var(--display);font-size:19px;color:var(--vino)}
+.msec:first-child{border-top:0}
+.msec span{flex:1}
+.msec small{font-family:var(--sans);font-size:13px;color:var(--muted)}
+.msec.on{background:var(--door)}
+.chip small{opacity:.7;margin-left:2px}
+.opt.in{padding:13px 14px;font-size:16px;min-height:48px}
+.kcard{display:flex;align-items:center;gap:14px;text-align:left;padding:16px;border:1px solid var(--line);border-radius:14px;background:#fff;min-height:76px;width:100%}
+.kcard.on{border:2px solid var(--vino);padding:15px}
+.kcard .r{flex:none;width:22px;height:22px;border-radius:50%;border:2px solid var(--line);display:flex;align-items:center;justify-content:center}
+.kcard.on .r{border-color:var(--vino)}
+.kcard.on .r::after{content:'';width:10px;height:10px;border-radius:50%;background:var(--vino)}
+.kcard .t{display:block;font-family:var(--display);font-size:22px;color:var(--vino);line-height:1.15}
+.kcard .s{display:block;font-size:14px;color:var(--muted);margin-top:2px}
+.shot{min-height:200px;border-radius:12px;border:2px dashed var(--line);background:var(--door);color:var(--vino);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;font-weight:500;font-size:17px;width:100%}
+.msg{padding:12px 14px;border-radius:12px;font-size:14px;line-height:1.45}
+.msg.ok{background:var(--ok-bg);color:var(--ok)}
+.msg.err{background:var(--err-bg);color:var(--err)}
+.msg.info{background:var(--door);color:var(--ink)}
+.center{text-align:center;padding:40px 20px;color:var(--muted)}
+.link{background:none;border:0;color:var(--vino);text-decoration:underline;padding:8px 0;font-size:14px;align-self:flex-start}
+/* report */
+.tiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.tile{background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.tile b{display:block;font-size:24px;font-weight:600;color:var(--vino)}
+.tile span{font-size:12px;color:var(--muted)}
+.tbl{width:100%;border-collapse:collapse;font-size:14px}
+.tbl th{font-weight:400;color:var(--muted);font-size:12px;text-align:left;padding:6px 4px;border-bottom:1px solid var(--line)}
+.tbl td{padding:9px 4px;border-bottom:1px solid var(--soft)}
+.tbl td.a{font-family:var(--display);font-size:17px;color:var(--vino)}
+.act{padding:12px 14px;display:flex;flex-direction:column;gap:6px}
+.act .h{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}
+.act .n{font-family:var(--display);font-size:18px;color:var(--vino);line-height:1.2}
+.badge{display:inline-block;font-size:11.5px;font-weight:600;padding:3px 9px;border-radius:10px;white-space:nowrap}
+.badge.urgent,.badge.remove{background:var(--err-bg);color:var(--err)}
+.badge.fix,.badge.attention{background:var(--below-bg);color:var(--below)}
+.badge.ok,.badge.keep{background:var(--ok-bg);color:var(--ok)}
+.act .it{font-size:12.5px;color:var(--muted);font-style:italic}
+.act textarea,.rtext textarea,.item textarea{width:100%;border:1px solid var(--line);border-radius:10px;padding:8px 10px;font-size:16px;line-height:1.45;background:var(--paper);min-height:44px;resize:vertical}
+.who{display:flex;gap:8px;flex-wrap:wrap}
+.who input{flex:1;min-width:130px;border:1px solid var(--line);border-radius:10px;padding:9px 10px;font-size:16px;background:#fff;min-height:42px}
+.rtext{padding:12px 14px;display:flex;flex-direction:column;gap:6px}
+.tabs{display:flex;gap:6px}
+.tabs button{flex:1;min-height:40px;border-radius:10px;border:1px solid var(--line);background:#fff;color:var(--vino);font-weight:500;font-size:13px}
+.tabs button.on{background:var(--vino);color:var(--paper);border-color:var(--vino)}
+.item{padding:10px 14px;border-top:1px solid var(--soft);display:flex;flex-direction:column;gap:6px}
+.item:first-child{border-top:0}
+.item .h{display:flex;justify-content:space-between;gap:8px;font-size:14px}
+.when{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.when label{min-width:0;display:flex;flex-direction:column;gap:8px}
+.when input{width:100%;box-sizing:border-box}
+@media (max-width:420px){.tiles{grid-template-columns:repeat(2,minmax(0,1fr))}.top h1{font-size:32px}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+/* The look of Roberto's (26 Oct 2026, Francesco: "more like Roberto's, fill the space without being noisy"):
+   a photo of the room behind the page, wine-tinted so it stays quiet, and the audit as a cream panel on top.
+   The questions themselves are untouched: plain cream, same size, nothing behind the text. On a phone the
+   panel is the whole screen and the photo is a slim band above the title of the first screens only. */
+.top::before{content:'';display:block;height:104px;margin:-24px -20px 2px;
+  background:linear-gradient(180deg,rgba(69,2,7,.35),rgba(69,2,7,.62)),url(venue-ristorante.jpg) center 40%/cover}
+@media (min-width:760px){
+  html{background:#2a0104}
+  body{background:linear-gradient(rgba(42,1,4,.62),rgba(42,1,4,.72)),url(venue-ristorante.jpg) center/cover fixed no-repeat;min-height:100vh}
+  .app{margin:36px auto;min-height:calc(100vh - 72px);border-radius:18px;overflow:hidden;box-shadow:0 24px 70px rgba(0,0,0,.45),0 0 0 1px rgba(250,247,241,.12)}
+  .top::before{height:150px}
+}
+</style>
+</head>
+<body>
+<div id="root" class="app"><div class="center">Caricamento…</div></div>
+<input type="file" id="file" accept="image/*" multiple hidden>
+<script>
+/* ════════════════════════════════════════════════════════════════════════════
+   CHEF BARTOLINI AUDIT (14 Oct 2026, Francesco)
+   Moved to the FOH app 22 Oct 2026 (Francesco: "the audit should only be in the FOH module, not
+   Kitchen any more"). The Kitchen audit.html now only forwards here, query string and all, so the
+   links already sent keep working. The data stays in the Kitchen database (audit-api): the dishes
+   come from the Kitchen recipes. No dev-guard here: FOH DEV and LIVE share one database, and every
+   write is a real audit, exactly as on LIVE.
+
+   Enrico opens audit.html?k=<his link> on his iPhone. He scores 33 items in five
+   areas (1–5 or N/A), writes or dictates notes in Italian, takes photos at any
+   moment, tastes dishes one by one, and closes with an overall comment, suggested
+   improvements and his top 3. Everything saves as he goes.
+
+   Francesco opens audit.html?a=<his link>: the report in English (translated by
+   Claude with a chef's glossary, Italian kept), owner + date on every action, a
+   test email to himself, then "Email to Amin".
+
+   Shared link (15 Oct 2026): audit.html?n=<invite>. Whoever opens it types their
+   name and gets their own audit (new visit, date and time stamped), then lands on
+   ?k= like Enrico. The same invite's ?a= link is Francesco's list of those audits.
+   "All N/A" on an area marks every item not yet scored as not experienced.
+
+   All reads and writes go through the audit-api Edge Function, which checks the
+   link. The audit_* tables are closed to the anon key.
+   ════════════════════════════════════════════════════════════════════════════ */
+var SB_URL = 'https://zrpglswalgjbtghudmhu.supabase.co';
+var SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpycGdsc3dhbGdqYnRnaHVkbWh1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA5MTIyMjQsImV4cCI6MjA5NjQ4ODIyNH0.pfABN-so4xINK7nHxXUlVeTO4g0h0l6ILHVwpoKrbds';
+var FN = SB_URL + '/functions/v1/audit-amman';
+var Q = new URLSearchParams(location.search);
+var TOK = Q.get('a') ? { a: Q.get('a') } : (Q.get('k') ? { k: Q.get('k') } : (Q.get('n') ? { n: Q.get('n') } : null));
+var ADMIN = !!(TOK && TOK.a);
+var AREAS = ['arrivo', 'ristorante', 'cucina', 'vino', 'scala'];
+var ORDER = ['arrivo', 'ristorante', 'cucina', 'piatti', 'vino', 'scala'];
+
+function ls(k, v){ try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch(e){ return null; } }
+// Italian first for Enrico; English first for anyone a shared link reaches (staff or a guest). The IT/EN switch stays.
+var LANG = ls('auditLang') || (ADMIN || (TOK && TOK.n) ? 'en' : 'it');
+var DICT = ls('auditDict') === 'it' || ls('auditDict') === 'en' ? ls('auditDict') : ((navigator.language || '').slice(0, 2) === 'it' ? 'it' : LANG);   // the language the microphone listens in
+function speakLabel(){ return LANG === 'it' ? 'Parla' : 'Speak'; }
+var ENRICO = 'Chef Enrico Bartolini';
+var AMMAN = "Andrea · Roberto's Amman";   // Roberto's Amman audit (9 Nov 2026): Enrico's whole-venue form, no DIFC menu, dishes typed by name
+function isEnrico(){ return !D || !D.visit || D.visit.auditor === ENRICO || D.visit.auditor === AMMAN; }
+function forceEn(){ if (isAmman()) { LANG = 'en'; DICT = 'en'; document.documentElement.lang = 'en'; } }   // Amman: English only, no IT/EN switch
+function isAmman(){ return !!(D && (D.site === 'amman' || (D.visit && D.visit.auditor === AMMAN))); }
+function who(){ return String((D && D.visit && D.visit.auditor) || ENRICO).replace(/^Chef\s+/i, '').trim().split(/\s+/)[0]; }
+function dubaiNow(){ var d = new Date(Date.now() + 4 * 3600 * 1000).toISOString(); return { date: d.slice(0, 10), time: d.slice(11, 16) }; }   // Dubai is UTC+4, no DST
+function addDays(ds, n){ var d = new Date(ds + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); }
+function dubaiTime(iso){ try { return new Date(iso).toLocaleString(LANG === 'en' ? 'en-GB' : 'it-IT', { timeZone: 'Asia/Dubai', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }); } catch(e){ return ''; } }
+
+var T = {
+  it: {
+    hello:'Ciao Enrico', visit:'Visita', autosave:'scrivi o parla, salva da solo', sections:'Sezioni',
+    arrivo:'Arrivo & Benvenuto', decor:'Decor interni', cucina:'Cucina', piatti:'Piatti — degustazione', ristorante:'Ristorante', vino:'Vino', scala:'Scala',
+    final:'Commento finale', finalSub:'Visita in generale · miglioramenti · 3 priorità',
+    piattiSub:'Piatto per piatto: tieni / correggi / togli', flagBtn:'Foto · Segnala',
+    of:'di', score:'Voto', anchor:'3 = accettabile, non da Bartolini · 5 = standard stellato',
+    note:'Nota', ph:'Scrivi qui, oppure premi Parla…', speak:'Parla · IT', tidying:'Sistemo il testo…', saidLink:'Cosa hai detto', listening:'Sto ascoltando… premi Stop quando hai finito', micStopped:'Il microfono si è fermato. Premi Parla per continuare.', stop:'Stop', photo:'Foto',
+    action:'Azione', ok:'Ok così', fix:'Da correggere', urgent:'Urgente',
+    next:'Avanti', done:'Fatto', back:'Indietro', home:'Sezioni',
+    saved:'Salvato', saving:'Salvo…', notSaved:'Non salvato — riprovo', inProgress:'in corso', avg:'media', na:'N/A',
+    last:'Ultima volta', flagTitle:'Segnalazione', shoot:'Scatta o scegli una foto', onlyNote:'Solo una nota, senza foto',
+    what:"Cos'è", piatto:'Piatto', dishFromMenu:'Piatto dal menu', choose:'Scegli…', keep:'Bello — da tenere', attention:'Attenzione',
+    save:'Salva', remove:'Togli', addDish:'+ Aggiungi piatto', searchDish:'Cerca nel menu…', useName:'Usa questo nome',
+    dKeep:'Tieni', dFix:'Correggi', dRemove:'Togli dal menu', noDishes:'Nessun piatto ancora. Aggiungi il primo che assaggi.',
+    overall:'La visita in generale', improve:'Miglioramenti suggeriti', top3:'Le tue 3 priorità', prio:'Priorità',
+    send:'Invia a Francesco', sendSure:'Premi di nuovo per inviare', sentTitle:'Grazie, Chef.', sentLine:"Francesco ha ricevuto l'audit. Puoi ancora aggiungere o correggere qualcosa: si salva da solo.",
+    closed:'Questo audit è stato inviato. Grazie!', badLink:'Questo link non è valido.', offline:'Connessione assente — tutto quello che scrivi resta qui e si salva appena torna la rete.',
+    noMic:'Su questo telefono usa il microfono della tastiera per dettare.', micBlocked:'Permetti il microfono a Safari per dettare.',
+    uploading:'Carico…', photoFail:'Foto non caricata. Riprova.', removeDish:'Togli questo piatto dalla lista', liked:'tenere', att:'attenzione', notes:'note',
+    anchorAll:'1 = scarso · 3 = accettabile · 5 = eccellente', started:'iniziato', allNa:'Non visto — tutto N/A', undoNa:'Togli i N/A',
+    startTitle:'Audit', startSub:'Scrivi il tuo nome e quando sei venuto.', yourName:'Il tuo nome', visitDate:'Data della visita', visitTime:'Ora', badDate:'Controlla la data della visita',
+    prenota:'Prenotazione', servito:'Chi ti ha servito', bookOpt:'Facoltativo', walkIn:'Sono entrato senza prenotare: salta', walkedIn:'Senza prenotazione, saltato', walkInSub:'Se sei entrato senza prenotare, salta questa sezione.', seatQ:'Dove eri seduto?', seatBar:'Al bancone', seatLounge:'A un tavolo del lounge', seatChange:'cambia', bagno:'Bagno', congedo:'Conto e saluto', food:'Cibo',
+    where:'Dove sei stato?', kRest:'Ristorante', kRestSub:'Prenotazione, accoglienza, sala, vino, cibo, bagno, conto', kScala:'Scala', kScalaSub:'Bar & lounge: prenotazione, accoglienza, servizio, drink, bagno, conto', pickKind:'Scegli Ristorante o Scala',
+    doneN:'Fatto', nextUp:'Prossima', qs:'domande', tasted:'assaggiati', piattiG:'I piatti assaggiati', piattiSubG:'Un voto per ogni piatto',
+    finalG:'Prima di inviare', finalSubG:'Il momento migliore, una cosa da migliorare', addPhoto:'Aggiungi una foto', cont2:'Continua', startS:'Inizia',
+    noted:'nota', photos:'foto', yes:'Sì', no:'No', notSeen:"Non l'ho visto", noIsNo:"Non è successo? Tocca No. «Non l'ho visto» solo se non potevi saperlo.", bagnoR:'Bagno del ristorante', bagnoS:'Bagno della Scala', anything:'Vuoi aggiungere qualcosa?', optional:'Facoltativo',
+    nextQ:'Domanda successiva', nextSec:'Sezione successiva', kRest:'Il ristorante', kRestSub:'Dalla prenotazione al saluto · 52 domande',
+    kScala:'Scala, bar & lounge', kScalaSub:"Dall'accoglienza al conto · 44 domande", kVenue:'Tutto il locale', atTable:'Al tavolo', atScala:'Alla Scala',
+    best:'Il momento migliore', fixone:'Una cosa da migliorare', other:'Altro', bestPh:'Cosa ti è piaciuto di più?', fixonePh:'Se potessi cambiare una cosa…', otherPh:'Qualsiasi altra cosa', formfb:'Feedback su questo audit', formfbPh:'Cosa cambieresti nelle domande o nella app?',
+    youSent:'Cosa hai inviato', answeredW:'risposte', notSeenW:'non viste', stillEdit:'Puoi ancora aggiungere o correggere qualcosa dalle sezioni: si salva da solo.',
+    orSection:'Oppure apri una sezione del menu:', typeDish:'Scrivi il nome del piatto qui sopra, poi toccalo per aggiungerlo.', typeDishPh:'Nome del piatto…',
+    startNew:'Nuovo audit', earlier:'I tuoi audit precedenti su questo telefono', openIt:'Apri', another:'Inizia un altro audit', startTitleE:'Nuovo audit', startSubE:'Scegli quando sei venuto: data e ora. Si apre un nuovo audit di tutto il locale.',
+    ordered:'Cosa hai ordinato?', orderedSub:'Scegli ogni piatto dal menu e dagli un voto.', thenFood:'Poi, il cibo in generale', scoreIt:'Da votare', dish1n:'piatto', dishesN:'piatti',
+    dish5:'Lo riordineresti domani', dish3:'Buono', dish1:"L'hai lasciato", startTitle:'Audit ospite', begin:"Inizia l'audit",
+    startSub:"Circa 15 minuti. Rispondi da ospite: quello che hai visto, sentito e assaggiato. Quello che non hai visto, saltalo.",
+    allNa:'Non ho visto niente di questa sezione', undoNa:'Annulla i "non visto"', saved:'Salvato', food:'Il cibo',
+    sendTeam:'Invia al team di direzione', sentTeamTitle:'Grazie', scoreRest:'Il tuo punteggio per il ristorante', scoreScala:'Il tuo punteggio per Scala', scoreNote:'La media di tutto ciò che hai valutato. Ciò che hai segnato N/A non conta.', sentTeamLine:"Il team di direzione di Roberto's vede già il tuo audit. Puoi ancora aggiungere o correggere qualcosa: si salva da solo.", begin:"Inizia l'audit", cont:'Continua il tuo audit', newOne:'oppure inizia un nuovo audit'
+  },
+  en: {
+    hello:'Hello Enrico', visit:'Visit', autosave:'type or speak, it saves by itself', sections:'Sections',
+    arrivo:'Arrival & welcome', decor:'Interior decor', cucina:'Inside the kitchen', piatti:'Dishes — tasting', ristorante:'Restaurant', vino:'Wine', scala:'Scala',
+    final:'Final comment', finalSub:'Overall visit · improvements · top 3',
+    piattiSub:'Dish by dish: keep / fix / take off', flagBtn:'Photo · Flag',
+    of:'of', score:'Score', anchor:'3 = acceptable, not Bartolini level · 5 = Michelin standard',
+    note:'Note', ph:'Type here, or press Speak…', speak:'Speak · EN', tidying:'Tidying the text…', saidLink:'What you said', listening:'Listening… tap Stop when you finish', micStopped:'The microphone stopped. Tap Speak to carry on.', stop:'Stop', photo:'Photo',
+    action:'Action', ok:'OK as is', fix:'To fix', urgent:'Urgent',
+    next:'Next', done:'Done', back:'Back', home:'Sections',
+    saved:'Saved', saving:'Saving…', notSaved:'Not saved — retrying', inProgress:'in progress', avg:'avg', na:'N/A',
+    last:'Last time', flagTitle:'Flag', shoot:'Take or choose a photo', onlyNote:'Just a note, no photo',
+    what:'What is it', piatto:'Dish', dishFromMenu:'Dish from the menu', choose:'Choose…', keep:'Great — keep', attention:'Attention',
+    save:'Save', remove:'Remove', addDish:'+ Add a dish', searchDish:'Search the menu…', useName:'Use this name',
+    dKeep:'Keep', dFix:'Fix', dRemove:'Take off the menu', noDishes:'No dishes yet. Add the first one you taste.',
+    overall:'Overall visit', improve:'Suggested improvements', top3:'Your top 3', prio:'Priority',
+    send:'Send to Francesco', sendSure:'Tap again to send', sentTitle:'Thank you, Chef.', sentLine:'Francesco has the audit. You can still add or correct anything: it saves by itself.',
+    closed:'This audit has been sent. Thank you!', badLink:'This link is not valid.', offline:'No connection — everything you write stays here and saves as soon as the network is back.',
+    noMic:'On this phone use the keyboard microphone to dictate.', micBlocked:'Allow the microphone for Safari to dictate.',
+    uploading:'Uploading…', photoFail:'Photo not uploaded. Try again.', removeDish:'Remove this dish from the list', liked:'keep', att:'attention', notes:'notes',
+    anchorAll:'1 = poor · 3 = acceptable · 5 = excellent', started:'started', allNa:'Not experienced — all N/A', undoNa:'Clear the N/As',
+    startTitle:'Audit', startSub:'Type your name and when you visited.', yourName:'Your name', visitDate:'Date of your visit', visitTime:'Time', badDate:'Check the date of your visit',
+    prenota:'Booking', servito:'Who served you', bookOpt:'Optional', walkIn:'I walked in: skip Booking', walkedIn:'Walked in, skipped', walkInSub:'If you walked in without booking, skip this section.', seatQ:'Where did you sit?', seatBar:'At the bar counter', seatLounge:'At a lounge table', seatChange:'change', bagno:'Washroom', congedo:'Bill & goodbye', food:'Food',
+    where:'Where did you go?', kRest:'Restaurant', kRestSub:'Booking, welcome, service, wine, food, washroom, bill', kScala:'Scala', kScalaSub:'Bar & lounge: booking, welcome, service, drinks, washroom, bill', pickKind:'Choose Restaurant or Scala',
+    doneN:'Done', nextUp:'Next up', qs:'questions', tasted:'tasted', piattiG:'Dishes you tasted', piattiSubG:'A score for each dish',
+    finalG:'Before you send', finalSubG:'The best moment, one thing to fix', addPhoto:'Add a photo', cont2:'Continue', startS:'Start',
+    noted:'note', photos:'photos', yes:'Yes', no:'No', notSeen:"I didn't see this", noIsNo:"Didn't happen? Tap No. «I didn't see this» only if you couldn't tell.", bagnoR:'Restaurant washroom', bagnoS:'Scala washroom', anything:'Anything to add?', optional:'Optional',
+    nextQ:'Next question', nextSec:'Next section', kRest:'The restaurant', kRestSub:'Booking to goodbye · 52 questions',
+    kScala:'Scala, bar & lounge', kScalaSub:'Welcome to the bill · 44 questions', kVenue:'Whole venue', atTable:'At the table', atScala:'At Scala',
+    best:'The best moment', fixone:'One thing to fix', other:'Anything else', bestPh:'What did you enjoy most?', fixonePh:'If you could change one thing…', otherPh:'Anything else', formfb:'Feedback on this audit', formfbPh:'What would you change in the questions or the app?',
+    youSent:'What you sent', answeredW:'answered', notSeenW:'not seen', stillEdit:'You can still add or correct anything from the sections: it saves by itself.',
+    orSection:'Or open a section of the menu:', typeDish:'Type the name of the dish above, then tap it to add it.', typeDishPh:'Dish name…',
+    startNew:'New audit', earlier:'Your earlier audits on this phone', openIt:'Open', another:'Start another audit', startTitleE:'New audit', startSubE:'Choose when you visited: date and time. A new audit of the whole venue opens.',
+    ordered:'What did you order?', orderedSub:'Pick each dish from the menu and give it a score.', thenFood:'Then, the food overall', scoreIt:'To score', dish1n:'dish', dishesN:'dishes',
+    dish5:"You'd order it again tomorrow", dish3:'Fine', dish1:'You left it', startTitle:'Guest audit', begin:'Start the audit',
+    startSub:"About 15 minutes. Answer as a guest: what you saw, heard and tasted. Anything you didn't see, skip.",
+    allNa:"I didn't see any of this section", undoNa:'Clear the "didn\'t see"', saved:'Saved', food:'The food',
+    sendTeam:"Send to Roberto's management team", sentTeamTitle:'Thank you', scoreRest:'Your score for the restaurant', scoreScala:'Your score for Scala', scoreNote:"The average of everything you scored. Anything marked N/A isn't counted.", sentTeamLine:"Roberto's management team can already see your audit. You can still add or correct anything: it saves by itself.", begin:'Start the audit', cont:'Continue your audit', newOne:'or start a new audit'
+  }
+};
+function t(k){ return (T[LANG] && T[LANG][k]) || T.it[k] || k; }
+function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+// For a guest (Restaurant visit) the kitchen section is the food on the plate.
+function areaName(a){
+  var k = D && D.kind;
+  if (a === 'cucina' && k && k !== 'venue') return t('food');
+  if (a === 'ristorante' && k === 'restaurant') return t('atTable');
+  if (a === 'scala' && k === 'scala') return t('atScala');
+  if (a === 'bagno' && (k === 'restaurant' || k === 'scala' || k === 'venue')) return t(k === 'scala' ? 'bagnoS' : 'bagnoR');   // two washrooms (24 Oct 2026)
+  if (a === 'bagnos') return t('bagnoS');   // the whole venue has both: this is Scala's (30 Oct 2026)
+  return t(a);
+}
+// The sections come from the visit's type (22 Oct 2026: whole venue / Restaurant / Scala); the lists
+// above are only the fallback. Dishes sit after the food (or after Scala on a Scala visit).
+function setAreas(){
+  if (!D || !D.areas) return;
+  AREAS = D.areas.slice();
+  ORDER = AREAS.slice();
+  // A Restaurant visit names its dishes inside The food ("What did you order?", Francesco 22 Oct 2026),
+  // so it has no separate dishes step; Scala bites and Enrico's tasting keep theirs.
+  if (D.kind !== 'restaurant') {
+    var at = ORDER.indexOf(D.kind === 'scala' ? 'scala' : 'cucina');
+    ORDER.splice(at < 0 ? ORDER.length : at + 1, 0, 'piatti');
+  }
+  if (D.area_en) for (var k in D.area_en) AREA_EN[k] = D.area_en[k];
+}
+function lab(c){ return LANG === 'en' ? c.label_en : c.label_it; }
+function shortDate(d){ if (!d) return ''; try { return new Date(d + 'T12:00:00Z').toLocaleDateString(LANG === 'en' ? 'en-GB' : 'it-IT', { weekday:'short', day:'numeric', month:'short' }); } catch(e){ return d; } }
+function fmtDate(d, lang){ if (!d) return ''; try { return new Date(d + 'T12:00:00Z').toLocaleDateString(lang === 'en' ? 'en-GB' : 'it-IT', { weekday:'long', day:'numeric', month:'long', year:'numeric' }); } catch(e){ return d; } }
+
+var D = null;                 // everything the API returned
+var S = { v: ADMIN ? 'report' : 'home' };
+var root = document.getElementById('root');
+
+/* ── API ─────────────────────────────────────────────────────────────────── */
+function api(action, payload){
+  var body = Object.assign({ action: action, pv: 3, qset: 4 }, TOK, payload || {});
+  // forceFunctionRegion: the function runs in Sydney, next to the database. From Mumbai every database query was a
+  // long round trip and a load took 1.5-7 s; here it takes about 0.5 s (30 Oct 2026).
+  return fetch(FN + '?forceFunctionRegion=ap-southeast-2' + (action === 'load' ? '&read=1' : ''), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY },
+    body: JSON.stringify(body)
+  }).then(function(r){
+    return r.json().catch(function(){ return {}; }).then(function(j){
+      if (!r.ok) { var e = new Error(j.message || j.error || ('Error ' + r.status)); e.status = r.status; throw e; }
+      return j;
+    });
+  });
+}
+
+/* Saves queue: the latest value per key wins, retried until it lands. A copy sits in
+   localStorage so a reload with no network does not lose a note. */
+var PEND = {}, BUSY = 0, PKEY = 'auditPending:' + (TOK ? (TOK.k || TOK.a) : '');
+try { PEND = JSON.parse(ls(PKEY) || '{}') || {}; } catch(e){ PEND = {}; }
+function keepPend(){ ls(PKEY, JSON.stringify(PEND)); }
+function queue(key, action, payload){
+  PEND[key] = { action: action, payload: payload };
+  keepPend(); setStatus('saving'); flushSoon();
+}
+var flushT = null;
+// A save waits at most 700 ms after the FIRST change, never pushed back by the next one: a fast
+// tapper kept resetting the timer and 29 of 33 answers sat unsaved (end-to-end test, 22 Oct 2026).
+function flushSoon(ms){
+  if (ms == null && flushT) return;
+  clearTimeout(flushT); flushT = setTimeout(function(){ flushT = null; flush(); }, ms == null ? 700 : ms);
+}
+// Up to 4 saves at once (each takes 1.5-3 s), never two for the same answer: a newer value for an
+// answer that is still on its way waits and goes next. BUSY = how many are on their way.
+var SENDING = {};
+function flush(){
+  var keys = Object.keys(PEND).filter(function(k){ return !SENDING[k]; });
+  if (!keys.length) { if (!BUSY && !Object.keys(PEND).length) setStatus('saved'); return; }
+  while (BUSY < 4 && keys.length) sendOne(keys.shift());
+}
+function sendOne(k){
+  var job = PEND[k]; SENDING[k] = true; BUSY++;
+  api(job.action, job.payload).then(function(res){
+    BUSY--; delete SENDING[k];
+    if (PEND[k] === job) { delete PEND[k]; keepPend(); }
+    merge(job.action, res && res.row);
+    flushSoon(0);
+  }, function(e){
+    BUSY--; delete SENDING[k];
+    if (e.status && e.status < 500) { if (PEND[k] === job) { delete PEND[k]; keepPend(); } toast(e.message, true); flushSoon(0); return; }
+    setStatus('bad'); flushSoon(4000);
+  });
+}
+window.addEventListener('online', function(){ flushSoon(0); });
+function setStatus(s){
+  var els = document.querySelectorAll('.saved');
+  for (var i = 0; i < els.length; i++) {
+    els[i].className = 'saved ' + (s === 'bad' ? 'bad' : s === 'saving' ? 'ing' : 'ok');
+    els[i].textContent = s === 'saving' ? t('saving') : s === 'bad' ? t('notSaved') : t('saved');
+  }
+}
+function toast(m, bad){
+  var el = document.getElementById('toast');
+  if (!el) { el = document.createElement('div'); el.id = 'toast'; el.setAttribute('role', 'status');
+    el.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);bottom:90px;max-width:92%;z-index:50;padding:12px 16px;border-radius:8px;font-size:14px;box-shadow:0 4px 14px rgba(0,0,0,.2)';
+    document.body.appendChild(el); }
+  el.textContent = m; el.style.background = bad ? '#8f1d12' : '#2a1a10'; el.style.color = '#fff'; el.hidden = false;
+  clearTimeout(el._t); el._t = setTimeout(function(){ el.hidden = true; }, 3500);
+}
+
+/* Put a saved row back into D so every screen shows it. */
+function merge(action, row){
+  if (!row || !D) return;
+  var list = action === 'score' ? D.scores : action === 'dish' ? D.dishes : action === 'flag' ? D.flags : action === 'text' ? D.texts : null;
+  if (!list) return;
+  var key = action === 'text' ? 'key' : action === 'score' ? 'code' : 'id';
+  for (var i = 0; i < list.length; i++) if (list[i][key] === row[key]) {
+    // Never overwrite a note the user is still typing (the queue holds the newer one).
+    var keepNote = list[i]._local; list[i] = Object.assign(list[i], row); if (keepNote) list[i]._local = keepNote; return;
+  }
+  if (!row.removed) list.push(row);
+}
+function scoreRow(code){ for (var i = 0; i < D.scores.length; i++) if (D.scores[i].code === code) return D.scores[i]; var r = { code: code, photos: [] }; D.scores.push(r); return r; }
+function textRow(key){ for (var i = 0; i < D.texts.length; i++) if (D.texts[i].key === key) return D.texts[i]; var r = { key: key, photos: [] }; D.texts.push(r); return r; }
+function byId(list, id){ for (var i = 0; i < list.length; i++) if (list[i].id === id) return list[i]; return null; }
+function cat(area){ return D.catalog.filter(function(c){ return c.area === area; }).sort(function(a, b){ return a.position - b.position; }); }
+// A standard is answered Yes (5) or No (0); a quality score is 1-5. "Answered" = a score is there at all:
+// a No is 0, so a score is never tested for truth (22 Oct 2026 redesign).
+function has(r){ return !!r && !r.na && r.score != null && r.score !== ''; }
+function isStd(c){ return c && c.qtype === 'standard'; }
+function ansLabel(c, r, lang){
+  var L = lang || LANG;
+  if (!r || (!r.na && !has(r))) return '';
+  if (r.na) return L === 'en' ? "Didn't see" : 'Non visto';
+  if (isStd(c)) return r.score > 0 ? (L === 'en' ? 'Yes' : 'Sì') : 'No';
+  return r.score + ' / 5';
+}
+function hint(c){ return LANG === 'en' ? c.hint_en : (c.hint_it || c.hint_en); }
+function anchor(c, n){ return LANG === 'en' ? c['a' + n + '_en'] : (c['a' + n + '_it'] || c['a' + n + '_en']); }
+function foodWithDishes(a){ return a === 'cucina' && D && D.kind === 'restaurant'; }
+// The dishes, by name: one row per dish (score, note, photos), shared by the dishes step and The food.
+function dishRows(){
+  var h = '';
+  if (!D.dishes.length) return '<div class="msg info">' + t('noDishes') + '</div>';
+  h += '<div class="card">';
+  D.dishes.forEach(function(d, i){
+    var v = d.verdict === 'keep' ? t('dKeep') : d.verdict === 'fix' ? t('dFix') : d.verdict === 'remove' ? t('dRemove') : '';
+    h += '<button class="sec" style="border:0;border-top:' + (i ? '1px solid var(--soft)' : '0') + ';border-radius:0" data-act="dish" data-id="' + d.id + '"><span class="dot' + (d.score ? ' done' : '') + '">' + (d.score ? CHECK_SVG : i + 1) + '</span>' +
+      '<span class="grow"><span class="t" style="font-size:17px">' + esc(d.dish_name) + '</span><span class="s">' + (d.score ? '' : t('scoreIt')) + v + (d.note_it ? (v ? ' · ' : '') + t('noted') : '') + ((d.photos || []).length ? ' · ' + d.photos.length + ' ' + t('photos') : '') + '</span></span><span class="sc">' + (d.score ? d.score + ' / 5' : '') + '</span></button>';
+  });
+  return h + '</div>';
+}
+function kindName(){ return D && D.kind === 'scala' ? t('kScala') : D && D.kind === 'restaurant' ? t('kRest') : t('kVenue'); }
+// After the last question of a section: the next section's first open question, then the dishes, then the end.
+function afterSection(area){
+  var i = ORDER.indexOf(area);
+  for (var j = i + 1; j < ORDER.length; j++) {
+    var a = ORDER[j];
+    if (a === 'piatti') return { v: 'dishes' };
+    var open = cat(a).filter(function(c){ return !isDone(c.code); })[0];
+    // Opens on "What did you order?" — but only while something there is still to do: with the dishes
+    // named and every food question answered it sent you back through them all (Antonio, 23 Oct 2026).
+    if (foodWithDishes(a) && (open || !D.dishes.length)) return { v: 'area', area: a };
+    if (foodWithDishes(a)) continue;
+    if (open) return { v: 'item', code: open.code };
+  }
+  return { v: 'final' };
+}
+
+/* Trend against the last visit, like for like: only items scored (not N/A) in BOTH visits.
+   Nov 2022 scored 17 items in 3 areas; this audit can score 33 in 5, so comparing the two
+   overall %s would compare different things. n = how many items the trend stands on. */
+function like(area){
+  if (!D.previous) return null;
+  var old = {}; D.previous.scores.forEach(function(p){ if (has(p)) old[p.code] = p.score; });
+  var a = 0, b = 0, n = 0;
+  D.catalog.forEach(function(c){
+    if (area && c.area !== area) return;
+    var r = scoreRow(c.code);
+    if (has(r) && old[c.code] != null) { a += r.score; b += old[c.code]; n++; }
+  });
+  if (!n) return null;
+  var now = Math.round(a / (5 * n) * 100), then = Math.round(b / (5 * n) * 100);
+  return { now: now, prev: then, diff: now - then, n: n };
+}
+function signed(x){ return (x >= 0 ? '+' : '') + x; }
+function prevScore(code){ if (!D.previous) return null; for (var i = 0; i < D.previous.scores.length; i++) if (D.previous.scores[i].code === code) return D.previous.scores[i]; return null; }
+function isDone(code){ var r = scoreRow(code); return !!(has(r) || r.na); }
+// The next question still open after position i in a section. Next skips the answered ones, so a
+// question reached from the last screen's open list does not walk you back through them (Antonio, 23 Oct 2026).
+function nextOpen(items, i){ return items.slice(i + 1).filter(function(c){ return !isDone(c.code); })[0] || null; }
+function areaStats(a){
+  var items = cat(a), n = 0, s = 0, k = 0;
+  items.forEach(function(c){ var r = scoreRow(c.code); if (has(r) || r.na) n++; if (has(r)) { s += r.score; k++; } });
+  return { done: n, total: items.length, avg: k ? (s / k) : null, pct: k ? Math.round(s / (5 * k) * 100) : null };
+}
+function overallPct(){ var s = 0, k = 0, codes = {}; D.catalog.forEach(function(c){ codes[c.code] = 1; }); D.scores.forEach(function(r){ if (codes[r.code] && has(r)) { s += r.score; k++; } }); return k ? Math.round(s / (5 * k) * 100) : null; }
+
+/* ── navigation (the iPhone back swipe works) ───────────────────────────── */
+function go(next, replace){
+  stopMic();
+  S = Object.assign({}, next);
+  try { history[replace ? 'replaceState' : 'pushState'](S, '', location.search); } catch(e){}
+  render(); window.scrollTo(0, 0);
+}
+window.addEventListener('popstate', function(e){ stopMic(); S = e.state || { v: ADMIN ? 'report' : 'home' }; render(); });
+
+/* ── shared pieces ──────────────────────────────────────────────────────── */
+var MIC_SVG = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0014 0M12 18v3"/></svg>';
+var CAM_SVG = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3" y="6" width="18" height="14" rx="2"/><circle cx="12" cy="13" r="3.5"/><path d="M8 6l1.5-2h5L16 6"/></svg>';
+function pics(row, target, ref){
+  var h = '<div class="pics">';
+  (row.photos || []).forEach(function(p){
+    var u = D.urls[p];
+    h += '<div class="pic">' + (u ? '<a href="' + esc(u) + '" target="_blank" rel="noopener"><img src="' + esc(u) + '" alt="Foto"></a>' : '') +
+         '<button data-act="pdel" data-target="' + target + '" data-ref="' + esc(ref) + '" data-path="' + esc(p) + '" aria-label="Togli foto">×</button></div>';
+  });
+  (UPLOADING[target + ':' + ref] || []).forEach(function(){ h += '<div class="pic up">' + t('uploading') + '</div>'; });
+  return h + '</div>';
+}
+/* A note: textarea + Speak + Photo. target/ref say where it saves. */
+function noteBlock(o){
+  var en = (LANG === 'en' && o.en && o.it) ? '<div class="en"><b>EN</b> ' + esc(o.en) + '</div>' : '';
+  return '<div class="card note">' +
+    '<textarea id="' + o.id + '" data-save="' + o.target + '" data-ref="' + esc(o.ref) + '" class="' + (o.small ? 'small' : '') + '" placeholder="' + esc(o.ph || t('ph')) + '" aria-label="' + esc(o.label || t('note')) + '">' + esc(o.it || '') + '</textarea>' +
+    (o.nopics ? '' : pics(o.row, o.target, o.ref)) +
+    '<div class="tools"><button class="mic" data-act="mic" data-for="' + o.id + '">' + MIC_SVG + '<span>' + speakLabel() + '</span></button>' + (isAmman() ? '' : '<button class="mic dict" data-act="dict" aria-label="Dictation language">' + DICT.toUpperCase() + '</button>') +
+    (o.nopics ? '' : '<button class="cam" data-act="photo" data-target="' + o.target + '" data-ref="' + esc(o.ref) + '">' + CAM_SVG + '<span>' + t('photo') + '</span></button>') +
+    '</div>' + saidLine(o.id, o.target + ':' + o.ref, o.it) + en + '</div>';
+}
+// After dictation the words are tidied with the question and the menu as context (audit-api 'tidy');
+// what was actually said stays one tap away until the note is changed again.
+var SAID = {};
+function saidLine(id, k, cur){
+  var x = SAID[k], inner = x && x.listening ? '<span class="listen"><i></i>' + esc(t('listening')) + '</span>' : x && x.busy ? esc(t('tidying')) : x && x.tidy === cur ? '<button class="link" data-act="said" data-k="' + esc(k) + '" data-for="' + id + '">' + t('saidLink') + '</button>' : '';
+  return '<div class="said" data-said="' + id + '">' + inner + '</div>';
+}
+function setSaid(el){ var d = root.querySelector('.said[data-said="' + el.id + '"]'); if (d) d.outerHTML = saidLine(el.id, el.getAttribute('data-save') + ':' + el.getAttribute('data-ref'), el.value); }
+function tidyDictation(el, base, said){
+  if (!said || said.split(/\s+/).length < 3) return;   // a word or two needs no tidying
+  var k = el.getAttribute('data-save') + ':' + el.getAttribute('data-ref'), id = el.id, before = el.value;
+  SAID[k] = { busy: true }; setSaid(el);
+  api('tidy', { text: said, lang: DICT, target: el.getAttribute('data-save'), ref: el.getAttribute('data-ref') }).then(function(d){
+    var cur = document.getElementById(id) || el;
+    // Typed or dictated again meanwhile, or nothing to change: leave it exactly as it is.
+    if (cur.value !== before || !d || typeof d.text !== 'string' || d.text === said) { delete SAID[k]; setSaid(cur); return; }
+    cur.value = (base + d.text).replace(/\s+$/, '');
+    cur.style.height = 'auto'; cur.style.height = (cur.scrollHeight + 2) + 'px';
+    SAID[k] = { raw: before, tidy: cur.value }; saveNote(cur); setSaid(cur);
+  }, function(){ var cur = document.getElementById(id) || el; delete SAID[k]; setSaid(cur); });
+}
+var CHECK_SVG = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><path d="M5 12l5 5L20 7"/></svg>';
+var CHEV_SVG = '<svg class="chev" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>';
+var BACK_SVG = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>';
+// The header: the official Roberto's wordmark on cream (never re-typed), the language switch, then the screen's own lines.
+function topBar(sub){   // not "top": window.top cannot be redeclared
+  return '<div class="top"><div class="row"><div class="brand"><img src="robertos-logo-burgundy.svg" alt="Roberto\'s"></div>' +
+    (isAmman() ? '' : '<div class="lang"><button data-act="lang" data-l="it" class="' + (LANG === 'it' ? 'on' : '') + '">IT</button><button data-act="lang" data-l="en" class="' + (LANG === 'en' ? 'on' : '') + '">EN</button></div>') + '</div>' + (sub || '') + '</div>';
+}
+function head(backTo, backLabel, right, title, extra){
+  return '<div class="head"><div class="row"><button class="back" data-act="go" data-to=\'' + esc(JSON.stringify(backTo)) + '\'>' + BACK_SVG + esc(backLabel) + '</button>' +
+    (right != null ? '<span class="muted">' + right + '</span>' : '<span class="saved ok">' + t('saved') + '</span>') + '</div>' +
+    (title ? '<h2>' + esc(title) + '</h2>' : '') + (extra || '') + '</div>';
+}
+function adminTabs(){
+  if (!ADMIN) return '';
+  return '<div class="tabs"><button data-act="go" data-to=\'{"v":"report"}\' class="' + (S.v === 'report' ? 'on' : '') + '">Report (EN)</button><button data-act="go" data-to=\'{"v":"home"}\' class="' + (S.v !== 'report' ? 'on' : '') + '">' + (LANG === 'en' ? esc(who()) + "'s screens" : 'Schermate di ' + esc(who())) + '</button></div>';
+}
+
+/* ── screens ────────────────────────────────────────────────────────────── */
+function render(){
+  if (!TOK) { root.innerHTML = topBar('<h1>Audit</h1>') + '<div class="body"><div class="msg err">' + t('badLink') + '</div></div>'; return; }
+  if (!D) return;
+  if (D.role === 'invite') { root.className = 'app'; root.innerHTML = vStart(); return; }
+  if (D.role === 'invite_admin') { root.className = 'app wide'; root.innerHTML = vList(); return; }
+  root.className = 'app' + (S.v === 'report' ? ' wide' : '');
+  var h = '';
+  if (S.v === 'home') h = vHome();
+  else if (S.v === 'area') h = vArea();
+  else if (S.v === 'item') h = vItem();
+  else if (S.v === 'dishes') h = vDishes();
+  else if (S.v === 'dish') h = vDish();
+  else if (S.v === 'flag') h = vFlag();
+  else if (S.v === 'final') h = vFinal();
+  else if (S.v === 'thanks') h = vThanks();
+  else if (S.v === 'report') h = vReport();
+  // A photo landing must not throw the keyboard away mid-sentence: keep focus and caret.
+  var a = document.activeElement, fid = a && a.id && root.contains(a) ? a.id : null, s0 = fid ? a.selectionStart : 0, s1 = fid ? a.selectionEnd : 0, y = window.scrollY;
+  root.innerHTML = h;
+  setStatus(Object.keys(PEND).length ? 'saving' : 'saved');
+  autosize(); markMic();
+  if (fid) { var el = document.getElementById(fid); if (el) { try { el.focus({ preventScroll: true }); el.setSelectionRange(s0, s1); } catch(e){} window.scrollTo(0, y); } }
+}
+
+function closedBanner(){
+  if (ADMIN || D.visit.status !== 'sent') return '';
+  return '<div class="msg info">' + t('closed') + '</div>';
+}
+
+function vHome(){
+  var total = D.catalog.length, done = D.catalog.filter(function(c){ return isDone(c.code); }).length;
+  var pct = total ? Math.round(done / total * 100) : 0;
+  var hello = isEnrico() ? t('hello') : (LANG === 'en' ? esc(who()) + "'s audit" : "L'audit di " + esc(who()));
+  var when = esc(shortDate(D.visit.visit_date)) + (D.visit.visit_time ? ', ' + esc(D.visit.visit_time) : '');
+  var h = topBar(adminTabs() + '<div><div class="kick">' + esc(kindName()) + ' · ' + when + '</div><h1>' + hello + '</h1></div>' +
+    '<div class="bar"><div class="track"><div class="fill" style="width:' + pct + '%"></div></div><b>' + done + ' ' + t('of') + ' ' + total + '</b><span class="saved ok">' + t('saved') + '</span></div>');
+  h += '<div class="body">' + closedBanner();
+  // Scala: bar counter or lounge table first, so the questions read right (Francesco, 22 Oct 2026).
+  if (D.kind === 'scala' && !isEnrico()) {
+    var seat = textRow('seat'); seat = seat._local != null ? seat._local : seat.it;
+    if (!seat) h += '<div class="card" style="padding:14px"><div class="lbl" style="margin:0 0 8px">' + t('seatQ') + '</div><div class="verd" style="grid-template-columns:repeat(2,minmax(0,1fr))">' +
+      '<button class="vbtn" data-act="seat" data-v="bar">' + t('seatBar') + '</button><button class="vbtn" data-act="seat" data-v="lounge">' + t('seatLounge') + '</button></div></div>';
+    else h += '<div class="muted" style="padding:2px 2px 4px">' + t(seat === 'bar' ? 'seatBar' : 'seatLounge') + ' · <button class="link" style="display:inline;padding:0" data-act="seat" data-v="">' + t('seatChange') + '</button></div>';
+  }
+  var n = 0, current = null;
+  ORDER.forEach(function(a){ if (a !== 'piatti' && current === null) { var st = areaStats(a); if (st.done < st.total) current = a; } });
+  ORDER.forEach(function(a){
+    n++;
+    if (a === 'piatti') {
+      var nd = D.dishes.length;
+      h += '<button class="sec" data-act="go" data-to=\'{"v":"dishes"}\'><span class="dot' + (nd ? ' done' : '') + '">' + (nd ? nd : n) + '</span><span class="grow"><span class="t">' + t(isEnrico() ? 'piatti' : 'piattiG') + '</span><span class="s">' + (nd ? nd + ' ' + t('tasted') : t(isEnrico() ? 'piattiSub' : 'piattiSubG')) + '</span></span></button>';
+      return;
+    }
+    var st = areaStats(a), full = st.done === st.total, now = a === current;
+    var sub = full ? t('doneN') + ' · ' + st.total + ' ' + t('of') + ' ' + st.total : now ? t('nextUp') + ' · ' + (st.total - st.done) + ' ' + t('qs') : st.total + ' ' + t('qs');
+    // Booking is optional: a walk-in skips it in one tap and is never marked down for the phone.
+    var walked = a === 'prenota' && st.total && cat(a).every(function(c){ return scoreRow(c.code).na; });
+    if (a === 'prenota' && !isEnrico()) sub = walked ? t('walkedIn') : t('bookOpt') + ' · ' + sub;
+    if (foodWithDishes(a)) sub = (D.dishes.length ? D.dishes.length + ' ' + t(D.dishes.length === 1 ? 'dish1n' : 'dishesN') : t('ordered')) + ' · ' + sub;
+    h += '<button class="sec' + (now ? ' now' : '') + '" data-act="area" data-a="' + a + '"><span class="dot' + (full ? ' done' : now ? ' go' : '') + '">' + (full ? CHECK_SVG : n) + '</span>' +
+         '<span class="grow"><span class="t">' + areaName(a) + '</span><span class="s">' + sub + '</span></span>' + (now ? CHEV_SVG : '') + '</button>';
+    if (a === 'prenota' && !isEnrico() && !st.done) h += '<button class="link" style="margin:-4px 0 4px" data-act="areana" data-a="prenota">' + t('walkIn') + '</button>';
+  });
+  h += '<button class="sec final" data-act="go" data-to=\'{"v":"final"}\'><span class="dot star">★</span><span class="grow"><span class="t">' + t(isEnrico() ? 'final' : 'finalG') + '</span><span class="s">' + t(isEnrico() ? 'finalSub' : 'finalSubG') + '</span></span></button>';
+  var nf = D.flags.length;
+  if (nf) h += '<div class="muted" style="padding:4px 2px">' + nf + ' ' + (LANG === 'en' ? (nf === 1 ? 'photo note' : 'photo notes') : (nf === 1 ? 'nota con foto' : 'note con foto')) + '</div>';
+  h += '</div>';
+  var go = current ? { v: 'area', area: current } : { v: 'final' };
+  h += '<div class="foot"><button class="big light" data-act="newflag">' + CAM_SVG + t('addPhoto') + '</button><button class="big vino" data-act="go" data-to=\'' + esc(JSON.stringify(go)) + '\'>' + t('cont2') + '</button></div>';
+  return h;
+}
+
+function vArea(){
+  var a = S.area, items = cat(a), st = areaStats(a);
+  var h = head({ v: 'home' }, t('home'), st.done + ' ' + t('of') + ' ' + st.total, areaName(a));
+  h += '<div class="body">' + closedBanner();
+  if (a === 'prenota' && !isEnrico() && !st.done) h += '<div class="msg info">' + t('walkInSub') + '</div><button class="big light" data-act="areana" data-a="prenota" data-home="1">' + t('walkIn') + '</button>';
+  // The food on a Restaurant visit opens with the dishes, by name: what was ordered, each scored.
+  if (foodWithDishes(a)) {
+    h += '<div style="display:flex;flex-direction:column;gap:4px"><h2 style="margin:0;font:400 26px/1.15 var(--display);color:var(--vino)">' + t('ordered') + '</h2><div class="muted" style="font-size:14px">' + t('orderedSub') + '</div></div>';
+    if (D.dishes.length) h += dishRows();
+    h += picker('adddish') + '<div class="lbl" style="margin-top:14px">' + t('thenFood') + '</div>';
+  }
+  h += '<div class="card">';
+  items.forEach(function(c, i){
+    var r = scoreRow(c.code), done = isDone(c.code);
+    h += '<button class="sec" style="border:0;border-top:' + (i ? '1px solid var(--soft)' : '0') + ';border-radius:0" data-act="item" data-code="' + c.code + '">' +
+      '<span class="dot' + (done ? ' done' : '') + '">' + (done ? CHECK_SVG : i + 1) + '</span><span class="grow"><span class="t" style="font-size:17px">' + esc(lab(c)) + '</span>' +
+      '<span class="s">' + (r.verdict ? t(r.verdict) : '') + (r.note_it ? (r.verdict ? ' · ' : '') + t('noted') : '') + ((r.photos || []).length ? ' · ' + r.photos.length + ' ' + t('photos') : '') + '</span></span><span class="sc">' + esc(ansLabel(c, r)) + '</span></button>';
+  });
+  h += '</div>';
+  var open = items.filter(function(c){ return !isDone(c.code); }).length, nas = items.filter(function(c){ return scoreRow(c.code).na; }).length;
+  if (open) h += '<button class="link" data-act="areana" data-a="' + a + '">' + t('allNa') + '</button>';
+  else if (nas) h += '<button class="link" data-act="areaclear" data-a="' + a + '">' + t('undoNa') + '</button>';
+  h += '</div>';
+  var next = items.filter(function(c){ return !isDone(c.code); })[0];
+  // A finished section's Continue moves on; it used to start the section again from question 1.
+  h += '<div class="foot">' + (next ? '<button class="big vino" data-act="item" data-code="' + next.code + '">' + (st.done ? t('cont2') : t('startS')) + '</button>'
+    : '<button class="big vino" data-act="go" data-to=\'' + esc(JSON.stringify(afterSection(a))) + '\'>' + t('cont2') + '</button>') + '</div>';
+  return h;
+}
+
+function vItem(){
+  var c = D.catalog.filter(function(x){ return x.code === S.code; })[0]; if (!c) return vHome();
+  var items = cat(c.area), idx = items.indexOf(c), r = scoreRow(c.code), std = isStd(c);
+  var segs = '<span class="segs">' + items.map(function(x, i){ return '<i class="' + (i <= idx ? 'on' : '') + '"></i>'; }).join('') + '</span>';
+  var h = '<div class="head"><div class="row"><button class="back" data-act="go" data-to=\'' + esc(JSON.stringify({ v: 'home' })) + '\'>' + BACK_SVG + t('sections') + '</button><span class="saved ok">' + t('saved') + '</span></div>' +
+    '<div class="qk"><span class="kick">' + esc(areaName(c.area)) + ' · ' + (idx + 1) + ' ' + t('of') + ' ' + items.length + '</span>' + segs + '</div></div>';
+  h += '<div class="body" style="gap:18px">' + closedBanner();
+  h += '<div style="display:flex;flex-direction:column;gap:8px"><h2 style="margin:0;font:400 28px/1.15 var(--display);color:var(--vino)">' + esc(lab(c)) + '</h2>' +
+       (hint(c) ? '<p class="hint" style="margin:0;font-size:15px;line-height:1.5;color:var(--body)">' + esc(hint(c)) + '</p>' : '') + '</div>';
+  if (std) {
+    h += '<div class="yn"><button class="ybtn yes' + (has(r) && r.score > 0 ? ' on' : '') + '" data-act="yn" data-v="yes" aria-pressed="' + (has(r) && r.score > 0) + '">' + (has(r) && r.score > 0 ? CHECK_SVG : '') + t('yes') + '</button>' +
+         '<button class="ybtn no' + (has(r) && r.score === 0 ? ' on' : '') + '" data-act="yn" data-v="no" aria-pressed="' + (has(r) && r.score === 0) + '">' + t('no') + '</button>' +
+         '<button class="ybtn seen' + (r.na ? ' on' : '') + '" data-act="yn" data-v="na" aria-pressed="' + !!r.na + '">' + t('notSeen') + '</button></div>';
+    // A guest tapped "I didn't see this" when the manager simply never came, and the miss left the % (24 Oct 2026).
+    if (!isEnrico()) h += '<p class="hint" style="margin:-2px 2px 0;font-size:13.5px;line-height:1.45;color:var(--muted)">' + esc(t('noIsNo')) + '</p>';
+  } else {
+    h += '<div class="scores five">';
+    [1, 2, 3, 4, 5].forEach(function(n){ h += '<button class="sbtn' + (r.score === n && !r.na ? ' on' : '') + '" data-act="score" data-v="' + n + '" aria-pressed="' + (r.score === n) + '">' + n + '</button>'; });
+    h += '</div>';
+    if (anchor(c, 5)) {
+      h += '<div class="anc">' + [5, 3, 1].map(function(n){ return '<div class="' + (r.score === n && !r.na ? 'on' : '') + '"><b>' + n + '</b><span>' + esc(anchor(c, n)) + '</span></div>'; }).join('') + '</div>';
+    } else h += '<div class="muted">' + (isEnrico() ? t('anchor') : t('anchorAll')) + '</div>';
+    h += '<div><button class="pill dash' + (r.na ? ' on' : '') + '" data-act="score" data-v="na">' + t('notSeen') + '</button></div>';
+  }
+  h += '<div style="display:flex;flex-direction:column;gap:8px"><div class="lbl" style="margin:0">' + t('anything') + ' <small>' + t('optional') + '</small></div>' +
+       noteBlock({ id: 'n-' + c.code, target: 'score', ref: c.code, row: r, it: r._local != null ? r._local : r.note_it, en: r.note_en, small: true }) + '</div>';
+  if (isEnrico()) {
+    h += '<div class="lbl" style="margin:0">' + t('action') + '</div><div class="verd">';
+    ['ok', 'fix', 'urgent'].forEach(function(v){ h += '<button class="vbtn ' + v + (r.verdict === v ? ' on' : '') + '" data-act="verdict" data-v="' + v + '">' + t(v) + '</button>'; });
+    h += '</div>';
+  }
+  h += '</div>';
+  var prev = idx > 0 ? { v: 'item', code: items[idx - 1].code } : { v: 'area', area: c.area };
+  h += '<div class="foot"><button class="big light" style="flex:1" data-act="go" data-to=\'' + esc(JSON.stringify(prev)) + '\'>' + t('back') + '</button>' +
+       '<button class="big vino" style="flex:2" data-act="nextitem">' + (nextOpen(items, idx) ? t('nextQ') : t('nextSec')) + '</button></div>';
+  return h;
+}
+
+function vDishes(){
+  var h = head({ v: 'home' }, t('home'), D.dishes.length ? String(D.dishes.length) : '', t(isEnrico() ? 'piatti' : 'piattiG'));
+  h += '<div class="body">' + closedBanner();
+  if (!D.dishes.length) h += '<div class="msg info">' + t('noDishes') + '</div>';
+  else {
+    h += '<div class="card">';
+    D.dishes.forEach(function(d, i){
+      var v = d.verdict === 'keep' ? t('dKeep') : d.verdict === 'fix' ? t('dFix') : d.verdict === 'remove' ? t('dRemove') : '';
+      h += '<button class="sec" style="border:0;border-top:' + (i ? '1px solid var(--soft)' : '0') + ';border-radius:0" data-act="dish" data-id="' + d.id + '"><span class="dot' + (d.score ? ' done' : '') + '">' + (d.score ? CHECK_SVG : i + 1) + '</span>' +
+        '<span class="grow"><span class="t" style="font-size:17px">' + esc(d.dish_name) + '</span><span class="s">' + v + (d.note_it ? (v ? ' · ' : '') + t('noted') : '') + ((d.photos || []).length ? ' · ' + d.photos.length + ' ' + t('photos') : '') + '</span></span><span class="sc">' + (d.score ? d.score + ' / 5' : '') + '</span></button>';
+    });
+    h += '</div>';
+  }
+  h += picker('adddish');
+  h += '</div>';
+  h += '<div class="foot"><button class="big vino" data-act="go" data-to=\'' + esc(JSON.stringify(afterSection('piatti'))) + '\'>' + t('cont2') + '</button></div>';
+  return h;
+}
+/* Dish search over the à la carte + Scala menus, or a free name. */
+function picker(mode){
+  return '<div class="card pick"><label class="lbl" for="pq" style="margin:0">' + (mode === 'adddish' ? t('addDish').replace('+ ', '') : t('dishFromMenu')) + '</label>' +
+    '<input id="pq" data-mode="' + mode + '" placeholder="' + t(isAmman() ? 'typeDishPh' : 'searchDish') + '" value="' + esc(S.q || '') + '" autocomplete="off" autocapitalize="words">' +
+    '<div id="pres">' + presHtml(mode) + '</div></div>';
+}
+function norm(s){ return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); }
+function presHtml(mode){
+  // The whole menu shows before anything is typed (an empty box read as "it doesn't work", 22 Oct 2026),
+  // this visit's own menu first; typing narrows it.
+  var raw = (S.q || '').trim(), q = norm(raw), chosen = {};
+  D.dishes.forEach(function(d){ if (d.recipe_id) chosen[d.recipe_id] = 1; });
+  var mine = function(m){ return D.kind === 'scala' ? m.where === 'scala' : D.kind === 'restaurant' ? m.where !== 'scala' : true; };
+  var hits = D.menu.filter(function(m){ return !q || norm(m.name).indexOf(q) !== -1; })
+    .sort(function(a, b){ return (mine(a) ? 0 : 1) - (mine(b) ? 0 : 1) || a.name.localeCompare(b.name); }).slice(0, q ? 12 : 200), h = '';
+  // Nothing typed: the menu by section, in menu order (Crudo, Antipasti, Pasta…). Tap a section to open
+  // it, tap the dish. Nobody has to remember a dish's name (Francesco, 22 Oct 2026).
+  if (!q && !D.menu.length) return '<div class="muted" style="margin:2px 2px 6px">' + t('typeDish') + '</div>';
+  if (!q) {
+    var secs = [], by = {};
+    D.menu.filter(mine).forEach(function(m){ var s = m.section || 'Other'; if (!by[s]) { by[s] = []; secs.push(s); } by[s].push(m); });
+    // Section chips stay on screen all together; the chosen section's dishes sit right under them, so
+    // there is no long accordion to scroll through (Francesco, 30 Oct 2026).
+    var cur = by[S.msec] ? S.msec : secs[0];
+    h += '<div class="chips msecs" role="tablist">';
+    secs.forEach(function(s){
+      h += '<button class="chip' + (s === cur ? ' on' : '') + '" role="tab" data-act="msec" data-s="' + esc(s) + '" aria-selected="' + (s === cur) + '">' + esc(s) + ' <small>' + by[s].length + '</small></button>';
+    });
+    h += '</div>';
+    if (cur) { h += '<div class="menu" style="margin-top:8px">'; by[cur].forEach(function(m){ h += '<button class="opt in' + (chosen[m.id] ? ' on' : '') + '" data-act="pickdish" data-mode="' + mode + '" data-id="' + m.id + '" data-name="' + esc(m.name) + '">' + esc(m.name) + '</button>'; }); h += '</div>'; }
+    return '<div class="muted" style="margin:2px 2px 6px">' + t('orSection') + '</div>' + h;
+  }
+  hits.forEach(function(m){ h += '<button class="opt' + (chosen[m.id] ? ' on' : '') + '" data-act="pickdish" data-mode="' + mode + '" data-id="' + m.id + '" data-name="' + esc(m.name) + '">' + esc(m.name) + '<small>' + (m.where === 'scala' ? 'Scala' : '') + '</small></button>'; });
+  return h + '<button class="opt" data-act="pickdish" data-mode="' + mode + '" data-id="" data-name="' + esc(raw) + '">' + t('useName') + ': <b>' + esc(raw) + '</b></button>';
+}
+
+function vDish(){
+  var d = byId(D.dishes, S.id); if (!d) return vDishes();
+  var backTo = D.kind === 'restaurant' ? { v: 'area', area: 'cucina' } : { v: 'dishes' };
+  var h = head(backTo, D.kind === 'restaurant' ? areaName('cucina') : t(isEnrico() ? 'piatti' : 'piattiG').split(' — ')[0], null, d.dish_name);
+  h += '<div class="body" style="gap:16px">' + closedBanner() + '<div class="scores five">';
+  [1, 2, 3, 4, 5].forEach(function(n){ h += '<button class="sbtn' + (d.score === n ? ' on' : '') + '" data-act="dscore" data-v="' + n + '">' + n + '</button>'; });
+  h += '</div>';
+  if (!isEnrico()) h += '<div class="anc">' + [[5, 'dish5'], [3, 'dish3'], [1, 'dish1']].map(function(x){ return '<div class="' + (d.score === x[0] ? 'on' : '') + '"><b>' + x[0] + '</b><span>' + t(x[1]) + '</span></div>'; }).join('') + '</div>';
+  h += '<div style="display:flex;flex-direction:column;gap:8px"><div class="lbl" style="margin:0">' + t('anything') + ' <small>' + t('optional') + '</small></div>' +
+       noteBlock({ id: 'n-d-' + d.id, target: 'dish', ref: d.id, row: d, it: d._local != null ? d._local : d.note_it, en: d.note_en, small: true, ph: LANG === 'en' ? 'Taste, temperature, presentation…' : 'Gusto, temperatura, presentazione…' }) + '</div>';
+  if (isEnrico()) {
+    h += '<div class="lbl" style="margin:0">' + t('action') + '</div><div class="verd">';
+    [['keep', 'ok', t('dKeep')], ['fix', 'fix', t('dFix')], ['remove', 'urgent', t('dRemove')]].forEach(function(v){
+      h += '<button class="vbtn ' + v[1] + (d.verdict === v[0] ? ' on' : '') + '" data-act="dverdict" data-v="' + v[0] + '">' + v[2] + '</button>'; });
+    h += '</div>';
+  }
+  h += '<button class="link" data-act="ddel">' + t('removeDish') + '</button></div>';
+  h += '<div class="foot"><button class="big vino" data-act="go" data-to=\'' + esc(JSON.stringify(backTo)) + '\'>' + t('done') + '</button></div>';
+  return h;
+}
+function vFlag(){
+  var f = S.id ? byId(D.flags, S.id) : null;
+  var h = head({ v: 'home' }, t('home'), '', t('flagTitle'));
+  h += '<div class="body">' + closedBanner();
+  if (!f) {
+    h += '<button class="shot" data-act="flagphoto">' + CAM_SVG.replace('width="20" height="20"', 'width="40" height="40"') + t('shoot') + '</button>';
+    h += '<button class="link" data-act="flagnote">' + t('onlyNote') + '</button></div>';
+    return h;
+  }
+  h += pics(f, 'flag', f.id) + '<button class="cam" data-act="photo" data-target="flag" data-ref="' + f.id + '" style="align-self:flex-start">' + CAM_SVG + '<span>+ ' + t('photo') + '</span></button>';
+  h += '<div class="lbl">' + t('what') + '</div><div class="chips">';
+  ['piatto', 'cucina', 'ristorante', 'scala'].forEach(function(a){ h += '<button class="chip' + (f.area === a ? ' on' : '') + '" data-act="farea" data-a="' + a + '">' + (a === 'piatto' ? t('piatto') : areaName(a)) + '</button>'; });
+  h += '</div>';
+  if (f.area === 'piatto') {
+    if (f.dish_name && !S.picking) h += '<button class="card pick" data-act="fpick" style="text-align:left"><span class="muted">' + t('dishFromMenu') + '</span><span style="font-family:var(--display);font-size:19px;color:var(--vino)">' + esc(f.dish_name) + ' ▾</span></button>';
+    else h += picker('flagdish');
+  }
+  h += '<div class="verd" style="grid-template-columns:repeat(2,minmax(0,1fr))"><button class="vbtn ok' + (f.kind === 'keep' ? ' on' : '') + '" data-act="fkind" data-v="keep">' + t('keep') + '</button><button class="vbtn fix' + (f.kind === 'attention' ? ' on' : '') + '" data-act="fkind" data-v="attention">' + t('attention') + '</button></div>';
+  h += '<div class="lbl">' + t('note') + '</div>' + noteBlock({ id: 'n-f-' + f.id, target: 'flag', ref: f.id, row: f, it: f._local != null ? f._local : f.note_it, en: f.note_en, nopics: true });
+  h += '<button class="link" data-act="fdel">' + t('remove') + '</button></div>';
+  h += '<div class="foot"><button class="big terra" data-act="go" data-to=\'{"v":"home"}\'>' + t('save') + '</button></div>';
+  return h;
+}
+
+function vFinal(){
+  var h = head({ v: 'home' }, t('sections'), null, t(isEnrico() ? 'final' : 'finalG'));
+  h += '<div class="body">' + closedBanner();
+  if (isEnrico()) {
+    ['overall', 'improve'].forEach(function(k){
+      var r = textRow(k);
+      h += '<div class="lbl">' + t(k) + '</div>' + noteBlock({ id: 'n-t-' + k, target: 'text', ref: k, row: r, it: r._local != null ? r._local : r.it, en: r.en });
+    });
+    h += '<div class="lbl">' + t('top3') + '</div>';
+    ['p1', 'p2', 'p3'].forEach(function(k, i){
+      var r = textRow(k);
+      h += noteBlock({ id: 'n-t-' + k, target: 'text', ref: k, row: r, it: r._local != null ? r._local : r.it, en: r.en, small: true, nopics: true, ph: t('prio') + ' ' + (i + 1), label: t('prio') + ' ' + (i + 1) });
+    });
+  } else {
+    var total = D.catalog.length, open = D.catalog.filter(function(c){ return !isDone(c.code); }).length;
+    if (open) h += '<div class="msg info">' + (LANG === 'en' ? open + ' of ' + total + ' questions still open. You can send anyway: they count as not seen.' : open + ' domande su ' + total + ' ancora aperte. Puoi inviare lo stesso: contano come non viste.') + '</div>';
+    if (open) h += '<div class="card" style="margin:0 0 10px">' + D.catalog.filter(function(c){ return !isDone(c.code); }).sort(function(x, y){ return (ORDER.indexOf(x.area) - ORDER.indexOf(y.area)) || (x.position - y.position); }).map(function(c, n){
+      return '<button class="sec" style="border:0;border-top:' + (n ? '1px solid var(--soft)' : '0') + ';border-radius:0;min-height:52px" data-act="item" data-code="' + c.code + '"><span class="grow"><span class="t" style="font-size:16px">' + esc(lab(c)) + '</span><span class="s">' + esc(areaName(c.area)) + '</span></span>' + CHEV_SVG + '</button>'; }).join('') + '</div>';
+    [['best', 'bestPh'], ['fixone', 'fixonePh'], ['other', 'otherPh'], ['formfb', 'formfbPh']].forEach(function(x){
+      var r = textRow(x[0]);
+      h += '<div class="lbl">' + t(x[0]) + (x[0] === 'other' || x[0] === 'formfb' ? ' <small>' + t('optional') + '</small>' : '') + '</div>' + noteBlock({ id: 'n-t-' + x[0], target: 'text', ref: x[0], row: r, it: r._local != null ? r._local : r.it, en: r.en, ph: t(x[1]), nopics: x[0] !== 'best' });
+    });
+  }
+  h += '</div>';
+  if (!ADMIN) h += '<div class="foot"><button class="big vino" data-act="submit" id="subbtn">' + (isEnrico() ? t('send') : t('sendTeam')) + '</button></div>';
+  return h;
+}
+
+function vThanks(){
+  var title = isEnrico() ? t('sentTitle') : t('sentTeamTitle') + ', ' + esc(who()) + '.';
+  var h = topBar('<div><h1>' + title + '</h1></div><div class="sub">' + (isEnrico() ? t('sentLine') : t('sentTeamLine')) + '</div>') + '<div class="body">';
+  // A guest sees what they sent, so it visibly went through: answers by section, the dishes, their words.
+  // The guest sees their overall score and each section's (Francesco, 26 Oct 2026: "when the person finishes
+  // the report he should see the overall score he gave"; on 22 Oct it was kept from them). The numbers are the
+  // server's, the same as the report; overallPct() is only a fallback for a page opened before they existed.
+  if (!isEnrico()) {
+    var ov = D.pct && D.pct.overall != null ? D.pct.overall : overallPct();
+    if (ov != null) h += '<div class="card" style="padding:18px 20px;display:flex;align-items:center;gap:18px;background:var(--door)"><span style="font-family:var(--display);font-size:64px;line-height:.9;color:var(--vino)">' + ov + '%</span><span style="display:flex;flex-direction:column;gap:4px"><span style="font-family:var(--display);font-size:21px;color:var(--vino);line-height:1.2">' + t(D.kind === 'restaurant' ? 'scoreRest' : 'scoreScala') + '</span><span class="muted" style="font-size:13.5px">' + t('scoreNote') + '</span></span></div>';
+    h += '<div class="lbl" style="margin:0">' + t('youSent') + '</div><div class="card">';
+    AREAS.forEach(function(a, i){
+      var st = areaStats(a), seen = cat(a).filter(function(c){ return scoreRow(c.code).na; }).length, ap = D.pct && D.pct.area && D.pct.area[a] != null ? D.pct.area[a] : st.pct;
+      h += '<div class="sec" style="border:0;border-top:' + (i ? '1px solid var(--soft)' : '0') + ';border-radius:0;min-height:52px"><span class="dot' + (st.done === st.total ? ' done' : '') + '">' + (st.done === st.total ? CHECK_SVG : i + 1) + '</span>' +
+           '<span class="grow"><span class="t" style="font-size:17px">' + esc(areaName(a)) + '</span><span class="s">' + (st.done - seen) + ' ' + t('of') + ' ' + st.total + ' ' + t('answeredW') + (seen ? ' · ' + seen + ' ' + t('notSeenW') : '') + '</span></span>' + (ap != null ? '<span class="sc">' + ap + '%</span>' : '') + '</div>';
+    });
+    h += '</div>';
+    if (D.dishes.length) h += '<div class="lbl">' + t(D.kind === 'restaurant' ? 'ordered' : 'piattiG') + '</div><div class="card">' + D.dishes.map(function(d, i){
+      return '<div class="sec" style="border:0;border-top:' + (i ? '1px solid var(--soft)' : '0') + ';border-radius:0;min-height:48px"><span class="grow"><span class="t" style="font-size:17px">' + esc(d.dish_name) + '</span></span><span class="sc">' + (d.score ? d.score + ' / 5' : '') + '</span></div>'; }).join('') + '</div>';
+    ['best', 'fixone', 'other', 'formfb'].forEach(function(k){
+      var r = textRow(k), txt = r._local != null ? r._local : r.it;
+      if (txt) h += '<div class="lbl">' + t(k) + '</div><div class="card" style="padding:12px 14px;font-size:15px;line-height:1.5;white-space:pre-line">' + esc(txt) + '</div>';
+    });
+    h += '<div class="muted" style="padding:6px 2px">' + t('stillEdit') + '</div>';
+  }
+  h += '<button class="sec" data-act="go" data-to=\'{"v":"home"}\'><span class="grow"><span class="t">' + t('sections') + '</span></span>' + CHEV_SVG + '</button></div>';
+  // Another audit from the same link (this phone remembers which link this audit came from).
+  var from = TOK && TOK.k ? ls('auditFrom:' + TOK.k) : null;
+  if (from) h += '<div class="foot"><a class="big vino" style="text-decoration:none" href="' + esc(location.pathname + '?n=' + encodeURIComponent(from)) + '">' + t('another') + '</a></div>';
+  return h;
+}
+/* ── shared link: name first, then their own audit ──────────────────────── */
+function mine(){ try { return JSON.parse(ls('auditMine:' + TOK.n) || 'null'); } catch(e){ return null; } }
+// Every audit this phone started from this link, newest first (up to 10). The shared link always opens on a
+// NEW audit; earlier ones are a small list underneath (Francesco, 22 Oct 2026: "the link keeps giving me the
+// same audit, I should be able to start a new one").
+function mineAll(){
+  var list = []; try { list = JSON.parse(ls('auditList:' + TOK.n) || '[]') || []; } catch(e){}
+  var m = mine(); if (m && m.k && !list.some(function(x){ return x.k === m.k; })) list.unshift(m);
+  return list;
+}
+function vStart(){
+  var earlier = mineAll(), E = !!(D && D.enrico);   // E: Chef Bartolini's own invite: no name, no Restaurant/Scala, just the date
+  var h = topBar('<div style="display:flex;flex-direction:column;gap:6px"><div class="kick">Roberto\'s ' + (isAmman() ? 'Amman' : 'DIFC') + '</div><h1>' + t(E ? 'startTitleE' : earlier.length ? 'startNew' : 'startTitle') + '</h1><div class="sub">' + t(E ? 'startSubE' : 'startSub') + '</div></div>') + '<div class="body" style="gap:16px">';
+  h += (E ? '' : '<label style="display:flex;flex-direction:column;gap:8px"><span class="lbl" style="margin:0">' + t('yourName') + '</span>' +
+       '<input id="aname" autocomplete="name" autocapitalize="words" maxlength="60" value="' + esc(S.name || '') + '" style="font-size:17px;padding:13px 14px;border:1px solid var(--line);border-radius:10px;background:#fff"></label>') +
+       '<div class="when"><label><span class="lbl" style="margin:0">' + t('visitDate') + '</span><input id="adate" type="date" max="' + (E ? addDays(dubaiNow().date, 30) : dubaiNow().date) + '" value="' + esc(S.vdate || dubaiNow().date) + '" style="font-size:17px;padding:12px;border:1px solid var(--line);border-radius:10px;background:#fff"></label>' +
+       '<label><span class="lbl" style="margin:0">' + t('visitTime') + '</span><input id="atime" type="time" value="' + esc(S.vtime || dubaiNow().time) + '" style="font-size:17px;padding:12px;border:1px solid var(--line);border-radius:10px;background:#fff"></label></div>';
+  if (!E) {
+  h += '<div style="display:flex;flex-direction:column;gap:10px"><span class="lbl" style="margin:0">' + t('where') + '</span>';
+  [['restaurant', 'kRest'], ['scala', 'kScala']].forEach(function(k){
+    var on = S.kind === k[0];
+    h += '<button class="kcard' + (on ? ' on' : '') + '" data-act="kind" data-k="' + k[0] + '" aria-pressed="' + on + '"><span class="r"></span>' +
+         '<span><span class="t">' + t(k[1]) + '</span><span class="s">' + t(k[1] + 'Sub') + '</span></span></button>';
+  });
+  h += '</div>';
+  }
+  if (earlier.length) {
+    h += '<div style="display:flex;flex-direction:column;gap:8px;margin-top:6px"><span class="lbl" style="margin:0">' + t('earlier') + '</span><div class="card">';
+    earlier.forEach(function(x, i){
+      h += '<a class="sec" style="border:0;border-top:' + (i ? '1px solid var(--soft)' : '0') + ';border-radius:0;text-decoration:none;min-height:54px" href="' + esc(location.pathname + '?k=' + encodeURIComponent(x.k)) + '">' +
+           '<span class="grow"><span class="t" style="font-size:17px">' + esc(x.name) + '</span><span class="s">' + t('started') + ' ' + esc(dubaiTime(x.at)) + '</span></span><span class="muted">' + t('openIt') + '</span>' + CHEV_SVG + '</a>';
+    });
+    h += '</div></div>';
+  }
+  h += '</div>';
+  h += '<div class="foot"><button class="big vino" data-act="begin" id="beginbtn">' + t('begin') + '</button></div>';
+  return h;
+}
+function begin(b){
+  var E = !!(D && D.enrico);
+  var el = document.getElementById('aname'), name = E ? ENRICO : (el ? el.value.trim() : '');
+  if (name.length < 2) { if (el) el.focus(); toast(t('yourName'), true); return; }
+  var dd = (document.getElementById('adate') || {}).value || '', tt = (document.getElementById('atime') || {}).value || '';
+  S.name = name; S.vdate = dd; S.vtime = tt;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dd) || dd > (E ? addDays(dubaiNow().date, 30) : dubaiNow().date) || !/^\d{2}:\d{2}$/.test(tt)) { toast(t('badDate'), true); return; }
+  if (!E && S.kind !== 'restaurant' && S.kind !== 'scala') { toast(t('pickKind'), true); return; }
+  b.disabled = true; b.textContent = t('saving');
+  api('start', { name: name, visit_date: dd, visit_time: tt, kind: E ? 'venue' : S.kind }).then(function(r){
+    var me = { k: r.k, name: E ? dd.split('-').reverse().join('/') + ' · ' + tt : name, at: new Date().toISOString() };
+    ls('auditMine:' + TOK.n, JSON.stringify(me));
+    ls('auditList:' + TOK.n, JSON.stringify([me].concat(mineAll().filter(function(x){ return x.k !== r.k; })).slice(0, 10)));
+    ls('auditFrom:' + r.k, TOK.n);   // so "Start another audit" after sending knows which link to open
+    ls('auditLang', LANG);   // they carry on in the language they started in
+    location.replace(location.pathname + '?k=' + encodeURIComponent(r.k));
+  }, function(er){ b.disabled = false; b.textContent = t('begin'); toast(er.message, true); });
+}
+/* Francesco: every audit started from the shared link. */
+function vList(){
+  var link = location.origin + location.pathname + '?n=' + D.invite_token;
+  var h = topBar('<h1>Audits from the shared link</h1><div class="sub">' + D.audits.length + ' started · newest first · times are Dubai</div>') + '<div class="body">';
+  h += '<div class="card rtext"><div class="lbl" style="margin:0">Link to share</div><div style="font-size:13px;word-break:break-all"><a href="' + esc(link) + '" target="_blank" rel="noopener">' + esc(link) + '</a></div>' +
+       '<button class="cam" data-act="copy" data-text="' + esc(link) + '" style="align-self:flex-start">Copy link</button></div>';
+  if (!D.audits.length) h += '<div class="msg info">Nobody has started one yet. Share the link: each person types their name and gets their own audit.</div>';
+  else {
+    h += '<div class="card">';
+    D.audits.forEach(function(x, i){
+      var st = x.status === 'sent' ? 'Sent to Amin' : x.status === 'submitted' ? 'Finished' : x.status === 'test' ? 'Test' : 'In progress';
+      h += '<a class="sec" style="border:0;border-top:' + (i ? '1px solid var(--sabbia-light)' : '0') + ';border-radius:0;text-decoration:none" href="' + esc(location.pathname + '?a=' + x.admin_token) + '">' +
+        '<span class="dot' + (x.status === 'submitted' || x.status === 'sent' ? ' done' : '') + '">' + (D.audits.length - i) + '</span><span class="grow"><span class="t" style="font-size:17px">' + esc(x.auditor) + '</span>' +
+        '<span class="s">' + esc(dubaiTime(x.created_at)) + ' · ' + st + ' · ' + x.done + '/' + D.total + '</span></span><span class="sc">' + (x.overall_pct == null ? '' : Math.round(x.overall_pct) + '%') + '</span></a>';
+    });
+    h += '</div>';
+  }
+  return h + '</div>';
+}
+
+/* ── Francesco's report (English) ───────────────────────────────────────── */
+var AREA_EN = { arrivo: 'Arrival & welcome', decor: 'Interior decor', cucina: 'Inside the kitchen', ristorante: 'Restaurant', vino: 'Wine', scala: 'Scala', piatto: 'Dish' };
+function vReport(){
+  var ov = overallPct(), pv = D.previous, lfAll = like();
+  // Action plan, by the same rule as the email Amin gets: a No, a quality score of 1-2, a dish of 1-2,
+  // Enrico's to fix / urgent / take off, a photo flag. A guest sets no verdicts, so before 24 Oct 2026
+  // a guest's seven No answers showed "To fix 0".
+  var acts = [];
+  D.scores.forEach(function(s){
+    var c = D.catalog.filter(function(x){ return x.code === s.code; })[0]; if (!c) return;
+    var low = !s.na && s.score != null && (c.qtype === 'standard' ? Number(s.score) === 0 : Number(s.score) <= 2);
+    if (s.verdict === 'urgent' || s.verdict === 'fix' || low)
+      acts.push({ lvl: s.verdict === 'urgent' ? 0 : 1, v: s.verdict === 'urgent' ? 'urgent' : 'fix', badge: s.verdict ? null : ansLabel(c, s, 'en'), where: AREA_EN[c.area], what: c.label_en, row: s, target: 'score', ref: s.code });
+  });
+  D.dishes.forEach(function(x){ if (x.verdict === 'fix' || x.verdict === 'remove' || (!x.verdict && x.score != null && Number(x.score) <= 2))
+    acts.push({ lvl: x.verdict === 'remove' ? 0 : 1, v: x.verdict === 'remove' ? 'remove' : 'fix', badge: x.verdict ? null : x.score + ' / 5', where: 'Dish', what: x.dish_name, row: x, target: 'dish', ref: x.id }); });
+  D.flags.forEach(function(f){ if (f.kind === 'attention') acts.push({ lvl: 1, v: 'attention', where: AREA_EN[f.area], what: f.dish_name || 'Photo note', row: f, target: 'flag', ref: f.id }); });
+  acts.sort(function(a, b){ return a.lvl - b.lvl; });
+  var urgent = acts.filter(function(a){ return a.lvl === 0; }).length, tofix = acts.length - urgent;
+  var st = D.visit.status;
+  var stline = st === 'sent' ? 'Sent to Amin ' + (D.visit.sent_at ? new Date(D.visit.sent_at).toLocaleString('en-GB', { timeZone: 'Asia/Dubai', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '') :
+               st === 'submitted' ? who() + ' has finished. Check the English, set owners, then send.' :
+               st === 'test' ? 'Test visit — it can only be emailed to you.' : who() + ' has not sent it yet. It fills in live as they work.';
+  var h = topBar(adminTabs() + '<h1>Audit report</h1><div class="sub">' + esc(D.visit.auditor) + ' · ' + (isEnrico() ? esc(fmtDate(D.visit.visit_date, 'en')) : 'started ' + esc(dubaiTime(D.visit.created_at))) + '</div>' +
+    '<div class="tiles"><div class="tile"><b>' + (ov == null ? '—' : ov + '%') + '</b><span>Overall</span></div>' +
+    '<div class="tile"><b>' + (lfAll ? signed(lfAll.diff) : '—') + '</b><span>vs ' + esc(pv ? pv.title.replace('Novembre', 'Nov') : 'last') + (lfAll ? ' · same ' + lfAll.n + ' items' : '') + '</span></div>' +
+    '<div class="tile"><b>' + urgent + '</b><span>Urgent</span></div><div class="tile"><b>' + tofix + '</b><span>To fix</span></div></div>');
+  h += '<div class="body"><div class="msg ' + (st === 'sent' ? 'ok' : 'info') + '">' + esc(stline) + '</div>';
+  if (D.visit.enrico_token) {
+    var link = location.origin + location.pathname + '?k=' + D.visit.enrico_token;
+    h += '<div class="card rtext"><div class="lbl" style="margin:0">' + esc(who()) + '\'s link</div><div style="font-size:13px;word-break:break-all"><a href="' + esc(link) + '" target="_blank" rel="noopener">' + esc(link) + '</a></div>' +
+         '<button class="cam" data-act="copy" data-text="' + esc(link) + '" style="align-self:flex-start">Copy link</button></div>';
+  }
+  h += '<div class="muted">English is editable: change any line and it saves. The original stays underneath.</div>';
+
+  if (isEnrico()) {
+    ['overall', 'improve'].forEach(function(k){
+      var r = textRow(k);
+      h += '<div class="lbl">' + (k === 'overall' ? 'Overall visit' : 'Suggested improvements') + '</div><div class="card rtext">' + enEdit('text', k, r.en, r.it) + pics(r, 'text', k) + '</div>';
+    });
+    h += '<div class="lbl">' + esc(who()) + '\'s top 3</div><div class="card rtext">';
+    ['p1', 'p2', 'p3'].forEach(function(k, i){ var r = textRow(k); h += '<div class="muted">' + (i + 1) + '</div>' + enEdit('text', k, r.en, r.it); });
+    h += '</div>';
+  } else {
+    // A guest writes the best moment, one thing to fix, anything else and feedback on the form, not
+    // Enrico's overall / improvements / top 3 (those boxes stood empty on a guest's report).
+    [['best', 'The best moment'], ['fixone', 'One thing to fix'], ['other', 'Anything else'], ['formfb', 'Feedback on the audit form']].forEach(function(x){
+      var r = textRow(x[0]);
+      if (!r.it && !r.en && (x[0] === 'other' || x[0] === 'formfb')) return;
+      h += '<div class="lbl">' + x[1] + '</div><div class="card rtext">' + (r.it || r.en ? enEdit('text', x[0], r.en, r.it) : '<div class="muted">Not written yet.</div>') + pics(r, 'text', x[0]) + '</div>';
+    });
+  }
+
+  h += '<div class="lbl">Scores by area</div><div class="card" style="padding:4px 12px"><table class="tbl"><tr><th>Area</th><th>Score</th>' + (pv ? '<th>' + esc(pv.title) + '</th><th>Trend</th>' : '') + '</tr>';
+  AREAS.forEach(function(a){
+    var s = areaStats(a), o = pv && pv.area_pct ? pv.area_pct[a] : null, lf = like(a);
+    h += '<tr><td class="a">' + esc(AREA_EN[a] || a) + '</td><td style="color:' + (s.pct == null ? 'var(--muted)' : s.pct >= 85 ? 'var(--ok)' : 'var(--err)') + ';font-weight:600">' + (s.pct == null ? 'not seen' : s.pct + '%') + '</td>' +
+      (pv ? '<td>' + (o == null ? '—' : o + '%') + '</td><td>' + (lf ? signed(lf.diff) + ' <small class="muted">(' + lf.n + ')</small>' : '—') + '</td>' : '') + '</tr>';
+  });
+  h += '</table></div>';
+  if (pv) h += '<div class="muted">Trend compares only the items scored in both visits (how many in brackets), so the two visits are measured on the same things.</div>';
+
+  // Action plan (built at the top)
+  h += '<div class="lbl">Action plan · ' + acts.length + '</div>';
+  if (!acts.length) h += '<div class="muted">Nothing below standard yet.</div>';
+  acts.forEach(function(a){
+    var badge = a.badge || { urgent: 'Urgent', fix: 'To fix', remove: 'Take off', attention: 'Attention' }[a.v];
+    h += '<div class="card act"><div class="h"><span class="n">' + esc(a.what) + '</span><span class="badge ' + a.v + '">' + badge + '</span></div><div class="muted">' + esc(a.where) + '</div>' +
+      enEdit(a.target, a.ref, a.row.note_en, a.row.note_it) + pics(a.row, a.target, a.ref) +
+      '<div class="who"><input aria-label="Owner" placeholder="Owner" value="' + esc(a.row.owner || '') + '" data-set="owner" data-target="' + a.target + '" data-ref="' + esc(a.ref) + '">' +
+      '<input type="date" aria-label="Due date" value="' + esc(a.row.due || '') + '" data-set="due" data-target="' + a.target + '" data-ref="' + esc(a.ref) + '"></div></div>';
+  });
+
+  if (D.dishes.length) {
+    h += '<div class="lbl">Dishes tasted</div><div class="card">';
+    D.dishes.forEach(function(x){
+      h += '<div class="item"><div class="h"><span style="font-family:var(--display);font-size:17px;color:var(--vino)">' + esc(x.dish_name) + '</span><span><b>' + (x.score ? x.score + '/5' : '') + '</b> ' + (x.verdict ? '<span class="badge ' + x.verdict + '">' + { keep: 'Keep', fix: 'To fix', remove: 'Take off' }[x.verdict] + '</span>' : '') + '</span></div>' +
+        enEdit('dish', x.id, x.note_en, x.note_it) + pics(x, 'dish', x.id) + '</div>';
+    });
+    h += '</div>';
+  }
+  var keeps = D.flags.filter(function(f){ return f.kind === 'keep'; });
+  if (keeps.length) {
+    h += '<div class="lbl">What ' + esc(who()) + ' liked</div><div class="card">';
+    keeps.forEach(function(f){ h += '<div class="item"><div class="muted">' + esc(AREA_EN[f.area]) + (f.dish_name ? ' · ' + esc(f.dish_name) : '') + '</div>' + enEdit('flag', f.id, f.note_en, f.note_it) + pics(f, 'flag', f.id) + '</div>'; });
+    h += '</div>';
+  }
+
+  h += '<div class="lbl">Every item</div>';
+  AREAS.forEach(function(a){
+    var s = areaStats(a);
+    h += '<div class="card"><div class="item" style="background:var(--door)"><div class="h"><span style="font-family:var(--display);font-size:19px;color:var(--vino)">' + AREA_EN[a] + '</span><b>' + (s.pct == null ? '' : s.pct + '%') + '</b></div></div>';
+    cat(a).forEach(function(c){
+      var r = scoreRow(c.code);
+      h += '<div class="item"><div class="h"><span>' + esc(c.label_en) + (r.verdict ? ' <span class="badge ' + r.verdict + '">' + { ok: 'OK', fix: 'To fix', urgent: 'Urgent' }[r.verdict] + '</span>' : '') + '</span><b>' + esc(ansLabel(c, r, 'en') || '—') + '</b></div>' +
+        (r.note_it || r.note_en ? enEdit('score', c.code, r.note_en, r.note_it) : '') + pics(r, 'score', c.code) + '</div>';
+    });
+    h += '</div>';
+  });
+  h += '<div style="height:12px"></div></div>';
+  var to = D.recipients ? D.recipients.to : { name: 'Amin' };
+  h += '<div class="foot static" style="flex-wrap:wrap"><button class="big light" data-act="translate" style="flex:1 1 140px">Translate new notes</button><button class="big light" data-act="sendtest" style="flex:1 1 140px">Send me a test</button>' +
+       '<button class="big vino" data-act="sendamin" id="aminbtn" style="flex:1 1 100%"' + (st === 'test' ? ' disabled' : '') + '>' + (st === 'sent' ? 'Email ' + esc(to.name) + ' again' : 'Email to ' + esc(to.name)) + '</button></div>';
+  return h;
+}
+function enEdit(target, ref, en, it){
+  return '<textarea class="en-edit" data-en="1" data-target="' + target + '" data-ref="' + esc(ref) + '" aria-label="English" placeholder="' + (it ? 'Not translated yet — press Translate new notes' : '') + '">' + esc(en || '') + '</textarea>' +
+    (it ? '<div class="it" style="font-size:12.5px;color:var(--muted);font-style:italic">Original: ' + esc(it) + '</div>' : '');
+}
+
+/* ── behaviour ──────────────────────────────────────────────────────────── */
+function autosize(){
+  var ts = root.querySelectorAll('textarea');
+  for (var i = 0; i < ts.length; i++) { ts[i].style.height = 'auto'; ts[i].style.height = Math.max(ts[i].scrollHeight + 2, ts[i].classList.contains('small') ? 52 : 44) + 'px'; }
+}
+function saveNote(el){
+  var target = el.getAttribute('data-save'), ref = el.getAttribute('data-ref'), v = el.value;
+  if (target === 'score') { var r = scoreRow(ref); r._local = v; queue('score:' + ref + ':note', 'score', { code: ref, note_it: v }); }
+  else if (target === 'dish') { var d = byId(D.dishes, ref); if (d) d._local = v; queue('dish:' + ref + ':note', 'dish', { id: ref, note_it: v }); }
+  else if (target === 'flag') { var f = byId(D.flags, ref); if (f) f._local = v; queue('flag:' + ref + ':note', 'flag', { id: ref, note_it: v }); }
+  else if (target === 'text') { var x = textRow(ref); x._local = v; queue('text:' + ref, 'text', { key: ref, it: v }); }
+}
+/* When a save lands the server row is merged in, then anything still waiting in the queue
+   is laid back on top, so a newer tap or word is never undone by an older reply. */
+var _merge = merge;
+merge = function(action, row){ _merge(action, row); applyPending(); };
+function applyPending(){
+  if (!D) return;
+  [D.scores, D.dishes, D.flags, D.texts].forEach(function(l){ l.forEach(function(r){ delete r._local; }); });
+  Object.keys(PEND).forEach(function(k){
+    var j = PEND[k], p = j.payload, r = null;
+    if (j.action === 'score') r = scoreRow(p.code);
+    else if (j.action === 'dish') r = byId(D.dishes, p.id);
+    else if (j.action === 'flag') r = byId(D.flags, p.id);
+    else if (j.action === 'text') { textRow(p.key)._local = p.it; return; }
+    else if (j.action === 'set') { ['en', 'owner', 'due'].forEach(function(c){ if (c in p) setLocal(p.target, p.ref, c === 'en' ? (p.target === 'text' ? 'en' : 'note_en') : c, p[c]); }); return; }
+    if (!r) return;
+    Object.keys(p).forEach(function(c){ if (c === 'note_it') r._local = p[c]; else if (c !== 'id' && c !== 'code') r[c] = p[c]; });
+  });
+}
+
+root.addEventListener('input', function(e){
+  var el = e.target;
+  if (el.matches('textarea')) { el.style.height = 'auto'; el.style.height = (el.scrollHeight + 2) + 'px'; }
+  if (el.matches('textarea[data-save]')) saveNote(el);
+  else if (el.matches('textarea[data-en]')) {
+    var tg = el.getAttribute('data-target'), rf = el.getAttribute('data-ref');
+    setLocal(tg, rf, tg === 'text' ? 'en' : 'note_en', el.value);
+    queue('en:' + tg + ':' + rf, 'set', { target: tg, ref: rf, en: el.value });
+  } else if (el.id === 'aname') { S.name = el.value;
+  } else if (el.id === 'pq') {
+    S.q = el.value;
+    var box = document.getElementById('pres'); if (box) box.innerHTML = presHtml(el.getAttribute('data-mode'));
+  }
+});
+// Enter in the dish search picks the top match.
+root.addEventListener('keydown', function(e){
+  if (e.key !== 'Enter' || !e.target || e.target.id !== 'pq') return;
+  e.preventDefault();
+  var first = document.querySelector('#pres .opt'); if (first && (S.q || '').trim()) first.click();
+});
+root.addEventListener('change', function(e){
+  var el = e.target;
+  if (el.matches('input[data-set]')) {
+    var tg = el.getAttribute('data-target'), rf = el.getAttribute('data-ref'), k = el.getAttribute('data-set'), p = { target: tg, ref: rf };
+    p[k] = el.value; setLocal(tg, rf, k, el.value);
+    queue('set:' + tg + ':' + rf + ':' + k, 'set', p);
+  }
+});
+function setLocal(target, ref, col, v){
+  var r = target === 'score' ? scoreRow(ref) : target === 'text' ? textRow(ref) : byId(target === 'dish' ? D.dishes : D.flags, ref);
+  if (r) r[col] = v;
+}
+
+root.addEventListener('click', function(e){
+  var b = e.target.closest('[data-act]'); if (!b) return;
+  var act = b.getAttribute('data-act');
+  if (act === 'pq') return;
+  if (act === 'msec') { var sv = b.getAttribute('data-s'); S.msec = sv; var box = document.getElementById('pres'); if (box) box.innerHTML = presHtml(document.getElementById('pq').getAttribute('data-mode')); return; }
+  if (act === 'lang') { LANG = b.getAttribute('data-l'); ls('auditLang', LANG); document.documentElement.lang = LANG; render(); return; }
+  if (act === 'go') { e.preventDefault(); go(JSON.parse(b.getAttribute('data-to'))); return; }
+  if (act === 'area') { go({ v: 'area', area: b.getAttribute('data-a') }); return; }
+  if (act === 'item') { go({ v: 'item', code: b.getAttribute('data-code') }); return; }
+  if (act === 'score') {
+    var r = scoreRow(S.code), v = b.getAttribute('data-v');
+    if (v === 'na') { r.na = !r.na; if (r.na) r.score = null; queue('score:' + S.code + ':s', 'score', { code: S.code, na: r.na }); }
+    else { var n = +v; r.score = r.score === n && !r.na ? null : n; r.na = false; queue('score:' + S.code + ':s', 'score', { code: S.code, score: r.score }); }
+    render(); return;
+  }
+  if (act === 'yn') {
+    var ry = scoreRow(S.code), vy = b.getAttribute('data-v');
+    if (vy === 'na') { ry.na = !ry.na; if (ry.na) ry.score = null; queue('score:' + S.code + ':s', 'score', { code: S.code, na: ry.na }); }
+    else { var sv = vy === 'yes' ? 5 : 0; ry.score = (has(ry) && ry.score === sv) ? null : sv; ry.na = false; queue('score:' + S.code + ':s', 'score', { code: S.code, score: ry.score }); }
+    render(); return;
+  }
+  if (act === 'verdict') { var r2 = scoreRow(S.code), vv = b.getAttribute('data-v'); r2.verdict = r2.verdict === vv ? null : vv; queue('score:' + S.code + ':v', 'score', { code: S.code, verdict: r2.verdict }); render(); return; }
+  if (act === 'nextitem') {
+    var c = D.catalog.filter(function(x){ return x.code === S.code; })[0], items = cat(c.area), i = items.indexOf(c);
+    var nx = nextOpen(items, i);
+    if (nx) go({ v: 'item', code: nx.code }, true);
+    else go(afterSection(c.area));
+    return;
+  }
+  if (act === 'mic') { toggleMic(b); return; }
+  if (act === 'dict') { stopMic(); DICT = DICT === 'it' ? 'en' : 'it'; ls('auditDict', DICT); root.querySelectorAll('.mic.dict').forEach(function(x){ x.textContent = DICT.toUpperCase(); }); return; }
+  if (act === 'said') {
+    var sk = b.getAttribute('data-k'), se = document.getElementById(b.getAttribute('data-for'));
+    // Only while the box still holds the tidied text: anything typed since is never thrown away.
+    if (se && SAID[sk] && se.value === SAID[sk].tidy) { se.value = SAID[sk].raw; saveNote(se); }
+    delete SAID[sk]; if (se) setSaid(se);
+    return;
+  }
+  if (act === 'photo') { pickPhoto(b.getAttribute('data-target'), b.getAttribute('data-ref')); return; }
+  if (act === 'pdel') { delPhoto(b.getAttribute('data-target'), b.getAttribute('data-ref'), b.getAttribute('data-path')); return; }
+  if (act === 'dish') { go({ v: 'dish', id: b.getAttribute('data-id') }); return; }
+  if (act === 'pickdish') { pickDish(b.getAttribute('data-mode'), b.getAttribute('data-id') || null, b.getAttribute('data-name')); return; }
+  if (act === 'dscore') { var d = byId(D.dishes, S.id), n2 = +b.getAttribute('data-v'); d.score = d.score === n2 ? null : n2; queue('dish:' + d.id + ':s', 'dish', { id: d.id, score: d.score }); render(); return; }
+  if (act === 'dverdict') { var d2 = byId(D.dishes, S.id), v2 = b.getAttribute('data-v'); d2.verdict = d2.verdict === v2 ? null : v2; queue('dish:' + d2.id + ':v', 'dish', { id: d2.id, verdict: d2.verdict }); render(); return; }
+  if (act === 'ddel') { var d3 = byId(D.dishes, S.id); api('dish', { id: d3.id, remove: true }).then(function(){ D.dishes = D.dishes.filter(function(x){ return x.id !== d3.id; }); go({ v: 'dishes' }, true); }, function(er){ toast(er.message, true); }); return; }
+  if (act === 'newflag') { S.q = ''; go({ v: 'flag' }); return; }
+  // The file picker must open inside the tap (iPhone rule); the flag is created once a photo is chosen.
+  if (act === 'flagphoto') { pickPhoto('flag', '__new'); return; }
+  if (act === 'flagnote') { createFlag().then(function(f){ go({ v: 'flag', id: f.id }, true); }); return; }
+  if (act === 'farea') { var f1 = byId(D.flags, S.id); f1.area = b.getAttribute('data-a'); queue('flag:' + f1.id + ':a', 'flag', { id: f1.id, area: f1.area }); render(); return; }
+  if (act === 'fkind') { var f2 = byId(D.flags, S.id); f2.kind = b.getAttribute('data-v'); queue('flag:' + f2.id + ':k', 'flag', { id: f2.id, kind: f2.kind }); render(); return; }
+  if (act === 'fpick') { S.picking = true; S.q = ''; render(); var q = document.getElementById('pq'); if (q) q.focus(); return; }
+  if (act === 'fdel') { var f3 = byId(D.flags, S.id); api('flag', { id: f3.id, remove: true }).then(function(){ D.flags = D.flags.filter(function(x){ return x.id !== f3.id; }); go({ v: 'home' }, true); }, function(er){ toast(er.message, true); }); return; }
+  if (act === 'submit') { submit(b); return; }
+  if (act === 'begin') { begin(b); return; }
+  if (act === 'kind') {
+    ['aname', 'adate', 'atime'].forEach(function(id, i){ var e = document.getElementById(id); if (e) S[['name', 'vdate', 'vtime'][i]] = e.value; });
+    S.kind = b.getAttribute('data-k'); render(); return;
+  }
+  if (act === 'resume') { var m = mine(); if (m && m.k) location.href = location.pathname + '?k=' + encodeURIComponent(m.k); return; }
+  if (act === 'seat') {
+    var sr = textRow('seat'); sr._local = b.getAttribute('data-v'); queue('text:seat', 'text', { key: 'seat', it: sr._local });
+    render(); waitSaved().then(reload); return;
+  }
+  if (act === 'areana' && b.getAttribute('data-home')) setTimeout(function(){ go({ v: 'home' }); }, 0);   // skipped Booking from inside it: back to the sections
+  if (act === 'areana' || act === 'areaclear') {
+    cat(b.getAttribute('data-a')).forEach(function(c){
+      var r = scoreRow(c.code);
+      if (act === 'areana' && !r.score && !r.na) { r.na = true; queue('score:' + c.code + ':s', 'score', { code: c.code, na: true }); }
+      if (act === 'areaclear' && r.na) { r.na = false; queue('score:' + c.code + ':s', 'score', { code: c.code, na: false }); }
+    });
+    render(); return;
+  }
+  if (act === 'copy') { copyText(b.getAttribute('data-text')); return; }
+  if (act === 'translate') { runTranslate(b); return; }
+  if (act === 'sendtest') { sendReport(b, 'send_test'); return; }
+  if (act === 'sendamin') { if (!b._sure) { b._sure = true; b.textContent = 'Tap again to email ' + (D.recipients ? D.recipients.to.name : 'Amin'); setTimeout(function(){ if (b.isConnected) { b._sure = false; render(); } }, 5000); return; } sendReport(b, 'send'); return; }
+});
+
+// One add at a time: the list stays on screen until the server answers, and Danilo's taps in
+// that gap saved Burrata four times (21 Oct 2026). A dish already in this audit is opened, not added again.
+var ADDING = null;
+function createFlag(){
+  if (ADDING) return ADDING;
+  ADDING = api('flag', { area: 'piatto', kind: 'attention' }).then(function(res){ ADDING = null; D.flags.push(res.row); return res.row; }, function(er){ ADDING = null; toast(er.message, true); throw er; });
+  return ADDING;
+}
+function pickDish(mode, id, name){
+  name = (name || '').trim(); if (!name) return;
+  if (mode === 'adddish') {
+    if (ADDING) return;
+    var same = D.dishes.filter(function(x){ return !x.removed && (id ? x.recipe_id === id : !x.recipe_id && low(x.dish_name || '') === low(name)); })[0];
+    S.q = ''; S.picking = false;
+    if (same) { go({ v: 'dish', id: same.id }); return; }
+    root.querySelectorAll('[data-act="pickdish"]').forEach(function(x){ x.disabled = true; });
+    ADDING = api('dish', { dish_name: name, recipe_id: id }).then(function(res){ ADDING = null; D.dishes.push(res.row); go({ v: 'dish', id: res.row.id }); }, function(er){ ADDING = null; toast(er.message, true); render(); });
+    return;
+  }
+  S.q = ''; S.picking = false;
+  var f = byId(D.flags, S.id); f.dish_name = name; f.recipe_id = id;
+  queue('flag:' + f.id + ':d', 'flag', { id: f.id, dish_name: name, recipe_id: id }); render();
+}
+function submit(b){
+  if (!b._sure) { b._sure = true; b.textContent = t('sendSure'); setTimeout(function(){ if (b.isConnected) { b._sure = false; b.textContent = isEnrico() ? t('send') : t('sendTeam'); } }, 5000); return; }
+  b.disabled = true; b.textContent = t('saving');
+  waitSaved().then(function(){ return api('submit', { page: location.origin + location.pathname }); }).then(function(r){ if (r && r.pct) D.pct = r.pct; D.visit.status = D.visit.status === 'test' ? 'test' : 'submitted'; go({ v: 'thanks' }); }, function(er){ b.disabled = false; b._sure = false; b.textContent = t('send'); toast(er.message, true); });
+}
+function waitSaved(){
+  return new Promise(function(res, rej){
+    // Waits as long as saves keep landing; gives up only after 40 s with no progress (it used to
+    // give up after 30 s in all, with saves still going through).
+    var left = -1, still = 0; flushSoon(0);
+    (function check(){
+      var k = Object.keys(PEND).length;
+      if (!k && !BUSY && !anyUploading()) return res();
+      if (k !== left) { left = k; still = 0; } else if (++still > 160) return rej(new Error(t('notSaved')));
+      setTimeout(check, 250);
+    })();
+  });
+}
+function runTranslate(b){
+  b.disabled = true; var old = b.textContent; b.textContent = 'Translating…';
+  waitSaved().then(function(){ return api('translate'); }).then(function(r){ return reload().then(function(){ toast(r.translated ? r.translated + ' notes translated' : 'Everything is already in English'); }); })
+    .catch(function(er){ toast(er.message, true); }).then(function(){ if (b.isConnected) { b.disabled = false; b.textContent = old; } });
+}
+function sendReport(b, action){
+  b.disabled = true; b.textContent = 'Sending…';
+  waitSaved().then(function(){ return api(action); }).then(function(r){
+    toast('Sent to ' + r.to.join(', '));
+    return reload();
+  }).catch(function(er){ toast(er.message, true); render(); });
+}
+function copyText(s){
+  var done = function(){ toast('Link copied'); };
+  var show = function(){ toast(s); };
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(s).then(done, show);
+  else show();
+}
+
+/* ── photos: resized on the phone (max 1600px) before upload ──────────── */
+var UPLOADING = {};
+function anyUploading(){ for (var k in UPLOADING) if (UPLOADING[k].length) return true; return false; }
+var fileEl = document.getElementById('file'), PHOTO_FOR = null;
+function pickPhoto(target, ref){ PHOTO_FOR = { target: target, ref: ref }; fileEl.value = ''; fileEl.click(); }
+fileEl.addEventListener('change', function(){
+  var files = Array.prototype.slice.call(fileEl.files || []), dest = PHOTO_FOR; if (!dest || !files.length) return;
+  if (dest.ref === '__new') {
+    createFlag().then(function(f){ PHOTO_FOR = { target: 'flag', ref: f.id }; go({ v: 'flag', id: f.id }, true); upload(files, PHOTO_FOR); });
+    return;
+  }
+  upload(files, dest);
+});
+function upload(files, dest){
+  var key = dest.target + ':' + dest.ref;
+  files.forEach(function(file){
+    UPLOADING[key] = (UPLOADING[key] || []).concat([1]); render();
+    shrink(file).then(function(b64){ return api('photo', { target: dest.target, ref: dest.ref, data: b64 }); }).then(function(res){
+      D.urls[res.path] = res.url;
+      var row = dest.target === 'score' ? scoreRow(dest.ref) : dest.target === 'text' ? textRow(dest.ref) : byId(dest.target === 'dish' ? D.dishes : D.flags, dest.ref);
+      if (row) row.photos = res.row.photos;
+    }, function(){ toast(t('photoFail'), true); }).then(function(){ UPLOADING[key].pop(); render(); });
+  });
+}
+function shrink(file){
+  return new Promise(function(res, rej){
+    var url = URL.createObjectURL(file), img = new Image();
+    img.onload = function(){
+      var max = 1600, w = img.naturalWidth, h = img.naturalHeight, s = Math.min(1, max / Math.max(w, h));
+      var c = document.createElement('canvas'); c.width = Math.round(w * s); c.height = Math.round(h * s);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url);
+      res(c.toDataURL('image/jpeg', 0.82).split(',')[1]);
+    };
+    img.onerror = function(){ URL.revokeObjectURL(url); rej(new Error('image')); };
+    img.src = url;
+  });
+}
+function delPhoto(target, ref, path){
+  api('photo_del', { target: target, ref: ref, path: path }).then(function(res){
+    var row = target === 'score' ? scoreRow(ref) : target === 'text' ? textRow(ref) : byId(target === 'dish' ? D.dishes : D.flags, ref);
+    if (row) row.photos = res.row.photos; render();
+  }, function(er){ toast(er.message, true); });
+}
+
+/* ── dictation: the iPhone's own speech recognition, Italian ──────────── */
+var REC = null, REC_ID = null;
+function low(s){ return String(s).toLowerCase().replace(/\s+/g, ' ').trim(); }
+function stopMic(){ if (REC) { try { REC._byUser = true; REC.stop(); } catch(e){} } }
+function markMic(){
+  if (!REC_ID) return;
+  var b = root.querySelector('.mic[data-for="' + REC_ID + '"]');
+  if (b && !b.classList.contains('live')) { b.classList.add('live'); b.querySelector('span').textContent = t('stop'); }
+}
+function toggleMic(btn){
+  var id = btn.getAttribute('data-for'), ta = document.getElementById(id);
+  if (REC && REC_ID === id) { stopMic(); return; }
+  stopMic();
+  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { toast(t('noMic')); ta.focus(); return; }
+  var rec = new SR(); REC = rec; REC_ID = id;
+  SAID[ta.getAttribute('data-save') + ':' + ta.getAttribute('data-ref')] = { listening: true }; setSaid(ta);
+  // Listens in the language on screen (IT/EN at the top): an English speaker on an Italian listener
+  // came out as half-English nonsense (Francesco's test, 15 Oct 2026).
+  rec.lang = DICT === 'en' ? 'en-GB' : 'it-IT';
+  rec.continuous = true; rec.interimResults = true;
+  // The text is rebuilt from the whole result list on every event, never appended to. The iPhone
+  // sends each "final" result as the whole sentence so far ("Sì", "Sì allora", "Sì allora tutto
+  // bene"…), so appending each one saved Danilo's note as one phrase repeated ~30 times (21 Oct 2026).
+  // A result that starts with what came before replaces it; anything else is a new piece.
+  // If the list starts over after a final result, what was heard before is kept; an unfinished
+  // guess that changes ("benne" → "bene") is replaced.
+  var base = ta.value ? ta.value.replace(/\s+$/, '') + ' ' : '', kept = '', last = '', lastFinal = false;
+  rec.onresult = function(ev){
+    var heard = '', n = ev.results.length;
+    for (var i = 0; i < n; i++) {
+      var s = ev.results[i][0].transcript.replace(/\s+/g, ' ').trim();
+      if (!s) continue;
+      if (heard && low(s).indexOf(low(heard)) !== 0) heard += ' ' + s; else heard = s;
+    }
+    if (last && lastFinal && low(heard).indexOf(low(last)) !== 0) kept += last + ' ';
+    last = heard; lastFinal = n > 0 && ev.results[n - 1].isFinal;
+    var el = document.getElementById(id) || ta;
+    el.value = (base + kept + heard).replace(/\s+$/, '') + ' ';
+    el.style.height = 'auto'; el.style.height = (el.scrollHeight + 2) + 'px';
+    saveNote(el);
+  };
+  rec.onerror = function(ev){ if (ev.error === 'not-allowed' || ev.error === 'service-not-allowed') toast(t('micBlocked'), true); };
+  rec.onend = function(){
+    if (REC === rec) { REC = null; REC_ID = null; }
+    var b = document.querySelector('.mic.live'); if (b) { b.classList.remove('live'); b.querySelector('span').textContent = speakLabel(); }
+    var kk = ta.getAttribute('data-save') + ':' + ta.getAttribute('data-ref'); delete SAID[kk];
+    if (!rec._byUser) toast(t('micStopped'));   // the phone ended it, not the guest
+    var el = document.getElementById(id); if (el) { el.value = el.value.replace(/\s+$/, ''); saveNote(el); setSaid(el);
+      if (el.value.indexOf(base) === 0 || !base) tidyDictation(el, base, el.value.slice(base.length).trim()); }
+  };
+  try { rec.start(); } catch(e){ toast(t('noMic')); return; }
+  btn.classList.add('live'); btn.querySelector('span').textContent = t('stop');
+}
+
+/* ── start ──────────────────────────────────────────────────────────────── */
+function reload(){
+  return api('load').then(function(d){
+    if (d.role === 'invite' || d.role === 'invite_admin') {
+      D = d;
+      // Chef Bartolini's own invite (30 Oct 2026): Italian first, like his own audit, unless he chose otherwise.
+      if (d.enrico && !ls('auditLang') && LANG !== 'it') { LANG = 'it'; document.documentElement.lang = 'it'; }
+      forceEn();
+      render(); return;
+    }
+    // Keep anything typed but not yet saved.
+    var local = {};
+    if (D) { D.scores.forEach(function(r){ if (r._local != null) local['s:' + r.code] = r._local; }); D.texts.forEach(function(r){ if (r._local != null) local['t:' + r.key] = r._local; });
+             D.dishes.forEach(function(r){ if (r._local != null) local['d:' + r.id] = r._local; }); D.flags.forEach(function(r){ if (r._local != null) local['f:' + r.id] = r._local; }); }
+    D = d; setAreas();
+    // Italian first is for Enrico only: anyone else opening their own audit link gets English
+    // unless they chose otherwise (a guest landed on Italian after Start, 22 Oct 2026).
+    if (!ls('auditLang') && D.visit && !isEnrico() && LANG !== 'en') { LANG = 'en'; document.documentElement.lang = 'en'; }
+    forceEn();
+    D.scores.forEach(function(r){ if (local['s:' + r.code] != null) r._local = local['s:' + r.code]; });
+    D.texts.forEach(function(r){ if (local['t:' + r.key] != null) r._local = local['t:' + r.key]; });
+    D.dishes.forEach(function(r){ if (local['d:' + r.id] != null) r._local = local['d:' + r.id]; });
+    D.flags.forEach(function(r){ if (local['f:' + r.id] != null) r._local = local['f:' + r.id]; });
+    // Saves still waiting (also from an earlier visit to this page) win over what the server has.
+    applyPending();
+    render();
+  });
+}
+if (!TOK) render();
+else {
+  document.documentElement.lang = LANG;
+  try { history.replaceState(S, '', location.search); } catch(e){}
+  reload().then(function(){ flushSoon(0); }, function(er){
+    root.innerHTML = topBar('<h1>Audit</h1>') + '<div class="body"><div class="msg err">' + esc(er.status === 403 ? t('badLink') : (navigator.onLine ? er.message : t('offline'))) + '</div></div>';
+  });
+}
+window.addEventListener('offline', function(){ toast(t('offline'), true); });
+</script>
+</body>
+</html>
