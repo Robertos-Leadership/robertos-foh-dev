@@ -6,15 +6,22 @@
 (function (w) {
   var M = w.Mare, T = M.T, E = M.esc, App = w.MareApp;
   var EQ = { q: '', sheet: 'all', grp: '', month: null, show: 'all', data: null };
+  // Zeljko's two kitchen lists (5 Nov 2026) and Milica's four areas (9 Nov 2026, Lista Inventara-2026 nova)
+  var AREAS = [['big', 'Big kitchen'], ['small', 'Small kitchen'], ['cutlery', 'Cutlery & small items'], ['bar', 'Bar'], ['store', 'Storeroom'], ['rest', 'Restaurant']];
+  function areaIx(k) { for (var i = 0; i < AREAS.length; i++) if (AREAS[i][0] === k) return i; return 99; }
+  function areaName(it) { var i = areaIx(it.sheet); return i < 99 ? T(AREAS[i][1]) : it.sheet; }
+  function isZ(it) { return it.sheet === 'big' || it.sheet === 'small'; }   // Zeljko's lists carry groups and yearly numbers
+  function subOf(it) { return isZ(it) ? T(it.grp || 'Other') + (it.sheet === 'small' ? ' \u00b7 ' + T('Small kitchen') : '') : areaName(it); }
+  function headOf(it) { return isZ(it) ? areaName(it) + ' \u00b7 ' + T(it.grp || 'Other') : areaName(it); }
 
   function ms() { if (!EQ.month) EQ.month = M.monthStart(M.today()); return EQ.month; }
-  function load() { return App.call('mare_m_equip_data', { p_month: ms() }).then(function (r) { if (r) EQ.data = r; return r; }); }
+  function load() { return App.call('mare_m_equip_data', { p_month: ms() }).then(function (r) { if (r) { EQ.data = r; if (r.items) r.items.sort(function (a, b) { return areaIx(a.sheet) - areaIx(b.sheet) || (a.sort - b.sort); }); } return r; }); }
   function css() {
     if (document.getElementById('eq-css')) return;
     var s = document.createElement('style'); s.id = 'eq-css';
     s.textContent =
       '.eq-bar{display:flex;flex-wrap:wrap;gap:10px;align-items:center}.eq-bar input[type=search],.eq-bar select{min-height:40px;padding:8px 12px;border:1px solid #D6CABA;border-radius:8px;font:inherit;background:#fff}' +
-      '.eq-bar input[type=search]{flex:1 1 200px}' +
+      '.eq-bar input[type=search]{flex:1 1 200px}.eq-bar .seg{flex-wrap:wrap}' +
       '.eq-grp{font-size:13px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin:10px 0 0;display:flex;justify-content:space-between}' +
       '.eq-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:12px}' +
       '.eq-it{display:flex;gap:12px;align-items:center;text-align:left;width:100%;background:linear-gradient(180deg,#fff,#FBF7F1);border:1px solid rgba(168,131,75,.24);border-radius:12px;padding:8px 12px 8px 8px;box-shadow:var(--lift);font:inherit;color:inherit;cursor:pointer}' +
@@ -57,7 +64,7 @@
   function groupsOf() { var g = {}; EQ.data.items.forEach(function (i) { if (i.active && i.grp) g[i.grp] = 1; }); return Object.keys(g).sort(); }
   function filterBar(withShow) {
     return '<div class="eq-bar"><input type="search" id="eqq" placeholder="' + E(T('Search the list')) + '" value="' + E(EQ.q) + '" aria-label="' + E(T('Search the list')) + '">' +
-      '<div class="seg" role="group">' + [['all', 'All'], ['big', 'Big kitchen'], ['small', 'Small kitchen']].map(function (s) { return '<button data-sh="' + s[0] + '" class="' + (EQ.sheet === s[0] ? 'on' : '') + '">' + E(T(s[1])) + '</button>'; }).join('') + '</div>' +
+      '<div class="seg" role="group">' + [['all', 'All']].concat(AREAS).map(function (s) { return '<button data-sh="' + s[0] + '" class="' + (EQ.sheet === s[0] ? 'on' : '') + '">' + E(T(s[1])) + '</button>'; }).join('') + '</div>' +
       '<select id="eqg" aria-label="' + E(T('Group')) + '"><option value="">' + E(T('Every group')) + '</option>' + groupsOf().map(function (g) { return '<option value="' + E(g) + '"' + (EQ.grp === g ? ' selected' : '') + '>' + E(T(g)) + '</option>'; }).join('') + '</select>' +
       (withShow ? '<div class="seg" role="group">' + [['all', 'All'], ['todo', 'To count'], ['diff', 'Different']].map(function (s) { return '<button data-show="' + s[0] + '" class="' + (EQ.show === s[0] ? 'on' : '') + '">' + E(T(s[1])) + '</button>'; }).join('') + '</div>' : '') + '</div>';
   }
@@ -88,14 +95,14 @@
     all.forEach(function (i) { if (i.q2026 != null) pieces += +i.q2026; if (+i.broken2026) broken += +i.broken2026; });
     main.innerHTML = '<section class="stack"><div class="row between"><h2 class="serif">' + E(T('Crockery & equipment')) + '</h2></div>' +
       '<div class="kpis eq-kp"><div class="kpi"><span>' + E(T('Lines')) + '</span><b>' + all.length + '</b></div>' +
-      '<div class="kpi"><span>' + E(T('Pieces in the 2026 list')) + '</span><b>' + pieces.toLocaleString('en') + '</b><i>' + E(T('Zeljko, 5 Nov 2026')) + '</i></div>' +
+      '<div class="kpi"><span>' + E(T('Pieces on the list')) + '</span><b>' + pieces.toLocaleString('en') + '</b><i>' + E(T('Zeljko 5 Nov \u00b7 Milica 9 Nov 2026')) + '</i></div>' +
       '<div class="kpi red"><span>' + E(T('Broken in 2026')) + '</span><b>' + broken + '</b></div></div>' +
       filterBar(false) + '<div id="eqlist" class="stack"></div>' +
-      '<p class="small muted" style="margin:0">' + E(T('The numbers are from Zeljko\'s inventory list of 5 Nov 2026. Where he left 2026 empty, the last year that has a number is shown. Count in the Count tab.')) + '</p></section>';
+      '<p class="small muted" style="margin:0">' + E(T('Big and Small kitchen numbers are from Zeljko\'s inventory list of 5 Nov 2026 (where he left 2026 empty, the last year that has a number is shown). Cutlery & small items, Bar, Storeroom and Restaurant are from Milica\'s list of 9 Nov 2026. Count in the Count tab.')) + '</p></section>';
     function draw() {
       var box = main.querySelector('#eqlist'); var list = items(); if (!list.length) { box.innerHTML = App.empty(T('Nothing found.')); return; }
       var by = {}, order = [];
-      list.forEach(function (i) { var k = (i.sheet === 'big' ? T('Big kitchen') : T('Small kitchen')) + ' · ' + T(i.grp || 'Other'); if (!by[k]) { by[k] = []; order.push(k); } by[k].push(i); });
+      list.forEach(function (i) { var k = headOf(i); if (!by[k]) { by[k] = []; order.push(k); } by[k].push(i); });
       box.innerHTML = order.map(function (k) {
         return '<div class="eq-grp"><span>' + E(k) + '</span><span>' + by[k].length + '</span></div><div class="eq-list">' + by[k].map(function (i) {
           var n = now(i), tags = '';
@@ -114,14 +121,18 @@
     var it = EQ.data.items.filter(function (x) { return x.id === id; })[0]; if (!it) return;
     var big = it.has_photo ? '<img class="photo" src="mare-equip/p/' + E(it.src_key) + '.jpg" alt="' + E(it.name) + '">' : '';
     var o = App.overlay('<div class="row between"><h3>' + E(it.name) + '</h3><button class="btn ghost sm" data-close>' + E(T('Close')) + '</button></div>' + big +
-      '<div class="small muted">' + E((it.sheet === 'big' ? T('Big kitchen') : T('Small kitchen')) + ' · ' + T(it.grp || 'Other')) + '</div>' +
+      '<div class="small muted">' + E(headOf(it)) + '</div>' +
+      (isZ(it) ?
       '<table class="eq-hist"><thead><tr><th>2019</th><th>2024</th><th>2025</th><th>2026</th><th>' + E(T('Broken')) + '</th><th>2027</th></tr></thead><tbody><tr><td>' + fnum(it.q2019) + '</td><td>' + fnum(it.q2024) + '</td><td>' + fnum(it.q2025) + '</td><td><b>' + fnum(it.q2026) + '</b></td><td>' + fnum(it.broken2026) + '</td><td>' + fnum(it.rec2027) + '</td></tr></tbody></table>' +
       '<div class="grid2"><label class="f">' + E(T('Wanted for 2027')) + '<input type="text" inputmode="decimal" id="er" value="' + (it.rec2027 != null ? +it.rec2027 : '') + '"></label>' +
-      '<label class="f">' + E(T('Note')) + '<input type="text" id="en" value="' + E(it.note || '') + '"></label></div>' +
+      '<label class="f">' + E(T('Note')) + '<input type="text" id="en" value="' + E(it.note || '') + '"></label></div>' :
+      '<table class="eq-hist"><thead><tr><th>' + E(T('On the list')) + '</th></tr></thead><tbody><tr><td><b>' + fnum(it.q2026) + '</b> ' + E(it.unit || 'PCS') + '</td></tr></tbody></table>' +
+      '<div class="small muted">' + E(T("Milica's list, 9 Nov 2026")) + '</div>' +
+      '<label class="f">' + E(T('Note')) + '<input type="text" id="en" value="' + E(it.note || '') + '"></label>') +
       '<div class="row"><button class="btn" id="es">' + E(T('Save')) + '</button><button class="btn ghost" id="ex">' + E(T('Take off the list')) + '</button></div>' +
       '<p class="small muted" style="margin:0">' + E(T('Nothing is deleted. A piece taken off the list stays in the database.')) + '</p>');
     o.querySelector('#es').onclick = function () {
-      var rc = parseCount(o.querySelector('#er').value); if (rc.err) { App.say(T('Write a number.')); return; }
+      var er = o.querySelector('#er'), rc = er ? parseCount(er.value) : { v: it.rec2027 == null ? null : +it.rec2027 }; if (rc.err) { App.say(T('Write a number.')); return; }
       var btn = this; btn.disabled = true;
       App.call('mare_m_equip_save', { p_row: { id: it.id, rec2027: rc.v == null ? '' : String(rc.v), note: o.querySelector('#en').value.trim() }, p_by: App.S.me }).then(function (r) {
         btn.disabled = false; if (!r) return; Object.assign(it, r.row); o.close(); App.say(T('Saved.')); App.reload();
@@ -156,7 +167,7 @@
     function rowHtml(i) {
       var c = cmap[i.id] || {}, e = now(i)[0], counted = c.counted != null, d = counted && e != null && +c.counted !== e;
       return '<div class="eq-row' + (counted ? (d ? ' diff' : ' done') : '') + '" data-row="' + i.id + '"><span class="eq-ph">' + thumb(i) + '</span>' +
-        '<span class="eq-tx"><b>' + E(i.name) + '</b><span class="tiny">' + E(T(i.grp || 'Other')) + (i.sheet === 'small' ? ' · ' + E(T('Small kitchen')) : '') + '</span>' +
+        '<span class="eq-tx"><b>' + E(i.name) + '</b><span class="tiny">' + E(subOf(i)) + '</span>' +
         (counted && e != null ? '<span class="tiny">' + (d ? '<span class="eq-tag amber">' + E(T('list says {n}', { n: e })) + '</span>' : '<span class="eq-tag green">' + E(T('as in the list')) + '</span>') + '</span>' : '') + '</span>' +
         '<label>' + E(T('Counted')) + '<input type="text" inputmode="decimal" data-cf="counted" data-id="' + i.id + '" value="' + (c.counted != null ? +c.counted : '') + '"></label>' +
         '<label>' + E(T('Broken')) + '<input type="text" inputmode="decimal" data-cf="broken" data-id="' + i.id + '" value="' + (c.broken != null ? +c.broken : '') + '"></label></div>';
