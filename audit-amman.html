@@ -14,7 +14,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Forum&family=Outfit:wght@400;500;600;700&display=swap" media="print" onload="this.media='all'">
 <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Forum&family=Outfit:wght@400;500;600;700&display=swap"></noscript>
-<title>Audit — Roberto's DIFC</title>
+<title>Audit — Roberto's Amman</title>
 <!-- Before any code below can call fetch(): on the DEV host this blocks every write. -->
 <style>
 /* Roberto's brand (redesign 22 Oct 2026, approved mock-up): wine #450207, cream, orange used sparingly,
@@ -209,7 +209,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,a:focus-visible{
 </style>
 </head>
 <body>
-<div id="root" class="app"><div class="center">Caricamento…</div></div>
+<div id="root" class="app"><div class="center">Loading…</div></div>
 <input type="file" id="file" accept="image/*" multiple hidden>
 <script>
 /* ════════════════════════════════════════════════════════════════════════════
@@ -636,7 +636,7 @@ function closedBanner(){
 function vHome(){
   var total = D.catalog.length, done = D.catalog.filter(function(c){ return isDone(c.code); }).length;
   var pct = total ? Math.round(done / total * 100) : 0;
-  var hello = isEnrico() ? t('hello') : (LANG === 'en' ? esc(who()) + "'s audit" : "L'audit di " + esc(who()));
+  var hello = isAmman() ? 'Hello ' + esc(who()) : isEnrico() ? t('hello') : (LANG === 'en' ? esc(who()) + "'s audit" : "L'audit di " + esc(who()));
   var when = esc(shortDate(D.visit.visit_date)) + (D.visit.visit_time ? ', ' + esc(D.visit.visit_time) : '');
   var h = topBar(adminTabs() + '<div><div class="kick">' + esc(kindName()) + ' · ' + when + '</div><h1>' + hello + '</h1></div>' +
     '<div class="bar"><div class="track"><div class="fill" style="width:' + pct + '%"></div></div><b>' + done + ' ' + t('of') + ' ' + total + '</b><span class="saved ok">' + t('saved') + '</span></div>');
