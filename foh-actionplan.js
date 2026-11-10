@@ -744,8 +744,12 @@ function apVisitsPending(m){
 function apFigNextLine(m){
   if(m.key !== 'visits3') return '';
   var p = apVisitsPending(m); if(!p.length) return '';
+  var o = apVisitsOpen(m, p[0]);
+  if(o && o.first_timers) return '<div class="ap-mctx ap-mnext">' + apYmName(p[0]) + ' so far: ' + apInt(o.second) + ' of ' + apInt(o.first_timers) + ' came a 2nd time (' + apPctOf(o.second, o.first_timers) + ') &middot; final ' + apDate(o.final_on || apYmReady(p[0])) + '</div>';
   return '<div class="ap-mctx ap-mnext">' + apYmName(p[0]) + ' first-timers: ready ' + apDate(apYmReady(p[0])) + '</div>';
 }
+// ap-weekly's "so far" count for a month still inside its 60-day window (10 Nov 2026).
+function apVisitsOpen(m, ym){ var o = (m.detail && m.detail.open) || []; return o.filter(function(x){ return x.month === ym; })[0] || null; }
 function apInt(n){ return n == null || isNaN(n) ? '&mdash;' : Number(n).toLocaleString('en-GB'); }
 function apPctOf(a, b){ return b ? (Math.round(a / b * 1000) / 10) + '%' : '&mdash;'; }
 function apFigTable(m){
@@ -756,7 +760,12 @@ function apFigTable(m){
   if(m.key === 'visits3'){
     head = ['Month', 'First-timers', '2nd visit', '3rd visit'];
     apVisitsPending(m).reverse().forEach(function(ym){
-      rows.push('<tr class="ap-ft-wait">' + td(apYmName(ym)) + '<td colspan="3">Still counting &middot; ready ' + apDate(apYmReady(ym)) + '</td></tr>');
+      var o = apVisitsOpen(m, ym);
+      if(!o || !o.first_timers){ rows.push('<tr class="ap-ft-wait">' + td(apYmName(ym)) + '<td colspan="3">Still counting &middot; ready ' + apDate(apYmReady(ym)) + '</td></tr>'); return; }
+      rows.push('<tr class="ap-ft-open">' + td(apYmName(ym) + '<small>' + (o.month_done ? 'so far &middot; final ' + apDate(o.final_on || apYmReady(ym)) : 'month not over') + '</small>')
+        + td(apInt(o.first_timers) + (o.month_done ? '' : '<span>so far</span>'), 'n')
+        + td(apInt(o.second) + ' <span>' + apPctOf(o.second, o.first_timers) + '</span>', 'n')
+        + td(apInt(o.third) + ' <span>' + apPctOf(o.third, o.first_timers) + '</span>', 'n') + '</tr>');
     });
     var tn = 0, t2 = 0, t3 = 0;
     hs.forEach(function(s){
@@ -768,7 +777,7 @@ function apFigTable(m){
         + td(apInt(d.third) + ' <span>' + apPctOf(d.third, d.first_timers) + '</span>', 'n') + '</tr>');
     });
     if(hs.filter(function(s){ return s.value != null; }).length > 1)
-      foot = '<tr>' + td('All months') + td(apInt(tn), 'n') + td(apInt(t2) + ' <span>' + apPctOf(t2, tn) + '</span>', 'n') + td(apInt(t3) + ' <span>' + apPctOf(t3, tn) + '</span>', 'n') + '</tr>';
+      foot = '<tr>' + td('Finished months') + td(apInt(tn), 'n') + td(apInt(t2) + ' <span>' + apPctOf(t2, tn) + '</span>', 'n') + td(apInt(t3) + ' <span>' + apPctOf(t3, tn) + '</span>', 'n') + '</tr>';
   } else if(hs.some(function(s){ return s.detail && s.detail.covers != null; })){
     var byCovers = m.key !== 'walkin_share';
     head = byCovers ? ['Week of', m.key === 'walkin_covers' ? '% walk-in' : '% ahead', 'Guests', 'Booked ahead', 'Walk-in']
@@ -819,6 +828,7 @@ function apFigShell(){
     + apChartSVG(m)
     + '<div class="ap-dsec">' + (apMonthly(m) ? 'Month by month' : 'Week by week') + '</div>'
     + apFigTable(m)
+    + (m.key === 'visits3' && m.detail && m.detail.open && m.detail.open.length ? '<div class="ap-small ap-fig-note">Rows marked <i>so far</i> are still counting: first-timers are final once the month is over; 2nd and 3rd visits can still grow until the date shown. The headline figure uses finished months only.</div>' : '')
     + (how ? '<details class="ap-more"><summary>How it is counted</summary><div class="ap-small">' + apEsc(how) + '</div></details>' : '')
     + '<div class="ap-msrc">' + apEsc(m.source || '') + ' &middot; ' + apEsc((m.frequency || '').toLowerCase()) + ' &middot; read ' + apAgo(m.updated_at) + '</div>'
     + '</div></div>';
@@ -1528,6 +1538,7 @@ function apCss(){
     '.ap-ft-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:12px}',
     '.ap-ft{width:100%;border-collapse:collapse;font-size:14px;font-variant-numeric:tabular-nums}.ap-ft th{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--text-light);font-weight:600;text-align:left;padding:9px 12px;background:#FAF6F1;border-bottom:1px solid var(--border);white-space:nowrap}',
     '.ap-ft td{padding:9px 12px;border-bottom:1px solid #F0E9E2;white-space:nowrap}.ap-ft tbody tr:last-child td{border-bottom:0}.ap-ft .n{text-align:right}.ap-ft td span{color:var(--text-light);font-size:12px;margin-left:4px}',
+    '.ap-ft-open td{background:#FCF8F3}.ap-ft td small{display:block;font-size:11px;color:var(--vino);font-style:italic}.ap-fig-note{margin-top:8px}',
     '.ap-ft tfoot td{border-top:2px solid var(--border);font-weight:600;background:#FAF6F1}.ap-ft-wait td{color:var(--text-light);font-style:italic}',
     '@media (max-width:600px){.ap-ft{font-size:13px}.ap-ft th{white-space:normal;letter-spacing:.04em}.ap-ft th,.ap-ft td{padding:8px 6px}.ap-ft td span{display:block;margin-left:0}.ap-fig-body{padding:12px}.ap-fig-body .ap-chart{height:110px}#ap-figv .ap-v-name{white-space:normal}}',
     '.ap-viewer{position:fixed;inset:0;z-index:9500;background:rgba(20,6,8,.78);display:flex;align-items:center;justify-content:center;padding:max(12px,env(safe-area-inset-top,0px)) max(12px,env(safe-area-inset-right,0px)) max(12px,env(safe-area-inset-bottom,0px)) max(12px,env(safe-area-inset-left,0px));font-family:var(--font-sans);color:var(--text)}',
