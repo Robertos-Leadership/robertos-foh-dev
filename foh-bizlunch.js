@@ -330,13 +330,29 @@ function blCostStart(){
   window.addEventListener('message', on);
   var t = setTimeout(function(){ finish(new Error('the recipe book did not answer')); }, 60000);
   document.body.appendChild(f);
-  sbKitchen.from('kitchen_event_overrides').select('dish_name,label').eq('event_id', '__bl_till_link__').then(function(r){
-    var m = {}; ((r && r.data) || []).forEach(function(x){ if(x.label) m[x.dish_name] = x.label; });
+  sbKitchen.from('kitchen_event_overrides').select('event_id,dish_name,label').like('event_id', '%bl_till_link%').then(function(r){
+    var m = {}; ((r && r.data) || []).forEach(function(x){ var mk = blLinkMonth(x.event_id); if(mk == null || !x.label) return; (m[mk] = m[mk] || {})[x.dish_name] = x.label; });
     BLC.links = m; if(BLC.costed) BLC.state = 'ready'; blRepaint();
   }, function(){ BLC.links = {}; if(BLC.costed) BLC.state = 'ready'; blRepaint(); });
 }
-function blCostOf(till){
-  var id = BLC.links && BLC.links[till], r = (id && BLC.byId[id]) || BLC.byName[blNorm(till)];
+// TILL LINKS BY MONTH (10 Nov 2026, Francesco: "by month"). The menu changes each month but the till
+// often keeps its names ("BL Tagliata Manzo" is Tagliata di Manzo in October and Tagliata pomodori e rucola
+// in November), so a link belongs to a month: event '__bl_till_link__@YYYY-MM'. The plain
+// '__bl_till_link__' rows are the first links (October 2026) and count as the earliest month.
+// A day uses its own month's link, else the nearest month before, else a recipe spelt exactly like the
+// till name, and only then the nearest month after (a dish that started on 28 Oct is November's).
+// The same rule is in the Kitchen app's business-lunch.html — keep them alike.
+function blLinkMonth(ev){ var e = String(ev||''); if(e === '__bl_till_link__') return ''; var m = e.match(/^__bl_till_link__@(\d{4}-\d{2})$/); return m ? m[1] : null; }
+function blLinkFor(links, till, iso, later){
+  var ym = String(iso||'').slice(0,7), ks = Object.keys(links||{}).filter(function(k){ return links[k][till]; }).sort();
+  if(!ks.length) return null;
+  if(links[ym] && links[ym][till]) return links[ym][till];
+  var before = ks.filter(function(k){ return k < ym; }), after = ks.filter(function(k){ return k > ym; });
+  return before.length ? links[before[before.length-1]][till] : (later && after.length ? links[after[0]][till] : null);
+}
+function blCostOf(till, iso){
+  var day = iso || blToday(), id = blLinkFor(BLC.links, till, day, false), r = (id && BLC.byId[id]) || BLC.byName[blNorm(till)];
+  if(!r){ id = blLinkFor(BLC.links, till, day, true); r = id && BLC.byId[id]; }
   return r && r.cost != null ? r.cost : null;
 }
 function blFoodCostHtml(shown, today){
@@ -350,7 +366,7 @@ function blFoodCostHtml(shown, today){
   h.push('<table class="bl-tbl"><thead><tr><th>Day</th><th class="r">Menus</th><th class="r">Food cost</th><th class="r">Per menu</th><th class="r">Food cost %</th></tr></thead><tbody>');
   days.forEach(function(d){
     var n = blView(d), c = n.courses || {}, fc = 0, miss = 0;
-    Object.keys(c).forEach(function(k){ var v = blCostOf(k); if(v != null) fc += v * c[k]; else { miss += c[k]; missing[k] = 1; } });
+    Object.keys(c).forEach(function(k){ var v = blCostOf(k, d); if(v != null) fc += v * c[k]; else { miss += c[k]; missing[k] = 1; } });
     var net = n.menuNet;
     T.m += n.menus; T.fc += fc; T.net += net; T.miss += miss;
     h.push('<tr><td>'+blEsc(blDayName(d))+' '+blEsc(blDateLabel(d))+(d===today?' <span class="bl-sofar">so far</span>':'')+'</td><td class="r"><b>'+blN(n.menus)+'</b></td>'
