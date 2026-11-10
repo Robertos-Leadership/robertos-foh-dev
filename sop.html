@@ -244,6 +244,7 @@ function renderBlocks(d){
 function reader(){
   var d = S.doc, me = S.me;
   var h = '<div class="top"><button class="link" id="back">&lsaquo; Back</button><span>' + esc(FNAME[d.folder] || '') + '</span></div>';
+  if(S.flash && me.checker){ h += '<div class="okmsg">' + S.flash + ' <span class="hint">' + checkOrder().filter(function(x){ return !x.ready; }).length + ' still to check.</span></div>'; S.flash = ''; }
   h += '<div class="card doc"><h1>' + esc(d.title) + '</h1>' + (me.checker ? '<div class="code-sm">' + esc(d.code) + '</div>' : '') + renderBlocks(d) + '<div class="end" id="end">End of the page</div></div>';
   h += '<div id="act"></div>';
   if(me.checker) h += keyEditor(d);
@@ -313,7 +314,8 @@ function keyEditor(d){
       '<label>The line we show when someone gets it wrong</label><textarea data-f="why">' + esc(q.why) + '</textarea></div>';
   });
   h += '<div id="kmsg"></div><button class="btn ghost" id="ksave">Save my changes</button>' +
-       (d.ready ? '<button class="btn ghost" id="kun">Take it back: stop signing until checked again</button>' : '<button class="btn" id="kok">The questions are right: open this page for signing</button>') + '</div>';
+       (d.ready ? '<button class="btn ghost" id="kun">Take it back: stop signing until checked again</button>' : '<button class="btn" id="kok">The questions are right: open for signing, go to the next</button>') +
+       (function(){ var n = nextToCheck(d.code); return n ? '<button class="btn ghost" id="knext">Skip to the next page to check: ' + esc(n.title) + ' &rsaquo;</button>' : '<div class="okmsg">&#10003; No other page is waiting to be checked.</div>'; })() + '</div>';
   return h;
 }
 function wireKey(d){
@@ -333,9 +335,17 @@ function wireKey(d){
   var ok = document.getElementById('kok'), un = document.getElementById('kun');
   if(ok) ok.onclick = function(){
     if(edited()){ m.innerHTML = '<div class="msg" role="alert">You changed a question. Save your changes first.</div>'; return; }
-    ok.disabled = true; call({ action:'check', code:d.code, emp:S.emp, jwt:S.jwt }).then(function(r){ if(!r.ok){ ok.disabled = false; m.innerHTML = '<div class="msg">' + esc(say(r.error)) + '</div>'; return; } refreshMe(function(){ openDoc(d.code); }); });
+    ok.disabled = true; call({ action:'check', code:d.code, emp:S.emp, jwt:S.jwt }).then(function(r){ if(!r.ok){ ok.disabled = false; m.innerHTML = '<div class="msg">' + esc(say(r.error)) + '</div>'; return; }
+      refreshMe(function(){ var n = nextToCheck(d.code); S.flash = '&#10003; ' + esc(d.title) + ' is open for signing.' + (n ? ' Next one below.' : ' That was the last one.'); openDoc(n ? n.code : d.code); }); });
   };
+  var nx = document.getElementById('knext'); if(nx) nx.onclick = function(){ var n = nextToCheck(d.code); if(n) openDoc(n.code); };
   if(un) un.onclick = function(){ un.disabled = true; call({ action:'uncheck', code:d.code, emp:S.emp, jwt:S.jwt }).then(function(r){ refreshMe(function(){ openDoc(d.code); }); }); };
+}
+function checkOrder(){ var docs = S.me.docs || [], out = []; FOLDERS.forEach(function(f){ docs.forEach(function(d){ if(d.folder === f[0]) out.push(d); }); }); return out; }
+function nextToCheck(code){
+  var all = checkOrder(), i = -1; all.forEach(function(d, k){ if(d.code === code) i = k; });
+  for(var k = 1; k <= all.length; k++){ var d = all[(i + k) % all.length]; if(!d.ready && d.code !== code) return d; }
+  return null;
 }
 function refreshMe(then){ call({ action:'me', emp:S.emp, jwt:S.jwt }).then(function(r){ if(r.ok) S.me = r; then(); }); }
 function checkList(){
