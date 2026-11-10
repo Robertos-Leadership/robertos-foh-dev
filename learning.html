@@ -144,7 +144,7 @@ function home(){
       (req.length ? (todo ? '<p class="hint">' + todo + ' still to do.</p>' : req.some(function(t){ return t.open; }) ? '<p class="hint good">You are up to date.</p>' : '<p class="hint">Nothing is open yet. These topics are waiting to be checked.</p>') : '<p class="hint">Nothing is compulsory for your role.</p>') +
       req.map(topicBtn).join('') + '</div>';
     if(opt.length) h += '<div class="card"><div class="eyebrow">Also open to you</div>' + opt.map(topicBtn).join('') + '</div>';
-    h += '<p class="hint" style="padding:0 6px">5 questions, one at a time, each with its own timer. 4 right passes. You can take a test again as often as you like; your best score is kept.</p>';
+    h += '<p class="hint" style="padding:0 6px">Questions one at a time, each with its own timer. Pass with 80%: 4 of 5, or 12 of 15 for Wine. You can take a test again as often as you like; your best score is kept.</p>';
   }
   var rv = me.review || [];
   if(rv.length){

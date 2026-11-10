@@ -459,3 +459,20 @@ export function buildTopic(data: Data, topic: string, seed: number, n = QUESTION
   }
   return out;
 }
+
+// ======================= A fixed question set (10 Nov 2026) =======================
+// The sommelier found the generated wine questions too complicated and wrote his own 15. When a topic has a fixed
+// set, every test is that whole set: the questions in a new order and the options shuffled, nothing generated.
+export function fixedTopic(set: Q[], seed: number): Q[] {
+  const r = rngFrom(seed);
+  return shuffle(r, set).map((q) => mix(r, JSON.parse(JSON.stringify(q)) as Q));
+}
+// the pass mark keeps the 4-of-5 ratio (80%) for any length: 5 -> 4, 15 -> 12
+export const passMark = (n: number) => (n === QUESTIONS_PER_TEST ? PASS_MARK : Math.ceil(n * 0.8));
+// a stored question is usable only if its answer key points at real options
+export function validQ(q: any): q is Q {
+  if (!q || typeof q.text !== "string" || !Array.isArray(q.opts) || q.opts.length < 2 || !Array.isArray(q.correct) || !q.correct.length) return false;
+  if (!["one", "multi", "match"].includes(q.type) || !(q.secs > 0)) return false;
+  if (q.type === "match" && (!Array.isArray(q.lefts) || q.lefts.length !== q.correct.length)) return false;
+  return q.correct.every((c: unknown) => Number.isInteger(c) && (c as number) >= 0 && (c as number) < q.opts.length);
+}

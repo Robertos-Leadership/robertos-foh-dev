@@ -1,11 +1,11 @@
 // learn — FOH Learning section, server side (2 Nov 2026). Same engine as the Food & Beverage test (fbtest):
 // questions are BUILT here from the live Food Bible and wine list, the answer key never reaches a phone,
 // the clock is the server's. A topic reaches the team only after it is checked (by the job title that owns it)
-// and approved (an Admin). Pass = 4 of 5; retakes unlimited, best kept; Allergens expire after 12 months.
+// and approved (an Admin). Pass = 4 of 5 (80%; the sommelier's 15-question Wine set: 12); retakes unlimited, best kept; Allergens expire after 12 months.
 //   me | start | answer | result | resume | abandon     staff, by Employee ID (foh_staff only)
 //   check (checker's Employee ID or app login) | approve | reopen (Admin app login) | board (manager app login)
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { buildTopic, publicQ, isRight, QUESTIONS_PER_TEST, PASS_MARK } from "./gen.ts";
+import { buildTopic, publicQ, isRight, QUESTIONS_PER_TEST, fixedTopic, passMark, validQ } from "./gen.ts";
 import type { Data, Q, Dish } from "./gen.ts";
 
 const CORS = {
@@ -87,15 +87,22 @@ async function foodData(): Promise<Book> {
 // What the team could have read: the dishes on one menu (a month inside it counts, as in the Bible's own picker).
 // The wines are the whole by-the-glass list, because the Bible's wine side shows all of it.
 // ---- the wine test setup the sommelier keeps: which edition the Wine test is built from, and which wines are left out --
-interface WineSet { edition: string; off: string[] }
+interface WineSet { edition: string; off: string[]; extra: Row[]; edit: Record<string, Row>; qs: Q[] }
 async function wineSet(db: ReturnType<typeof sb>): Promise<WineSet> {
-  const r = await db.from("learn_settings").select("key,val").in("key", ["wine_edition", "wine_off"]);
+  const r = await db.from("learn_settings").select("key,val").in("key", ["wine_edition", "wine_off", "wine_extra", "wine_edit", "wine_questions"]);
   const g = (k: string) => ((r.data || []).find((x: Row) => x.key === k) || {}).val;
-  return { edition: typeof g("wine_edition") === "string" ? g("wine_edition") : "", off: Array.isArray(g("wine_off")) ? g("wine_off") : [] };
+  return { edition: typeof g("wine_edition") === "string" ? g("wine_edition") : "", off: Array.isArray(g("wine_off")) ? g("wine_off") : [],
+    extra: Array.isArray(g("wine_extra")) ? g("wine_extra") : [], edit: g("wine_edit") && typeof g("wine_edit") === "object" && !Array.isArray(g("wine_edit")) ? g("wine_edit") : {},
+    // the sommelier's own question set (10 Nov 2026): when it is there, the Wine test is exactly these questions
+    qs: Array.isArray(g("wine_questions")) ? (g("wine_questions") as unknown[]).filter(validQ) : [] };
+}
+// The Kitchen's wines as the sommelier has corrected them here, plus the wines added here. The Kitchen rows are never written.
+function mergedWines(book: Book, set: WineSet): Row[] {
+  return book.allWines.map((w) => (set.edit[w.id] ? { ...w, ...set.edit[w.id] } : w)).concat(set.extra.map((x) => ({ ...x, active: book.allWines.some((k) => k.edition === x.edition && k.active) })));
 }
 // no edition chosen = the Kitchen's own active wines, as before
 function testWines(book: Book, set: WineSet): Row[] {
-  return book.allWines.filter((w) => (set.edition ? w.edition === set.edition : w.active) && !set.off.includes(w.id));
+  return mergedWines(book, set).filter((w) => (set.edition ? w.edition === set.edition : w.active) && !set.off.includes(w.id));
 }
 function scoped(book: Book, menuId: string, set: WineSet): Data {
   const kid: Record<string, string> = {}; book.menus.forEach((m) => { if (m.parent_id) kid[m.id] = m.parent_id; });
@@ -104,6 +111,11 @@ function scoped(book: Book, menuId: string, set: WineSet): Data {
 }
 function runningMenu(book: Book): Row | null {
   return book.menus.find((m) => m.running && !m.parent_id) || book.menus.find((m) => m.running) || null;
+}
+// one test's questions: the sommelier's fixed set for Wine when there is one, otherwise built from the Bible
+function testQs(book: Book, menuId: string, set: WineSet, key: string, seed: number, n = QUESTIONS_PER_TEST): Q[] {
+  if (key === "wine" && set.qs.length) return fixedTopic(set.qs, seed);
+  return buildTopic(scoped(book, menuId, set), key, seed, n);
 }
 // ---- who is asking -------------------------------------------------------------------------------------------
 const same = (a: unknown, raw: string) => {
@@ -170,7 +182,7 @@ function mark(qs: Q[], ans: Row[]) {
     total += a.ms; away += a.away || 0;
     if (!a.out && isRight(q, a.pick)) score++;
   });
-  return { score, total_ms: total, away, passed: score >= PASS_MARK };
+  return { score, total_ms: total, away, passed: score >= passMark(qs.length) };
 }
 function review(qs: Q[], ans: Row[]) {
   return qs.map((q, i) => {
@@ -179,7 +191,7 @@ function review(qs: Q[], ans: Row[]) {
   });
 }
 function resultOf(at: Row, topic: Row, m: ReturnType<typeof mark>, ans: Row[]) {
-  return { attempt: at.id, topic: topic.key, topic_name: topic.name, name: at.name, score: m.score, total: at.qs.length, pass_mark: PASS_MARK, passed: m.passed, total_ms: m.total_ms, review: review(at.qs, ans) };
+  return { attempt: at.id, topic: topic.key, topic_name: topic.name, name: at.name, score: m.score, total: at.qs.length, pass_mark: passMark(at.qs.length), passed: m.passed, total_ms: m.total_ms, review: review(at.qs, ans) };
 }
 function frame(at: Row, topic: Row, resumed: boolean) {
   const q: Q = at.qs[at.cur];
@@ -251,12 +263,12 @@ Deno.serve(async (req) => {
       const book = await foodData();
       const menu = book.menus.find((m) => m.running && /a la carte/i.test(String(m.name))) || runningMenu(book);
       if (!menu) return json({ ok: false, error: "not_ready" });
-      const qs = buildTopic(scoped(book, menu.id, await wineSet(db)), t.key, Math.floor(Math.random() * 4294967295), 10);
+      const qs = testQs(book, menu.id, await wineSet(db), t.key, Math.floor(Math.random() * 4294967295), 10);
       return json({ ok: true, topic: t.key, topic_name: t.name, menu: menu.name, review: qs.map((q) => ({ ...publicQ(q), correct: q.correct, note: q.note })) });
     }
 
     // ----------------------------------------------------------------- the sommelier keeps the wine test setup
-    if (action === "wines" || action === "wine_set") {
+    if (action === "wines" || action === "wine_set" || action === "wine_save" || action === "wine_remove") {
       const [st, au] = await Promise.all([fohStaff(db, emp), appUser(db, b.jwt)]);
       const who = st && /sommelier/i.test(st.role) ? st.name : au && (au.admin || /sommelier/i.test(au.title)) ? au.name : null;
       if (!who) return json({ ok: false, error: "not_sommelier" }, 403);
@@ -264,6 +276,44 @@ Deno.serve(async (req) => {
       const eds = Array.from(new Set(book.allWines.map((w) => String(w.edition)))).sort();
       const activeEd = (book.allWines.find((w) => w.active) || {}).edition || "";
       let reset = false;
+      // new or changed wine content has to be checked again before the team is tested on it
+      const resetWine = async () => {
+        const t = TOPICS.find((x) => x.key === "wine");
+        if (t && t.status !== "draft") { await db.from("learn_topics").update({ status: "draft", checked_by: null, checked_at: null, approved_by: null, approved_at: null }).eq("key", "wine"); t.status = "draft"; reset = true; }
+      };
+      if (action === "wine_save" || action === "wine_remove") {
+        const cur = await wineSet(db);
+        const now = new Date().toISOString();
+        const all = mergedWines(book, cur);
+        const id = String(b.id ?? "");
+        if (action === "wine_remove") {
+          if (!id.startsWith("x-") || !cur.extra.some((w) => w.id === id)) return json({ ok: false, error: "no_wine" });
+          const a = await db.from("learn_settings").upsert({ key: "wine_extra", val: cur.extra.filter((w) => w.id !== id), by: who, at: now });
+          const c = await db.from("learn_settings").upsert({ key: "wine_off", val: cur.off.filter((x) => x !== id), by: who, at: now });
+          if (a.error || c.error) return json({ ok: false, error: "db" }, 500);
+          await resetWine();
+        } else {
+          const one = (v: unknown, n: number) => String(v ?? "").replace(/\s+/g, " ").trim().slice(0, n);
+          const name = one(b.name, 80), style = one(b.style, 12).toLowerCase();
+          if (name.length < 2) return json({ ok: false, error: "wine_name" });
+          if (!["sparkling", "white", "rose", "red"].includes(style)) return json({ ok: false, error: "wine_style" });
+          const fields = { name, style, region: one(b.region, 80), grapes: one(b.grapes, 120), notes: String(b.notes ?? "").replace(/[ 	]+/g, " ").trim().slice(0, 700) };
+          const here = id ? all.find((w) => w.id === id) : null;
+          if (id && !here) return json({ ok: false, error: "no_wine" });
+          const ed = here ? here.edition : (cur.edition || (book.allWines.find((w) => w.active) || {}).edition || "");
+          if (all.some((w) => w.id !== id && w.edition === ed && String(w.name).trim().toLowerCase() === name.toLowerCase())) return json({ ok: false, error: "wine_dup" });
+          let w;
+          if (!id) {
+            w = await db.from("learn_settings").upsert({ key: "wine_extra", val: cur.extra.concat({ id: "x-" + crypto.randomUUID().slice(0, 8), edition: ed, active: false, ...fields }), by: who, at: now });
+          } else if (id.startsWith("x-")) {
+            w = await db.from("learn_settings").upsert({ key: "wine_extra", val: cur.extra.map((x) => (x.id === id ? { ...x, ...fields } : x)), by: who, at: now });
+          } else {
+            w = await db.from("learn_settings").upsert({ key: "wine_edit", val: { ...cur.edit, [id]: fields }, by: who, at: now });
+          }
+          if (w.error) return json({ ok: false, error: "db" }, 500);
+          await resetWine();
+        }
+      }
       if (action === "wine_set") {
         const cur = await wineSet(db);
         const now = new Date().toISOString();
@@ -276,7 +326,7 @@ Deno.serve(async (req) => {
           if (t && t.status !== "draft") { await db.from("learn_topics").update({ status: "draft", checked_by: null, checked_at: null, approved_by: null, approved_at: null }).eq("key", "wine"); t.status = "draft"; reset = true; }
         }
         if (Array.isArray(b.off)) {
-          const ids = new Set(book.allWines.map((w) => w.id));
+          const ids = new Set(mergedWines(book, await wineSet(db)).map((w) => w.id));
           const off = b.off.map(String).filter((id: string) => ids.has(id));
           const w = await db.from("learn_settings").upsert({ key: "wine_off", val: off, by: who, at: now });
           if (w.error) return json({ ok: false, error: "db" }, 500);
@@ -286,14 +336,16 @@ Deno.serve(async (req) => {
       const set = await wineSet(db);
       const ed = set.edition || activeEd;
       const inTest = testWines(book, set);
+      const all = mergedWines(book, set);
       const pairCount = (id: string) => book.data.pairings.filter((p: Row) => p.wine_id === id).length;
       let can = false;
       const menu = book.menus.find((m) => m.running && /a la carte/i.test(String(m.name))) || runningMenu(book);
-      if (menu) { try { can = inTest.length >= 8 && buildTopic(scoped(book, menu.id, set), "wine", 1).length === QUESTIONS_PER_TEST; } catch (_e) { can = false; } }
+      if (set.qs.length) can = true;
+      else if (menu) { try { can = inTest.length >= 8 && buildTopic(scoped(book, menu.id, set), "wine", 1).length === QUESTIONS_PER_TEST; } catch (_e) { can = false; } }
       const wt = TOPICS.find((x) => x.key === "wine");
-      return json({ ok: true, by: who, edition: ed, editions: eds.map((e) => ({ edition: e, n: book.allWines.filter((w) => w.edition === e).length, active: book.allWines.some((w) => w.edition === e && w.active) })),
+      return json({ ok: true, by: who, edition: ed, editions: eds.map((e) => ({ edition: e, n: all.filter((w) => w.edition === e).length, active: book.allWines.some((w) => w.edition === e && w.active) })),
         status: wt ? wt.status : "draft", reset, can_build: can, in_test: inTest.length, off: set.off,
-        wines: book.allWines.filter((w) => w.edition === ed).map((w) => ({ id: w.id, name: w.name, style: w.style, region: w.region, pairs: pairCount(w.id), out: set.off.includes(w.id) })) });
+        wines: all.filter((w) => w.edition === ed).map((w) => ({ id: w.id, name: w.name, style: w.style, region: w.region, grapes: w.grapes || "", notes: w.notes || "", pairs: pairCount(w.id), out: set.off.includes(w.id), added: String(w.id).startsWith("x-"), edited: !!set.edit[w.id] })) });
     }
 
     // ----------------------------------------------------------------- managers: who has passed what, scores and times
@@ -334,10 +386,12 @@ Deno.serve(async (req) => {
       const book = await foodData();
       const menu = book.menus.find((m) => m.running && /a la carte/i.test(String(m.name))) || runningMenu(book);
       if (!menu) return json({ ok: false, error: "not_ready" });
-      const data = scoped(book, menu.id, await wineSet(db));
-      if (data.dishes.length < 25 || data.wines.length < 8) return json({ ok: false, error: "not_ready" });
-      const qs = buildTopic(data, t.key, Math.floor(Math.random() * 4294967295));
-      if (qs.length !== QUESTIONS_PER_TEST) return json({ ok: false, error: "not_ready" });
+      const set = await wineSet(db);
+      const fixed = t.key === "wine" && set.qs.length > 0;
+      const data = scoped(book, menu.id, set);
+      if (!fixed && (data.dishes.length < 25 || data.wines.length < 8)) return json({ ok: false, error: "not_ready" });
+      const qs = testQs(book, menu.id, set, t.key, Math.floor(Math.random() * 4294967295));
+      if (qs.length !== (fixed ? set.qs.length : QUESTIONS_PER_TEST)) return json({ ok: false, error: "not_ready" });
       const ins = await db.from("learn_attempts").insert({ emp_id: emp, name: st.name, role: st.role, topic: t.key, qs }).select("*").single();
       if (ins.error) { console.log("learn insert", ins.error.message); return json({ ok: false, error: "db" }, 500); }
       return json(frame(ins.data, t, false));
