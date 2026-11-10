@@ -694,16 +694,147 @@ function apMeasureCard(m, withPoint){
       + (m.current_label ? '<div class="ap-mctx">' + apEsc(m.current_label) + '</div>' : '');
   } else {
     body = val == null ? '<div class="ap-mval ap-mval-none">No data</div><div class="ap-mctx">' + apEsc(m.current_label || '') + '</div>'
-      : '<div class="ap-mval">' + val + '</div>' + (m.current_label ? '<div class="ap-mctx">' + apEsc(m.current_label) + '</div>' : '') + apChartSVG(m);
+      : '<div class="ap-mval">' + val + '</div>' + (m.current_label ? '<div class="ap-mctx">' + apEsc(m.current_label) + '</div>' : '') + apFigNextLine(m) + apChartSVG(m);
   }
   var src = kind === 'manual'
     ? (m.updated_by ? 'Typed in by ' + apEsc(apName(m.updated_by)) + ' &middot; ' + apAgo(m.updated_at) : 'Not typed in yet') + ' &middot; ' + apEsc((m.frequency || '').toLowerCase())
     : apEsc(m.source || '') + ' &middot; ' + apEsc((m.frequency || '').toLowerCase()) + ' &middot; read ' + apAgo(m.updated_at);
-  return '<div class="ap-mcard">'
+  var more = kind === 'live' ? '<button class="ap-mmore" onclick="apFigOpen(\'' + m.id + '\')">' + apFigMoreText(m) + ' &rsaquo;</button>' : '';
+  return '<div class="ap-mcard' + (more ? ' ap-mcard-open' : '') + '"' + (more ? ' onclick="apFigCard(event,\'' + m.id + '\')"' : '') + '>'
     + '<div class="ap-mtop">' + (p ? '<button class="ap-mpoint" onclick="apOpen(\'' + p.id + '\')">' + p.num + ' &middot; ' + apEsc(p.title) + '</button>' : '<span></span>') + tag + '</div>'
     + '<div class="ap-mlabel">' + apEsc(m.label) + '</div>' + body
     + '<div class="ap-mfoot"><div><span>Target</span><b>' + apEsc(m.target || '&mdash;') + '</b></div><div><span>Baseline</span><b>' + apEsc(m.baseline || '&mdash;') + '</b></div></div>'
-    + '<div class="ap-msrc">' + src + '</div></div>';
+    + '<div class="ap-msrc">' + src + '</div>' + more + '</div>';
+}
+// ── One figure, opened (10 Nov 2026) ─────────────────────────────────────
+// Francesco 10 Nov: the card is fine, "when I click I would like to see more".
+// Tapping a live figure opens every stored week (or month) with the counts
+// behind it, read from ap_snapshots — the same rows the chart draws.
+var AP_HOW = {
+  booked_share: 'Guests who came with a booking made ahead, out of all guests seated that Monday to Sunday (SevenRooms). A walk-in is a booking entered as “walk in”. Cancelled and no-show bookings are not counted. A week appears once its Sunday has passed.',
+  walkin_share: 'Walk-in bookings out of all bookings that Monday to Sunday (SevenRooms). Cancelled and no-show bookings are not counted.',
+  walkin_covers: 'Walk-in guests out of all guests that Monday to Sunday (SevenRooms). Cancelled and no-show bookings are not counted.',
+  visits3: 'First-timers of a month: guests whose first visit in 3 months fell in that month. They count as coming a 2nd time if they came back within 30 days of the 1st visit, and a 3rd time within 30 days of the 2nd. So a month can only be scored 60 days after it ends — the newest finished month is always about two months back.',
+  monday_net: 'Net revenue of each Monday from that night’s closing report. The arrow on the card compares the average of the last 4 Mondays with the baseline, not one night.',
+  sunday_net: 'Net revenue of each Sunday from that night’s closing report. Roberto’s opened on Sundays from October. The arrow on the card compares the average of the last 4 Sundays with the baseline, not one night.',
+  monday_guests: 'Guests on each Monday from that night’s closing report (restaurant and lounge).',
+  sunday_guests: 'Guests on each Sunday from that night’s closing report (restaurant and lounge). Roberto’s opened on Sundays from October.'
+};
+var AP_FIG = { id: null, back: null };
+function apFigMoreText(m){ return apMonthly(m) ? 'Every month' : 'Every week'; }
+function apFigCard(e, mid){
+  var t = e && e.target;
+  while(t && t !== e.currentTarget){ if(/^(BUTTON|INPUT|A|TEXTAREA|SELECT)$/.test(t.tagName)) return; t = t.parentNode; }
+  apFigOpen(mid);
+}
+function apYm(d){ return String(d).slice(0, 7); }
+function apYmNext(ym){ var y = +ym.slice(0, 4), mo = +ym.slice(5, 7); return mo === 12 ? (y + 1) + '-01' : y + '-' + (mo < 9 ? '0' : '') + (mo + 1); }
+function apYmEnd(ym){ var y = +ym.slice(0, 4), mo = +ym.slice(5, 7); return new Date(Date.UTC(y, mo, 0, 12)).toISOString().slice(0, 10); }
+function apYmName(ym){ return new Date(ym + '-15T12:00:00Z').toLocaleDateString('en-GB', { month: 'long', timeZone: 'UTC' }); }
+// ap-weekly scores a month once month end + 60 days is before "yesterday": the first day it can appear.
+function apYmReady(ym){ return apAdd(apYmEnd(ym), 61); }
+// visits3 months after the newest scored one, up to this month: still counting.
+function apVisitsPending(m){
+  var hs = apHist(m).filter(function(h){ return h.v != null; });
+  var last = hs.length ? apYm(hs[hs.length - 1].d) : null, now = apYm(apToday()), out = [];
+  if(!last) return out;
+  for(var ym = apYmNext(last); ym <= now && out.length < 6; ym = apYmNext(ym)) out.push(ym);
+  return out;
+}
+function apFigNextLine(m){
+  if(m.key !== 'visits3') return '';
+  var p = apVisitsPending(m); if(!p.length) return '';
+  return '<div class="ap-mctx ap-mnext">' + apYmName(p[0]) + ' first-timers: ready ' + apDate(apYmReady(p[0])) + '</div>';
+}
+function apInt(n){ return n == null || isNaN(n) ? '&mdash;' : Number(n).toLocaleString('en-GB'); }
+function apPctOf(a, b){ return b ? (Math.round(a / b * 1000) / 10) + '%' : '&mdash;'; }
+function apFigTable(m){
+  var hs = AP.snaps.filter(function(s){ return s.measure_id === m.id && !(s.detail && s.detail.superseded); })
+    .sort(function(a, b){ return a.week_start < b.week_start ? 1 : -1; });
+  var head, rows = [], foot = null;
+  var td = function(x, cls){ return '<td' + (cls ? ' class="' + cls + '"' : '') + '>' + x + '</td>'; };
+  if(m.key === 'visits3'){
+    head = ['Month', 'First-timers', '2nd visit', '3rd visit'];
+    apVisitsPending(m).reverse().forEach(function(ym){
+      rows.push('<tr class="ap-ft-wait">' + td(apYmName(ym)) + '<td colspan="3">Still counting &middot; ready ' + apDate(apYmReady(ym)) + '</td></tr>');
+    });
+    var tn = 0, t2 = 0, t3 = 0;
+    hs.forEach(function(s){
+      var d = s.detail || {};
+      if(s.value == null){ rows.push('<tr>' + td(apYmName(apYm(s.week_start))) + '<td colspan="3">' + apEsc(s.label || 'No data') + '</td></tr>'); return; }
+      tn += d.first_timers || 0; t2 += d.second || 0; t3 += d.third || 0;
+      rows.push('<tr>' + td(apYmName(apYm(s.week_start))) + td(apInt(d.first_timers), 'n')
+        + td(apInt(d.second) + ' <span>' + apPctOf(d.second, d.first_timers) + '</span>', 'n')
+        + td(apInt(d.third) + ' <span>' + apPctOf(d.third, d.first_timers) + '</span>', 'n') + '</tr>');
+    });
+    if(hs.filter(function(s){ return s.value != null; }).length > 1)
+      foot = '<tr>' + td('All months') + td(apInt(tn), 'n') + td(apInt(t2) + ' <span>' + apPctOf(t2, tn) + '</span>', 'n') + td(apInt(t3) + ' <span>' + apPctOf(t3, tn) + '</span>', 'n') + '</tr>';
+  } else if(hs.some(function(s){ return s.detail && s.detail.covers != null; })){
+    var byCovers = m.key !== 'walkin_share';
+    head = byCovers ? ['Week of', m.key === 'walkin_covers' ? '% walk-in' : '% ahead', 'Guests', 'Booked ahead', 'Walk-in']
+                    : ['Week of', '% walk-in', 'Bookings', 'Walk-in'];
+    hs.forEach(function(s){
+      var d = s.detail || {};
+      if(s.value == null){ rows.push('<tr>' + td(apDate(s.week_start)) + '<td colspan="' + (head.length - 1) + '">' + apEsc(s.label || 'No data') + '</td></tr>'); return; }
+      rows.push(byCovers
+        ? '<tr>' + td('Mon ' + apDate(s.week_start)) + td('<b>' + apNumText(m, Number(s.value)) + '</b>', 'n') + td(apInt(d.covers), 'n') + td(apInt(d.covers - d.walkin_covers), 'n') + td(apInt(d.walkin_covers), 'n') + '</tr>'
+        : '<tr>' + td('Mon ' + apDate(s.week_start)) + td('<b>' + apNumText(m, Number(s.value)) + '</b>', 'n') + td(apInt(d.bookings), 'n') + td(apInt(d.walkins), 'n') + '</tr>');
+    });
+  } else if(m.unit === 'AED'){
+    head = ['Night', 'Net revenue', 'Guests', 'Per guest'];
+    hs.forEach(function(s){
+      var d = s.detail || {}, night = d.date ? new Date(d.date + 'T12:00:00Z').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }) : apDate(s.week_start);
+      if(s.value == null){ rows.push('<tr class="' + (d.closed ? 'ap-ft-wait' : '') + '">' + td(night) + '<td colspan="3">' + (d.closed ? 'Closed' : apEsc(s.label || 'No data')) + '</td></tr>'); return; }
+      var v = Number(s.value);
+      rows.push('<tr>' + td(night) + td('<b>AED ' + Math.round(v).toLocaleString('en-GB') + '</b>', 'n') + td(apInt(d.guests), 'n') + td(d.guests ? 'AED ' + Math.round(v / d.guests).toLocaleString('en-GB') : '&mdash;', 'n') + '</tr>');
+    });
+  } else {
+    head = [apMonthly(m) ? 'Month' : 'Week of', m.short_label || m.label];
+    hs.forEach(function(s){
+      var d = s.detail || {};
+      rows.push('<tr class="' + (d.closed ? 'ap-ft-wait' : '') + '">' + td(apMonthly(m) ? apYmName(apYm(s.week_start)) : apDate(s.week_start))
+        + td(s.value == null ? (d.closed ? 'Closed' : apEsc(s.label || 'No data')) : '<b>' + apNumText(m, Number(s.value)) + '</b>' + (s.label ? ' <span>' + apEsc(s.label) + '</span>' : ''), s.value == null ? '' : 'n') + '</tr>');
+    });
+  }
+  if(!rows.length) return '<div class="ap-small">Nothing stored yet.</div>';
+  return '<div class="ap-ft-wrap"><table class="ap-ft"><thead><tr>' + head.map(function(h, i){ return '<th' + (i ? ' class="n"' : '') + '>' + h + '</th>'; }).join('') + '</tr></thead><tbody>'
+    + rows.join('') + '</tbody>' + (foot ? '<tfoot>' + foot + '</tfoot>' : '') + '</table></div>';
+}
+function apFigShell(){
+  var m = AP.measures.filter(function(x){ return x.id === AP_FIG.id; })[0];
+  if(!m) return apFigClose();
+  var v = document.getElementById('ap-figv');
+  if(!v){
+    v = document.createElement('div'); v.id = 'ap-figv'; v.className = 'ap-viewer'; v.setAttribute('role', 'dialog'); v.setAttribute('aria-modal', 'true'); v.setAttribute('aria-labelledby', 'ap-fig-name');
+    v.addEventListener('click', function(e){ if(e.target === v) apFigClose(); });
+    document.body.appendChild(v);
+  }
+  var p = AP.points.filter(function(x){ return x.id === m.point_id; })[0], val = apValue(m), how = AP_HOW[m.key];
+  v.innerHTML = '<div class="ap-fig-box"><div class="ap-v-head"><div class="ap-v-title"><div class="ap-v-meta">' + (p ? p.num + ' &middot; ' + apEsc(p.title) : '') + '</div>'
+    + '<div class="ap-v-name" id="ap-fig-name">' + apEsc(m.label) + '</div></div>'
+    + '<button class="ap-btn" id="ap-fig-close" onclick="apFigClose()">Close</button></div>'
+    + '<div class="ap-fig-body">'
+    + '<div class="ap-fig-now"><div class="ap-mval">' + (val == null ? 'No data' : val) + '</div>' + (m.current_label ? '<div class="ap-mctx">' + apEsc(m.current_label) + '</div>' : '') + apFigNextLine(m) + '</div>'
+    + '<div class="ap-fig-tb"><div><span>Target</span><b>' + apEsc(m.target || '&mdash;') + '</b></div><div><span>Baseline</span><b>' + apEsc(m.baseline || '&mdash;') + '</b></div></div>'
+    + apChartSVG(m)
+    + '<div class="ap-dsec">' + (apMonthly(m) ? 'Month by month' : 'Week by week') + '</div>'
+    + apFigTable(m)
+    + (how ? '<details class="ap-more"><summary>How it is counted</summary><div class="ap-small">' + apEsc(how) + '</div></details>' : '')
+    + '<div class="ap-msrc">' + apEsc(m.source || '') + ' &middot; ' + apEsc((m.frequency || '').toLowerCase()) + ' &middot; read ' + apAgo(m.updated_at) + '</div>'
+    + '</div></div>';
+}
+function apFigOpen(mid){
+  AP_FIG = { id: mid, back: document.activeElement };
+  apCss(); apFigShell();
+  document.addEventListener('keydown', apFigKeys);
+  try{ var c = document.getElementById('ap-fig-close'); if(c) c.focus(); }catch(e){}
+}
+function apFigKeys(e){ if(e.key === 'Escape' && document.getElementById('ap-figv')) apFigClose(); }
+function apFigClose(){
+  var v = document.getElementById('ap-figv'); if(v) v.remove();
+  document.removeEventListener('keydown', apFigKeys);
+  var back = AP_FIG.back; AP_FIG = { id: null, back: null };
+  try{ if(back && back.focus && document.body.contains(back)) back.focus(); }catch(e){}
 }
 function apComingRow(m, withPoint){
   var p = AP.points.filter(function(x){ return x.id === m.point_id; })[0];
@@ -951,7 +1082,8 @@ function apFigureBlock(m){
     + '<div class="ap-dfig-row"><div class="ap-dfig-val' + (v == null ? ' ap-mval-none' : '') + '">' + (v == null ? (kind === 'manual' ? '&mdash;' : 'No data') : v) + '</div>'
     + (dl ? '<div class="ap-delta ' + (dl.good === true ? 'good' : dl.good === false ? 'bad' : '') + '">' + dl.text + '</div>' : '') + '</div>'
     + (m.current_label ? '<div class="ap-mctx">' + apEsc(m.current_label) + '</div>' : '')
-    + apChartSVG(m)
+    + apFigNextLine(m) + apChartSVG(m)
+    + (kind === 'live' ? '<button class="ap-mmore" onclick="apFigOpen(\'' + m.id + '\')">' + apFigMoreText(m) + ' &rsaquo;</button>' : '')
     + '<div class="ap-dfig-foot">Target <b>' + apEsc(m.target || '—') + '</b> &middot; Baseline <b>' + apEsc(m.baseline || '—') + '</b></div>'
     + '<div class="ap-msrc">' + (kind === 'manual' ? (m.updated_by ? 'Typed in by ' + apEsc(apName(m.updated_by)) + ' &middot; ' + apAgo(m.updated_at) : 'Not typed in yet')
         : apEsc(m.source || '') + ' &middot; ' + apEsc((m.frequency || '').toLowerCase()) + ' &middot; read ' + apAgo(m.updated_at)) + '</div></div>';
@@ -1386,6 +1518,18 @@ function apCss(){
     '.ap-filebtn:focus-within,.ap-filelink:focus-within{outline:2px solid #B08A4A;outline-offset:2px}',
     '.ap-fileadd{margin-top:8px;font-size:14px}.ap-filelink{font-weight:600;min-height:32px}',
     '.ap-srow-files{padding:0 20px 12px 58px;border-bottom:1px solid var(--border);margin-top:-6px}.ap-srow-files .ap-files{margin-top:0}',
+    '.ap-mcard-open{cursor:pointer}.ap-mcard-open:hover{border-color:#C9B7A2}',
+    '.ap-mmore{align-self:flex-start;margin-top:10px;background:none;border:1px solid var(--border);border-radius:999px;padding:7px 14px;font:inherit;font-size:14px;font-weight:600;color:var(--vino);cursor:pointer;min-height:36px}.ap-mmore:hover{background:#F7F1EA}',
+    '.ap-mnext{color:var(--vino)}',
+    '.ap-fig-box{background:#fff;border-radius:16px;width:100%;max-width:760px;max-height:100%;display:flex;flex-direction:column;overflow:hidden}',
+    '.ap-fig-body{overflow:auto;padding:16px 18px 18px;-webkit-overflow-scrolling:touch}',
+    '.ap-fig-body .ap-chart{height:140px}',
+    '.ap-fig-tb{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:12px 0 4px;padding-top:10px;border-top:1px solid var(--border)}.ap-fig-tb span{display:block;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--text-light)}.ap-fig-tb b{font-weight:500;font-size:15px}',
+    '.ap-ft-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:12px}',
+    '.ap-ft{width:100%;border-collapse:collapse;font-size:14px;font-variant-numeric:tabular-nums}.ap-ft th{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--text-light);font-weight:600;text-align:left;padding:9px 12px;background:#FAF6F1;border-bottom:1px solid var(--border);white-space:nowrap}',
+    '.ap-ft td{padding:9px 12px;border-bottom:1px solid #F0E9E2;white-space:nowrap}.ap-ft tbody tr:last-child td{border-bottom:0}.ap-ft .n{text-align:right}.ap-ft td span{color:var(--text-light);font-size:12px;margin-left:4px}',
+    '.ap-ft tfoot td{border-top:2px solid var(--border);font-weight:600;background:#FAF6F1}.ap-ft-wait td{color:var(--text-light);font-style:italic}',
+    '@media (max-width:600px){.ap-ft{font-size:13px}.ap-ft th{white-space:normal;letter-spacing:.04em}.ap-ft th,.ap-ft td{padding:8px 6px}.ap-ft td span{display:block;margin-left:0}.ap-fig-body{padding:12px}.ap-fig-body .ap-chart{height:110px}#ap-figv .ap-v-name{white-space:normal}}',
     '.ap-viewer{position:fixed;inset:0;z-index:9500;background:rgba(20,6,8,.78);display:flex;align-items:center;justify-content:center;padding:max(12px,env(safe-area-inset-top,0px)) max(12px,env(safe-area-inset-right,0px)) max(12px,env(safe-area-inset-bottom,0px)) max(12px,env(safe-area-inset-left,0px));font-family:var(--font-sans);color:var(--text)}',
     '.ap-v-box{background:#fff;border-radius:16px;width:100%;max-width:1000px;height:100%;max-height:900px;display:flex;flex-direction:column;overflow:hidden}',
     '.ap-v-head{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 14px;border-bottom:1px solid var(--border)}',
