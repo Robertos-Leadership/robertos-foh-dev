@@ -25,6 +25,11 @@
 // So each day is also read from Simphony itself by the weekly reconciliation into `biz_lunch_sim`
 // (FOH db, authenticated read). Once a day is there, its menus, paid vs comped, net, courses and
 // checks on this screen are Simphony's; SevenRooms stays only as the bookings, folded.
+// EXPRESS LUNCH (10 Nov 2026): a second set menu, AED 99, joined the AED 135 Business Lunch on Mon 9 Nov
+// (first sold Tue 10 Nov), rung as "ExpressLunch@99". Any "<Name>Lunch@<price>" line is one menu of that
+// offer, so menus are the total of both and each offer is shown on its own. Both use the same "BL …" course
+// lines. A "BL …" line WITH a price (BL Dessert AED 30, BL BardoFolon GL AED 48) is an ADD-ON the guest
+// paid for: never a course choice, never a menu; its money is part of the extras and is also shown alone.
 var BL = { week: 0, nights: {}, loading: {}, failed: {}, sim: {}, simph: {}, simKey: '', pick: null, open: {}, kick: 0, all: null, allState: 'idle' };
 
 function blEsc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
@@ -40,7 +45,32 @@ function blN2(n){ return Number(n||0).toLocaleString('en-US',{minimumFractionDig
 function blDiv(iso){ return (typeof fohSubtotalToNetDiv==='function') ? fohSubtotalToNetDiv(iso) : 1.155; }
 function blNet(gross, iso){ return (Number(gross)||0) / blDiv(iso); }
 function blMoney(){ return (typeof fohBlocked==='function') ? !fohBlocked('revenue') : false; }
-function blIsMenu(name){ return /^business\s*lunch/i.test(String(name||'')); }
+function blOfferOf(name){
+  var m = String(name||'').match(/^\s*([A-Za-z]+?)\s*lunch\s*@\s*(\d+(?:\.\d+)?)/i);
+  return m ? { key: m[1].charAt(0).toUpperCase()+m[1].slice(1).toLowerCase(), price: Number(m[2]) } : null;
+}
+function blIsMenu(name){ return !!blOfferOf(name); }
+function blAddonName(name){ return blTill(name).replace(/^BL\s+/,''); }
+// Offers biggest price first, so Business (135) always leads and Express (99) follows.
+function blOfferKeys(o){ return Object.keys(o||{}).sort(function(a,b){ return (o[b].price||0)-(o[a].price||0) || (a<b?-1:1); }); }
+function blMergeOffers(into, from){ Object.keys(from||{}).forEach(function(k){ var f = from[k], t = into[k] || (into[k] = { menus:0, net:0, price:f.price }); t.menus += Number(f.menus)||0; t.net += Number(f.net)||0; if(f.price) t.price = f.price; }); return into; }
+function blMergeAddons(into, from){ Object.keys(from||{}).forEach(function(k){ var t = into[k] || (into[k] = { qty:0, net:0 }); t.qty += Number(from[k].qty)||0; t.net += Number(from[k].net)||0; }); return into; }
+// A stored Simphony day → its offers. Days read before Express (offers NULL) were all Business Lunch @135.
+function blSimOffers(r){
+  var o = {}, m = r && r.offers && r.offers.menus;
+  if(m && Object.keys(m).length){
+    Object.keys(m).forEach(function(k){ var of = blOfferOf(k) || { key: k, price: null }; var t = o[of.key] || (o[of.key] = { menus:0, net:0, price: of.price }); t.menus += Number(m[k].qty)||0; t.net += Number(m[k].net)||0; });
+  } else if(r && Number(r.menus)) o.Business = { menus: Number(r.menus)||0, net: Number(r.menu_net)||0, price: 135 };
+  return o;
+}
+function blSimAddons(r){
+  var a = {}, m = r && r.offers && r.offers.addons;
+  Object.keys(m||{}).forEach(function(k){ a[blAddonName(k)] = { qty: Number(m[k].qty)||0, net: Number(m[k].net)||0 }; });
+  return a;
+}
+// "2 Express" — the menus that are not the lead offer, for a sub-line under a total.
+// The lead offer is the dearest one ever seen (BL.lead, set by the render), so an Express-only day still says "2 Express".
+function blOthers(o){ var lead = BL.lead || 'Business'; return blOfferKeys(o).filter(function(k){ return k !== lead && o[k].menus; }).map(function(k){ return blN(o[k].menus)+' '+k; }).join(' &middot; '); }
 function blIsCourse(name){ return /^BL\s/.test(String(name||'')); }
 // Served to every business-lunch guest by default — not a choice, so never counted
 // as one (Francesco, 7 Oct 2026). It still shows on the check itself.
@@ -50,16 +80,20 @@ function blCourseName(name){ var s = String(name||'').replace(/^BL\s+/,''); retu
 
 // One night's book → the business-lunch view of it.
 function blDigest(iso, j){
-  var out = { date: iso, menus: 0, menuGross: 0, extraGross: 0, tables: 0, guests: 0, dishes: {}, courses: {}, rows: [], price: null };
+  var out = { date: iso, menus: 0, menuGross: 0, extraGross: 0, tables: 0, guests: 0, dishes: {}, courses: {}, rows: [], price: null, offers: {}, addons: {} };
   (j.reservations||[]).forEach(function(r){
     if(r.state === 'cancelled' || r.state === 'noshow') return;
     var items = r.items || [];
-    var menus = 0, mg = 0, xg = 0, dishes = {}, courses = {};
+    var menus = 0, mg = 0, xg = 0, dishes = {}, courses = {}, offers = {}, addons = {};
     items.forEach(function(it){
-      var q = Number(it.qty)||0, p = Number(it.price)||0;
-      if(blIsMenu(it.name)){
+      var q = Number(it.qty)||0, p = Number(it.price)||0, of = blOfferOf(it.name);
+      if(of){
         menus += q; mg += p;
-        var m = String(it.name).match(/@\s*(\d+(?:\.\d+)?)/); if(m) out.price = Number(m[1]);
+        var o = offers[of.key] || (offers[of.key] = { menus: 0, gross: 0, price: of.price }); o.menus += q; o.gross += p;
+        if(of.key === 'Business' || out.price == null) out.price = of.price;
+      } else if(blIsCourse(it.name) && p){
+        // a paid add-on (dessert, a glass of wine): an extra, not a course
+        var an = blAddonName(it.name), a = addons[an] || (addons[an] = { qty: 0, gross: 0 }); a.qty += q; a.gross += p;
       } else if(blIsCourse(it.name)){
         // every course as rung, Focaccia too: it is not a choice, but it is a cost
         var tn = blTill(it.name); courses[tn] = (courses[tn]||0) + q;
@@ -75,7 +109,9 @@ function blDigest(iso, j){
     out.menus += menus; out.menuGross += mg; out.extraGross += xg; out.tables++; out.guests += Number(r.pax)||0;
     Object.keys(dishes).forEach(function(k){ out.dishes[k] = (out.dishes[k]||0) + dishes[k]; });
     Object.keys(courses).forEach(function(k){ out.courses[k] = (out.courses[k]||0) + courses[k]; });
-    out.rows.push({ time: r.time||'', tables: (r.tables||[]).join(', '), area: r.area||'', pax: Number(r.pax)||0,
+    Object.keys(offers).forEach(function(k){ var t = out.offers[k] || (out.offers[k] = { menus: 0, gross: 0, price: offers[k].price }); t.menus += offers[k].menus; t.gross += offers[k].gross; });
+    Object.keys(addons).forEach(function(k){ var t = out.addons[k] || (out.addons[k] = { qty: 0, gross: 0 }); t.qty += addons[k].qty; t.gross += addons[k].gross; });
+    out.rows.push({ offers: offers, addons: addons, time: r.time||'', tables: (r.tables||[]).join(', '), area: r.area||'', pax: Number(r.pax)||0,
                     guest: String(r.name||'').trim(), walkin: /walk\s*in/i.test(String(r.booked_by||'')), vip: !!r.vip,
                     menus: menus, menuGross: mg, extraGross: xg, dishes: dishes,
                     items: items.filter(function(it){ return (Number(it.price)||0) || blIsCourse(it.name) || blIsMenu(it.name); }) });
@@ -90,13 +126,17 @@ function blView(d){
   var n = BL.nights[d] || null, s = BL.simph[d];
   if(!s){
     if(!n) return null;
+    var no = {}, na = {};
+    Object.keys(n.offers||{}).forEach(function(k){ no[k] = { menus: n.offers[k].menus, net: blNet(n.offers[k].gross, d), price: n.offers[k].price }; });
+    Object.keys(n.addons||{}).forEach(function(k){ na[k] = { qty: n.addons[k].qty, net: blNet(n.addons[k].gross, d) }; });
     return { date: d, checked: false, menus: n.menus, menuNet: blNet(n.menuGross, d), extraNet: blNet(n.extraGross, d),
-             tables: n.tables, guests: n.guests, dishes: n.dishes, courses: n.courses, rows: n.rows, price: n.price };
+             tables: n.tables, guests: n.guests, dishes: n.dishes, courses: n.courses, rows: n.rows, price: n.price, offers: no, addons: na };
   }
   var cs = Array.isArray(s.checks) ? s.checks : [], sub = 0, guests = 0, courses = {}, dishes = {};
+  var sa = blSimAddons(s);
   cs.forEach(function(c){ sub += Number(c.subtotal)||0; guests += Number(c.guests)||0; });
   Object.keys(s.courses||{}).forEach(function(k){
-    var q = Number(s.courses[k])||0; if(!q) return;
+    var q = Number(s.courses[k])||0; if(!q || sa[blAddonName(k)]) return;
     var tn = blTill(k); courses[tn] = (courses[tn]||0) + q;
     if(!blIsChoice(tn)) return;
     var nm = blCourseName(tn); dishes[nm] = (dishes[nm]||0) + q;
@@ -105,7 +145,8 @@ function blView(d){
   return { date: d, checked: true, menus: Number(s.menus)||0, paid: s.menus_paid, comped: s.menus_comp, compValue: s.comp_value,
            comps: Array.isArray(s.comps) ? s.comps : [], checks: cs, note: s.note, readAt: s.read_at,
            menuNet: menuNet, extraNet: Math.max(0, tablesNet - menuNet), tables: cs.filter(function(c){ return Number(c.menus) > 0; }).length,
-           guests: guests || (n ? n.guests : 0), dishes: dishes, courses: courses, rows: n ? n.rows : [], price: n ? n.price : null };
+           guests: guests || (n ? n.guests : 0), dishes: dishes, courses: courses, rows: n ? n.rows : [], price: n ? n.price : null,
+           offers: blSimOffers(s), addons: sa };
 }
 
 async function blFetchNight(iso){
@@ -158,7 +199,7 @@ async function blLoadSim(dates){
     });
   } catch(e){ BL.simKey = ''; }
   try {
-    var sp = await sb.from('biz_lunch_sim').select('day,menus,menus_paid,menus_comp,menu_net,comp_value,comps,courses,checks,note,read_at')
+    var sp = await sb.from('biz_lunch_sim').select('day,menus,menus_paid,menus_comp,menu_net,comp_value,comps,courses,checks,note,read_at,offers')
       .gte('day', dates[0]).lte('day', dates[6]);
     if(!sp.error) (sp.data||[]).forEach(function(r){ BL.simph[String(r.day).slice(0,10)] = r; });
   } catch(e){}
@@ -169,7 +210,7 @@ async function blLoadSim(dates){
 // The first row's day IS the launch day, so nothing here is typed in.
 async function blLoadAll(){
   try {
-    var r = await sb.from('biz_lunch_sim').select('day,menus,menus_comp,menu_net,comp_value').order('day');
+    var r = await sb.from('biz_lunch_sim').select('day,menus,menus_comp,menu_net,comp_value,offers').order('day');
     if(r.error) throw r.error;
     BL.all = r.data || []; BL.allState = 'ok';
   } catch(e){ BL.allState = 'failed'; }
@@ -180,13 +221,13 @@ async function blLoadAll(){
 function blToDate(today){
   var a = BL.all; if(!a || !a.length) return null;
   var t = { first: String(a[0].day).slice(0,10), last: String(a[a.length-1].day).slice(0,10), menus: 0, comped: 0, net: 0,
-            tail: [], want: [], bad: [], pending: 0, tailMenus: 0, tailNet: 0, capped: false };
-  a.forEach(function(r){ t.menus += Number(r.menus)||0; t.comped += Number(r.menus_comp)||0; t.net += Number(r.menu_net)||0; });
+            tail: [], want: [], bad: [], pending: 0, tailMenus: 0, tailNet: 0, capped: false, offers: {} };
+  a.forEach(function(r){ t.menus += Number(r.menus)||0; t.comped += Number(r.menus_comp)||0; t.net += Number(r.menu_net)||0; blMergeOffers(t.offers, blSimOffers(r)); });
   for(var d = blAdd(t.last, 1); d <= today; d = blAdd(d, 1)){
     if(t.tail.length >= 21){ t.capped = true; break; }
     t.tail.push(d);
     var n = BL.nights[d];
-    if(n){ t.tailMenus += n.menus; t.tailNet += blNet(n.menuGross, d); }
+    if(n){ t.tailMenus += n.menus; t.tailNet += blNet(n.menuGross, d); blMergeOffers(t.offers, blView(d).offers); }
     else if(BL.failed[d]) t.bad.push(d);
     else { t.pending++; if(!BL.loading[d]) t.want.push(d); }
   }
@@ -199,10 +240,10 @@ function blToDate(today){
 function blWeeks(today){
   var a = BL.all; if(!a || !a.length) return null;
   var W = {}, order = [];
-  function wk(d){ var m = blMonday(d); if(!W[m]){ W[m] = { mon: m, menus: 0, comped: 0, net: 0, comp: 0, days: 0, checked: 0, booked: 0, pending: 0, bad: 0 }; order.push(m); } return W[m]; }
+  function wk(d){ var m = blMonday(d); if(!W[m]){ W[m] = { mon: m, menus: 0, comped: 0, net: 0, comp: 0, days: 0, checked: 0, booked: 0, pending: 0, bad: 0, offers: {} }; order.push(m); } return W[m]; }
   a.forEach(function(r){
     var d = String(r.day).slice(0,10), w = wk(d), m = Number(r.menus)||0;
-    w.menus += m; w.comped += Number(r.menus_comp)||0; w.net += Number(r.menu_net)||0; w.comp += Number(r.comp_value)||0;
+    w.menus += m; w.comped += Number(r.menus_comp)||0; w.net += Number(r.menu_net)||0; w.comp += Number(r.comp_value)||0; blMergeOffers(w.offers, blSimOffers(r));
     w.checked++; if(m) w.days++;
   });
   var TD = blToDate(today);
@@ -210,7 +251,7 @@ function blWeeks(today){
     var n = BL.nights[d];
     if(blDow(d) >= 5 && !(n && n.menus)) return;      // a weekend with no menus is not a booking day
     var w = wk(d);
-    if(n){ w.menus += n.menus; w.net += blNet(n.menuGross, d); w.booked++; if(n.menus) w.days++; }
+    if(n){ w.menus += n.menus; w.net += blNet(n.menuGross, d); w.booked++; if(n.menus) w.days++; blMergeOffers(w.offers, blView(d).offers); }
     else if(BL.failed[d]) w.bad++;
     else w.pending++;
   });
@@ -238,16 +279,18 @@ function blRefresh(){
 
 function blSum(days){
   var s = { menus:0, menuNet:0, extraNet:0, tables:0, guests:0, dishes:{}, sold:0, simCovers:0, simDays:0, menusOnSimDays:0,
-            comped:0, compValue:0, checkedDays:0, uncheckedDays:0 };
+            comped:0, compValue:0, checkedDays:0, uncheckedDays:0, offers:{}, addons:{}, addonNet:0 };
   days.forEach(function(n){       // n = blView(day)
     if(!n) return;
     s.menus += n.menus; s.menuNet += n.menuNet; s.extraNet += n.extraNet;
     s.tables += n.tables; s.guests += n.guests; if(n.menus) s.sold++;
     if(n.checked){ s.checkedDays++; s.comped += Number(n.comped)||0; s.compValue += Number(n.compValue)||0; } else if(n.menus) s.uncheckedDays++;
     Object.keys(n.dishes).forEach(function(k){ s.dishes[k] = (s.dishes[k]||0) + n.dishes[k]; });
+    blMergeOffers(s.offers, n.offers); blMergeAddons(s.addons, n.addons);
     var sim = BL.sim[n.date];
     if(sim && sim.covers){ s.simCovers += sim.covers; s.simDays++; s.menusOnSimDays += n.menus; }
   });
+  Object.keys(s.addons).forEach(function(k){ s.addonNet += s.addons[k].net; });
   return s;
 }
 
@@ -341,11 +384,17 @@ function renderBizLunch(){
   var shown = dates.filter(function(d, i){ return i < 5 || (V[d] && V[d].menus); });
   var price = null; nights.forEach(function(n){ if(n && n.price) price = n.price; });
   if(price == null) price = 135;
+  // every offer seen this week or since launch, with its price, for the head and the notes
+  var allOf = blMergeOffers({}, S.offers); if(TD) blMergeOffers(allOf, TD.offers);
+  if(!Object.keys(allOf).length) allOf.Business = { menus: 0, net: 0, price: price };
+  var ofKeys = blOfferKeys(allOf), multi = ofKeys.length > 1; BL.lead = ofKeys[0];
+  var ofLabel = ofKeys.map(function(k){ return (multi ? blEsc(k)+' ' : '')+'AED '+blN(allOf[k].price); }).join(' &middot; ');
+  var ofLines = ofKeys.map(function(k){ return '<b>'+blEsc(k)+'Lunch@'+blN(allOf[k].price)+'</b>'; }).join(' and ');
   var h = ['<div class="res-wrap bl-wrap">'];
 
   // ── Head ──
   h.push('<div class="res-head"><div class="res-head-l">');
-  h.push('<div class="res-kicker">Lunch &middot; set menu &middot; AED '+blN(price)+'</div>');
+  h.push('<div class="res-kicker">Lunch &middot; set menu'+(multi ? 's' : '')+' &middot; '+ofLabel+'</div>');
   h.push('<div class="res-title">Business Lunch</div>');
   h.push('</div><div class="res-head-r">');
   h.push('<button class="res-btn" onclick="blStep(-1)" aria-label="Previous week">&lsaquo;</button>');
@@ -366,12 +415,20 @@ function renderBizLunch(){
   h.push('<div class="bl-hero-days">'+shown.map(function(d){
     var n = V[d];
     var v = (BL.loading[d] && !(n && n.checked)) ? '&hellip;' : (n ? blN(n.menus) : (d > today ? '&ndash;' : (BL.failed[d] ? '!' : '&hellip;')));
-    return '<span'+(d===today?' class="today"':'')+'>'+blEsc(blDayName(d))+' <b>'+v+'</b>'+(n && n.checked ? ' <i class="bl-ok" title="Checked in Simphony">&#10003;</i>' : '')+'</span>';
+    var ox = (n && multi) ? blOthers(n.offers) : '';
+    return '<span'+(d===today?' class="today"':'')+'>'+blEsc(blDayName(d))+' <b>'+v+'</b>'+(ox ? ' <span class="bl-ofx">('+ox+')</span>' : '')+(n && n.checked ? ' <i class="bl-ok" title="Checked in Simphony">&#10003;</i>' : '')+'</span>';
   }).join('')+'</div>');
+  var adKeys = Object.keys(S.addons).sort(function(a,b){ return S.addons[b].qty - S.addons[a].qty || (a<b?-1:1); });
+  if(multi || adKeys.length){
+    h.push('<div class="bl-split">'
+      + ofKeys.filter(function(k){ return BL.week === 0 || (S.offers[k] && S.offers[k].menus); }).map(function(k){ var o = S.offers[k] || { menus: 0 }; return '<span>'+blEsc(k)+' <b>'+blN(o.menus)+'</b></span>'; }).join('')
+      + adKeys.map(function(k){ var a = S.addons[k]; return '<span class="bl-ad">+ '+blEsc(k)+' <b>'+blN(a.qty)+'</b>'+(S.menus ? ' <i>'+Math.round(a.qty / S.menus * 100)+'% of menus</i>' : '')+'</span>'; }).join('')
+      + '</div>');
+  }
   if(S.uncheckedDays) h.push('<div class="bl-hero-days"><span class="today">'+(S.checkedDays ? 'Days without &#10003; are' : 'This week is')+' not checked in Simphony yet &mdash; until then a comped menu shows here as paid.</span></div>');
   if(TD){
     h.push('<div class="bl-todate"><span class="bl-todate-l">Since launch &middot; '+blEsc(blDayName(TD.first))+' '+blDateLabel(TD.first)+'</span>'
-      + '<span><b>'+blN(TD.menus + TD.tailMenus)+'</b> menus</span><span><b>'+blN(TD.comped)+'</b> comped</span>'
+      + '<span><b>'+blN(TD.menus + TD.tailMenus)+'</b> menus'+(multi && blOthers(TD.offers) ? ' <span class="bl-ofx">('+blOthers(TD.offers)+')</span>' : '')+'</span><span><b>'+blN(TD.comped)+'</b> comped</span>'
       + (money ? '<span>menu net <b>'+blN(TD.net + TD.tailNet)+'</b></span>' : '')
       + '<span class="bl-todate-s">'+blN(TD.menus)+' checked in Simphony to '+blEsc(blDayName(TD.last))+' '+blDateLabel(TD.last)+' <i class="bl-ok">&#10003;</i>'
       + (TD.tailMenus ? ' + '+blN(TD.tailMenus)+' since, from bookings' : '')
@@ -394,9 +451,12 @@ function renderBizLunch(){
   h.push('<div class="rv2-stat"><div class="l">Avg a day</div><div class="v">'+(S.sold ? blN(S.menus / S.sold) : '&ndash;')+'</div></div>');
   h.push('<div class="rv2-stat"><div class="l">Guests at BL tables</div><div class="v">'+blN(S.guests)+'</div></div>');
   if(money){
-    h.push('<div class="rv2-stat"><div class="l">Net per menu</div><div class="v">'+blN2(price / blDiv(dates[0]))+'</div></div>');
+    h.push(multi
+      ? '<div class="rv2-stat"><div class="l">Net per menu &middot; avg</div><div class="v">'+(S.menus ? blN2(S.menuNet / S.menus) : '&ndash;')+'</div></div>'
+      : '<div class="rv2-stat"><div class="l">Net per menu</div><div class="v">'+blN2(price / blDiv(dates[0]))+'</div></div>');
     h.push('<div class="rv2-stat"><div class="l">Menu net</div><div class="v">'+blN(S.menuNet)+'</div></div>');
     h.push('<div class="rv2-stat"><div class="l">Extras net</div><div class="v">'+blN(S.extraNet)+'</div></div>');
+    if(S.addonNet) h.push('<div class="rv2-stat"><div class="l">Add-ons net</div><div class="v">'+blN(S.addonNet)+'</div></div>');
     h.push('<div class="rv2-stat"><div class="l">Net spend / guest</div><div class="v">'+(perGuest!=null ? blN(perGuest) : '&ndash;')+'</div></div>');
     if(S.checkedDays) h.push('<div class="rv2-stat"><div class="l">Comps &amp; discounts</div><div class="v">'+blN(S.compValue)+'</div></div>');
   }
@@ -424,7 +484,7 @@ function renderBizLunch(){
       h.push('<tr class="bl-row'+(w.off === BL.week ? ' bl-wk-on' : '')+'" onclick="blGoWeek('+w.off+')">'
         + '<td><div class="bl-wk-n">Week '+w.n+tag+src+'</div><div class="bl-wk-d">'+blDateLabel(w.mon)+' &ndash; '+blDateLabel(fri)+wait+miss+'</div>'
         + '<div class="bl-wk-bar"><i style="width:'+(wkMax && w.avg ? Math.round(w.avg / wkMax * 100) : 0)+'%"></i></div></td>'
-        + '<td class="r"><b>'+blN(w.menus)+'</b></td>'
+        + '<td class="r"><b>'+blN(w.menus)+'</b>'+(multi && blOthers(w.offers) ? '<div class="bl-wk-d">'+blOthers(w.offers)+'</div>' : '')+'</td>'
         + '<td class="r">'+(w.avg != null ? blN(w.avg) : '&ndash;')+'</td>'
         + '<td class="r">'+ch+'</td>'
         + '<td class="r bl-hide-s">'+(w.checked ? blN(w.comped) : '&ndash;')+'</td>'
@@ -535,14 +595,14 @@ function renderBizLunch(){
     P.checks.forEach(function(c, i){
       var key = 's'+i, cs = c.courses || {};
       h.push('<tr class="bl-row'+(BL.open[key]?' open':'')+'" onclick="blToggle(\''+key+'\')"><td>'+blEsc(String(c.opened||'').slice(11,16))+'</td><td class="bl-guest">'+blEsc(c.check)
-        + (c.comp ? ' <span class="bl-tag">'+(Number(c.subtotal) ? 'discount' : 'comped')+'</span>' : '')+'</td><td>'+blEsc(c.table||'—')+'</td><td class="r">'+(c.guests!=null ? blN(c.guests) : '&ndash;')+'</td>'
+        + (c.comp ? ' <span class="bl-tag">'+(Number(c.subtotal) ? 'discount' : 'comped')+'</span>' : '')+blCheckTags(c)+'</td><td>'+blEsc(c.table||'—')+'</td><td class="r">'+(c.guests!=null ? blN(c.guests) : '&ndash;')+'</td>'
         + '<td class="r"><b>'+(c.menus ? blN(c.menus) : '&ndash;')+'</b></td>'+(money ? '<td class="r">'+blN(blNet(c.subtotal, BL.pick))+'</td>' : '')+'</tr>');
       if(BL.open[key]){
         var ks = Object.keys(cs).filter(function(k){ return cs[k] > 0; }).sort(function(a,b){ return cs[b]-cs[a] || (a<b?-1:1); });
         h.push('<tr class="bl-items"><td colspan="'+(money?6:5)+'">'
           + (c.comp ? '<div><span><b>'+(Number(c.subtotal) ? 'Discount' : 'Comped')+(money ? ' '+blN(c.comp.amount) : '')+'</b> &mdash; '+blEsc(c.comp.reason||'')+(c.comp.what ? ' ('+blEsc(c.comp.what)+')' : '')+'</span><span></span></div>' : '')
           + (c.note ? '<div><span>'+blEsc(c.note)+'</span><span></span></div>' : '')
-          + (ks.length ? ks.map(function(k){ return '<div><span>'+(cs[k]>1 ? blN(cs[k])+'× ' : '')+blEsc(blCourseName(k))+'</span><span>incl.</span></div>'; }).join('') : '<div><span>No courses on this check</span></div>')
+          + (ks.length ? ks.map(function(k){ var ad = c.addons && c.addons[k]; return '<div><span>'+(cs[k]>1 ? blN(cs[k])+'× ' : '')+blEsc(blCourseName(k))+'</span><span>'+(ad ? 'add-on' : 'incl.')+'</span></div>'; }).join('') : '<div><span>No courses on this check</span></div>')
           + '</td></tr>');
       }
     });
@@ -559,8 +619,9 @@ function renderBizLunch(){
     h.push('<table class="bl-tbl"><thead><tr><th>Time</th><th>Guest</th><th>Table</th><th class="r">Guests</th><th class="r">Menus</th><th class="bl-hide-s">Courses</th>'
       + (money ? '<th class="r">Extras net</th><th class="r">Check net</th>' : '')+'</tr></thead><tbody>');
     N.rows.forEach(function(r, i){
-      var courses = Object.keys(r.dishes).map(function(k){ return (r.dishes[k]>1 ? r.dishes[k]+'× ' : '')+k; }).join(', ');
-      h.push('<tr class="bl-row'+(BL.open[i]?' open':'')+'" onclick="blToggle('+i+')"><td>'+blEsc(r.time)+'</td><td class="bl-guest">'+blEsc(r.guest||'—')+(r.vip?' <span class="bl-tag">VIP</span>':'')+(r.walkin?' <span class="bl-tag">walk-in</span>':'')+'</td><td>'+blEsc(r.tables||'—')+'</td><td class="r">'+blN(r.pax)+'</td><td class="r"><b>'+blN(r.menus)+'</b></td>'
+      var courses = Object.keys(r.dishes).map(function(k){ return (r.dishes[k]>1 ? r.dishes[k]+'× ' : '')+k; }).concat(Object.keys(r.addons||{}).map(function(k){ return '+ '+(r.addons[k].qty>1 ? r.addons[k].qty+'× ' : '')+k; })).join(', ');
+      var rx = blOfferKeys(r.offers||{}).filter(function(k){ return k !== (BL.lead || 'Business'); }).map(function(k){ return ' <span class="bl-tag">'+(r.offers[k].menus !== r.menus ? blN(r.offers[k].menus)+' ' : '')+blEsc(k)+'</span>'; }).join('');
+      h.push('<tr class="bl-row'+(BL.open[i]?' open':'')+'" onclick="blToggle('+i+')"><td>'+blEsc(r.time)+'</td><td class="bl-guest">'+blEsc(r.guest||'—')+(r.vip?' <span class="bl-tag">VIP</span>':'')+(r.walkin?' <span class="bl-tag">walk-in</span>':'')+rx+'</td><td>'+blEsc(r.tables||'—')+'</td><td class="r">'+blN(r.pax)+'</td><td class="r"><b>'+blN(r.menus)+'</b></td>'
         + '<td class="bl-hide-s bl-courses">'+blEsc(courses)+'</td>'
         + (money ? '<td class="r">'+blN(blNet(r.extraGross, N.date))+'</td><td class="r">'+blN(blNet(r.menuGross + r.extraGross, N.date))+'</td>' : '')+'</tr>');
       if(BL.open[i]){
@@ -577,13 +638,20 @@ function renderBizLunch(){
   // ── How it is counted (folded) ──
   h.push('<details class="bl-how"><summary>How these numbers are counted</summary>'
     + '<p><b>Days marked &#10003;</b> are read from Simphony itself by the weekly reconciliation: every check with a business lunch, menus paid and comped, the comp reason, net after discounts, and the courses. SevenRooms&rsquo; copy of a check never shows discounts and can be an earlier version of it, so for those days its bookings are only folded under the checks.</p>'
-    + '<p>Counted from the Simphony check SevenRooms attaches to each booking: every <b>BusinessLunch@'+blN(price)+'</b> line is one menu, every <b>BL &hellip;</b> line is a course. Focaccia goes to every guest, so it is not counted as a choice. Nothing is typed in and nothing is stored &mdash; Refresh reads the book again.</p>'
+    + '<p>Counted from the Simphony check SevenRooms attaches to each booking: every '+ofLines+' line is one menu'+(multi ? ' (both offers count as menus and are shown apart)' : '')+', every <b>BL &hellip;</b> line at no charge is a course. A <b>BL &hellip;</b> line with a price (dessert, a glass of wine) is a paid add-on: not a menu and not a course choice; its money is in the extras and is also shown on its own. Focaccia goes to every guest, so it is not counted as a choice. Nothing is typed in and nothing is stored &mdash; Refresh reads the book again.</p>'
     + '<p>A check rung without a booking is not linked to SevenRooms and is <b>not</b> in these figures. The Simphony lunch guests beside each day come from the closing report, so a gap shows up as a difference. BL tables net is everything on a table that had a business lunch (menus and extras); a lunch check with no booking is missed, so the BL share of lunch net is a floor, never an overstatement.</p>'
-    + (money ? '<p>Net = menu price &divide; '+blDiv(dates[0])+' (10% service and 5% VAT are inside the price; since 16 Sep 2026 the 7% DIFC fee is added on top of the bill). AED '+blN(price)+' = '+blN2(price/blDiv(dates[0]))+' net. Extras are everything else on a business-lunch table &mdash; water, drinks, desserts. Tips are not included.</p>' : '')
+    + (money ? '<p>Net = menu price &divide; '+blDiv(dates[0])+' (10% service and 5% VAT are inside the price; since 16 Sep 2026 the 7% DIFC fee is added on top of the bill). '+ofKeys.map(function(k){ return 'AED '+blN(allOf[k].price)+' = '+blN2(allOf[k].price/blDiv(dates[0]))+' net'; }).join(', ')+'. Extras are everything else on a business-lunch table &mdash; water, drinks, desserts. Tips are not included.</p>' : '')
     + '</details>');
   h.push('<div class="res-foot">Read-only from SevenRooms'+(money ? '' : ' &middot; money is hidden on your access')+'.</div>');
   h.push('</div>');
   return h.join('');
+}
+
+// Tags on a Simphony check: its non-Business menus ("2 Express") and paid add-ons.
+function blCheckTags(c){
+  var t = '', o = c && c.offers || {};
+  Object.keys(o).forEach(function(k){ var of = blOfferOf(k); if(of && of.key !== (BL.lead || 'Business') && Number(o[k])) t += ' <span class="bl-tag">'+(Number(o[k]) !== Number(c.menus) ? blN(o[k])+' ' : '')+blEsc(of.key)+'</span>'; });
+  return t;
 }
 
 function blCss(){
@@ -620,6 +688,10 @@ function blCss(){
     '.bl-todate b{color:var(--vino);font-weight:600;font-variant-numeric:tabular-nums}',
     '.bl-todate-l{font-size:10px;letter-spacing:.15em;text-transform:uppercase;font-weight:600}',
     '.bl-todate-s{flex-basis:100%;font-size:12px}',
+    '.bl-ofx{font-size:11px;color:var(--text-mid);font-weight:400}',
+    '.bl-split{display:flex;flex-wrap:wrap;gap:6px 18px;margin-top:10px;font-size:13px;color:var(--text-mid)}',
+    '.bl-split b{color:var(--vino);font-weight:600;margin-left:3px;font-variant-numeric:tabular-nums}',
+    '.bl-split .bl-ad i{font-style:normal;font-size:11px;color:var(--text-light)}',
     '.bl-grid{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:16px;margin-bottom:16px}',
     '.bl-panel{border:1px solid var(--border);background:var(--surface);padding:16px 18px}',
     '.bl-panel .rv2-mix-title{margin-bottom:12px}',
