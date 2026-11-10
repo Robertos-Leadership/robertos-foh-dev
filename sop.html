@@ -1,0 +1,383 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>How we work</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600&display=swap">
+<style>
+/* FOH "How we work" (10 Nov 2026): the SOPs and policies. Read to the end, answer two questions, sign with the
+   Employee ID. Everything that decides (who must read what, the clock, the answers) is in the `sop` edge function. */
+:root{--vino:#410207;--vino-mid:#5e0a10;--sab:#e1d3c2;--sabl:#ede5d8;--paper:#F8F4EC;--oro:#C9A84C;--ink:#2C1810;--muted:#4F4535;--ok:#2F5D32;--okbg:#e3efe1;--bad:#8B1A1A;--serif:'Playfair Display',Georgia,serif}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--sabl);color:var(--ink);font:16px/1.5 system-ui,'Segoe UI',sans-serif}
+.wrap{max-width:640px;margin:0 auto;padding:14px 16px 64px}
+h1,h2,h3{font-family:var(--serif);font-weight:500;margin:.2em 0;color:var(--ink)}
+h1{font-size:26px;line-height:1.2}h2{font-size:21px;line-height:1.25}h3{font-size:17px;margin-top:18px}
+.card{background:#fff;border:1px solid rgba(65,2,7,.14);border-top:3px solid var(--oro);padding:18px 16px;margin-top:12px}
+.eyebrow{font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:#544418;font-weight:700}
+.hint{font-size:13px;color:var(--muted)}
+input[type=text],textarea{width:100%;border:1px solid #b9ab94;background:#fff;padding:10px 12px;font:inherit;font-size:16px;margin-top:6px;color:var(--ink)}
+input[type=text]{height:46px}
+input.code{text-align:center;letter-spacing:.2em;font-size:18px}
+textarea{min-height:58px;resize:vertical;font-size:15px}
+.btn{width:100%;min-height:46px;background:var(--vino);color:var(--paper);border:0;font:inherit;font-size:15px;letter-spacing:.04em;cursor:pointer;margin-top:12px;padding:8px 12px}
+.btn:disabled{opacity:.45;cursor:default}
+.btn.ghost{background:none;color:var(--vino);border:1px solid var(--vino)}
+.btn.sm{width:auto;min-height:38px;font-size:13px;margin-top:8px}
+.link{background:none;border:0;color:var(--vino);text-decoration:underline;font:inherit;font-size:14px;cursor:pointer;padding:8px 0}
+.top{display:flex;justify-content:space-between;align-items:center;font-size:13px;color:var(--muted);gap:8px}
+.msg{margin-top:10px;font-size:14px;padding:8px 10px;border-left:3px solid var(--bad);background:#fbeeee;color:var(--bad)}
+.okmsg{margin-top:10px;font-size:15px;padding:10px 12px;border-left:3px solid var(--ok);background:var(--okbg);color:var(--ok);font-weight:600}
+.flag{background:#fff3cf;border-left:3px solid var(--oro);padding:8px 10px;font-size:14px;margin-top:10px}
+.bar{height:6px;background:var(--sab);margin:8px 0 2px}.bar i{display:block;height:100%;background:var(--vino)}
+.item{display:flex;gap:10px;align-items:center;width:100%;text-align:left;background:#fff;border:1px solid #cdbfa8;padding:12px;margin-top:8px;font:inherit;color:var(--ink);cursor:pointer}
+.item .m{flex:1;min-width:0}.item .a{display:block;font-weight:500}.item .b{display:block;font-size:12.5px;color:var(--muted)}
+.item[disabled]{opacity:.55;cursor:default}
+.pill{font-size:11px;padding:3px 9px;font-weight:600;white-space:nowrap;letter-spacing:.04em}
+.pill.todo{background:#fff3cf;color:#6b4a00}.pill.again{background:var(--vino);color:var(--paper)}.pill.done{background:var(--okbg);color:var(--ok)}.pill.lock{background:var(--sab);color:var(--muted)}.pill.draft{background:#fff3cf;color:#6b4a00}
+details{margin-top:12px}summary{cursor:pointer;color:var(--vino);font-size:14px}
+.search{margin-top:6px}
+/* the document */
+.doc h3{font-size:15px;letter-spacing:.12em;text-transform:uppercase;font-family:system-ui,'Segoe UI',sans-serif;font-weight:700;color:#544418;margin:22px 0 6px}
+.doc p{margin:8px 0}
+.step{display:flex;gap:10px;padding:12px 0;border-top:1px solid var(--sab)}
+.step .n{flex:none;width:24px;height:24px;border-radius:50%;background:var(--sab);color:var(--vino);font-size:12px;font-weight:700;display:grid;place-items:center;margin-top:1px}
+.step .rem{font-size:14px;color:var(--muted);margin-top:4px;padding-left:10px;border-left:2px solid var(--oro)}
+.doc table{width:100%;border-collapse:collapse;font-size:14px;margin:8px 0}
+.doc td,.doc th{padding:8px 6px;border-bottom:1px solid var(--sab);text-align:left;vertical-align:top}
+.doc th{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#544418}
+.tw{overflow-x:auto}
+.end{margin-top:18px;text-align:center;font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:#544418}
+/* questions */
+.q{margin-top:16px}.q .t{font-weight:600}
+.opt{display:flex;gap:10px;align-items:center;width:100%;text-align:left;background:#fff;border:1px solid #b9ab94;padding:12px;margin-top:8px;font:inherit;font-size:15px;cursor:pointer;color:var(--ink)}
+.opt .k{width:20px;height:20px;border:1.5px solid var(--vino);border-radius:50%;flex:none}
+.opt.on{background:var(--sab);border-color:var(--vino)}.opt.on .k{background:var(--vino)}
+.q.wrong .t{color:var(--bad)}
+.why{margin-top:8px;font-size:14px;padding:8px 10px;background:var(--sabl);border-left:3px solid var(--oro)}
+/* managers */
+table.list{width:100%;border-collapse:collapse;font-size:13.5px;margin-top:8px}
+table.list th,table.list td{padding:8px 4px;border-bottom:1px solid var(--sab);text-align:left;vertical-align:top}
+table.list th{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#544418}
+table.list td.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.qe{border:1px solid var(--sab);padding:10px;margin-top:10px;background:var(--paper)}
+.qe label{display:block;font-size:12px;color:var(--muted);margin-top:8px}
+.code-sm{font-size:11px;color:var(--muted);letter-spacing:.06em}
+.foot{position:sticky;bottom:0;background:var(--paper);border-top:2px solid var(--oro);padding:10px 16px;margin:16px -16px 0;font-size:14px;color:var(--muted);text-align:center}
+</style>
+</head><body><div class="wrap"><div id="app"><div class="card"><div class="hint">Loading…</div></div></div></div>
+<script>
+var FN = 'https://paoaivwtkzujmrgrfjuq.supabase.co/functions/v1/sop';
+var KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBhb2Fpdnd0a3p1am1yZ3JmanVxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEwNzAxMzAsImV4cCI6MjA5NjY0NjEzMH0.VynG9PBeIaqRG2lkMEuzskkcB11EhR-UfO9eGYsaUxk';
+var WHO = 'foh-sop-who';
+var FOLDERS = [['host','Hostess and reservations'],['dining','Dining room'],['bar','Bar'],['gx','Guest experience'],['rest_pol','Rules for guests: restaurant'],['lounge_pol','Rules for guests: lounge and bar']];
+var FNAME = {}; FOLDERS.forEach(function(f){ FNAME[f[0]] = f[1]; });
+var S = { emp:'', jwt:'', me:null, err:'', doc:null, picks:[], q:'', reached:false, openedAt:0, timer:null, lastWrong:null };
+var app = document.getElementById('app');
+
+function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function br(s){ return esc(s).replace(/\n/g,'<br>'); }
+function call(body){
+  return fetch(FN, { method:'POST', headers:{ 'Content-Type':'application/json', apikey:KEY, Authorization:'Bearer '+KEY }, body:JSON.stringify(body), cache:'no-store' })
+    .then(function(r){ return r.json().catch(function(){ return { ok:false, error:'error' }; }); })
+    .catch(function(){ return { ok:false, error:'net' }; });
+}
+function say(e){
+  return ({ no_emp:'That Employee ID is not on the FOH staff list.', net:'No connection. Nothing was lost; try again.', no_doc:'That page is not available to you.',
+    not_ready:'The questions for this page are still being checked by the managers.', changed:'This page was just updated. Open it again to read the new version.',
+    id_mismatch:'That is not the Employee ID you opened the page with.', staff_only:'Only team members on the staff list sign. Managers see the team below.',
+    not_checker:'Only a manager can do that.', bad_questions:'Each question needs the question, the right answer and three different wrong answers.', save:'It did not save. Try again.' })[e] || 'Something went wrong. Try again.';
+}
+function dmy(iso){ return new Date(iso).toLocaleDateString('en-GB', { day:'numeric', month:'short', timeZone:'Asia/Dubai' }); }
+function dmyt(iso){ return new Date(iso).toLocaleString('en-GB', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit', timeZone:'Asia/Dubai' }); }
+function ymdNice(ymd){ var p = ymd.split('-'); return new Date(Date.UTC(+p[0], +p[1]-1, +p[2])).toLocaleDateString('en-GB', { weekday:'short', day:'numeric', month:'short', timeZone:'UTC' }); }
+function mmss(ms){ var s = Math.ceil(ms/1000); return Math.floor(s/60) + ':' + ('0'+(s%60)).slice(-2); }
+// A manager's own FOH app login (same origin). The function checks the token; nothing here decides who is a manager.
+function appToken(){
+  try{ for(var i = 0; i < localStorage.length; i++){ var k = localStorage.key(i);
+    if(/^sb-.*-auth-token$/.test(k)){ var v = JSON.parse(localStorage.getItem(k) || 'null'); var t = v && (v.access_token || (v.currentSession && v.currentSession.access_token)); if(t) return t; } } }catch(e){}
+  return '';
+}
+function remembered(){ try{ return sessionStorage.getItem(WHO) || ''; }catch(e){ return ''; } }
+function remember(v){ try{ if(v) sessionStorage.setItem(WHO, v); else sessionStorage.removeItem(WHO); }catch(e){} }
+function docMeta(code){ return (S.me && S.me.docs || []).filter(function(d){ return d.code === code; })[0]; }
+function stopTimer(){ if(S.timer){ clearInterval(S.timer); S.timer = null; } }
+
+/* ---------- the door ---------- */
+function boot(){ S.emp = remembered(); S.jwt = appToken(); if(S.emp) return signIn(S.emp); door(); }
+function door(){
+  stopTimer();
+  app.innerHTML = '<div class="card" style="text-align:center"><div class="eyebrow">Roberto&rsquo;s</div><h1>How we work</h1>' +
+    '<p class="hint">Our SOPs and policies. Enter your Employee ID to open them.</p>' +
+    '<input class="code" id="id" type="text" inputmode="numeric" autocomplete="off" placeholder="Employee ID">' +
+    (S.err ? '<div class="msg" role="alert">' + esc(S.err) + '</div>' : '') + '<button class="btn" id="go">Open</button>' +
+    (S.jwt ? '<button class="btn ghost" id="mgr">I am signed in to the app as a manager</button>' : '') + '</div>';
+  S.err = '';
+  var i = document.getElementById('id'); setTimeout(function(){ try{ i.focus(); }catch(e){} }, 50);
+  document.getElementById('go').onclick = function(){ var v = i.value.trim(); if(!v){ S.err = 'Enter your Employee ID.'; return door(); } signIn(v); };
+  i.addEventListener('keydown', function(e){ if(e.key === 'Enter') document.getElementById('go').click(); });
+  var m = document.getElementById('mgr'); if(m) m.onclick = function(){ signIn(''); };
+}
+function signIn(emp){
+  S.emp = emp;
+  app.innerHTML = '<div class="card"><div class="hint">Opening…</div></div>';
+  call({ action:'me', emp:emp, jwt:S.jwt }).then(function(r){
+    if(!r.ok){ remember(''); S.emp = ''; S.err = say(r.error); return door(); }
+    remember(emp); S.me = r; home();
+  });
+}
+function out(){ remember(''); S.emp = ''; S.me = null; S.jwt = ''; door(); }
+
+/* ---------- home: my list for this week, the library, managers ---------- */
+function home(){
+  stopTimer(); window.scrollTo(0,0);
+  var me = S.me, h = '<div class="top"><span>' + esc(me.name) + (me.role ? ' &middot; ' + esc(me.role) : '') + '</span><button class="link" id="out">Not you?</button></div>';
+  h += '<h1>How we work</h1>';
+  if(me.staff) h += myList(me);
+  else h += '<div class="card"><div class="hint">You are signed in as a manager. Open any page to read it and check its questions.</div></div>';
+  if(me.checker) h += '<div class="card"><div class="eyebrow">Managers</div><h2>Questions and team</h2>' +
+    '<button class="item" data-go="check"><span class="m"><span class="a">Check the questions</span><span class="b">' + (me.to_check ? me.to_check + ' of ' + me.docs.length + ' pages still to check. Nobody can sign a page until its questions are checked.' : 'All questions are checked.') + '</span></span><span>&rsaquo;</span></button>' +
+    '<button class="item" data-go="board"><span class="m"><span class="a">Who has read what</span><span class="b">Every person, by position</span></span><span>&rsaquo;</span></button></div>';
+  h += library();
+  app.innerHTML = h;
+  document.getElementById('out').onclick = out;
+  wireHome();
+}
+function myList(me){
+  if(!me.grp) return '<div class="card"><div class="hint">There is nothing you have to sign. You can read every page below.</div></div>';
+  var weeks = me.weeks || [], tasks = me.tasks || [];
+  var total = tasks.length, done = tasks.filter(function(t){ return t.state === 'done'; }).length;
+  var cur = weeks.filter(function(w){ return w.open && w.done < w.total; })[0] || null;
+  var h = '<div class="card"><div class="eyebrow">' + esc(me.grp_name) + '</div>';
+  h += '<div class="top" style="margin-top:4px"><b style="color:var(--ink);font-size:15px">' + done + ' of ' + total + ' signed</b><span>' + weeks.length + ' weeks</span></div><div class="bar"><i style="width:' + (total ? Math.round(100*done/total) : 0) + '%"></i></div>';
+  var again = tasks.filter(function(t){ return t.state === 'again'; });
+  if(again.length) h += '<div class="flag"><b>' + again.length + ' page' + (again.length>1?'s':'') + ' changed.</b> Read ' + (again.length>1?'them':'it') + ' again and sign.</div>';
+  if(!cur && done === total) h += '<div class="okmsg">&#10003; All done. Thank you.</div>';
+  weeks.forEach(function(w){
+    var mine = tasks.filter(function(t){ return t.week === w.n; });
+    var isCur = cur && w.n === cur.n;
+    var label = 'Week ' + w.n + (w.open ? (w.done === w.total ? ' &middot; done' : ' &middot; by ' + ymdNice(w.due)) : ' &middot; opens ' + ymdNice(w.opens));
+    var body = mine.map(function(t){ return taskRow(t, w.open); }).join('');
+    if(isCur) h += '<h3>' + label + '</h3><div class="hint">' + w.done + ' of ' + w.total + ' signed' + (w.late ? ' &middot; <b style="color:var(--bad)">late</b>' : '') + '</div>' + body;
+    else h += '<details' + (w.late ? ' open' : '') + '><summary>' + label + ' (' + w.done + ' of ' + w.total + ')</summary>' + body + '</details>';
+  });
+  h += '<details><summary>How signing works</summary><p class="hint">Open a page and read it to the end. Then answer the two questions about it and type your Employee ID to sign. ' +
+    'If an answer is wrong, the page shows you the line to read again. A new week of pages opens every week, or straight away once you finish the week before. When a page changes, it comes back as &ldquo;Read again&rdquo;.</p></details></div>';
+  return h;
+}
+function taskRow(t, open){
+  var d = docMeta(t.code); if(!d) return '';
+  var pill = !open ? '<span class="pill lock">Opens later</span>' : t.state === 'done' ? '<span class="pill done">&#10003; Signed</span>' : t.state === 'again' ? '<span class="pill again">Read again</span>' : '<span class="pill todo">To read</span>';
+  var sub = t.state === 'done' ? 'Signed ' + dmy(t.signed_at) : FNAME[d.folder] || '';
+  return '<button class="item" data-doc="' + esc(t.code) + '"' + (open ? '' : ' disabled') + '><span class="m"><span class="a">' + esc(d.title) + '</span><span class="b">' + esc(sub) + '</span></span>' + pill + '</button>';
+}
+function library(){
+  var docs = S.me.docs || [];
+  var h = '<div class="card"><div class="eyebrow">Every page</div><h2>Find a page</h2><input class="search" id="q" type="text" autocomplete="off" placeholder="Search: hold a table, allergy, bread, cake…" value="' + esc(S.q) + '"><div id="res"></div>';
+  h += '<div id="folders">' + FOLDERS.map(function(f){
+    var mine = docs.filter(function(d){ return d.folder === f[0]; }); if(!mine.length) return '';
+    return '<details><summary>' + esc(f[1]) + ' (' + mine.length + ')</summary>' + mine.map(function(d){ return libRow(d); }).join('') + '</details>';
+  }).join('') + '</div></div>';
+  return h;
+}
+function libRow(d){
+  var t = (S.me.tasks || []).filter(function(x){ return x.code === d.code; })[0] || (S.me.extra || []).filter(function(x){ return x.code === d.code; })[0];
+  var pill = t && t.state === 'done' ? '<span class="pill done">&#10003;</span>' : t && t.state === 'again' ? '<span class="pill again">Read again</span>' : '';
+  return '<button class="item" data-doc="' + esc(d.code) + '"><span class="m"><span class="a">' + esc(d.title) + '</span>' + (S.me.checker ? '<span class="b code-sm">' + esc(d.code) + (d.ready ? '' : ' &middot; questions not checked') + '</span>' : '') + '</span>' + pill + '</button>';
+}
+function wireHome(){
+  app.querySelectorAll('[data-doc]').forEach(function(b){ b.onclick = function(){ openDoc(b.dataset.doc); }; });
+  app.querySelectorAll('[data-go]').forEach(function(b){ b.onclick = function(){ if(b.dataset.go === 'check') checkList(); else board(); }; });
+  var q = document.getElementById('q'); if(q){ q.oninput = function(){ S.q = q.value; search(); }; if(S.q) search(); }
+}
+// search: the full text of every page, on the server (the pages are not all on the phone)
+var findSeq = 0, findT = null;
+function search(){
+  var v = S.q.trim(), res = document.getElementById('res'), fo = document.getElementById('folders');
+  if(v.length < 2){ res.innerHTML = ''; fo.style.display = ''; return; }
+  fo.style.display = 'none';
+  clearTimeout(findT); var my = ++findSeq;
+  findT = setTimeout(function(){
+    res.innerHTML = '<div class="hint" style="margin-top:8px">Searching…</div>';
+    call({ action:'find', q:v, emp:S.emp, jwt:S.jwt }).then(function(r){
+      if(my !== findSeq || !document.getElementById('res')) return;
+      if(!r.ok){ res.innerHTML = '<div class="msg">' + esc(say(r.error)) + '</div>'; return; }
+      var re = new RegExp('(' + v.split(/\s+/).filter(function(w){ return w.length > 1; }).map(function(w){ return w.replace(/[^a-z0-9]/gi, ''); }).filter(Boolean).join('|') + ')', 'ig');
+      res.innerHTML = '<div class="hint" style="margin-top:8px">' + r.hits.length + ' page' + (r.hits.length===1?'':'s') + (r.hits.length ? '' : '. Try a shorter word.') + '</div>' + r.hits.map(function(h){
+        var d = docMeta(h.code); if(!d) return '';
+        return '<button class="item" data-doc="' + esc(h.code) + '"><span class="m"><span class="a">' + esc(d.title) + '</span><span class="b">' + esc(h.snip).replace(re, '<mark>$1</mark>') + '</span></span></button>';
+      }).join('');
+      res.querySelectorAll('[data-doc]').forEach(function(b){ b.onclick = function(){ openDoc(b.dataset.doc); }; });
+    });
+  }, 300);
+}
+
+/* ---------- reading a page ---------- */
+function openDoc(code){
+  stopTimer();
+  app.innerHTML = '<div class="card"><div class="hint">Opening…</div></div>';
+  call({ action:'doc', code:code, emp:S.emp, jwt:S.jwt }).then(function(r){
+    if(!r.ok){ S.err = say(r.error); return home(); }
+    S.doc = r; S.picks = [null, null]; S.reached = false; S.justSigned = null; S.openedAt = Date.now(); S.lastWrong = null;
+    reader();
+  });
+}
+function renderBlocks(d){
+  var isSop = /^ROB-SOP/.test(d.code), h = '', n = 0, i = 0, B = d.blocks || [];
+  while(i < B.length){
+    var b = B[i];
+    if(b.h != null){ h += '<h3>' + esc(b.h) + '</h3>'; i++; continue; }
+    if(b.p != null){ h += '<p>' + br(b.p) + '</p>'; i++; continue; }
+    // a run of rows with the same number of cells
+    var cells = b.row.length, run = [];
+    while(i < B.length && B[i].row && B[i].row.length === cells){ run.push(B[i].row); i++; }
+    if(isSop && cells === 2){
+      run.forEach(function(r){ if(!r[0] && !r[1]) return; n++;
+        h += '<div class="step"><span class="n">' + n + '</span><div>' + (r[0] ? '<div>' + br(r[0]) + '</div>' : '') + (r[1] ? '<div class="rem">' + br(r[1]) + '</div>' : '') + '</div></div>'; });
+    } else if(cells === 1){
+      run.forEach(function(r){ h += '<p>' + br(r[0]) + '</p>'; });
+    } else {
+      h += '<div class="tw"><table>' + run.map(function(r, k){ var tag = (k === 0 && !isSop) ? 'th' : 'td'; return '<tr>' + r.map(function(c){ return '<' + tag + '>' + br(c) + '</' + tag + '>'; }).join('') + '</tr>'; }).join('') + '</table></div>';
+    }
+  }
+  return h;
+}
+function reader(){
+  var d = S.doc, me = S.me;
+  var h = '<div class="top"><button class="link" id="back">&lsaquo; Back</button><span>' + esc(FNAME[d.folder] || '') + '</span></div>';
+  h += '<div class="card doc"><h1>' + esc(d.title) + '</h1>' + (me.checker ? '<div class="code-sm">' + esc(d.code) + '</div>' : '') + renderBlocks(d) + '<div class="end" id="end">End of the page</div></div>';
+  h += '<div id="act"></div>';
+  if(me.checker) h += keyEditor(d);
+  app.innerHTML = h; window.scrollTo(0,0);
+  document.getElementById('back').onclick = function(){ signIn(S.emp); };
+  if(me.checker) wireKey(d);
+  var end = document.getElementById('end');
+  if('IntersectionObserver' in window){
+    var io = new IntersectionObserver(function(es){ es.forEach(function(e){ if(e.isIntersecting && !S.reached){ S.reached = true; act(); } }); });
+    io.observe(end);
+  } else { S.reached = true; }
+  act();
+}
+// the part under the page: what the reader can do now
+function act(){
+  var el = document.getElementById('act'); if(!el) return;
+  var d = S.doc, me = S.me; stopTimer();
+  if(!me.staff){ el.innerHTML = ''; return; }
+  if(d.signed && d.signed.current && !S.justSigned){ el.innerHTML = '<div class="okmsg">&#10003; You signed this page on ' + dmyt(d.signed.at) + '.</div>'; return; }
+  if(S.justSigned){ el.innerHTML = '<div class="okmsg">&#10003; Signed. Saved on ' + dmyt(S.justSigned) + '.</div><button class="btn ghost" id="next">Back to my list</button>'; document.getElementById('next').onclick = function(){ S.justSigned = null; signIn(S.emp); }; return; }
+  if(!d.ready){ el.innerHTML = '<div class="flag">The managers are still checking the questions for this page. You can read it now; signing opens once they are checked.</div>'; return; }
+  if(!S.reached){ el.innerHTML = '<div class="foot">Read to the end of the page. The two questions open there.</div>'; return; }
+  var left = (d.min_read_ms || 0) - (Date.now() - S.openedAt);
+  if(left > 0){
+    el.innerHTML = '<div class="foot">Take your time with it. The questions open in <b id="cd">' + mmss(left) + '</b>.</div>';
+    S.timer = setInterval(function(){ var l = (d.min_read_ms || 0) - (Date.now() - S.openedAt); if(l <= 0){ act(); } else { var c = document.getElementById('cd'); if(c) c.textContent = mmss(l); } }, 500);
+    return;
+  }
+  var h = '<div class="card"><div class="eyebrow">Two questions</div><h2>' + (d.signed && !d.signed.current ? 'This page changed. Check you know it' : 'Check you know it') + '</h2>';
+  (d.questions || []).forEach(function(q, qi){
+    var wrong = S.lastWrong && S.lastWrong.right && S.lastWrong.right[qi] === false;
+    h += '<div class="q' + (wrong ? ' wrong' : '') + '"><div class="t">' + (qi+1) + '. ' + esc(q.q) + '</div>' +
+      q.opts.map(function(o, oi){ return '<button class="opt' + (S.picks[qi] === o ? ' on' : '') + '" data-q="' + qi + '" data-o="' + oi + '"><span class="k"></span><span>' + esc(o) + '</span></button>'; }).join('') +
+      (wrong && S.lastWrong.why[qi] ? '<div class="why"><b>Not quite. The page says:</b><br>' + esc(S.lastWrong.why[qi]) + '</div>' : '') + '</div>';
+  });
+  var ready = S.picks[0] != null && S.picks[1] != null;
+  h += '<label class="hint" for="idn" style="display:block;margin-top:16px">Type your Employee ID to sign</label><input class="code" id="idn" type="text" inputmode="numeric" autocomplete="off" placeholder="Employee ID">';
+  h += '<div id="err"></div><button class="btn" id="sign"' + (ready ? '' : ' disabled') + '>Sign: I have read this page</button>' + (ready ? '' : '<div class="hint" style="text-align:center;margin-top:6px">Answer both questions to sign.</div>') + '</div>';
+  el.innerHTML = h;
+  el.querySelectorAll('.opt').forEach(function(b){ b.onclick = function(){ var qi = +b.dataset.q; S.picks[qi] = d.questions[qi].opts[+b.dataset.o]; var keep = document.getElementById('idn').value; act(); document.getElementById('idn').value = keep; }; });
+  document.getElementById('sign').onclick = function(){
+    var idn = document.getElementById('idn').value.trim(), errEl = document.getElementById('err'), btn = this;
+    if(!idn){ errEl.innerHTML = '<div class="msg" role="alert">Type your Employee ID to sign.</div>'; return; }
+    btn.disabled = true; btn.textContent = 'Signing…';
+    call({ action:'sign', code:d.code, ver:d.ver, answers:S.picks, idn:idn, emp:S.emp }).then(function(r){
+      if(r.ok){ S.justSigned = r.signed_at || new Date().toISOString(); S.lastWrong = null; return act(); }
+      if(r.error === 'wrong'){ S.lastWrong = r; r.right.forEach(function(ok, qi){ if(!ok) S.picks[qi] = null; }); act(); var w = app.querySelector('.q.wrong'); if(w) w.scrollIntoView({ block:'center' }); return; }
+      if(r.error === 'too_fast'){ S.openedAt = Date.now() - ((d.min_read_ms || 0) - (r.wait_ms || 0)); return act(); }
+      btn.disabled = false; btn.textContent = 'Sign: I have read this page';
+      errEl.innerHTML = '<div class="msg" role="alert">' + esc(say(r.error)) + '</div>';
+    });
+  };
+}
+
+/* ---------- managers: the questions with their answers, and fixing them ---------- */
+function keyEditor(d){
+  var k = d.key || [];
+  var h = '<div class="card"><div class="eyebrow">Managers only</div><h2>The two questions</h2>';
+  h += d.ready ? '<div class="okmsg">&#10003; Checked' + (d.checked_by ? ' by ' + esc(d.checked_by) : '') + (d.checked_at ? ', ' + dmy(d.checked_at) : '') + '. The team can sign this page.</div>'
+               : '<div class="flag">Not checked yet. The team can read this page but cannot sign it until the questions are checked.</div>';
+  k.forEach(function(q, qi){
+    h += '<div class="qe" data-qe="' + qi + '"><b>Question ' + (qi+1) + '</b>' +
+      '<label>Question</label><textarea data-f="q">' + esc(q.q) + '</textarea>' +
+      '<label>Right answer</label><input type="text" data-f="right" value="' + esc(q.right) + '">' +
+      q.wrong.map(function(w, wi){ return '<label>Wrong answer ' + (wi+1) + '</label><input type="text" data-f="w' + wi + '" value="' + esc(w) + '">'; }).join('') +
+      '<label>The line we show when someone gets it wrong</label><textarea data-f="why">' + esc(q.why) + '</textarea></div>';
+  });
+  h += '<div id="kmsg"></div><button class="btn ghost" id="ksave">Save my changes</button>' +
+       (d.ready ? '<button class="btn ghost" id="kun">Take it back: stop signing until checked again</button>' : '<button class="btn" id="kok">The questions are right: open this page for signing</button>') + '</div>';
+  return h;
+}
+function wireKey(d){
+  var m = document.getElementById('kmsg');
+  function collect(){ return Array.prototype.map.call(app.querySelectorAll('[data-qe]'), function(box){ var g = function(f){ return box.querySelector('[data-f="' + f + '"]').value; };
+    return { q:g('q'), right:g('right'), wrong:[g('w0'), g('w1'), g('w2')], why:g('why') }; }); }
+  function edited(){ var a = collect(), k = d.key || []; return a.some(function(q, i){ var o = k[i]; return !o || q.q !== o.q || q.right !== o.right || q.why !== o.why || q.wrong.join('|') !== o.wrong.join('|'); }); }
+  document.getElementById('ksave').onclick = function(){
+    if(!edited()){ m.innerHTML = '<div class="flag">Nothing was changed.</div>'; return; }
+    var b = this; b.disabled = true;
+    call({ action:'qsave', code:d.code, questions:collect(), emp:S.emp, jwt:S.jwt }).then(function(r){
+      b.disabled = false;
+      if(!r.ok){ m.innerHTML = '<div class="msg" role="alert">' + esc(say(r.error)) + '</div>'; return; }
+      openDoc(d.code); setTimeout(function(){ var x = document.getElementById('kmsg'); if(x) x.innerHTML = '<div class="okmsg">&#10003; Saved. Check it, then open the page for signing.</div>'; }, 900);
+    });
+  };
+  var ok = document.getElementById('kok'), un = document.getElementById('kun');
+  if(ok) ok.onclick = function(){
+    if(edited()){ m.innerHTML = '<div class="msg" role="alert">You changed a question. Save your changes first.</div>'; return; }
+    ok.disabled = true; call({ action:'check', code:d.code, emp:S.emp, jwt:S.jwt }).then(function(r){ if(!r.ok){ ok.disabled = false; m.innerHTML = '<div class="msg">' + esc(say(r.error)) + '</div>'; return; } refreshMe(function(){ openDoc(d.code); }); });
+  };
+  if(un) un.onclick = function(){ un.disabled = true; call({ action:'uncheck', code:d.code, emp:S.emp, jwt:S.jwt }).then(function(r){ refreshMe(function(){ openDoc(d.code); }); }); };
+}
+function refreshMe(then){ call({ action:'me', emp:S.emp, jwt:S.jwt }).then(function(r){ if(r.ok) S.me = r; then(); }); }
+function checkList(){
+  stopTimer(); window.scrollTo(0,0);
+  var docs = S.me.docs || [], left = docs.filter(function(d){ return !d.ready; }).length;
+  var h = '<div class="top"><button class="link" id="back">&lsaquo; Back</button><span>Managers</span></div><h1>Check the questions</h1>';
+  h += '<div class="card"><div class="hint"><b style="color:var(--ink)">' + (docs.length - left) + ' of ' + docs.length + ' checked.</b> Open a page, read its two questions and answers, fix any that are wrong, then open it for signing.</div>';
+  FOLDERS.forEach(function(f){
+    var mine = docs.filter(function(d){ return d.folder === f[0]; }); if(!mine.length) return;
+    var todo = mine.filter(function(d){ return !d.ready; }).length;
+    h += '<details' + (todo ? ' open' : '') + '><summary>' + esc(f[1]) + ' &middot; ' + (todo ? todo + ' to check' : 'all checked') + '</summary>' +
+      mine.map(function(d){ return '<button class="item" data-doc="' + esc(d.code) + '"><span class="m"><span class="a">' + esc(d.title) + '</span><span class="b code-sm">' + esc(d.code) + '</span></span>' + (d.ready ? '<span class="pill done">&#10003; Checked</span>' : '<span class="pill draft">To check</span>') + '</button>'; }).join('') + '</details>';
+  });
+  h += '</div>';
+  app.innerHTML = h;
+  document.getElementById('back').onclick = home;
+  app.querySelectorAll('[data-doc]').forEach(function(b){ b.onclick = function(){ openDoc(b.dataset.doc); }; });
+}
+function board(){
+  stopTimer(); window.scrollTo(0,0);
+  app.innerHTML = '<div class="card"><div class="hint">Loading the team…</div></div>';
+  call({ action:'board', emp:S.emp, jwt:S.jwt }).then(function(r){
+    if(!r.ok){ S.err = say(r.error); return home(); }
+    var ppl = r.people.slice().sort(function(a, b){ return b.behind - a.behind || a.grp_name.localeCompare(b.grp_name) || a.name.localeCompare(b.name); });
+    var signed = ppl.reduce(function(n, p){ return n + p.done; }, 0), need = ppl.reduce(function(n, p){ return n + p.total; }, 0);
+    var behind = ppl.filter(function(p){ return p.behind > 0; }).length;
+    var h = '<div class="top"><button class="link" id="back">&lsaquo; Back</button><span>Managers</span></div><h1>Who has read what</h1>';
+    h += '<div class="card"><div class="top"><b style="color:var(--ink);font-size:15px">' + signed + ' of ' + need + ' sign-offs done</b><span>' + ppl.length + ' people</span></div><div class="bar"><i style="width:' + (need ? Math.round(100*signed/need) : 0) + '%"></i></div>' +
+      '<div class="hint">' + (behind ? '<b style="color:var(--bad)">' + behind + ' behind</b> on a week that has ended. ' : 'Nobody is behind. ') + 'Started ' + ymdNice(r.start) + '.' + (r.to_check.length ? ' ' + r.to_check.length + ' pages still have questions to check, so nobody can sign them yet.' : '') + '</div>';
+    h += '<div class="tw"><table class="list"><tr><th>Name</th><th>Position</th><th class="n">Signed</th><th class="n">Behind</th><th>Last</th></tr>' +
+      ppl.map(function(p){ return '<tr><td>' + esc(p.name) + '</td><td>' + esc(p.grp_name) + '</td><td class="n">' + p.done + ' / ' + p.total + (p.again ? '<br><span class="code-sm">' + p.again + ' to read again</span>' : '') + '</td><td class="n"' + (p.behind ? ' style="color:var(--bad);font-weight:700"' : '') + '>' + (p.behind || '–') + '</td><td>' + (p.last ? dmy(p.last) : '–') + '</td></tr>'; }).join('') + '</table></div></div>';
+    if(r.hard.length) h += '<div class="card"><div class="eyebrow">Most wrong answers</div>' + r.hard.map(function(x){ return '<div class="top" style="padding:6px 0;border-bottom:1px solid var(--sab)"><span style="color:var(--ink)">' + esc(x.title) + '</span><span>' + x.wrong + ' wrong</span></div>'; }).join('') + '</div>';
+    h += '<div class="card"><details><summary>Change the start date</summary><p class="hint">Week 1 starts on this date. Each week after opens 7 days later, or earlier for anyone who has finished the week before.</p>' +
+      '<input type="text" id="sd" value="' + esc(r.start) + '" placeholder="YYYY-MM-DD"><div id="sdm"></div><button class="btn ghost" id="sds">Save the start date</button></details></div>';
+    app.innerHTML = h;
+    document.getElementById('back').onclick = home;
+    document.getElementById('sds').onclick = function(){
+      var v = document.getElementById('sd').value.trim(), m = document.getElementById('sdm');
+      if(!/^\d{4}-\d{2}-\d{2}$/.test(v)){ m.innerHTML = '<div class="msg">Write the date as 2026-11-10.</div>'; return; }
+      call({ action:'start', start:v, emp:S.emp, jwt:S.jwt }).then(function(x){ m.innerHTML = x.ok ? '<div class="okmsg">&#10003; Saved. Week 1 starts ' + ymdNice(v) + '.</div>' : '<div class="msg">' + esc(say(x.error)) + '</div>'; });
+    };
+  });
+}
+boot();
+</script>
+</body></html>
