@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>How we work</title>
+<title>SOPs and policies</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600&display=swap">
 <style>
 /* FOH "How we work" (10 Nov 2026): the SOPs and policies. Read to the end, answer two questions, sign with the
@@ -106,7 +106,7 @@ function stopTimer(){ if(S.timer){ clearInterval(S.timer); S.timer = null; } }
 function boot(){ S.emp = remembered(); S.jwt = appToken(); if(S.emp) return signIn(S.emp); door(); }
 function door(){
   stopTimer();
-  app.innerHTML = '<div class="card" style="text-align:center"><div class="eyebrow">Roberto&rsquo;s</div><h1>How we work</h1>' +
+  app.innerHTML = '<div class="card" style="text-align:center"><div class="eyebrow">Roberto&rsquo;s</div><h1>SOPs &amp; policies</h1>' +
     '<p class="hint">Our SOPs and policies. Enter your Employee ID to open them.</p>' +
     '<input class="code" id="id" type="text" inputmode="numeric" autocomplete="off" placeholder="Employee ID">' +
     (S.err ? '<div class="msg" role="alert">' + esc(S.err) + '</div>' : '') + '<button class="btn" id="go">Open</button>' +
@@ -131,7 +131,7 @@ function out(){ remember(''); S.emp = ''; S.me = null; S.jwt = ''; door(); }
 function home(){
   stopTimer(); window.scrollTo(0,0);
   var me = S.me, h = '<div class="top"><span>' + esc(me.name) + (me.role ? ' &middot; ' + esc(me.role) : '') + '</span><button class="link" id="out">Not you?</button></div>';
-  h += '<h1>How we work</h1>';
+  h += '<h1>SOPs &amp; policies</h1>';
   if(me.staff) h += myList(me);
   else h += '<div class="card"><div class="hint">You are signed in as a manager. Open any page to read it and check its questions.</div></div>';
   if(me.checker) h += '<div class="card"><div class="eyebrow">Managers</div><h2>Questions and team</h2>' +
