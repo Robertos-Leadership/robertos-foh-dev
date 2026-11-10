@@ -217,7 +217,7 @@ function openDoc(code){
   app.innerHTML = '<div class="card"><div class="hint">Opening…</div></div>';
   call({ action:'doc', code:code, emp:S.emp, jwt:S.jwt }).then(function(r){
     if(!r.ok){ S.err = say(r.error); return home(); }
-    S.doc = r; S.picks = [null, null]; S.reached = false; S.justSigned = null; S.openedAt = Date.now(); S.lastWrong = null;
+    S.doc = r; S.picks = [null, null]; S.reached = false; S.justSigned = null; S.idn = ''; S.openedAt = Date.now(); S.lastWrong = null;
     reader();
   });
 }
@@ -283,13 +283,14 @@ function act(){
   h += '<label class="hint" for="idn" style="display:block;margin-top:16px">Type your Employee ID to sign</label><input class="code" id="idn" type="text" inputmode="numeric" autocomplete="off" placeholder="Employee ID">';
   h += '<div id="err"></div><button class="btn" id="sign"' + (ready ? '' : ' disabled') + '>Sign: I have read this page</button>' + (ready ? '' : '<div class="hint" style="text-align:center;margin-top:6px">Answer both questions to sign.</div>') + '</div>';
   el.innerHTML = h;
-  el.querySelectorAll('.opt').forEach(function(b){ b.onclick = function(){ var qi = +b.dataset.q; S.picks[qi] = d.questions[qi].opts[+b.dataset.o]; var keep = document.getElementById('idn').value; act(); document.getElementById('idn').value = keep; }; });
+  var idEl = document.getElementById('idn'); idEl.value = S.idn || ''; idEl.oninput = function(){ S.idn = idEl.value; };
+  el.querySelectorAll('.opt').forEach(function(b){ b.onclick = function(){ var qi = +b.dataset.q; S.picks[qi] = d.questions[qi].opts[+b.dataset.o]; act(); }; });
   document.getElementById('sign').onclick = function(){
     var idn = document.getElementById('idn').value.trim(), errEl = document.getElementById('err'), btn = this;
     if(!idn){ errEl.innerHTML = '<div class="msg" role="alert">Type your Employee ID to sign.</div>'; return; }
     btn.disabled = true; btn.textContent = 'Signing…';
     call({ action:'sign', code:d.code, ver:d.ver, answers:S.picks, idn:idn, emp:S.emp }).then(function(r){
-      if(r.ok){ S.justSigned = r.signed_at || new Date().toISOString(); S.lastWrong = null; return act(); }
+      if(r.ok){ S.justSigned = r.signed_at || new Date().toISOString(); S.lastWrong = null; S.idn = ''; return act(); }
       if(r.error === 'wrong'){ S.lastWrong = r; r.right.forEach(function(ok, qi){ if(!ok) S.picks[qi] = null; }); act(); var w = app.querySelector('.q.wrong'); if(w) w.scrollIntoView({ block:'center' }); return; }
       if(r.error === 'too_fast'){ S.openedAt = Date.now() - ((d.min_read_ms || 0) - (r.wait_ms || 0)); return act(); }
       btn.disabled = false; btn.textContent = 'Sign: I have read this page';
