@@ -428,6 +428,8 @@ function apMaybeRefresh(){
 }
 function apOpen(pid){ AP.open = pid; AP.moving = null; AP.msg = null; apRepaint(); try{ window.scrollTo(0, 0); }catch(e){} }
 function apFilter(f){ AP.filter = f; AP.tabChosen = true; apRepaint(); }
+// Late tile on the dashboard: straight to the late steps, scrolled into view.
+function apShowLate(){ AP.open = null; apFilter('late'); setTimeout(function(){ var el = document.querySelector('.ap-subtabs'); if(el && el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 0); }
 
 // ── render ────────────────────────────────────────────────────────────────
 function renderActionPlan(){
@@ -488,7 +490,8 @@ function apOverview(msg){
   h.push('<div class="ap-kpis">'
     + '<div class="ap-kpi"><div class="l">Plan progress</div><div class="v">' + pct + '%</div>' + apBar(pct) + '</div>'
     + '<div class="ap-kpi"><div class="l">Steps done</div><div class="v">' + done + ' / ' + all.length + '</div><div class="s">' + thisWeek + ' this week</div></div>'
-    + '<div class="ap-kpi"><div class="l">Late</div><div class="v' + (late ? ' ap-red' : '') + '">' + late + '</div><div class="s">steps past their date</div></div>'
+    + (late ? '<button class="ap-kpi ap-kpi-btn" onclick="apShowLate()" aria-label="See the ' + late + ' late steps"><div class="l">Late</div><div class="v ap-red">' + late + '</div><div class="s">steps past their date &middot; <span class="ap-kpi-see">see them &rsaquo;</span></div></button>'
+            : '<div class="ap-kpi"><div class="l">Late</div><div class="v">0</div><div class="s">steps past their date</div></div>')
     + '<div class="ap-kpi"><div class="l">Relaunch</div><div class="v">' + apDate(rel) + '</div><div class="s">'
     + (days > 0 ? days + ' day' + (days === 1 ? '' : 's') + ' to go' : (days === 0 ? 'today' : 'done')) + '</div></div></div>');
   h.push(apApproveBar());
@@ -1419,6 +1422,7 @@ function apCss(){
     '.ap-plan-head{font-size:15px}',
     '.ap-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:14px}',
     '.ap-kpi{background:#fff;border:1px solid #E9E1D6;border-radius:12px;padding:14px 18px;min-height:96px}',
+    'button.ap-kpi-btn{display:block;width:100%;text-align:left;font:inherit;color:inherit;cursor:pointer}.ap-kpi-btn:hover{border-color:#C9A7A3}.ap-kpi-btn:focus-visible{outline:2px solid #B08A4A;outline-offset:2px}.ap-kpi-see{color:var(--vino);font-weight:600;white-space:nowrap}',
     '.ap-kpi .l{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--text-light);font-weight:600}',
     '.ap-kpi .v{font-family:var(--font-serif);font-size:32px;line-height:1.1;margin-top:8px;color:var(--text);font-feature-settings:"lnum"}',
     '.ap-kpi .s{font-size:12px;color:var(--text-light);margin-top:4px}.ap-kpi .ap-bar{margin-top:10px;height:6px}.ap-kpi .ap-bar div{height:6px}',
