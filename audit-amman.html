@@ -912,6 +912,16 @@ function mineAll(){
   return list;
 }
 function vStart(){
+  // Andrea's link opens on the audit he already has open (10 Nov 2026: each reopen had started a new one).
+  var O = isAmman() && D && D.open && !S.newAudit ? D.open : null;
+  if (O) {
+    var when = (O.visit_date || '').split('-').reverse().join('/') + (O.visit_time ? ' · ' + O.visit_time : '');
+    var h0 = topBar('<div style="display:flex;flex-direction:column;gap:6px"><div class="kick">Roberto\'s Amman</div><h1>' + t('cont') + '</h1><div class="sub">Visit of ' + esc(when) + '</div></div>') + '<div class="body" style="gap:16px">';
+    h0 += '<div class="card rtext"><div style="font-size:17px">' + O.done + ' answered so far</div><div class="muted" style="font-size:14px">Everything you wrote is saved. Carry on where you left off.</div></div>';
+    h0 += '<button class="cam" data-act="newaudit" style="align-self:flex-start">' + t('newOne') + '</button>';
+    h0 += '</div><div class="foot"><button class="big vino" data-act="contopen">' + t('cont') + '</button></div>';
+    return h0;
+  }
   var earlier = mineAll(), E = !!(D && D.enrico);   // E: Chef Bartolini's own invite: no name, no Restaurant/Scala, just the date
   var h = topBar('<div style="display:flex;flex-direction:column;gap:6px"><div class="kick">Roberto\'s ' + (isAmman() ? 'Amman' : 'DIFC') + '</div><h1>' + t(E ? 'startTitleE' : earlier.length ? 'startNew' : 'startTitle') + '</h1><div class="sub">' + t(E ? 'startSubE' : 'startSub') + '</div></div>') + '<div class="body" style="gap:16px">';
   h += (E ? '' : '<label style="display:flex;flex-direction:column;gap:8px"><span class="lbl" style="margin:0">' + t('yourName') + '</span>' +
@@ -948,7 +958,7 @@ function begin(b){
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dd) || dd > (E ? addDays(dubaiNow().date, 30) : dubaiNow().date) || !/^\d{2}:\d{2}$/.test(tt)) { toast(t('badDate'), true); return; }
   if (!E && S.kind !== 'restaurant' && S.kind !== 'scala') { toast(t('pickKind'), true); return; }
   b.disabled = true; b.textContent = t('saving');
-  api('start', { name: name, visit_date: dd, visit_time: tt, kind: E ? 'venue' : S.kind }).then(function(r){
+  api('start', { name: name, visit_date: dd, visit_time: tt, kind: E ? 'venue' : S.kind, fresh: !!S.newAudit }).then(function(r){
     var me = { k: r.k, name: E ? dd.split('-').reverse().join('/') + ' · ' + tt : name, at: new Date().toISOString() };
     ls('auditMine:' + TOK.n, JSON.stringify(me));
     ls('auditList:' + TOK.n, JSON.stringify([me].concat(mineAll().filter(function(x){ return x.k !== r.k; })).slice(0, 10)));
@@ -1206,6 +1216,12 @@ root.addEventListener('click', function(e){
   if (act === 'fdel') { var f3 = byId(D.flags, S.id); api('flag', { id: f3.id, remove: true }).then(function(){ D.flags = D.flags.filter(function(x){ return x.id !== f3.id; }); go({ v: 'home' }, true); }, function(er){ toast(er.message, true); }); return; }
   if (act === 'submit') { submit(b); return; }
   if (act === 'begin') { begin(b); return; }
+  if (act === 'newaudit') { S.newAudit = true; render(); return; }
+  if (act === 'contopen') {
+    var o = D.open, me = { k: o.k, name: (o.visit_date || '').split('-').reverse().join('/') + ' · ' + (o.visit_time || ''), at: new Date().toISOString() };
+    ls('auditMine:' + TOK.n, JSON.stringify(me)); ls('auditFrom:' + o.k, TOK.n);
+    location.href = location.pathname + '?k=' + encodeURIComponent(o.k); return;
+  }
   if (act === 'kind') {
     ['aname', 'adate', 'atime'].forEach(function(id, i){ var e = document.getElementById(id); if (e) S[['name', 'vdate', 'vtime'][i]] = e.value; });
     S.kind = b.getAttribute('data-k'); render(); return;
