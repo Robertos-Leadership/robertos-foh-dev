@@ -27,7 +27,8 @@
 
 var AP = { loaded: false, loading: false, noAccess: false, err: null, open: null, filter: 'dash',
            settings: null, points: [], steps: [], measures: [], snaps: [], results: [], comments: [], changes: [], weeks: [],
-           busy: {}, moving: null, msg: null, refreshing: false };
+           busy: {}, moving: null, msg: null, refreshing: false,
+           files: [], askFiles: null, upBusy: {} };   // files on steps (10 Nov 2026)
 
 var AP_NAMES = { 'fguarracino@robertos.ae': 'Francesco', 'onafid@robertos.ae': 'Ouafaa', 'akadrie@skelmore.com': 'Amin', 'justin@skelmore.com': 'Justin', 'asacchi@skelmore.com': 'Andrea', 'ndragan@robertos.ae': 'Nicole', 'musti@robertos.ae': 'Mustafa' };
 var AP_GROUPS = ['Standards', 'People', 'Business growth', 'Relaunch'];
@@ -111,9 +112,14 @@ async function apLoad(silent){
     AP.noAccess = false;
     AP.settings = r[0].data[0]; AP.points = r[1].data; AP.steps = r[2].data; AP.measures = r[3].data.filter(function(m){ return !m.hidden; });   // hidden = taken off the plan, kept in the table
     AP.snaps = r[4].data; AP.results = r[5].data; AP.comments = r[6].data; AP.changes = r[7].data; AP.weeks = r[8].data;
+    try{
+      var fr = await sb.from('ap_files').select('*').is('removed_at', null).order('created_at');
+      if(!fr.error) AP.files = fr.data || [];
+    }catch(e){}
     if(!AP.loaded && !AP.tabChosen) AP.filter = (AP_WANT_MINE || apMyOpen().length) ? 'mine' : 'dash';   // first open: straight to My tasks
     AP.loaded = true;
     setTimeout(apMaybeRefresh, 0);
+    if(AP_WANT_FILE){ var wf = AP_WANT_FILE; AP_WANT_FILE = null; setTimeout(function(){ apOpenFileLink(wf); }, 0); }
   }catch(e){
     if(!silent || !AP.loaded) AP.err = (e && e.message) ? e.message : String(e);   // a failed background refresh keeps what is on screen
   }finally{
@@ -130,7 +136,197 @@ async function apTick(id, on){
   var s = AP.steps.filter(function(x){ return x.id === id; })[0]; if(!s) return;
   var r = await sb.from('ap_steps').update({ done_at: on ? new Date().toISOString() : null }).eq('id', id).select();
   if(r.error || !r.data || !r.data.length) return apFail('Could not save the tick', r.error || 'no row changed');
-  Object.assign(s, r.data[0]); apSay(on ? 'Marked done' : 'Marked not done');
+  Object.assign(s, r.data[0]);
+  if(on && !apIsApprover()) AP.askFiles = id; else if(!on && AP.askFiles === id) AP.askFiles = null;
+  apSay(on ? 'Marked done' : 'Marked not done');
+}
+
+// ── FILES ON STEPS (10 Nov 2026) ──────────────────────────────────────────
+// The owner ticks a step done and adds the file that shows it (the proposal,
+// a photo, a menu). Amin sees a paperclip on the step, the point and the
+// dashboard card, and opens the file here, page by page. Built to the mock-up
+// "Plan Step Files" (claude.ai artifact, 10 Nov).
+// Storage: private bucket 'ap-files', one row per file in ap_files. RLS: plan
+// members read and add; only the person who added a file, or an Admin, can
+// remove it, and remove only sets removed_at (the file stays in storage).
+// Links are signed for one hour, so a copied link stops working.
+var AP_MAX_MB = 20;
+var AP_FILE_ACCEPT = '.pdf,image/*,.doc,.docx,.xls,.xlsx,.ppt,.pptx';
+var AP_MIME = { pdf: 'application/pdf', jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', gif: 'image/gif', heic: 'image/heic', heif: 'image/heif',
+  doc: 'application/msword', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  xls: 'application/vnd.ms-excel', xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  ppt: 'application/vnd.ms-powerpoint', pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation' };
+var AP_CLIP_SVG = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5 12.6 19.9a5.5 5.5 0 0 1-7.8-7.8l8.5-8.5a3.7 3.7 0 0 1 5.2 5.2l-8.5 8.5a1.8 1.8 0 0 1-2.6-2.6l7.8-7.8"/></svg>';
+function apStepFiles(sid){ return (AP.files || []).filter(function(f){ return f.step_id === sid; }); }
+function apPointFiles(pid){ var ids = apPointSteps(pid).map(function(s){ return s.id; }); return (AP.files || []).filter(function(f){ return ids.indexOf(f.step_id) !== -1; }); }
+function apClip(n){ return n ? ' <span class="ap-clip" title="' + n + ' file' + (n === 1 ? '' : 's') + '">' + AP_CLIP_SVG + n + '</span>' : ''; }
+function apExt(name){ var m = String(name || '').match(/\.([a-z0-9]{1,5})$/i); return m ? m[1].toLowerCase() : ''; }
+function apKind(f){ var e = apExt(f.name), t = String(f.mime || ''); if(e === 'pdf' || t === 'application/pdf') return 'pdf'; if(/^image\//.test(t) || /^(jpe?g|png|webp|gif)$/.test(e)) return 'image'; return 'other'; }
+function apFileSize(b){ b = Number(b) || 0; return b >= 1048576 ? (b / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(b / 1024)) + ' KB'; }
+function apCanRemove(f){ return String(f.added_by || '').toLowerCase() === apMe() || (typeof fohIsAdmin === 'function' && fohIsAdmin()); }
+function apFileInput(sid){ return '<input type="file" multiple accept="' + AP_FILE_ACCEPT + '" onchange="apUpload(\'' + sid + '\',this)"' + (AP.upBusy[sid] ? ' disabled' : '') + '>'; }
+
+// The files under a step, and the way to add one. compact = My tasks: the
+// "Add file" link only shows on a done step (the ask box covers the tick).
+function apFilesBlock(s, compact){
+  var fs = apStepFiles(s.id), busy = !!AP.upBusy[s.id];
+  var ask = AP.askFiles === s.id && !!s.done_at;
+  var h = '';
+  if(fs.length) h += '<div class="ap-files">' + fs.map(function(f){
+    return '<button class="ap-file" onclick="apView(\'' + f.id + '\')" aria-label="Open ' + apEsc(f.name) + '"><span class="ap-file-ic">' + apEsc(apExt(f.name).toUpperCase() || 'FILE') + '</span>'
+      + '<span class="ap-file-meta"><span class="ap-file-n">' + apEsc(f.name) + '</span><span class="ap-file-s">' + apFileSize(f.size) + ' &middot; ' + apEsc(apName(f.added_by)) + ', ' + apDoneDate(f.created_at) + '</span></span></button>';
+  }).join('') + '</div>';
+  if(apIsApprover()) return h;   // Amin reads; the owners add
+  if(ask){
+    h += '<div class="ap-ask"><div><b>Add the file that shows it.</b> The proposal, a photo, a menu. Amin sees it on this step.</div>'
+      + '<div class="ap-btns"><label class="ap-btn ap-btn-main ap-filebtn">' + (busy ? 'Uploading&hellip;' : (fs.length ? 'Add another file' : 'Add file')) + apFileInput(s.id) + '</label>'
+      + '<button class="ap-btn" onclick="apAskClose()">' + (fs.length ? 'Done' : 'No file') + '</button></div></div>';
+  } else if(!compact || s.done_at || busy){
+    h += '<div class="ap-fileadd"><label class="ap-linkbtn ap-filelink">' + (busy ? 'Uploading&hellip;' : '+ Add file') + apFileInput(s.id) + '</label></div>';
+  }
+  return h;
+}
+function apAskClose(){ AP.askFiles = null; apRepaint(); }
+
+async function apUpload(sid, input){
+  var files = Array.prototype.slice.call((input && input.files) || []);
+  try{ input.value = ''; }catch(e){}
+  if(!files.length) return;
+  var big = files.filter(function(f){ return f.size > AP_MAX_MB * 1048576; })[0];
+  if(big) return apFail('Not added', big.name + ' is ' + apFileSize(big.size) + '. The limit is ' + AP_MAX_MB + ' MB a file: save it smaller and add it again');
+  var bad = files.filter(function(f){ return !(f.type in invertMime()) && !AP_MIME[apExt(f.name)]; })[0];
+  if(bad) return apFail('Not added', bad.name + ' is a kind of file the plan cannot hold. Use PDF, a photo, Word, Excel or PowerPoint');
+  AP.upBusy[sid] = true; apRepaint();
+  var added = 0;
+  try{
+    for(var i = 0; i < files.length; i++){
+      var f = files[i];
+      var type = AP_MIME[apExt(f.name)] || f.type;
+      var safe = String(f.name).replace(/[^\w.\-]+/g, '_').slice(-80);
+      var path = sid + '/' + Date.now() + '-' + Math.random().toString(36).slice(2, 8) + '-' + safe;
+      var up = await sb.storage.from('ap-files').upload(path, f, { contentType: type, upsert: false });
+      if(up.error) throw up.error;
+      var r = await sb.from('ap_files').insert({ step_id: sid, name: f.name, path: path, size: f.size, mime: type, added_by: apMe() }).select();
+      if(r.error || !r.data || !r.data.length) throw (r.error || new Error('the file went up but was not saved on the step'));
+      AP.files.push(r.data[0]); added++;
+    }
+    AP.upBusy[sid] = false;
+    apSay(added === 1 ? 'File added' : added + ' files added');
+  }catch(e){
+    AP.upBusy[sid] = false;
+    apFail('Could not add ' + (files[added] ? files[added].name : 'the file') + (added ? ' (' + added + ' added before it stopped)' : ''), e);
+  }
+}
+function invertMime(){ var o = {}; Object.keys(AP_MIME).forEach(function(k){ o[AP_MIME[k]] = k; }); return o; }
+
+// ── the viewer: PDFs page by page (pdf.js, already used by Events), photos
+//    as they are, Word/Excel/PowerPoint open in a new tab ──
+var APV = { f: null, url: null, pdf: null, page: 1, n: 0, back: null, rm: false, err: null };
+function apLoadPdfJs(){
+  if(typeof peLoadPdfJs === 'function') return peLoadPdfJs();
+  return new Promise(function(res, rej){
+    if(window.pdfjsLib) return res(window.pdfjsLib);
+    var s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+    s.onload = function(){ window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'; res(window.pdfjsLib); };
+    s.onerror = function(){ rej(new Error('the PDF reader could not load. Check the connection')); };
+    document.head.appendChild(s);
+  });
+}
+function apFileWhere(f){
+  var s = AP.steps.filter(function(x){ return x.id === f.step_id; })[0] || {};
+  var p = AP.points.filter(function(x){ return x.id === s.point_id; })[0] || {};
+  return { s: s, p: p };
+}
+function apViewShell(){
+  var v = document.getElementById('ap-viewer');
+  if(!v){
+    v = document.createElement('div'); v.id = 'ap-viewer'; v.className = 'ap-viewer'; v.setAttribute('role', 'dialog'); v.setAttribute('aria-modal', 'true');
+    v.addEventListener('click', function(e){ if(e.target === v) apViewClose(); });
+    document.body.appendChild(v);
+  }
+  var f = APV.f, w = apFileWhere(f), kind = apKind(f);
+  var body;
+  if(APV.err) body = '<div class="ap-v-msg">This file could not be opened: ' + apEsc(APV.err) + '</div>';
+  else if(!APV.url) body = '<div class="ap-v-msg">Opening&hellip;</div>';
+  else if(kind === 'pdf') body = APV.pdf ? '<canvas id="ap-v-canvas" aria-label="Page ' + APV.page + ' of ' + APV.n + '"></canvas>' : '<div class="ap-v-msg">Opening&hellip;</div>';
+  else if(kind === 'image') body = '<img src="' + apEsc(APV.url) + '" alt="' + apEsc(f.name) + '">';
+  else body = '<div class="ap-v-msg"><b>' + apEsc(f.name) + '</b><br>Word, Excel and PowerPoint files open in their own app.<div class="ap-btns" style="justify-content:center"><a class="ap-btn ap-btn-main" href="' + apEsc(APV.url) + '" target="_blank" rel="noopener">Open the file</a></div></div>';
+  var foot = '';
+  if(kind === 'pdf' && APV.pdf) foot += '<button class="ap-btn" onclick="apViewPage(-1)"' + (APV.page <= 1 ? ' disabled' : '') + '>Previous</button><span class="ap-v-pg">' + APV.page + ' / ' + APV.n + '</span><button class="ap-btn" onclick="apViewPage(1)"' + (APV.page >= APV.n ? ' disabled' : '') + '>Next</button>';
+  var right = (APV.url && kind !== 'other' ? '<a class="ap-linkbtn" href="' + apEsc(APV.url) + '" target="_blank" rel="noopener">Open in a new tab</a>' : '')
+    + (apCanRemove(f) ? (APV.rm ? '<button class="ap-btn ap-v-rm" onclick="apFileRemove()">Tap again to remove</button><button class="ap-btn" onclick="APV.rm=false;apViewShell()">Keep it</button>'
+                                : '<button class="ap-linkbtn ap-v-rmlink" onclick="APV.rm=true;apViewShell()">Remove</button>') : '');
+  v.innerHTML = '<div class="ap-v-box"><div class="ap-v-head"><div class="ap-v-title"><div class="ap-v-name" id="ap-v-name">' + apEsc(f.name) + '</div>'
+    + '<div class="ap-v-meta">Added by ' + apEsc(apName(f.added_by)) + ' &middot; ' + apDoneDate(f.created_at) + (w.p.num ? ' &middot; ' + w.p.num + '. ' + apEsc(w.p.title) + ': ' + apEsc(w.s.title || '') : '') + '</div></div>'
+    + '<button class="ap-btn" id="ap-v-close" onclick="apViewClose()">Close</button></div>'
+    + '<div class="ap-v-body" id="ap-v-body">' + body + '</div>'
+    + '<div class="ap-v-foot"><div class="ap-v-nav">' + foot + '</div><div class="ap-v-right">' + right + '</div></div></div>';
+  v.setAttribute('aria-labelledby', 'ap-v-name');
+  if(kind === 'pdf' && APV.pdf) apViewDraw();
+}
+async function apView(fid){
+  var f = (AP.files || []).filter(function(x){ return x.id === fid; })[0];
+  if(!f) return apFail('Could not open the file', 'it is no longer on the plan');
+  APV = { f: f, url: null, pdf: null, page: 1, n: 0, back: document.activeElement, rm: false, err: null };
+  apCss(); apViewShell();
+  document.addEventListener('keydown', apViewKeys);
+  try{ var c = document.getElementById('ap-v-close'); if(c) c.focus(); }catch(e){}
+  try{
+    var r = await sb.storage.from('ap-files').createSignedUrl(f.path, 3600);
+    if(r.error || !r.data) throw (r.error || new Error('no link'));
+    if(APV.f !== f) return;
+    APV.url = r.data.signedUrl;
+    if(apKind(f) === 'pdf'){
+      apViewShell();
+      var lib = await apLoadPdfJs();
+      var doc = await lib.getDocument({ url: APV.url }).promise;
+      if(APV.f !== f) return;
+      APV.pdf = doc; APV.n = doc.numPages;
+    }
+  }catch(e){ APV.err = (e && e.message) ? e.message : String(e); }
+  if(APV.f === f) apViewShell();
+}
+async function apViewDraw(){
+  var cv = document.getElementById('ap-v-canvas'), box = document.getElementById('ap-v-body');
+  if(!cv || !APV.pdf) return;
+  var want = APV.page, page = await APV.pdf.getPage(want);
+  if(want !== APV.page) return;
+  var base = page.getViewport({ scale: 1 });
+  var maxW = Math.max(200, (box ? box.clientWidth : 800) - 24), maxH = Math.max(200, (box ? box.clientHeight : 600) - 24);
+  var scale = Math.min(maxW / base.width, maxH / base.height);
+  var dpr = Math.min(window.devicePixelRatio || 1, 2);
+  var vp = page.getViewport({ scale: scale * dpr });
+  cv.width = Math.floor(vp.width); cv.height = Math.floor(vp.height);
+  cv.style.width = Math.floor(vp.width / dpr) + 'px'; cv.style.height = Math.floor(vp.height / dpr) + 'px';
+  await page.render({ canvasContext: cv.getContext('2d'), viewport: vp }).promise;
+}
+function apViewPage(d){ var n = APV.page + d; if(n < 1 || n > APV.n) return; APV.page = n; apViewShell(); }
+function apViewKeys(e){
+  if(!document.getElementById('ap-viewer')) return;
+  if(e.key === 'Escape') apViewClose();
+  else if(e.key === 'ArrowRight') apViewPage(1);
+  else if(e.key === 'ArrowLeft') apViewPage(-1);
+}
+function apViewClose(){
+  var v = document.getElementById('ap-viewer'); if(v) v.remove();
+  document.removeEventListener('keydown', apViewKeys);
+  var back = APV.back; APV = { f: null, url: null, pdf: null, page: 1, n: 0, back: null, rm: false, err: null };
+  try{ if(back && back.focus && document.body.contains(back)) back.focus(); }catch(e){}
+}
+async function apFileRemove(){
+  var f = APV.f; if(!f) return;
+  var r = await sb.from('ap_files').update({ removed_at: new Date().toISOString(), removed_by: apMe() }).eq('id', f.id).select();
+  if(r.error || !r.data || !r.data.length){ APV.rm = false; apViewShell(); return apFail('Could not remove the file', r.error || 'only the person who added it, or an Admin, can remove it'); }
+  AP.files = AP.files.filter(function(x){ return x.id !== f.id; });
+  apViewClose(); apSay('File removed');
+}
+// The Wednesday email links straight to a file: #actionplan/file/<id>
+function apOpenFileLink(fid){
+  var f = (AP.files || []).filter(function(x){ return x.id === fid; })[0];
+  if(!f) return apFail('Could not open the file', 'it is no longer on the plan, or this login cannot see it');
+  var w = apFileWhere(f); if(w.p.id){ AP.open = w.p.id; apRepaint(); }
+  apView(fid);
 }
 async function apSetOwner(id, v){
   var r = await sb.from('ap_steps').update({ owner: String(v || '').trim() || null }).eq('id', id).select();
@@ -309,7 +505,7 @@ function apOverview(msg){
       h.push('<div class="ap-card ap-list">');
       AP.points.slice().sort(function(a, b){ return a.num - b.num; }).forEach(function(p){
         var st = apPointSteps(p.id), pc = apPct(st);
-        h.push('<button class="ap-row" onclick="apOpen(\'' + p.id + '\')"><span class="ap-num">' + p.num + '</span><span class="ap-ptitle">' + apEsc(p.title)
+        h.push('<button class="ap-row" onclick="apOpen(\'' + p.id + '\')"><span class="ap-num">' + p.num + '</span><span class="ap-ptitle">' + apEsc(p.title) + apClip(apPointFiles(p.id).length)
           + '<span class="ap-gtag">' + apEsc(p.group) + '</span></span>'
           + '<span class="ap-rowbar">' + apBar(pc) + '</span><span class="ap-pct">' + pc + '%</span>' + apPill(apPointStatus(st)) + '</button>');
       });
@@ -358,7 +554,7 @@ function apPlanList(){
       h.push('<div class="ap-group">' + p.num + '. ' + apEsc(p.title) + '</div><div class="ap-card ap-steps">');
       apPointSteps(p.id).forEach(function(s){
         var late = apStepLate(s);
-        h.push('<div class="ap-step"><div class="ap-sbody"><div class="ap-stitle">' + apEsc(s.title) + (s.is_app ? ' <span class="ap-app">App</span>' : '') + '</div>'
+        h.push('<div class="ap-step"><div class="ap-sbody"><div class="ap-stitle">' + apEsc(s.title) + (s.is_app ? ' <span class="ap-app">App</span>' : '') + apClip(apStepFiles(s.id).length) + '</div>'
           + (s.done_at ? '<div class="ap-ssub">Done ' + apDoneDate(s.done_at) + '</div>'
                        : (late ? '<div class="ap-ssub"><b class="ap-red">Late &middot; was due ' + apDate(s.due_date) + '</b></div>' : '') + apEditors(s) + apMovePanel(s))
           + '</div></div>');
@@ -384,7 +580,7 @@ function apStepList(f){
   AP.points.forEach(function(p){
     pick.filter(function(s){ return s.point_id === p.id; }).sort(function(a, b){ return a.sort - b.sort; }).forEach(function(s){
       h.push('<div class="ap-srow"><input type="checkbox" class="ap-check" ' + (s.done_at ? 'checked ' : '') + 'onchange="apTick(\'' + s.id + '\',this.checked)" aria-label="Done">'
-        + '<button class="ap-slink" onclick="apOpen(\'' + p.id + '\')"><span class="ap-stitle">' + apEsc(s.title) + '</span><span class="ap-ssub">' + p.num + '. ' + apEsc(p.title)
+        + '<button class="ap-slink" onclick="apOpen(\'' + p.id + '\')"><span class="ap-stitle">' + apEsc(s.title) + apClip(apStepFiles(s.id).length) + '</span><span class="ap-ssub">' + p.num + '. ' + apEsc(p.title)
         + (s.owner ? ' &middot; ' + apEsc(s.owner) : '') + (s.due_date ? ' &middot; ' + (apStepLate(s) ? '<b class="ap-red">was due ' + apDate(s.due_date) + '</b>' : 'due ' + apDate(s.due_date)) : '') + '</span></button></div>');
     });
   });
@@ -419,8 +615,9 @@ function apMyTasks(){
       var others = String(s.owner || '').split(/\s*(?:,|&|\/|\+|\band\b)\s*/).filter(function(n){ return n && mine.indexOf(n.trim().toLowerCase().split(/\s+/)[0]) === -1; });
       var date = s.done_at ? 'done ' + apDoneDate(s.done_at) : (s.due_date ? (apStepLate(s) ? '<b class="ap-red">was due ' + apDate(s.due_date) + '</b>' : apDate(s.due_date)) : 'no date');
       h.push('<div class="ap-srow"><input type="checkbox" class="ap-check" ' + (s.done_at ? 'checked ' : '') + 'onchange="apTick(\'' + s.id + '\',this.checked)" aria-label="Done: ' + apEsc(s.title) + '">'
-        + '<button class="ap-slink" onclick="apOpen(\'' + s.point_id + '\')"><span class="ap-stitle">' + apEsc(s.title) + '</span><span class="ap-ssub">' + p.num + '. ' + apEsc(p.title)
+        + '<button class="ap-slink" onclick="apOpen(\'' + s.point_id + '\')"><span class="ap-stitle">' + apEsc(s.title) + apClip(apStepFiles(s.id).length) + '</span><span class="ap-ssub">' + p.num + '. ' + apEsc(p.title)
         + (others.length ? ' &middot; with ' + apEsc(others.join(', ')) : '') + '</span></button><span class="ap-mydate">' + date + '</span></div>');
+      var fb = apFilesBlock(s, true); if(fb) h.push('<div class="ap-srow-files">' + fb + '</div>');
     });
     h.push('</div>');
   });
@@ -567,8 +764,8 @@ function apPointPage(pid, msg){
     var sub = s.done_at ? 'Done ' + apDoneDate(s.done_at) + (s.done_by && s.done_by !== 'seed' ? ' &middot; ' + apEsc(apName(s.done_by)) : '')
       : (s.due_date ? (late ? '<b class="ap-red">Late &middot; was due ' + apDate(s.due_date) + '</b>' : 'Due ' + apDate(s.due_date)) : 'No date yet');
     h.push('<div class="ap-step"><input type="checkbox" class="ap-check" ' + (s.done_at ? 'checked ' : '') + 'onchange="apTick(\'' + s.id + '\',this.checked)" aria-label="Done">'
-      + '<div class="ap-sbody"><div class="ap-stitle">' + apEsc(s.title) + (s.is_app ? ' <span class="ap-app">App</span>' : '') + '</div><div class="ap-ssub">' + sub + '</div>'
-      + apEditors(s) + apMovePanel(s));
+      + '<div class="ap-sbody"><div class="ap-stitle">' + apEsc(s.title) + (s.is_app ? ' <span class="ap-app">App</span>' : '') + apClip(apStepFiles(s.id).length) + '</div><div class="ap-ssub">' + sub + '</div>'
+      + apFilesBlock(s, false) + apEditors(s) + apMovePanel(s));
     h.push('</div></div>');
   });
   h.push('</div>');
@@ -623,7 +820,9 @@ function apPointPage(pid, msg){
 // (loadFohAccess calls apHashOpen) go straight into the plan.
 var AP_WANT = false;
 var AP_WANT_MINE = false;
-try{ AP_WANT = /^#actionplan(\/mine)?$/.test(location.hash); AP_WANT_MINE = location.hash === '#actionplan/mine'; }catch(e){}
+var AP_WANT_FILE = null;
+try{ AP_WANT = /^#actionplan(\/mine|\/file\/[0-9a-f-]{36})?$/.test(location.hash); AP_WANT_MINE = location.hash === '#actionplan/mine';
+     var wfm = location.hash.match(/^#actionplan\/file\/([0-9a-f-]{36})$/); if(wfm) AP_WANT_FILE = wfm[1]; }catch(e){}
 function apHashOpen(){
   if(!AP_WANT || !state || !state.access) return;
   AP_WANT = false;
@@ -854,7 +1053,7 @@ function apCard(p){
   var st = apPointSteps(p.id), pc = apPct(st), done = st.filter(function(s){ return s.done_at; }).length, nx = apNextStep(p);
   var sub = nx ? (nx.owner ? apEsc(nx.owner) : 'No owner') + ' &middot; ' + (nx.due_date ? (apStepLate(nx) ? '<b class="ap-red">was due ' + apDate(nx.due_date) + '</b>' : 'due ' + apDate(nx.due_date)) : 'no date') : '';
   return '<button class="ap-c" onclick="apOpen(\'' + p.id + '\')" aria-label="Point ' + p.num + ': ' + apEsc(p.title) + '">'
-    + '<span class="ap-c-top"><span class="ap-c-title"><span class="ap-num">' + p.num + '</span>' + apEsc(p.title) + '</span>' + apPill(apPointStatus(st)) + '</span>'
+    + '<span class="ap-c-top"><span class="ap-c-title"><span class="ap-num">' + p.num + '</span>' + apEsc(p.title) + apClip(apPointFiles(p.id).length) + '</span>' + apPill(apPointStatus(st)) + '</span>'
     + '<span class="ap-c-prog">' + apBar(pc) + '<span>' + pc + '% &middot; ' + done + '/' + st.length + '</span></span>'
     + '<span class="ap-c-next">' + (nx ? 'Next: ' + apEsc(nx.title) + '<small>' + sub + '</small>' : 'All steps done<small>&nbsp;</small>') + '</span>'
     + apCardFigure(p) + '</button>';
@@ -1173,6 +1372,32 @@ function apCss(){
     '.ap-numtable{min-width:900px}.ap-linkbtn{background:none;border:0;padding:0;font:inherit;color:var(--vino);cursor:pointer;text-align:left}',
     '.ap-more{margin-top:18px;padding:0 4px}.ap-more summary{cursor:pointer;color:var(--text-light);font-size:14px;min-height:40px;display:flex;align-items:center}',
     '@media (max-width:820px){.ap-cards{grid-template-columns:repeat(2,minmax(0,1fr))}.ap-row{grid-template-columns:32px 1fr auto;grid-template-areas:"n t p" "n b s"}.ap-num{grid-area:n}.ap-ptitle{grid-area:t}.ap-pct{grid-area:p;text-align:right}.ap-rowbar{grid-area:b}.ap-row .ap-pill{grid-area:s;justify-self:end}.ap-title{font-size:26px}}',
+    // files on steps (10 Nov 2026)
+    '.ap-clip{display:inline-flex;align-items:center;gap:3px;font-size:13px;font-weight:600;color:var(--vino);vertical-align:middle;white-space:nowrap}.ap-clip svg{flex:none}',
+    '.ap-files{display:flex;flex-direction:column;gap:6px;margin-top:10px}',
+    '.ap-file{display:flex;align-items:center;gap:10px;width:100%;min-width:0;text-align:left;font:inherit;color:inherit;background:#FBF7F2;border:1px solid var(--border);border-radius:10px;padding:8px 10px;cursor:pointer;min-height:52px}',
+    '.ap-file:hover{border-color:var(--border-strong)}',
+    '.ap-file-ic{flex:0 0 34px;height:40px;border-radius:5px;background:var(--vino);color:#fff;font-size:9px;font-weight:700;letter-spacing:.06em;display:flex;align-items:flex-end;justify-content:center;padding-bottom:5px}',
+    '.ap-file-meta{min-width:0;flex:1;display:flex;flex-direction:column}',
+    '.ap-file-n{font-size:15px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ap-file-s{font-size:12px;color:var(--text-light)}',
+    '.ap-ask{border-top:1px dashed var(--border-strong);margin-top:10px;padding-top:10px;font-size:14px}',
+    '.ap-filebtn,.ap-filelink{position:relative;display:inline-flex;align-items:center;cursor:pointer}',
+    '.ap-filebtn input,.ap-filelink input{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}',
+    '.ap-filebtn:focus-within,.ap-filelink:focus-within{outline:2px solid #B08A4A;outline-offset:2px}',
+    '.ap-fileadd{margin-top:8px;font-size:14px}.ap-filelink{font-weight:600;min-height:32px}',
+    '.ap-srow-files{padding:0 20px 12px 58px;border-bottom:1px solid var(--border);margin-top:-6px}.ap-srow-files .ap-files{margin-top:0}',
+    '.ap-viewer{position:fixed;inset:0;z-index:9500;background:rgba(20,6,8,.78);display:flex;align-items:center;justify-content:center;padding:max(12px,env(safe-area-inset-top,0px)) max(12px,env(safe-area-inset-right,0px)) max(12px,env(safe-area-inset-bottom,0px)) max(12px,env(safe-area-inset-left,0px));font-family:var(--font-sans);color:var(--text)}',
+    '.ap-v-box{background:#fff;border-radius:16px;width:100%;max-width:1000px;height:100%;max-height:900px;display:flex;flex-direction:column;overflow:hidden}',
+    '.ap-v-head{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 14px;border-bottom:1px solid var(--border)}',
+    '.ap-v-title{min-width:0}.ap-v-name{font-weight:600;font-size:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ap-v-meta{font-size:12px;color:var(--text-light)}',
+    '.ap-v-body{flex:1;min-height:0;background:#F3ECE4;display:flex;align-items:center;justify-content:center;overflow:auto;padding:12px}',
+    '.ap-v-body img,.ap-v-body canvas{max-width:100%;max-height:100%;background:#fff;box-shadow:0 2px 12px rgba(44,24,16,.18);border-radius:3px}',
+    '.ap-v-msg{text-align:center;color:var(--text-mid);font-size:15px;line-height:1.6;max-width:420px}',
+    '.ap-v-foot{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 14px;border-top:1px solid var(--border)}',
+    '.ap-v-nav,.ap-v-right{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.ap-v-pg{font-variant-numeric:tabular-nums;color:var(--text-light);font-size:14px;min-width:54px;text-align:center}',
+    '.ap-v-right a.ap-linkbtn{font-weight:600;text-decoration:underline}.ap-v-rmlink{color:#A1231B;font-weight:600}.ap-v-rm{background:#A1231B;border-color:#A1231B;color:#fff}',
+    'a.ap-btn{display:inline-flex;align-items:center;text-decoration:none}',
+    '@media (max-width:480px){.ap-srow-files{padding:0 14px 12px 52px}.ap-v-box{border-radius:12px}}',
     '@media (max-width:480px){.ap-head{padding:18px}.ap-card{padding:14px 16px}.ap-big{font-size:28px}.ap-row{padding:12px 14px;grid-template-columns:28px 1fr auto}.ap-steps{padding:4px 14px}}'
   ].join('\n');
   document.head.appendChild(s);

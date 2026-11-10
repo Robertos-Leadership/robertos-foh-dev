@@ -322,10 +322,12 @@ function planFacts(points: { id: string; num: number; title: string }[], steps: 
 // ignores padding/height/radius on <div> (16 Oct: the first version arrived as
 // torn colour strips with no bar and a purple-on-wine button). Padding lives on
 // <td>; the bar is two cells; the button is a filled cell around the link.
-const NAMES: Record<string, string> = { "fguarracino@robertos.ae": "Francesco", "onafid@robertos.ae": "Ouafaa", "akadrie@skelmore.com": "Amin", "justin@skelmore.com": "Justin", "asacchi@skelmore.com": "Andrea", "ndragan@robertos.ae": "Nicole" };
+const NAMES: Record<string, string> = { "fguarracino@robertos.ae": "Francesco", "onafid@robertos.ae": "Ouafaa", "akadrie@skelmore.com": "Amin", "justin@skelmore.com": "Justin", "asacchi@skelmore.com": "Andrea", "ndragan@robertos.ae": "Nicole", "musti@robertos.ae": "Mustafa" };
+// Files added to steps in the last 7 days (10 Nov 2026). Each links to the file in the app (#actionplan/file/<id>).
+type NewFile = { id: string; name: string; added_by: string; point?: { num: number; title: string }; step?: string };
 const SANS = "Arial,Helvetica,sans-serif";
 function emailHtml(f: ReturnType<typeof planFacts>, weekNo: number, pending: { point?: { num: number; title: string }; proposal: string }[],
-  comments: { point?: { num: number; title: string }; author_email: string; body: string }[], weekLabel: string, toLabel: string) {
+  comments: { point?: { num: number; title: string }; author_email: string; body: string }[], weekLabel: string, toLabel: string, files: NewFile[] = []) {
   const box = (inner: string) =>
     `<tr><td style="padding:0 0 12px 0;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#FFFFFF" style="border:1px solid #E6DFE0;border-radius:12px;border-collapse:separate;">`
     + `<tr><td style="padding:16px 20px;">${inner}</td></tr></table></td></tr>`;
@@ -361,6 +363,7 @@ ${box(`<div style="font-family:${SANS};font-size:12px;line-height:16px;letter-sp
 <td valign="bottom" align="right" style="font-family:${SANS};font-size:14px;line-height:20px;color:#8B7355;padding:0 0 16px 0;">${delta > 0 ? "+" + delta + "% this week" : "No change this week"}<br>${f.done} of ${f.total} steps done</td>
 </tr></table>${bar}`)}
 ${box(head(`Done this week &middot; ${n(f.doneThisWeek.length, "step", "steps")}`) + sub(join(f.doneThisWeek.map((s) => esc(s.title)), "Nothing ticked off this week")))}
+${box(head(`New files this week &middot; ${files.length}`) + sub(join(files.map((x) => `${esc(x.point?.title)}, ${esc(x.step)}: <a href="${APP_URL}#actionplan/file/${esc(x.id)}" target="_blank" style="color:#6B1F2A;font-weight:bold;">${esc(x.name)}</a> (${esc(NAMES[String(x.added_by).toLowerCase()] || x.added_by)})`), "No files added this week")))}
 ${box(head(`Late &middot; ${f.late.length}`, f.late.length ? "#B3261E" : "#2C1810") + sub(join(f.late.map((s) => `${esc(s.point?.title)}: ${esc(s.title)} (${esc(s.owner || "no owner")}, due ${esc(label(s.due))})`), "Nothing is late")))}
 ${box(head(`Needs your OK &middot; ${pending.length}`) + sub(join(pending.map((c) => `${esc(c.point?.title)}: ${esc(c.proposal)}`), "Nothing waiting")))}
 ${box(head(`New comments &middot; ${comments.length}`) + sub(join(comments.slice(0, 6).map((c) => `${esc(NAMES[c.author_email] || c.author_email)} on ${esc(c.point?.title)}: &ldquo;${esc(c.body)}&rdquo;`), "No new comments")))}
@@ -446,11 +449,12 @@ Deno.serve(async (req) => {
 
     // 2. Build the email from the stored plan.
     const since = new Date(Date.now() - 7 * 86400e3).toISOString();
-    const [{ data: points }, { data: steps }, { data: changes }, { data: comments }] = await Promise.all([
+    const [{ data: points }, { data: steps }, { data: changes }, { data: comments }, { data: newFiles }] = await Promise.all([
       sb.from("ap_points").select("id,num,title").order("num"),
       sb.from("ap_steps").select("id,point_id,title,owner,due_date,done_at,done_by"),
       sb.from("ap_changes").select("point_id,proposal").eq("status", "pending").order("created_at"),
       sb.from("ap_comments").select("point_id,author_email,body,created_at").gte("created_at", since).order("created_at", { ascending: false }),
+      sb.from("ap_files").select("id,step_id,name,added_by,created_at").is("removed_at", null).gte("created_at", since).order("created_at"),
     ]);
     const P = (points || []) as { id: string; num: number; title: string }[];
     const pt = (id: string) => P.find((p) => p.id === id);
@@ -461,7 +465,11 @@ Deno.serve(async (req) => {
       (changes || []).map((c: { point_id: string; proposal: string }) => ({ point: pt(c.point_id), proposal: c.proposal })),
       (comments || []).map((c: { point_id: string; author_email: string; body: string }) => ({ point: pt(c.point_id), author_email: c.author_email, body: c.body })),
       "Week of " + label(thisMonday) + " · sent " + label(dubaiToday()),
-      "To: " + ((settings.recipients as string[]) || []).map((e) => NAMES[String(e).toLowerCase()] || e).join(", ") + " · Wednesday 9:00");
+      "To: " + ((settings.recipients as string[]) || []).map((e) => NAMES[String(e).toLowerCase()] || e).join(", ") + " · Wednesday 9:00",
+      (newFiles || []).map((x: { id: string; step_id: string; name: string; added_by: string }) => {
+        const st = ((steps || []) as Step[]).find((s) => s.id === x.step_id);
+        return { id: x.id, name: x.name, added_by: x.added_by, point: st ? pt(st.point_id) : undefined, step: st?.title };
+      }));
     const subject = `Roberto's 3.0 · ${weekNo >= 1 ? "Week " + weekNo + " update" : "Before week 1"} · ${f.pct}%`;
     if (mode === "preview") return json({ ok: true, subject, html, facts: f });
 
