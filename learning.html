@@ -50,6 +50,15 @@ td.n{text-align:right;font-variant-numeric:tabular-nums}
 .topic{display:block;width:100%;text-align:left;background:#fff;border:1px solid #b9ab94;padding:14px;margin-top:9px;font:inherit;color:var(--ink);cursor:pointer}
 .topic[disabled]{opacity:.6;cursor:default}
 .topic b{font-family:var(--serif);font-size:17px;font-weight:500}
+button{font-family:inherit}
+.trow{padding:14px 0;border-bottom:1px solid var(--sab)}.trow:last-child{border-bottom:0;padding-bottom:0}
+.thead{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.thead b{font-family:var(--serif);font-size:17px;font-weight:500}
+.thead .tag{margin-left:0;white-space:nowrap}
+.acts{display:flex;flex-wrap:wrap;gap:0 20px;margin-top:4px}
+.acts .link{text-decoration:none;font-weight:600;padding:6px 0}.acts .link:hover{text-decoration:underline}
+.acts .link.quiet{color:#7a6d5a;font-weight:400}
+.foot{text-align:center;margin-top:16px}.foot .link{color:#6b5f4d}
 </style>
 </head><body><div class="wrap"><div id="app"><div class="card"><div class="hint">Loading…</div></div></div></div>
 <script>
@@ -135,8 +144,9 @@ function line(t){
 function home(){
   clearInterval(S.t); S.cur = null;
   var me = S.me, h = '<div class="card" style="text-align:center"><div class="eyebrow">Roberto&rsquo;s</div><h1>Learning</h1><div class="hint">' + esc(me.name || '') +
-    (me.role ? ' · ' + esc(me.role) : '') + (me.admin ? ' · admin' : me.manager ? ' · manager' : '') + '</div></div>';
+    (me.role ? ' · ' + esc(me.role) : '') + (me.admin ? ' · Admin' : me.manager ? ' · Manager' : '') + '</div></div>';
   if(S.err) h += '<div class="msg" role="alert">' + esc(S.err) + '</div>'; S.err = '';
+  if(me.manager) h += '<button class="btn" id="board">Who has passed what</button>';
   if(me.staff){
     var req = me.topics.filter(function(t){ return t.required; }), opt = me.topics.filter(function(t){ return !t.required; });
     var todo = req.filter(function(t){ return t.open && t.state !== 'passed'; }).length;
@@ -148,23 +158,23 @@ function home(){
   }
   var rv = me.review || [];
   if(rv.length){
-    h += '<div class="card"><div class="eyebrow">Checking and approving</div><p class="hint">A topic reaches the team only after the person who owns it has checked it, and an Admin has approved it.</p>' +
+    h += '<div class="card"><div class="eyebrow">Topics</div><p class="hint">A topic reaches the team only after its owner has checked it and an Admin has approved it.</p>' +
       rv.map(function(t){
-        var st = t.status === 'approved' ? '<span class="tag ok">Open to the team</span>' : t.status === 'checked' ? '<span class="tag warn">Checked by ' + esc(t.checked_by || '') + ' · waiting for approval</span>' : '<span class="tag soon">Waiting for ' + esc(t.checker_for || 'the checker') + '</span>';
-        return '<div class="row" style="flex-direction:column"><div><b>' + esc(t.name) + '</b> ' + st + '</div><div>' +
-          '<button class="link" data-sample="' + t.key + '">Read a sample with the answers</button>' +
-          (t.can_check ? ' <button class="link" data-act="check" data-t="' + t.key + '">I have checked it &mdash; it is right</button>' : '') +
-          (t.can_approve ? ' <button class="link" data-act="approve" data-t="' + t.key + '">Approve for the team</button>' : '') +
-          (t.can_reopen ? ' <button class="link" data-act="reopen" data-t="' + t.key + '">Take it back to draft</button>' : '') + '</div></div>'; }).join('') + '</div>';
+        var st = t.status === 'approved' ? '<span class="tag ok">Live</span>' : t.status === 'checked' ? '<span class="tag warn">Awaiting approval</span>' : '<span class="tag soon">Draft</span>';
+        var who = t.status === 'checked' ? 'Checked by ' + esc(t.checked_by || '') : t.status === 'approved' ? '' : 'Waiting for ' + esc(t.checker_for || 'the checker');
+        return '<div class="trow"><div class="thead"><b>' + esc(t.name) + '</b>' + st + '</div>' + (who ? '<div class="hint">' + who + '</div>' : '') + '<div class="acts">' +
+          '<button class="link" data-sample="' + t.key + '">View sample</button>' +
+          (t.can_check ? '<button class="link" data-act="check" data-t="' + t.key + '">Mark as checked</button>' : '') +
+          (t.can_approve ? '<button class="link" data-act="approve" data-t="' + t.key + '">Approve for the team</button>' : '') +
+          (t.can_reopen ? '<button class="link quiet" data-act="reopen" data-t="' + t.key + '">Return to draft</button>' : '') + '</div></div>'; }).join('') + '</div>';
   }
-  if(me.wine_editor) h += '<button class="btn" id="wines">The wine list for the Wine test</button>';
-  if(me.manager) h += '<button class="btn" id="board">Who has passed what</button>';
-  h += '<button class="link" id="out">Not you? Use another Employee ID</button>';
+  if(me.wine_editor) h += '<button class="btn ghost" id="wines">Wine list for the Wine test</button>';
+  h += '<div class="foot"><button class="link" id="out">Not you? Use another Employee ID</button></div>';
   app.innerHTML = h;
   Array.prototype.forEach.call(document.querySelectorAll('[data-topic]'), function(b){ b.onclick = function(){ begin(b.dataset.topic); }; });
   Array.prototype.forEach.call(document.querySelectorAll('[data-sample]'), function(b){ b.onclick = function(){ sample(b.dataset.sample); }; });
   Array.prototype.forEach.call(document.querySelectorAll('[data-act]'), function(b){
-    b.onclick = function(){ b.disabled = true; call({ action:b.dataset.act, topic:b.dataset.t, emp:S.emp, jwt:S.jwt }).then(function(r){ if(!r.ok) S.err = say(r.error); signIn(S.emp); }); };
+    b.onclick = function(){ if(b.dataset.act === 'reopen' && !confirm('Take this topic off the team? Staff will not see it until it is checked and approved again.')) return; b.disabled = true; call({ action:b.dataset.act, topic:b.dataset.t, emp:S.emp, jwt:S.jwt }).then(function(r){ if(!r.ok) S.err = say(r.error); signIn(S.emp); }); };
   });
   var bd = document.getElementById('board'); if(bd) bd.onclick = boardView;
   var wb = document.getElementById('wines'); if(wb) wb.onclick = function(){ wineView(); };
