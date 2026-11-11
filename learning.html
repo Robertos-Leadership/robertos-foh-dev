@@ -59,6 +59,10 @@ button{font-family:inherit}
 .acts .link{text-decoration:none;font-weight:600;padding:6px 0}.acts .link:hover{text-decoration:underline}
 .acts .link.quiet{color:#7a6d5a;font-weight:400}
 .foot{text-align:center;margin-top:16px}.foot .link{color:#6b5f4d}
+.req{display:block;margin-top:5px;padding:3px 8px;font-size:11px;letter-spacing:.06em;border:1px solid #b9ab94;background:#fff;color:#6b5f4d;cursor:pointer;white-space:nowrap}
+.req.on{background:var(--vino);border-color:var(--vino);color:var(--paper)}
+.req:disabled{opacity:.5;cursor:default}
+.link.mini{font-size:10px;padding:4px 0 0;letter-spacing:.04em;text-transform:none;font-weight:600;text-decoration:none}
 </style>
 </head><body><div class="wrap"><div id="app"><div class="card"><div class="hint">Loading…</div></div></div></div>
 <script>
@@ -151,9 +155,9 @@ function home(){
     var req = me.topics.filter(function(t){ return t.required; }), opt = me.topics.filter(function(t){ return !t.required; });
     var todo = req.filter(function(t){ return t.open && t.state !== 'passed'; }).length;
     h += '<div class="card"><div class="eyebrow">You must pass</div>' +
-      (req.length ? (todo ? '<p class="hint">' + todo + ' still to do.</p>' : req.some(function(t){ return t.open; }) ? '<p class="hint good">You are up to date.</p>' : '<p class="hint">Nothing is open yet. These topics are waiting to be checked.</p>') : '<p class="hint">Nothing is compulsory for your role.</p>') +
+      (req.length ? (todo ? '<p class="hint">' + todo + ' still to do.</p>' : req.some(function(t){ return t.open; }) ? '<p class="hint good">You are up to date.</p>' : '<p class="hint">Nothing is open yet. These topics are waiting to be checked.</p>') : '<p class="hint">Your manager has not given you a test yet. You can still take any test below.</p>') +
       req.map(topicBtn).join('') + '</div>';
-    if(opt.length) h += '<div class="card"><div class="eyebrow">Also open to you</div>' + opt.map(topicBtn).join('') + '</div>';
+    if(opt.length) h += '<div class="card"><div class="eyebrow">' + (req.length ? 'Also open to you' : 'Open to you') + '</div>' + opt.map(topicBtn).join('') + '</div>';
     h += '<p class="hint" style="padding:0 6px">Questions one at a time, each with its own timer. Pass with 80%: 4 of 5, or 12 of 15 for Wine. You can take a test again as often as you like; your best score is kept.</p>';
   }
   var rv = me.review || [];
@@ -176,7 +180,7 @@ function home(){
   Array.prototype.forEach.call(document.querySelectorAll('[data-act]'), function(b){
     b.onclick = function(){ if(b.dataset.act === 'reopen' && !confirm('Take this topic off the team? Staff will not see it until it is checked and approved again.')) return; b.disabled = true; call({ action:b.dataset.act, topic:b.dataset.t, emp:S.emp, jwt:S.jwt }).then(function(r){ if(!r.ok) S.err = say(r.error); signIn(S.emp); }); };
   });
-  var bd = document.getElementById('board'); if(bd) bd.onclick = boardView;
+  var bd = document.getElementById('board'); if(bd) bd.onclick = function(){ boardView(); };
   var wb = document.getElementById('wines'); if(wb) wb.onclick = function(){ wineView(); };
   document.getElementById('out').onclick = function(){ remember(''); S.me = null; S.emp = ''; door(); };
 }
@@ -317,24 +321,42 @@ function wineView(body){
 }
 
 /* ---------- managers: who has passed what ---------- */
-function boardView(){
+function boardView(keep){
+  var y = keep ? window.scrollY : 0;
   call({ action:'board', emp:S.emp, jwt:S.jwt }).then(function(r){
     if(!r.ok){ S.err = say(r.error); return home(); }
+    var can = !!r.can_assign;
     var h = '<div class="top"><button class="link" id="back">‹ Back</button><span class="eyebrow">Team</span></div>';
     if(r.waiting.length) h += '<div class="card"><div class="eyebrow">Not open to the team yet</div>' + r.waiting.map(function(w){ return '<div class="row"><span>' + esc(w.name) + '</span><span>' + (w.status === 'checked' ? 'waiting for approval' : 'waiting for the check') + '</span></div>'; }).join('') + '</div>';
     if(!r.topics.length) h += '<div class="card"><p class="hint">No topic is open to the team yet, so there is nothing to track.</p></div>';
     else {
       var open = 0, total = 0;
       r.rows.forEach(function(p){ p.topics.forEach(function(t){ if(t.required){ total++; if(t.state === 'passed') open++; } }); });
-      h += '<div class="card"><div class="eyebrow">Compulsory topics passed</div><div class="big">' + open + ' / ' + total + '</div></div>';
-      h += '<div class="card"><div class="eyebrow">By person</div><table><tr><th>Name</th>' + r.topics.map(function(t){ return '<th>' + esc(t.name) + '</th>'; }).join('') + '</tr>' +
+      h += '<div class="card"><div class="eyebrow">Compulsory topics passed</div>' + (total ? '<div class="big">' + open + ' / ' + total + '</div>' :
+        '<p class="hint">Nothing is compulsory yet.' + (can ? ' Tap <b>Assign</b> next to a person to give them a test.' : '') + '</p>') + '</div>';
+      var who = function(k){ return r.rows.filter(function(p){ return p.emp; }).map(function(p){ return { emp:p.emp, on:p.topics.filter(function(t){ return t.key === k; })[0].required }; }); };
+      h += '<div class="card"><div class="eyebrow">By person</div><table class="board"><tr><th>Name</th>' + r.topics.map(function(t){
+          var all = who(t.key), full = all.length && all.every(function(x){ return x.on; });
+          return '<th>' + esc(t.name) + (can && all.length ? '<div><button class="link mini" data-all="' + t.key + '" data-on="' + (full ? '0' : '1') + '" data-name="' + esc(t.name) + '">' + (full ? 'Clear all' : 'Assign all') + '</button></div>' : '') + '</th>'; }).join('') + '</tr>' +
         r.rows.map(function(p){
-          return '<tr><td>' + esc(p.name) + '<div class="hint">' + esc(p.role || '') + '</div></td>' + p.topics.map(function(t){
-            var s = t.state === 'passed' ? '<span class="good">Passed</span>' : t.state === 'expired' ? '<span class="no">Expired</span>' : t.state === 'tried' ? '<span class="no">Not passed</span>' : t.required ? '<span class="no">To do</span>' : '–';
-            return '<td>' + s + (t.best ? '<div class="hint">' + t.best.score + '/' + (t.n || 5) + ' · ' + mmss(t.best.ms) + (t.tries > 1 ? ' · ' + t.tries + ' tries' : '') + '</div>' : '') + '</td>'; }).join('') + '</tr>'; }).join('') + '</table>' +
-        '<div class="hint" style="margin-top:8px">Best score and its time. &ldquo;To do&rdquo; = compulsory for that job title and not passed.</div></div>';
+          return '<tr><td>' + esc(p.name) + '<div class="hint">' + esc(p.role || '') + (p.emp ? '' : ' · no Employee ID') + '</div></td>' + p.topics.map(function(t){
+            var s = t.state === 'passed' ? '<span class="good">Passed</span>' : t.state === 'expired' ? '<span class="no">Expired</span>' : t.state === 'tried' ? '<span class="no">Not passed</span>' : (!can && t.required) ? '<span class="no">To do</span>' : (!can ? '–' : '');
+            var tog = can && p.emp ? '<button class="req' + (t.required ? ' on' : '') + '" data-emp="' + esc(p.emp) + '" data-t="' + t.key + '" data-on="' + (t.required ? '0' : '1') + '" aria-pressed="' + !!t.required + '">' + (t.required ? 'Required' : 'Assign') + '</button>' : '';
+            return '<td>' + s + (t.best ? '<div class="hint">' + t.best.score + '/' + (t.n || 5) + ' · ' + mmss(t.best.ms) + (t.tries > 1 ? ' · ' + t.tries + ' tries' : '') + '</div>' : '') + tog + '</td>'; }).join('') + '</tr>'; }).join('') + '</table>' +
+        '<div class="hint" style="margin-top:8px">' + (can ? 'Tap <b>Assign</b> to make a topic compulsory for that person; tap <b>Required</b> to take it off. ' : '') + 'Anyone can take any open test. Scores show the best try and its time.</div></div>';
     }
     app.innerHTML = h; document.getElementById('back').onclick = home;
+    var send = function(btn, topic, ids, on){
+      btn.disabled = true;
+      call({ action:'assign', emp:S.emp, jwt:S.jwt, topic:topic, who:ids, on:on }).then(function(x){ if(!x.ok){ S.err = say(x.error); btn.disabled = false; alert(S.err); S.err = ''; return; } boardView(true); });
+    };
+    Array.prototype.forEach.call(document.querySelectorAll('button.req'), function(b){ b.onclick = function(){ send(b, b.dataset.t, [b.dataset.emp], b.dataset.on === '1'); }; });
+    Array.prototype.forEach.call(document.querySelectorAll('[data-all]'), function(b){ b.onclick = function(){
+      var on = b.dataset.on === '1', ids = who(b.dataset.all).filter(function(x){ return x.on !== on; }).map(function(x){ return x.emp; });
+      if(!ids.length) return;
+      if(!confirm((on ? 'Make “' + b.dataset.name + '” compulsory for ' : 'Take “' + b.dataset.name + '” off ') + ids.length + (ids.length === 1 ? ' person' : ' people') + ' on this list?')) return;
+      send(b, b.dataset.all, ids, on); }; });
+    if(keep) window.scrollTo(0, y);
   });
 }
 boot();

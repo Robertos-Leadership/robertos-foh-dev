@@ -127,11 +127,11 @@ const same = (a: unknown, raw: string) => {
 };
 
 // ---- who is asking: FOH staff only (the Kitchen's own Learning is separate) -------------------------------------
-async function fohStaff(db: ReturnType<typeof sb>, raw: string): Promise<{ name: string; role: string } | null> {
+async function fohStaff(db: ReturnType<typeof sb>, raw: string): Promise<{ name: string; role: string; id: string } | null> {
   raw = String(raw ?? "").trim(); if (!raw) return null;
   const f = await db.from("foh_staff").select("name,emp_id,role").eq("active", true);
   const hit = (f.data || []).find((s: Row) => same(s.emp_id, raw));
-  return hit ? { name: String(hit.name), role: String(hit.role ?? "") } : null;
+  return hit ? { name: String(hit.name), role: String(hit.role ?? ""), id: String(hit.emp_id ?? "").trim() } : null;
 }
 // the master codes open every module for viewing (Francesco's standing rule): 1212 and the personal codes checked in
 // the database. A master code READS (the team board); it never takes a test, checks or approves.
@@ -150,17 +150,18 @@ async function appUser(db: ReturnType<typeof sb>, jwt: unknown): Promise<{ name:
   return { name: String(row.name || email), title, admin: !!row.is_admin, manager: !!row.is_admin || /manager/i.test(title) };
 }
 
-// ---- who must pass what (Alessandro, 2 Nov 2026: compulsory for ALL FOH staff) -------------------------------------
-// Everyone on the floor passes the menu and the allergens. Wine by the glass is also required of everyone who
-// serves or pours it: waiters, supervisors, managers, sommeliers and the bar. Hosts, reservations, reception,
-// runners and the cashier are not asked for wine. Housekeeping, security, maintenance, consultants and the
-// chairman are not floor staff, so nothing is required of them (they can still take any topic).
-export function requiredFor(role: string): string[] {
-  const r = role.toLowerCase();
-  if (/housekeep|security|maintenance|consultant|chairman/.test(r)) return [];
-  const out = ["alacarte", "allergens"];
-  if (!/host|reserv|reception|runner|cashier/.test(r)) out.push("wine");
-  return out;
+// ---- who must pass what (Francesco, 11 Nov 2026: nothing is compulsory by default) ----------------------------------
+// A manager picks, on the board, which topic each person must pass (table learn_required; switching it off sets
+// required=false, rows are never deleted). Anyone can still take any open topic. The board lists the floor team:
+// housekeeping, security, maintenance, consultants and the chairman are left off unless assigned or already tried.
+export function onFloor(role: string): boolean {
+  return !/housekeep|security|maintenance|consultant|chairman/.test(role.toLowerCase());
+}
+async function assigned(db: ReturnType<typeof sb>, emp?: string): Promise<Set<string>> {
+  let q = db.from("learn_required").select("emp_id,topic").eq("required", true);
+  if (emp !== undefined) q = q.eq("emp_id", emp);
+  const r = await q;
+  return new Set((r.data || []).map((x: Row) => String(x.emp_id).trim() + "|" + x.topic));
 }
 
 const PASS_VALID = (t: Row, at: string) => !t.expires_months || Date.now() < new Date(at).setMonth(new Date(at).getMonth() + t.expires_months);
@@ -223,10 +224,10 @@ Deno.serve(async (req) => {
       const out: Row = { ok: true, name: st ? st.name : au ? au.name : mn, staff: !!st, manager: !!au?.manager || (!st && !!mn), admin: !!au?.admin, master: !st && !!mn };
       if (st) {
         const at = await db.from("learn_attempts").select("topic,finished_at,score,passed,total_ms").eq("emp_id", emp).not("finished_at", "is", null);
-        const need = requiredFor(st.role);
+        const need = await assigned(db, st.id);
         const ws = await wineSet(db);
         out.role = st.role;
-        out.topics = TOPICS.map((t) => ({ key: t.key, name: t.name, blurb: t.blurb, open: open(t), required: need.includes(t.key), expires_months: t.expires_months, ...sizing(t.key, ws), ...stateOf(t, at.data || []) }));
+        out.topics = TOPICS.map((t) => ({ key: t.key, name: t.name, blurb: t.blurb, open: open(t), required: need.has(st.id + "|" + t.key), expires_months: t.expires_months, ...sizing(t.key, ws), ...stateOf(t, at.data || []) }));
       }
       // a checker (by job title) sees the topics waiting for their check; an Admin sees the ones waiting for approval
       const mayCheck = (t: Row) => !!((st && new RegExp(t.checker_re, "i").test(st.role)) || (au && new RegExp(t.checker_re, "i").test(au.title)));
@@ -357,18 +358,36 @@ Deno.serve(async (req) => {
       const au = await appUser(db, b.jwt);
       const mn = au ? null : await masterName(db, emp);
       if ((!au || !au.manager) && !mn) return json({ ok: false, error: "not_manager" }, 403);
-      const [sf, at] = await Promise.all([
+      const [sf, at, need] = await Promise.all([
         db.from("foh_staff").select("name,emp_id,role").eq("active", true).order("name"),
         db.from("learn_attempts").select("emp_id,topic,finished_at,score,passed,total_ms").not("finished_at", "is", null),
+        assigned(db),
       ]);
       const live = TOPICS.filter(open);
       const ws = await wineSet(db);
       const rows = (sf.data || []).map((s: Row) => {
-        const mine = (at.data || []).filter((a: Row) => String(a.emp_id) === String(s.emp_id).trim());
-        const need = requiredFor(String(s.role ?? ""));
-        return { name: s.name, role: s.role, topics: live.map((t) => ({ key: t.key, required: need.includes(t.key), ...sizing(t.key, ws), ...stateOf(t, mine) })) };
-      }).filter((r: Row) => r.topics.some((t: Row) => t.required || t.state !== "not_yet"));
-      return json({ ok: true, by: au ? au.name : mn, topics: live.map((t) => ({ key: t.key, name: t.name })), rows, waiting: TOPICS.filter((t) => t.built && !open(t)).map((t) => ({ key: t.key, name: t.name, status: t.status })) });
+        const id = s.emp_id == null ? "" : String(s.emp_id).trim();
+        const mine = id ? (at.data || []).filter((a: Row) => String(a.emp_id) === id) : [];
+        return { name: s.name, role: s.role, emp: id || null, floor: onFloor(String(s.role ?? "")),
+          topics: live.map((t) => ({ key: t.key, required: !!id && need.has(id + "|" + t.key), ...sizing(t.key, ws), ...stateOf(t, mine) })) };
+      }).filter((r: Row) => r.floor || r.topics.some((t: Row) => t.required || t.state !== "not_yet"));
+      return json({ ok: true, by: au ? au.name : mn, can_assign: !!au?.manager, topics: live.map((t) => ({ key: t.key, name: t.name })), rows, waiting: TOPICS.filter((t) => t.built && !open(t)).map((t) => ({ key: t.key, name: t.name, status: t.status })) });
+    }
+
+    // ----------------------------------------------------------------- managers: make a topic compulsory for people (or not)
+    if (action === "assign") {
+      const au = await appUser(db, b.jwt);
+      if (!au || !au.manager) return json({ ok: false, error: "not_manager" }, 403);   // a master code only reads
+      const t = topicOf(b.topic); if (!t || !open(t)) return json({ ok: false, error: "no_topic" });
+      const want = (Array.isArray(b.who) ? b.who : [b.who]).map((x: unknown) => String(x ?? "").trim()).filter(Boolean).slice(0, 300);
+      if (!want.length) return json({ ok: false, error: "no_emp" });
+      const sf = await db.from("foh_staff").select("emp_id").in("emp_id", want);
+      const ids = [...new Set((sf.data || []).map((r: Row) => String(r.emp_id).trim()))];
+      if (!ids.length) return json({ ok: false, error: "no_emp" });
+      const now = new Date().toISOString();
+      const up = await db.from("learn_required").upsert(ids.map((id) => ({ emp_id: id, topic: t.key, required: !!b.on, by: au.name, at: now })), { onConflict: "emp_id,topic" });
+      if (up.error) { console.log("learn assign", up.error.message); return json({ ok: false, error: "db" }, 500); }
+      return json({ ok: true, n: ids.length, on: !!b.on });
     }
 
     // ----------------------------------------------------------------- staff taking a test
