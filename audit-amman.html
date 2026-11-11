@@ -174,6 +174,8 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,a:focus-visible{
 .act{padding:12px 14px;display:flex;flex-direction:column;gap:6px}
 .act .h{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}
 .act .n{font-family:var(--display);font-size:18px;color:var(--vino);line-height:1.2}
+.noteflag{background:var(--below-bg);color:var(--below);border-radius:8px;padding:8px 10px;font-size:13px;line-height:1.45;margin-top:6px}
+select.movenote{margin-top:6px;font:inherit;font-size:13px;color:var(--muted);background:#fff;border:1px solid var(--line);border-radius:8px;padding:6px 8px;max-width:100%}
 .badge{display:inline-block;font-size:11.5px;font-weight:600;padding:3px 9px;border-radius:10px;white-space:nowrap}
 .badge.urgent,.badge.remove{background:var(--err-bg);color:var(--err)}
 .badge.fix,.badge.attention{background:var(--below-bg);color:var(--below)}
@@ -348,6 +350,8 @@ function areaName(a){
   if (a === 'ristorante' && k === 'restaurant') return t('atTable');
   if (a === 'scala' && k === 'scala') return t('atScala');
   if (a === 'bagno' && (k === 'restaurant' || k === 'scala' || k === 'venue')) return t(k === 'scala' ? 'bagnoS' : 'bagnoR');   // two washrooms (24 Oct 2026)
+  if (isAmman() && a === 'scala') return 'Lounge';   // Amman has no Scala: it is the lounge (11 Nov 2026)
+  if (isAmman() && a === 'bagnos') return 'Lounge washroom';
   if (a === 'bagnos') return t('bagnoS');   // the whole venue has both: this is Scala's (30 Oct 2026)
   return t(a);
 }
@@ -990,6 +994,7 @@ function vList(){
 /* ── Francesco's report (English) ───────────────────────────────────────── */
 var AREA_EN = { arrivo: 'Arrival & welcome', decor: 'Interior decor', cucina: 'Inside the kitchen', ristorante: 'Restaurant', vino: 'Wine', scala: 'Scala', piatto: 'Dish' };
 function vReport(){
+  checkNotesSoon();
   var ov = overallPct(), pv = D.previous, lfAll = like();
   // Action plan, by the same rule as the email Amin gets: a No, a quality score of 1-2, a dish of 1-2,
   // Enrico's to fix / urgent / take off, a photo flag. A guest sets no verdicts, so before 24 Oct 2026
@@ -999,7 +1004,7 @@ function vReport(){
     var c = D.catalog.filter(function(x){ return x.code === s.code; })[0]; if (!c) return;
     var low = !s.na && s.score != null && (c.qtype === 'standard' ? Number(s.score) === 0 : Number(s.score) <= 2);
     if (s.verdict === 'urgent' || s.verdict === 'fix' || low)
-      acts.push({ lvl: s.verdict === 'urgent' ? 0 : 1, v: s.verdict === 'urgent' ? 'urgent' : 'fix', badge: s.verdict ? null : ansLabel(c, s, 'en'), where: AREA_EN[c.area], what: c.label_en, row: s, target: 'score', ref: s.code });
+      acts.push({ lvl: s.verdict === 'urgent' ? 0 : 1, v: s.verdict === 'urgent' ? 'urgent' : 'fix', badge: s.verdict ? ({ urgent: 'Urgent', fix: 'To fix' }[s.verdict] + (low || (s.score != null && !s.na) ? ' · ' + ansLabel(c, s, 'en') : '')) : ansLabel(c, s, 'en'), where: AREA_EN[c.area], what: c.label_en, row: s, target: 'score', ref: s.code });
   });
   D.dishes.forEach(function(x){ if (x.verdict === 'fix' || x.verdict === 'remove' || (!x.verdict && x.score != null && Number(x.score) <= 2))
     acts.push({ lvl: x.verdict === 'remove' ? 0 : 1, v: x.verdict === 'remove' ? 'remove' : 'fix', badge: x.verdict ? null : x.score + ' / 5', where: 'Dish', what: x.dish_name, row: x, target: 'dish', ref: x.id }); });
@@ -1094,7 +1099,33 @@ function vReport(){
 }
 function enEdit(target, ref, en, it){
   return '<textarea class="en-edit" data-en="1" data-target="' + target + '" data-ref="' + esc(ref) + '" aria-label="English" placeholder="' + (it ? 'Not translated yet — press Translate new notes' : '') + '">' + esc(en || '') + '</textarea>' +
-    (it ? '<div class="it" style="font-size:12.5px;color:var(--muted);font-style:italic">Original: ' + esc(it) + '</div>' : '');
+    (it ? '<div class="it" style="font-size:12.5px;color:var(--muted);font-style:italic">Original: ' + esc(it) + '</div>' : '') +
+    (target === 'score' && ADMIN && isAmman() && (en || it) ? noteTools(ref) : '');
+}
+/* Amman report (11 Nov 2026): a note on the wrong question, or one that only says "commented before", reads
+   as nonsense to whoever gets the email. check_notes points at those (it never changes them); Move to puts a
+   note under the question it is about. Francesco decides both. */
+var NOTEFLAGS = null, NOTECHECK = false;
+function checkNotesSoon(){
+  if (NOTECHECK || !ADMIN || !isAmman()) return; NOTECHECK = true;
+  api('check_notes').then(function(r){ NOTEFLAGS = {}; (r.flags || []).forEach(function(f){ NOTEFLAGS[f.code] = f; }); if (S.v === 'report') render(); }, function(){ NOTEFLAGS = {}; });
+}
+function qLabel(code){ var c = D.catalog.filter(function(x){ return x.code === code; })[0]; return c ? c.label_en : code; }
+function noteTools(code){
+  var f = NOTEFLAGS && NOTEFLAGS[code], h = '';
+  if (f) h += '<div class="noteflag">' + (f.kind === 'pointer' ? 'This note only points to another note. The reader of the email will not see what it means.' : 'This note seems to be about something else.') +
+    (f.why ? ' <span class="muted">' + esc(f.why) + '</span>' : '') +
+    (f.better ? '<br><button class="cam" data-act="movenote" data-from="' + esc(code) + '" data-to="' + esc(f.better) + '" style="margin-top:6px">Move it to: ' + esc(qLabel(f.better)) + '</button>' : '') + '</div>';
+  var opts = '<option value="">Move this note to…</option>';
+  AREAS.forEach(function(a){ opts += '<optgroup label="' + esc(AREA_EN[a] || a) + '">'; cat(a).forEach(function(c){ if (c.code !== code) opts += '<option value="' + esc(c.code) + '">' + esc(c.label_en) + '</option>'; }); opts += '</optgroup>'; });
+  return h + '<select class="movenote" data-move="' + esc(code) + '" aria-label="Move this note to another question">' + opts + '</select>';
+}
+function moveNote(from, to){
+  if (!from || !to) return;
+  waitSaved().then(function(){ return api('move_note', { from: from, to: to }); }).then(function(){
+    if (NOTEFLAGS) delete NOTEFLAGS[from]; NOTECHECK = false; toast('Note moved to: ' + qLabel(to));
+    return reload();
+  }).catch(function(er){ toast(er.message, true); render(); });
 }
 
 /* ── behaviour ──────────────────────────────────────────────────────────── */
@@ -1150,6 +1181,7 @@ root.addEventListener('keydown', function(e){
 });
 root.addEventListener('change', function(e){
   var el = e.target;
+  if (el.matches('select[data-move]')) { if (el.value) { el.disabled = true; moveNote(el.getAttribute('data-move'), el.value); } return; }
   if (el.matches('input[data-set]')) {
     var tg = el.getAttribute('data-target'), rf = el.getAttribute('data-ref'), k = el.getAttribute('data-set'), p = { target: tg, ref: rf };
     p[k] = el.value; setLocal(tg, rf, k, el.value);
@@ -1241,6 +1273,7 @@ root.addEventListener('click', function(e){
     render(); return;
   }
   if (act === 'copy') { copyText(b.getAttribute('data-text')); return; }
+  if (act === 'movenote') { b.disabled = true; moveNote(b.getAttribute('data-from'), b.getAttribute('data-to')); return; }
   if (act === 'translate') { runTranslate(b); return; }
   if (act === 'sendtest') { sendReport(b, 'send_test'); return; }
   if (act === 'sendamin') { if (!b._sure) { b._sure = true; b.textContent = 'Tap again to email ' + (D.recipients ? D.recipients.to.name : 'Amin'); setTimeout(function(){ if (b.isConnected) { b._sure = false; render(); } }, 5000); return; } sendReport(b, 'send'); return; }
@@ -1289,7 +1322,7 @@ function waitSaved(){
 }
 function runTranslate(b){
   b.disabled = true; var old = b.textContent; b.textContent = 'Translating…';
-  waitSaved().then(function(){ return api('translate'); }).then(function(r){ return reload().then(function(){ toast(r.translated ? r.translated + ' notes translated' : 'Everything is already in English'); }); })
+  waitSaved().then(function(){ return api('translate'); }).then(function(r){ NOTECHECK = false; NOTEFLAGS = null; return reload().then(function(){ toast(r.translated ? r.translated + ' notes translated' : 'Everything is already in English'); }); })
     .catch(function(er){ toast(er.message, true); }).then(function(){ if (b.isConnected) { b.disabled = false; b.textContent = old; } });
 }
 function sendReport(b, action){
