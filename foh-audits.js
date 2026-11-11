@@ -45,11 +45,11 @@ function auEsc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, functio
 // The audit page lives in this app (moved from the Kitchen app 22 Oct 2026), next to index.html:
 // DEV hands out the DEV page, LIVE the LIVE one. The function only accepts our own pages.
 function auPage(){ return new URL('audit.html', location.origin + location.pathname).href; }
-async function auApi(action, payload){
+async function auApi(action, payload, fn){
   var s = await sb.auth.getSession();
   var jwt = s && s.data && s.data.session && s.data.session.access_token;
   if(!jwt) throw new Error('Please sign in again.');
-  var r = await fetch(KITCHEN_URL + '/functions/v1/audit-api?forceFunctionRegion=ap-southeast-2', {   // runs in Sydney, next to the database (30 Oct 2026)
+  var r = await fetch(KITCHEN_URL + '/functions/v1/' + (fn || 'audit-api') + '?forceFunctionRegion=ap-southeast-2', {   // runs in Sydney, next to the database (30 Oct 2026)
     method: 'POST',
     headers: { 'Content-Type': 'application/json', apikey: KITCHEN_KEY, Authorization: 'Bearer ' + KITCHEN_KEY },
     body: JSON.stringify(Object.assign({ action: action, foh: jwt, page: auPage() }, payload || {}))
@@ -259,7 +259,8 @@ async function auOpen(id){
   var a = (AU.list || []).filter(function(x){ return x.id === id; })[0];
   AU.open = a || { id: id, auditor: '' }; AU.report = null; AU.reportErr = null;
   auRepaint(); try { window.scrollTo(0, 0); } catch(e){}
-  try { var r = await auApi('report', { id: id }); if(AU.open && AU.open.id === id) AU.report = r.html; }
+  // Andrea's Amman report is built by audit-amman (its own design, 11 Nov 2026); Chef Bartolini's and the guests' by audit-api.
+  try { var r = await auApi('report', { id: id }, auKindOf(AU.open) === 'amman' ? 'audit-amman' : null); if(AU.open && AU.open.id === id) AU.report = r.html; }
   catch(e){ if(AU.open && AU.open.id === id) AU.reportErr = e.message || String(e); }
   auRepaint();
 }
