@@ -127,9 +127,9 @@ function chip(t){
 }
 function line(t){
   if(!t.open) return 'Waiting to be checked before the team sees it.';
-  if(t.state === 'passed') return 'Passed ' + dmy(t.passed_at) + (t.best ? ' · best ' + t.best.score + '/5 in ' + mmss(t.best.ms) : '') + (t.expires ? ' · valid until ' + dmy(t.expires) : '');
+  if(t.state === 'passed') return 'Passed ' + dmy(t.passed_at) + (t.best ? ' · best ' + t.best.score + '/' + (t.n || 5) + ' in ' + mmss(t.best.ms) : '') + (t.expires ? ' · valid until ' + dmy(t.expires) : '');
   if(t.state === 'expired') return 'Passed ' + dmy(t.passed_at) + ' · expired ' + dmy(t.expires) + ', take it again';
-  if(t.state === 'tried') return t.tries + (t.tries === 1 ? ' try' : ' tries') + ' · best ' + (t.best ? t.best.score : 0) + '/5 · you need 4';
+  if(t.state === 'tried') return t.tries + (t.tries === 1 ? ' try' : ' tries') + ' · best ' + (t.best ? t.best.score : 0) + '/' + (t.n || 5) + ' · you need ' + (t.need || 4);
   return t.blurb || '';
 }
 function home(){
@@ -209,7 +209,7 @@ function draw(r){
   var h = '<div class="top"><span>Question ' + (r.idx+1) + ' of ' + r.total + '</span><span class="lvl">' + esc(r.topic_name) + '</span><span class="clock">' + q.secs + 's</span></div><div class="bar"><i></i></div>' +
     '<div class="card"><div class="eyebrow">' + esc(q.area) + '</div><h2>' + esc(q.text) + '</h2>' + (q.quote ? '<div class="quote">“' + esc(q.quote) + '”</div>' : '');
   if(q.type === 'match'){
-    h += '<p class="hint">One wine is not used.</p>' + q.lefts.map(function(l, i){
+    h += '<p class="hint">' + ((q.opts.length - q.lefts.length) === 1 ? 'One wine is' : (q.opts.length - q.lefts.length) + ' wines are') + ' not used.</p>' + q.lefts.map(function(l, i){
       return '<div style="margin-top:12px"><div style="font-weight:600">' + esc(l) + '</div><select class="sel" data-i="' + i + '"><option value="">Choose a wine…</option>' +
         q.opts.map(function(o, k){ return '<option value="' + k + '">' + esc(o) + '</option>'; }).join('') + '</select></div>'; }).join('');
   } else {
@@ -321,7 +321,7 @@ function boardView(){
         r.rows.map(function(p){
           return '<tr><td>' + esc(p.name) + '<div class="hint">' + esc(p.role || '') + '</div></td>' + p.topics.map(function(t){
             var s = t.state === 'passed' ? '<span class="good">Passed</span>' : t.state === 'expired' ? '<span class="no">Expired</span>' : t.state === 'tried' ? '<span class="no">Not passed</span>' : t.required ? '<span class="no">To do</span>' : '–';
-            return '<td>' + s + (t.best ? '<div class="hint">' + t.best.score + '/5 · ' + mmss(t.best.ms) + (t.tries > 1 ? ' · ' + t.tries + ' tries' : '') + '</div>' : '') + '</td>'; }).join('') + '</tr>'; }).join('') + '</table>' +
+            return '<td>' + s + (t.best ? '<div class="hint">' + t.best.score + '/' + (t.n || 5) + ' · ' + mmss(t.best.ms) + (t.tries > 1 ? ' · ' + t.tries + ' tries' : '') + '</div>' : '') + '</td>'; }).join('') + '</tr>'; }).join('') + '</table>' +
         '<div class="hint" style="margin-top:8px">Best score and its time. &ldquo;To do&rdquo; = compulsory for that job title and not passed.</div></div>';
     }
     app.innerHTML = h; document.getElementById('back').onclick = home;

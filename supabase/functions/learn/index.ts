@@ -117,6 +117,9 @@ function testQs(book: Book, menuId: string, set: WineSet, key: string, seed: num
   if (key === "wine" && set.qs.length) return fixedTopic(set.qs, seed);
   return buildTopic(scoped(book, menuId, set), key, seed, n);
 }
+// how many questions a topic's test has and how many pass it (the fixed Wine set is longer than 5)
+const sizeOf = (key: string, set: WineSet) => (key === "wine" && set.qs.length ? set.qs.length : QUESTIONS_PER_TEST);
+const sizing = (key: string, set: WineSet) => ({ n: sizeOf(key, set), need: passMark(sizeOf(key, set)) });
 // ---- who is asking -------------------------------------------------------------------------------------------
 const same = (a: unknown, raw: string) => {
   const s = String(a ?? "").trim(); if (!s) return false; if (s === raw) return true;
@@ -221,8 +224,9 @@ Deno.serve(async (req) => {
       if (st) {
         const at = await db.from("learn_attempts").select("topic,finished_at,score,passed,total_ms").eq("emp_id", emp).not("finished_at", "is", null);
         const need = requiredFor(st.role);
+        const ws = await wineSet(db);
         out.role = st.role;
-        out.topics = TOPICS.map((t) => ({ key: t.key, name: t.name, blurb: t.blurb, open: open(t), required: need.includes(t.key), expires_months: t.expires_months, ...stateOf(t, at.data || []) }));
+        out.topics = TOPICS.map((t) => ({ key: t.key, name: t.name, blurb: t.blurb, open: open(t), required: need.includes(t.key), expires_months: t.expires_months, ...sizing(t.key, ws), ...stateOf(t, at.data || []) }));
       }
       // a checker (by job title) sees the topics waiting for their check; an Admin sees the ones waiting for approval
       const mayCheck = (t: Row) => !!((st && new RegExp(t.checker_re, "i").test(st.role)) || (au && new RegExp(t.checker_re, "i").test(au.title)));
@@ -358,10 +362,11 @@ Deno.serve(async (req) => {
         db.from("learn_attempts").select("emp_id,topic,finished_at,score,passed,total_ms").not("finished_at", "is", null),
       ]);
       const live = TOPICS.filter(open);
+      const ws = await wineSet(db);
       const rows = (sf.data || []).map((s: Row) => {
         const mine = (at.data || []).filter((a: Row) => String(a.emp_id) === String(s.emp_id).trim());
         const need = requiredFor(String(s.role ?? ""));
-        return { name: s.name, role: s.role, topics: live.map((t) => ({ key: t.key, required: need.includes(t.key), ...stateOf(t, mine) })) };
+        return { name: s.name, role: s.role, topics: live.map((t) => ({ key: t.key, required: need.includes(t.key), ...sizing(t.key, ws), ...stateOf(t, mine) })) };
       }).filter((r: Row) => r.topics.some((t: Row) => t.required || t.state !== "not_yet"));
       return json({ ok: true, by: au ? au.name : mn, topics: live.map((t) => ({ key: t.key, name: t.name })), rows, waiting: TOPICS.filter((t) => t.built && !open(t)).map((t) => ({ key: t.key, name: t.name, status: t.status })) });
     }
