@@ -3793,6 +3793,18 @@ function peRenderEvent(){
     var actVal = actSet ? Math.max(0, Number(e.actual_revenue)) : null;
     var colMissing = !!(peState.colsOk && peState.colsOk.actual_revenue===false);
     var srSourced = actSet && e.actual_revenue_source==='sevenrooms';
+    // 'simphony' = the figure was read off the Simphony check itself (the POS
+    // truth) and written here by the Simphony check run. The line it logged says
+    // which check and what SevenRooms had shown, so the screen can repeat it.
+    var simSourced = actSet && e.actual_revenue_source==='simphony';
+    var simNote = '';
+    if(simSourced){
+      (peState.log[e.id]||[]).some(function(l){
+        var d = String((l && l.detail) || '');
+        if(d.indexOf('Simphony check')===0){ simNote = d; return true; }
+        return false;
+      });
+    }
     h += '<div class="pe-card" style="margin-top:12px;border-color:rgba(201,168,76,0.55);background:#FDFBF6">'+
       '<b style="font-size:14px;color:#400207">After the event — real revenue</b>'+
       '<div style="font-size:11.5px;color:#4F4535;margin:4px 0 9px">More guests showed up, or extra bar / off-menu spend? Put the <b>real final total</b> here — it becomes this event’s revenue in the monthly report. You can also just raise the guest count above. Leave this blank to keep the quoted '+(t.total!=null?'AED '+peMoney(t.total):'amount')+'.</div>'+
@@ -3806,7 +3818,10 @@ function peRenderEvent(){
         ? '<div style="margin-top:8px;font-size:12.5px;color:#2E6B34">✓ The report counts <b>AED '+peMoney(actVal)+'</b> for this event'+((t.payable!=null && Math.round(actVal)!==Math.round(t.payable))?' <span style="color:#4F4535">(quoted was AED '+peMoney(t.payable)+(t.fee?' with the 7% fee':'')+')</span>':'')+'.</div>'
         : '')+
       (srSourced
-        ? '<div style="margin-top:6px;font-size:11.5px;color:#8A2A1A;background:#FBF0D6;border:1px solid #E4CE8E;border-radius:8px;padding:7px 9px">From <b>SevenRooms</b> (POS check) — not yet checked against Simphony. Type the Simphony figure over it to confirm.</div>'
+        ? '<div style="margin-top:6px;font-size:11.5px;color:#8A2A1A;background:#FBF0D6;border:1px solid #E4CE8E;border-radius:8px;padding:7px 9px">From <b>SevenRooms</b> (POS check) — not yet checked against Simphony. It turns green here once the Simphony check is read, or type the Simphony figure over it.</div>'
+        : '')+
+      (simSourced
+        ? '<div style="margin-top:6px;font-size:11.5px;color:#1C5A25;background:#EAF4E6;border:1px solid #A9CFA0;border-radius:8px;padding:7px 9px">✓ <b>Confirmed against Simphony</b>'+(simNote?' — '+peEsc(simNote):'')+'</div>'
         : '')+
       (colMissing
         ? '<div style="margin-top:8px;font-size:11.5px;color:#7A5500;background:#FBF0D6;border:1px solid #DFC680;border-radius:8px;padding:8px 10px">Run <b>foh-events-actualrev.sql</b> once in Supabase before this saves permanently — until then it holds for this session only.</div>'
