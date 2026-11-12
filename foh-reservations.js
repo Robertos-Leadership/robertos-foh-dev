@@ -203,7 +203,7 @@ async function resFetchDaysheet(d){
 // as DAY and dinner as LEGACY. Only used now for a booking with no time.
 var RES_SHIFT_NAMES = { DAY:'Lunch', LUNCH:'Lunch', BREAKFAST:'Breakfast', BRUNCH:'Brunch',
   LEGACY:'Dinner', DINNER:'Dinner', NIGHT:'Dinner' };
-// Francesco's rule, 6 Oct 2026: LUNCH is 12:00-17:00 and DINNER is 17:01 to
+// Francesco's rule (6 Oct, moved 12 Nov 2026): LUNCH is 12:00-16:59 and DINNER is 17:00 to
 // closing, by the booking time -- not by SevenRooms' shift, which files a 16:00
 // table under dinner. After midnight is still dinner (closing runs late), and a
 // booking before noon counts as lunch. Only a booking with no time falls back to
@@ -212,7 +212,7 @@ function resShiftOf(r){
   var m = /^(\d{1,2}):(\d{2})/.exec(String((r && r.time) || ''));
   if(!m) return resShiftLabel(r && r.shift);
   var mins = Number(m[1])*60 + Number(m[2]);
-  return (mins >= 6*60 && mins <= 17*60) ? 'Lunch' : 'Dinner';
+  return (mins >= 6*60 && mins < 17*60) ? 'Lunch' : 'Dinner';   // 12 Nov 2026: lunch ends 16:59
 }
 function resShiftLabel(s){
   if(!s) return s;
@@ -258,7 +258,7 @@ function resRefresh(){ resLoad(true); resWeekLoad(true); }
 // ── The week ahead (6 Oct 2026): today + the next 6 days, lunch and dinner
 // covers each, so a manager sees the week at a glance and taps into a day.
 // Reads the light ?upcoming= count (the same one the home strip uses, split
-// 12:00-17:00 / 17:01-close by sevenrooms-sync), one call per day, all at once.
+// 12:00-16:59 / 17:00-close by sevenrooms-sync), one call per day, all at once.
 // A day that fails shows a dash with a reason -- never a 0, which reads as "empty".
 var RESW = { from:null, days:{}, loading:false, at:0 };
 function resWeekDates(){
