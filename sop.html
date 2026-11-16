@@ -424,30 +424,42 @@ function report(){
       var share = p.people ? p.not_first / p.people : 0, cls = p.people < 3 ? 'lock' : share >= .5 ? 'hot' : share >= .3 ? 'mid' : 'done';
       return '<details class="rp"><summary><span class="m">' + esc(p.title) + '<small>' + esc(FNAME[p.folder] || '') + '</small></span>' +
         '<span class="v"><span class="pill ' + cls + '">' + p.not_first + ' of ' + p.people + ' people</span><small>' + p.wrong + ' wrong ' + (p.wrong === 1 ? 'try' : 'tries') + '</small></span></summary>' +
-        '<div class="in">' + p.who.map(function(w){ return '<div>' + esc(w.name) + ': ' + w.wrong + ' wrong' + (w.signed ? ', then passed' : ', <b style="color:var(--bad)">not signed</b>') + '</div>'; }).join('') + '</div></details>';
+        '<div class="in">' + p.who.map(function(w){ return '<div>' + esc(w.name) + ': ' + w.wrong + ' wrong' + (w.signed ? ', then passed' : ', <b style="color:var(--bad)">not passed yet</b>') + '</div>'; }).join('') + '</div></details>';
     };
     h += '<div class="card"><div class="eyebrow">Pages the team finds hard</div><div class="hint">People who did not pass first time. Tap a page for the names.</div>' +
       (R.pages.length ? R.pages.slice(0, 10).map(pageRow).join('') + (R.pages.length > 10 ? '<details><summary>Show the other ' + (R.pages.length - 10) + ' pages</summary>' + R.pages.slice(10).map(pageRow).join('') + '</details>' : '') : '<div class="hint">No wrong answers so far.</div>') + '</div>';
+
+    // tap a name: the pages this person got wrong, and (for tries since the app keeps them) which question and what they picked
+    var personIn = function(p){
+      if(!p.list || !p.list.length) return '<div>No wrong answers.</div>';
+      return p.list.map(function(it){
+        var s = '<div style="color:var(--ink);margin-top:6px">' + esc(it.title) + ': ' + it.wrong + ' wrong' + (it.signed ? ', then passed' : ', <b style="color:var(--bad)">not passed yet</b>') + '</div>';
+        (it.missed || []).forEach(function(m){
+          s += '<div style="padding-left:12px">' + esc(m.q) + '<br>Picked: ' + Object.keys(m.picks).map(function(k){ return esc(k || 'no answer') + (m.picks[k] > 1 ? ' (' + m.picks[k] + ' times)' : ''); }).join('; ') + '</div>';
+        });
+        return s;
+      }).join('') + (p.list.some(function(it){ return it.rec < it.wrong; }) ? '<div class="code-sm" style="margin-top:8px">Which question was missed is shown for tries from 16 Nov on. Earlier tries only say right or wrong.</div>' : '');
+    };
 
     // people who need a word
     var need = [];
     R.people.forEach(function(p){
       var sub = p.role || p.section || '';
       var why = [], tag = null;
-      if(p.open.length){ why.push('Got ' + p.open.slice(0, 3).join(', ') + (p.open.length > 3 ? ' and ' + (p.open.length - 3) + ' more' : '') + ' wrong and has not signed'); tag = tag || [0, 'Not signed', 'hot']; }
+      if(p.open.length){ why.push('Got ' + p.open.slice(0, 3).join(', ') + (p.open.length > 3 ? ' and ' + (p.open.length - 3) + ' more' : '') + ' wrong and has not passed yet'); tag = tag || [0, 'Not passed', 'hot']; }
       if(p.pages >= 5 && p.miss / p.pages >= .5){ why.push('Wrong at least once on ' + p.miss + ' of ' + p.pages + ' pages'); tag = tag || [1, 'Most pages', 'hot']; }
       if(p.top >= 10){ why.push(p.top + ' wrong tries on ' + p.top_title); tag = tag || [2, 'One page', 'mid']; }
-      if(tag) need.push([tag[0], p.name, sub, why.join('. '), tag[1], tag[2]]);
+      if(tag) need.push([tag[0], p.name, sub, why.join('. '), tag[1], tag[2], p]);
     });
     need.sort(function(a, b){ return a[0] - b[0]; });
     h += '<div class="card"><div class="eyebrow">Needs a word from a manager</div>' + (need.length ? need.map(function(n){
-      return '<div class="rrow"><span class="m">' + esc(n[1]) + '<small>' + esc(n[2]) + (n[2] ? ' &middot; ' : '') + esc(n[3]) + '</small></span><span class="v"><span class="pill ' + n[5] + '">' + n[4] + '</span></span></div>'; }).join('') : '<div class="hint">Nobody right now.</div>') +
-      '<details><summary>Who is listed here</summary><p class="hint">Anyone who got a page wrong and has not signed it; anyone wrong on half or more of their pages (5 pages or more tried); anyone with 10 or more wrong tries on one page.</p></details></div>';
+      return '<details class="rp"><summary><span class="m">' + esc(n[1]) + '<small>' + esc(n[2]) + (n[2] ? ' &middot; ' : '') + esc(n[3]) + '</small></span><span class="v"><span class="pill ' + n[5] + '">' + n[4] + '</span></span></summary><div class="in">' + personIn(n[6]) + '</div></details>'; }).join('') : '<div class="hint">Nobody right now.</div>') +
+      '<details><summary>Who is listed here</summary><p class="hint">Tap a name to see where they went wrong. Listed: anyone who got a page wrong and has not passed it yet; anyone wrong on half or more of their pages (5 pages or more tried); anyone with 10 or more wrong tries on one page.</p></details></div>';
 
     // everyone
     var idle = (r.people || []).filter(function(p){ return !p.started; });
-    h += '<div class="card"><div class="eyebrow">Everyone who has started</div><div class="tw"><table class="list"><tr><th>Name</th><th class="n">Pages with a miss</th><th class="n">Wrong tries</th></tr>' +
-      R.people.map(function(p){ return '<tr><td>' + esc(p.name) + '<br><span class="code-sm">' + esc(p.role || p.section || '') + '</span></td><td class="n">' + p.miss + ' of ' + p.pages + '</td><td class="n">' + p.wrong + '</td></tr>'; }).join('') + '</table></div>' +
+    h += '<div class="card"><div class="eyebrow">Everyone who has started</div><div class="hint">Pages with a wrong try, out of pages tried. Tap a name to see where they went wrong.</div>' +
+      R.people.map(function(p){ return '<details class="rp"><summary><span class="m">' + esc(p.name) + '<small>' + esc(p.role || p.section || '') + '</small></span><span class="v">' + p.miss + ' of ' + p.pages + ' pages<small>' + p.wrong + ' wrong ' + (p.wrong === 1 ? 'try' : 'tries') + '</small></span></summary><div class="in">' + personIn(p) + '</div></details>'; }).join('') +
       '<details><summary>Not started yet (' + idle.length + ')</summary>' + (idle.length ? idle.map(function(p){ return '<div class="rrow"><span class="m">' + esc(p.name) + '<small>' + esc(p.grp_name) + '</small></span></div>'; }).join('') : '<p class="hint">Everybody on the list has started.</p>') + '</details></div>';
 
     // sections

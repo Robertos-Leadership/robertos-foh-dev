@@ -310,6 +310,8 @@ Deno.serve(async (req) => {
           if (!recSince) recSince = t.at;
           const qa = picked[t.code] || (picked[t.code] = [{ n: 0, wrong: 0, opts: {} }, { n: 0, wrong: 0, opts: {} }]);
           t.picks.slice(0, 2).forEach((a: unknown, i: number) => { const s = String(a ?? ""); qa[i].n++; if (!t.oks[i]) qa[i].wrong++; qa[i].opts[s] = (qa[i].opts[s] || 0) + 1; });
+          // per person: which question they missed on this page, and what they picked
+          if (!t.ok) { e.rec = (e.rec || 0) + 1; const mq = e.missed || (e.missed = [{}, {}]); t.picks.slice(0, 2).forEach((a: unknown, i: number) => { if (!t.oks[i]) { const s = String(a ?? ""); mq[i][s] = (mq[i][s] || 0) + 1; } }); }
         }
       }
       const pages = Object.keys(byPage).map((code) => {
@@ -320,8 +322,10 @@ Deno.serve(async (req) => {
       }).filter((p) => p.wrong > 0).sort((a, b) => b.not_first - a.not_first || b.wrong - a.wrong);
       const perEmp: Record<string, Row> = {};
       Object.keys(byPage).forEach((code) => Object.keys(byPage[code]).forEach((k) => {
-        const e = byPage[code][k], o = perEmp[k] || (perEmp[k] = { ...person(k), pages: 0, miss: 0, wrong: 0, open: [] as string[], top: 0, top_title: "" });
+        const e = byPage[code][k], o = perEmp[k] || (perEmp[k] = { ...person(k), pages: 0, miss: 0, wrong: 0, open: [] as string[], top: 0, top_title: "", list: [] as Row[] });
         o.pages++; o.wrong += e.wrong; if (e.wrong > 0) o.miss++;
+        // where this person went wrong: one line per page (rec = wrong tries that kept the answers, from 16 Nov 2026)
+        if (e.wrong > 0) o.list.push({ code, title: docOf(code)?.title, wrong: e.wrong, tries: e.tries, signed: signedNow(k, code), rec: e.rec || 0, missed: e.missed || null });
         if (e.wrong > 0 && !signedNow(k, code)) o.open.push(docOf(code)?.title);
         if (e.wrong > o.top) { o.top = e.wrong; o.top_title = docOf(code)?.title; }
       }));
@@ -330,12 +334,21 @@ Deno.serve(async (req) => {
       for (const t of T) { if (!verOf[t.code]) continue; const s = person(String(t.emp_id)).section || "Other"; if (sect[s]) { sect[s].tries++; if (!t.ok) sect[s].wrong++; } }
       let questions: Row[] = [];
       const qCodes = Object.keys(picked);
+      const qText: Record<string, string[]> = {};
       if (qCodes.length) {
         const dq = await db.from("sop_docs").select("code,questions").in("code", qCodes);
+        (dq.data || []).forEach((d: Row) => { qText[d.code] = (d.questions as Row[]).map((q) => String(q[0])); });
         questions = (dq.data || []).filter((d: Row) => docOf(d.code)).map((d: Row) => ({ code: d.code, title: docOf(d.code)?.title,
           qs: (d.questions as Row[]).map((q, i) => ({ q: q[0], right: q[1][0], n: picked[d.code][i].n, wrong: picked[d.code][i].wrong, opts: picked[d.code][i].opts })) }))
           .sort((a: Row, b: Row) => (b.qs[0].wrong + b.qs[1].wrong) - (a.qs[0].wrong + a.qs[1].wrong));
       }
+      Object.keys(perEmp).forEach((k) => {
+        perEmp[k].list.sort((a: Row, b: Row) => Number(a.signed) - Number(b.signed) || b.wrong - a.wrong);
+        perEmp[k].list.forEach((it: Row) => {
+          it.missed = it.missed ? (it.missed as Row[]).map((m, i) => ({ q: (qText[it.code] || [])[i] || "Question " + (i + 1), picks: m })).filter((m) => Object.keys(m.picks).length) : [];
+          delete it.code;
+        });
+      });
       const started = new Set(Object.keys(perEmp)); signs.forEach((s: Row) => started.add(String(s.emp_id)));
       people.forEach((p) => { p.started = started.has(p.emp); });
       report = {
