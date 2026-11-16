@@ -65,6 +65,8 @@ button{font-family:inherit}
 .link.mini{font-size:10px;padding:4px 0 0;letter-spacing:.04em;text-transform:none;font-weight:600;text-decoration:none}
 .tiles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:10px}
 .tile{background:#fff;border:1px solid rgba(65,2,7,.14);border-top:3px solid var(--oro);padding:12px 10px}
+button.tile{font:inherit;text-align:left;cursor:pointer;width:100%;color:inherit}
+.tile.on{background:var(--sabl);border-color:var(--vino);border-top-color:var(--vino)}
 .tile span{display:block;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#544418;font-weight:700;min-height:26px}
 .tile b{display:block;font-family:var(--serif);font-weight:500;font-size:24px;color:var(--vino);line-height:1.1;margin-top:4px}
 .chips{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 4px}
@@ -378,7 +380,22 @@ function boardDraw(){
   var going = ppl.filter(function(p){ return p.s.started; }), idle = ppl.filter(function(p){ return !p.s.started && p.s.req; });
   var tot = 0, got = 0, ft = 0;
   ppl.forEach(function(p){ tot += p.s.req; got += p.s.reqPass; ft += p.s.firstTry; });
-  h += '<div class="tiles"><div class="tile"><span>Compulsory passed</span><b>' + got + ' / ' + tot + '</b></div><div class="tile"><span>People started</span><b>' + going.length + ' of ' + (going.length + idle.length) + '</b></div><div class="tile"><span>Passed first try</span><b>' + ft + '</b></div></div>';
+  var tile = function(k, label, val){ return '<button class="tile' + (S.tile === k ? ' on' : '') + '" data-tile="' + k + '" aria-expanded="' + (S.tile === k) + '"><span>' + label + '</span><b>' + val + '</b></button>'; };
+  h += '<div class="tiles">' + tile('pass', 'Compulsory passed', got + ' / ' + tot) + tile('started', 'People started', going.length + ' of ' + (going.length + idle.length)) + tile('first', 'Passed first try', ft) + '</div>';
+  // tap a tile: the people behind its number
+  if(S.tile){
+    var list = [];
+    r.rows.forEach(function(p){
+      if(S.tile === 'started'){ var s0 = sumUp(p, r); if(s0.started) list.push({ emp:p.emp, name:p.name, sub:p.role || '', right:s0.tries ? tries(s0.tries) : 'not finished' }); return; }
+      p.topics.forEach(function(t){
+        if(S.tile === 'pass' && t.required && t.state === 'passed') list.push({ emp:p.emp, name:p.name, sub:tname(r, t.key), right:t.pass_try === 1 ? 'first try' : t.pass_try ? 'try ' + t.pass_try : 'passed' });
+        if(S.tile === 'first' && t.pass_try === 1) list.push({ emp:p.emp, name:p.name, sub:tname(r, t.key), right:t.first + '/' + (t.n || 5) });
+      });
+    });
+    var ttl = S.tile === 'pass' ? 'Compulsory tests passed' : S.tile === 'first' ? 'Passed on the first try' : 'People who started';
+    h += '<div class="card" id="tileBox"><div class="eyebrow">' + ttl + '</div>' + (list.length ? list.map(function(x){
+      return '<button class="prow" data-emp="' + esc(x.emp || '') + '"><span><b>' + esc(x.name) + '</b><span class="hint">' + esc(x.sub) + '</span></span><span class="pr">' + esc(x.right) + ' ›</span></button>'; }).join('') : '<p class="hint">Nobody yet.</p>') + '</div>';
+  }
   var srt = SORTS.filter(function(x){ return x[0] === key; })[0] || SORTS[0];
   going.sort(function(a, b){ return srt[2](a, b) || String(a.name).localeCompare(String(b.name)); });
   h += '<div class="card"><div class="eyebrow">People who started</div>';
@@ -402,6 +419,7 @@ function boardDraw(){
   if(can) h += '<button class="btn ghost" id="assign">Choose who must pass what</button>';
   app.innerHTML = h;
   document.getElementById('back').onclick = home;
+  Array.prototype.forEach.call(document.querySelectorAll('[data-tile]'), function(b){ b.onclick = function(){ S.tile = S.tile === b.dataset.tile ? '' : b.dataset.tile; var y = window.scrollY; boardDraw(); window.scrollTo(0, y); }; });
   Array.prototype.forEach.call(document.querySelectorAll('[data-sort]'), function(b){ b.onclick = function(){ S.sort = b.dataset.sort; var y = window.scrollY; boardDraw(); window.scrollTo(0, y); }; });
   Array.prototype.forEach.call(document.querySelectorAll('.prow'), function(b){ b.onclick = function(){ if(b.dataset.emp) personView(b.dataset.emp); }; });
   var as = document.getElementById('assign'); if(as) as.onclick = function(){ assignView(); };
