@@ -62,6 +62,19 @@ table.list td.n{text-align:right;font-variant-numeric:tabular-nums;white-space:n
 .qe{border:1px solid var(--sab);padding:10px;margin-top:10px;background:var(--paper)}
 .qe label{display:block;font-size:12px;color:var(--muted);margin-top:8px}
 .code-sm{font-size:11px;color:var(--muted);letter-spacing:.06em}
+/* managers: how the team is doing (16 Nov 2026) */
+.rp{margin:0;border-bottom:1px solid var(--sab)}
+.rp>summary,.rrow{display:flex;gap:10px;align-items:center;justify-content:space-between;padding:10px 0;color:var(--ink);font-size:15px;list-style:none}
+.rp>summary::-webkit-details-marker{display:none}
+.rrow{border-bottom:1px solid var(--sab)}
+.rp .m,.rrow .m{flex:1;min-width:0}.rp .m small,.rrow .m small{display:block;font-size:12.5px;color:var(--muted)}
+.rp .v,.rrow .v{flex:none;text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;font-size:14px}.rp .v small,.rrow .v small{display:block;font-size:12px;color:var(--muted)}
+.rp .in{padding:0 0 12px 12px;font-size:14px;color:var(--muted)}.rp .in div{padding:2px 0}
+.pill.hot{background:#f6e3df;color:var(--bad)}.pill.mid{background:#fff3cf;color:#6b4a00}
+.big{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px 16px;margin-top:8px}
+.big b{display:block;font-family:var(--serif);font-weight:500;font-size:26px;line-height:1.1;color:var(--vino);font-variant-numeric:tabular-nums}.big span{font-size:13px;color:var(--muted)}
+.sbar{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:8px 10px;align-items:center;font-size:14px;margin-top:8px}
+.sbar .bar{margin:0;height:8px}
 .foot{position:sticky;bottom:0;background:var(--paper);border-top:2px solid var(--oro);padding:10px 16px;margin:16px -16px 0;font-size:14px;color:var(--muted);text-align:center}
 </style>
 </head><body><div class="wrap"><div id="app"><div class="card"><div class="hint">Loading…</div></div></div></div>
@@ -136,7 +149,8 @@ function home(){
   else h += '<div class="card"><div class="hint">You are signed in as a manager. Open any page to read it and check its questions.</div></div>';
   if(me.checker) h += '<div class="card"><div class="eyebrow">Managers</div><h2>Questions and team</h2>' +
     '<button class="item" data-go="check"><span class="m"><span class="a">Check the questions</span><span class="b">' + (me.to_check ? me.to_check + ' of ' + me.docs.length + ' pages still to check. Nobody can sign a page until its questions are checked.' : 'All questions are checked.') + '</span></span><span>&rsaquo;</span></button>' +
-    '<button class="item" data-go="board"><span class="m"><span class="a">Who has read what</span><span class="b">Every person, by position</span></span><span>&rsaquo;</span></button></div>';
+    '<button class="item" data-go="board"><span class="m"><span class="a">Who has read what</span><span class="b">Every person, by position</span></span><span>&rsaquo;</span></button>' +
+    '<button class="item" data-go="report"><span class="m"><span class="a">How the team is doing</span><span class="b">Hard pages, who needs a word, by section</span></span><span>&rsaquo;</span></button></div>';
   h += library();
   app.innerHTML = h;
   document.getElementById('out').onclick = out;
@@ -186,7 +200,7 @@ function libRow(d){
 }
 function wireHome(){
   app.querySelectorAll('[data-doc]').forEach(function(b){ b.onclick = function(){ openDoc(b.dataset.doc); }; });
-  app.querySelectorAll('[data-go]').forEach(function(b){ b.onclick = function(){ if(b.dataset.go === 'check') checkList(); else board(); }; });
+  app.querySelectorAll('[data-go]').forEach(function(b){ b.onclick = function(){ if(b.dataset.go === 'check') checkList(); else if(b.dataset.go === 'report') report(); else board(); }; });
   var q = document.getElementById('q'); if(q){ q.oninput = function(){ S.q = q.value; search(); }; if(S.q) search(); }
 }
 // search: the full text of every page, on the server (the pages are not all on the phone)
@@ -387,6 +401,76 @@ function board(){
       if(!/^\d{4}-\d{2}-\d{2}$/.test(v)){ m.innerHTML = '<div class="msg">Write the date as 2026-11-10.</div>'; return; }
       call({ action:'start', start:v, emp:S.emp, jwt:S.jwt }).then(function(x){ m.innerHTML = x.ok ? '<div class="okmsg">&#10003; Saved. Week 1 starts ' + ymdNice(v) + '.</div>' : '<div class="msg">' + esc(say(x.error)) + '</div>'; });
     };
+  });
+}
+/* How the team is doing (16 Nov 2026). Counts PEOPLE, not tries: one person failing 20 times is one person.
+   Every number comes from the `sop` function's board answer; nothing is worked out from a fixed list here. */
+function report(){
+  stopTimer(); window.scrollTo(0,0);
+  app.innerHTML = '<div class="card"><div class="hint">Loading the report…</div></div>';
+  call({ action:'board', emp:S.emp, jwt:S.jwt }).then(function(r){
+    if(!r.ok || !r.report){ S.err = r.ok ? 'The report is not ready yet. Try again in a minute.' : say(r.error); return home(); }
+    var R = r.report, pct = function(a, b){ return b ? Math.round(100*a/b) : 0; };
+    var h = '<div class="top"><button class="link" id="back">&lsaquo; Back</button><span>Managers</span></div><h1>How the team is doing</h1>';
+    if(!R.tries){ app.innerHTML = h + '<div class="card"><div class="hint">Nobody has answered a page yet.</div></div>'; document.getElementById('back').onclick = home; return; }
+    h += '<div class="hint">' + dmy(R.from) + ' to today</div>';
+    h += '<div class="card"><div class="big"><div><b>' + R.started + '</b><span>people have started</span></div><div><b>' + R.signed + '</b><span>pages signed</span></div>' +
+      '<div><b>' + pct(R.wrong, R.tries) + '%</b><span>of tries were wrong (' + R.wrong + ' of ' + R.tries + ')</span></div>' +
+      '<div><b>' + R.quick + ' of ' + R.retries + '</b><span>retries within 20 seconds of a wrong answer</span></div></div>' +
+      '<details><summary>What these mean</summary><p class="hint">A try is one go at the two questions of a page. A retry within 20 seconds means the person answered again without going back to the text.</p></details></div>';
+
+    // pages, by how many people did not pass first time
+    var pageRow = function(p){
+      var share = p.people ? p.not_first / p.people : 0, cls = p.people < 3 ? 'lock' : share >= .5 ? 'hot' : share >= .3 ? 'mid' : 'done';
+      return '<details class="rp"><summary><span class="m">' + esc(p.title) + '<small>' + esc(FNAME[p.folder] || '') + '</small></span>' +
+        '<span class="v"><span class="pill ' + cls + '">' + p.not_first + ' of ' + p.people + ' people</span><small>' + p.wrong + ' wrong ' + (p.wrong === 1 ? 'try' : 'tries') + '</small></span></summary>' +
+        '<div class="in">' + p.who.map(function(w){ return '<div>' + esc(w.name) + ': ' + w.wrong + ' wrong' + (w.signed ? ', then passed' : ', <b style="color:var(--bad)">not signed</b>') + '</div>'; }).join('') + '</div></details>';
+    };
+    h += '<div class="card"><div class="eyebrow">Pages the team finds hard</div><div class="hint">People who did not pass first time. Tap a page for the names.</div>' +
+      (R.pages.length ? R.pages.slice(0, 10).map(pageRow).join('') + (R.pages.length > 10 ? '<details><summary>Show the other ' + (R.pages.length - 10) + ' pages</summary>' + R.pages.slice(10).map(pageRow).join('') + '</details>' : '') : '<div class="hint">No wrong answers so far.</div>') + '</div>';
+
+    // people who need a word
+    var need = [];
+    R.people.forEach(function(p){
+      var sub = p.role || p.section || '';
+      var why = [], tag = null;
+      if(p.open.length){ why.push('Got ' + p.open.slice(0, 3).join(', ') + (p.open.length > 3 ? ' and ' + (p.open.length - 3) + ' more' : '') + ' wrong and has not signed'); tag = tag || [0, 'Not signed', 'hot']; }
+      if(p.pages >= 5 && p.miss / p.pages >= .5){ why.push('Wrong at least once on ' + p.miss + ' of ' + p.pages + ' pages'); tag = tag || [1, 'Most pages', 'hot']; }
+      if(p.top >= 10){ why.push(p.top + ' wrong tries on ' + p.top_title); tag = tag || [2, 'One page', 'mid']; }
+      if(tag) need.push([tag[0], p.name, sub, why.join('. '), tag[1], tag[2]]);
+    });
+    need.sort(function(a, b){ return a[0] - b[0]; });
+    h += '<div class="card"><div class="eyebrow">Needs a word from a manager</div>' + (need.length ? need.map(function(n){
+      return '<div class="rrow"><span class="m">' + esc(n[1]) + '<small>' + esc(n[2]) + (n[2] ? ' &middot; ' : '') + esc(n[3]) + '</small></span><span class="v"><span class="pill ' + n[5] + '">' + n[4] + '</span></span></div>'; }).join('') : '<div class="hint">Nobody right now.</div>') +
+      '<details><summary>Who is listed here</summary><p class="hint">Anyone who got a page wrong and has not signed it; anyone wrong on half or more of their pages (5 pages or more tried); anyone with 10 or more wrong tries on one page.</p></details></div>';
+
+    // everyone
+    var idle = (r.people || []).filter(function(p){ return !p.started; });
+    h += '<div class="card"><div class="eyebrow">Everyone who has started</div><div class="tw"><table class="list"><tr><th>Name</th><th class="n">Pages with a miss</th><th class="n">Wrong tries</th></tr>' +
+      R.people.map(function(p){ return '<tr><td>' + esc(p.name) + '<br><span class="code-sm">' + esc(p.role || p.section || '') + '</span></td><td class="n">' + p.miss + ' of ' + p.pages + '</td><td class="n">' + p.wrong + '</td></tr>'; }).join('') + '</table></div>' +
+      '<details><summary>Not started yet (' + idle.length + ')</summary>' + (idle.length ? idle.map(function(p){ return '<div class="rrow"><span class="m">' + esc(p.name) + '<small>' + esc(p.grp_name) + '</small></span></div>'; }).join('') : '<p class="hint">Everybody on the list has started.</p>') + '</details></div>';
+
+    // sections
+    h += '<div class="card"><div class="eyebrow">By section</div><div class="hint">Share of tries that were wrong.</div><div class="sbar">' +
+      R.sections.map(function(s){ var p = pct(s.wrong, s.tries); return '<span>' + esc(s.section) + '</span><div class="bar"><i style="width:' + p + '%"></i></div><span style="font-variant-numeric:tabular-nums;text-align:right">' + p + '% <span class="code-sm">' + s.wrong + ' of ' + s.tries + '</span></span>'; }).join('') + '</div></div>';
+
+    // which question, which answer (recorded from 16 Nov 2026)
+    h += '<div class="card"><div class="eyebrow">Which question, which answer</div>';
+    if(!R.questions.length) h += '<div class="hint">The app now keeps the answer each person picks. Nothing has been answered since that started; this fills in as the team reads.</div>';
+    else {
+      h += '<div class="hint">Answers picked since ' + dmyt(R.rec_since) + '. Earlier tries only say right or wrong.</div>' + R.questions.map(function(d){
+        var w = d.qs[0].wrong + d.qs[1].wrong;
+        return '<details class="rp"><summary><span class="m">' + esc(d.title) + '</span><span class="v">' + w + ' wrong<small>' + d.qs[0].n + (d.qs[0].n === 1 ? ' try' : ' tries') + '</small></span></summary><div class="in">' +
+          d.qs.map(function(q){
+            var keys = Object.keys(q.opts).sort(function(a, b){ return q.opts[b] - q.opts[a]; });
+            return '<div style="color:var(--ink);font-weight:600;margin-top:8px">' + esc(q.q) + '</div><div>' + q.wrong + ' of ' + q.n + ' wrong</div>' +
+              keys.map(function(k){ return '<div class="top"><span>' + (k === q.right ? '&#10003; ' : '') + esc(k || 'No answer') + '</span><span>' + q.opts[k] + '</span></div>'; }).join('');
+          }).join('') + '</div></details>';
+      }).join('');
+    }
+    h += '</div>';
+    app.innerHTML = h;
+    document.getElementById('back').onclick = home;
   });
 }
 boot();

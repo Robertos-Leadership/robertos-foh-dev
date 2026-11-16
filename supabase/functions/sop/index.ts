@@ -92,7 +92,17 @@ export function weeksOf(start: string, today: string, rows: { week: number; done
   return out;
 }
 
-const shuffle = <T,>(a: T[]) => { const x = a.slice(); for (let i = x.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [x[i], x[j]] = [x[j], x[i]]; } return x; };
+// every row of a table, oldest first: a plain select stops at 1,000 rows without saying so
+async function allRows(db: DB, table: string, cols: string, by: string): Promise<Row[]> {
+  const out: Row[] = [];
+  for (let from = 0; from < 200000; from += 1000) {
+    const r = await db.from(table).select(cols).order(by, { ascending: true }).range(from, from + 999);
+    const d = (r.data || []) as Row[]; out.push(...d); if (d.length < 1000) break;
+  }
+  return out;
+}
+
+const shuffle =<T,>(a: T[]) => { const x = a.slice(); for (let i = x.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [x[i], x[j]] = [x[j], x[i]]; } return x; };
 const validQs = (qs: unknown) => Array.isArray(qs) && qs.length === 2 && qs.every((q: any) => Array.isArray(q) && typeof q[0] === "string" && q[0].trim() &&
   Array.isArray(q[1]) && q[1].length === 4 && q[1].every((o: any) => typeof o === "string" && o.trim()) && new Set(q[1].map((o: string) => o.trim())).size === 4 && typeof q[2] === "string");
 
@@ -227,7 +237,8 @@ Deno.serve(async (req) => {
       const qs = d.questions as Row[];
       const right = qs.map((q, i) => String(ans[i] ?? "").trim() === String(q[1][0]).trim());
       const allRight = right.every(Boolean);
-      await db.from("sop_tries").insert({ emp_id: st.emp, code: d.code, ok: allRight });
+      // each try keeps what was picked and which question it missed (16 Nov 2026), for the managers' report
+      await db.from("sop_tries").insert({ emp_id: st.emp, code: d.code, ok: allRight, picks: qs.map((_q, i) => String(ans[i] ?? "").trim().slice(0, 300)), oks: right });
       if (!allRight) return json({ ok: false, error: "wrong", right, why: qs.map((q, i) => (right[i] ? null : q[2])) });
       const tr = await db.from("sop_tries").select("id", { count: "exact", head: true }).eq("emp_id", st.emp).eq("code", d.code).gte("at", new Date(opened).toISOString());
       const ins = await db.from("sop_signs").insert({ emp_id: st.emp, name: st.name, role: st.role, code: d.code, ver: d.ver, read_ms: readMs, tries: tr.count || 1 }).select("signed_at");
@@ -255,12 +266,12 @@ Deno.serve(async (req) => {
     if (action === "board") {
       const [staff, signs, map] = await Promise.all([
         db.from("foh_staff").select("name,emp_id,role,section,end_date,in_schedule").eq("active", true),
-        db.from("sop_signs").select("emp_id,code,ver,signed_at").order("signed_at", { ascending: false }),
+        allRows(db, "sop_signs", "emp_id,name,role,code,ver,signed_at", "signed_at"),
         db.from("sop_map").select("grp,code,week"),
       ]);
       const verOf: Record<string, string> = {}; DOCS.forEach((d) => (verOf[d.code] = d.ver));
       const last: Record<string, Row> = {};
-      (signs.data || []).forEach((s: Row) => { const k = String(s.emp_id) + "|" + s.code; if (!last[k]) last[k] = s; });
+      signs.forEach((s: Row) => { last[String(s.emp_id) + "|" + s.code] = s; });   // oldest first, so the newest wins
       const people = (staff.data || []).filter((p: Row) => !p.end_date && p.in_schedule !== false && p.emp_id).map((p: Row) => {
         const grp = grpOf(String(p.section ?? ""), String(p.role ?? "")); if (!grp) return null;
         const mine = (map.data || []).filter((m: Row) => m.grp === grp && verOf[m.code]);
@@ -268,11 +279,75 @@ Deno.serve(async (req) => {
         const weeks = weeksOf(START, today, rows);
         const dueNow = weeks.filter((w) => w.open && today > w.due).reduce((n, w) => n + (w.total - w.done), 0);
         const lastAt = Object.keys(last).filter((k) => k.startsWith(String(p.emp_id) + "|")).map((k) => last[k].signed_at).sort().pop() || null;
-        return { name: p.name, role: p.role, grp, grp_name: GRP_NAME[grp], done: rows.filter((r) => r.done).length, again: rows.filter((r) => r.again).length, total: rows.length, behind: dueNow, last: lastAt };
-      }).filter(Boolean);
-      const tries = await db.from("sop_tries").select("code,ok");
-      const miss: Record<string, number> = {}; (tries.data || []).forEach((t: Row) => { if (!t.ok) miss[t.code] = (miss[t.code] || 0) + 1; });
-      return json({ ok: true, start: START, today, people, to_check: DOCS.filter((d) => d.q_status !== "checked").map((d) => d.code), hard: Object.keys(miss).sort((a, b) => miss[b] - miss[a]).slice(0, 8).map((c) => ({ code: c, title: docOf(c)?.title, wrong: miss[c] })) });
+        return { name: p.name, role: p.role, emp: String(p.emp_id), grp, grp_name: GRP_NAME[grp], done: rows.filter((r) => r.done).length, again: rows.filter((r) => r.again).length, total: rows.length, behind: dueNow, last: lastAt };
+      }).filter(Boolean) as Row[];
+      const T = await allRows(db, "sop_tries", "emp_id,code,ok,at,picks,oks", "at");
+      const miss: Record<string, number> = {}; T.forEach((t: Row) => { if (!t.ok) miss[t.code] = (miss[t.code] || 0) + 1; });
+
+      // ---- the team report (16 Nov 2026): hard pages counted by PEOPLE, who needs a word, sections, and which answer was picked
+      // a fault in here must never take the sign-off board down with it, so it answers report: null instead
+      let report: Row | null = null;
+      try {
+      const who: Record<string, Row> = {};
+      (staff.data || []).forEach((p: Row) => { const k = String(p.emp_id ?? ""); if (k && !who[k]) who[k] = { name: String(p.name), role: String(p.role ?? ""), section: String(p.section ?? "") }; });
+      signs.forEach((s: Row) => { const k = String(s.emp_id); if (!who[k]) who[k] = { name: String(s.name || "ID " + k), role: String(s.role ?? ""), section: "" }; });
+      const person = (k: string) => who[k] || { name: "ID " + k, role: "", section: "" };
+      const signedNow = (k: string, code: string) => { const s = last[k + "|" + code]; return !!s && s.ver === verOf[code]; };
+      const byPage: Record<string, Record<string, Row>> = {};
+      const prev: Record<string, Row> = {};
+      const picked: Record<string, Row[]> = {};
+      let retries = 0, quick = 0, wrongAll = 0, tryAll = 0, recSince: string | null = null;
+      for (const t of T) {
+        if (!verOf[t.code]) continue;
+        const k = String(t.emp_id); tryAll++; if (!t.ok) wrongAll++;
+        const pg = byPage[t.code] || (byPage[t.code] = {});
+        const e = pg[k] || (pg[k] = { wrong: 0, tries: 0, firstOk: !!t.ok });
+        e.tries++; if (!t.ok) e.wrong++;
+        const pk = k + "|" + t.code, p0 = prev[pk];
+        if (p0 && !p0.ok) { retries++; if (new Date(t.at).getTime() - new Date(p0.at).getTime() < 20000) quick++; }
+        prev[pk] = t;
+        if (Array.isArray(t.picks) && Array.isArray(t.oks)) {
+          if (!recSince) recSince = t.at;
+          const qa = picked[t.code] || (picked[t.code] = [{ n: 0, wrong: 0, opts: {} }, { n: 0, wrong: 0, opts: {} }]);
+          t.picks.slice(0, 2).forEach((a: unknown, i: number) => { const s = String(a ?? ""); qa[i].n++; if (!t.oks[i]) qa[i].wrong++; qa[i].opts[s] = (qa[i].opts[s] || 0) + 1; });
+        }
+      }
+      const pages = Object.keys(byPage).map((code) => {
+        const pg = byPage[code], ks = Object.keys(pg);
+        return { code, title: docOf(code)?.title, folder: docOf(code)?.folder, people: ks.length, not_first: ks.filter((k) => !pg[k].firstOk).length,
+          wrong: ks.reduce((n, k) => n + pg[k].wrong, 0),
+          who: ks.filter((k) => pg[k].wrong > 0).sort((a, b) => pg[b].wrong - pg[a].wrong).map((k) => ({ name: person(k).name, wrong: pg[k].wrong, signed: signedNow(k, code) })) };
+      }).filter((p) => p.wrong > 0).sort((a, b) => b.not_first - a.not_first || b.wrong - a.wrong);
+      const perEmp: Record<string, Row> = {};
+      Object.keys(byPage).forEach((code) => Object.keys(byPage[code]).forEach((k) => {
+        const e = byPage[code][k], o = perEmp[k] || (perEmp[k] = { ...person(k), pages: 0, miss: 0, wrong: 0, open: [] as string[], top: 0, top_title: "" });
+        o.pages++; o.wrong += e.wrong; if (e.wrong > 0) o.miss++;
+        if (e.wrong > 0 && !signedNow(k, code)) o.open.push(docOf(code)?.title);
+        if (e.wrong > o.top) { o.top = e.wrong; o.top_title = docOf(code)?.title; }
+      }));
+      const sect: Record<string, Row> = {};
+      Object.keys(perEmp).forEach((k) => { const s = perEmp[k].section || "Other"; const o = sect[s] || (sect[s] = { section: s, people: 0, tries: 0, wrong: 0 }); o.people++; });
+      for (const t of T) { if (!verOf[t.code]) continue; const s = person(String(t.emp_id)).section || "Other"; if (sect[s]) { sect[s].tries++; if (!t.ok) sect[s].wrong++; } }
+      let questions: Row[] = [];
+      const qCodes = Object.keys(picked);
+      if (qCodes.length) {
+        const dq = await db.from("sop_docs").select("code,questions").in("code", qCodes);
+        questions = (dq.data || []).filter((d: Row) => docOf(d.code)).map((d: Row) => ({ code: d.code, title: docOf(d.code)?.title,
+          qs: (d.questions as Row[]).map((q, i) => ({ q: q[0], right: q[1][0], n: picked[d.code][i].n, wrong: picked[d.code][i].wrong, opts: picked[d.code][i].opts })) }))
+          .sort((a: Row, b: Row) => (b.qs[0].wrong + b.qs[1].wrong) - (a.qs[0].wrong + a.qs[1].wrong));
+      }
+      const started = new Set(Object.keys(perEmp)); signs.forEach((s: Row) => started.add(String(s.emp_id)));
+      people.forEach((p) => { p.started = started.has(p.emp); });
+      report = {
+        from: T.length ? T[0].at : null, started: Object.keys(perEmp).length, signed: Object.keys(last).filter((k) => { const c = k.split("|")[1]; return last[k].ver === verOf[c]; }).length,
+        tries: tryAll, wrong: wrongAll, retries, quick, pages,
+        people: Object.keys(perEmp).map((k) => perEmp[k]).sort((a, b) => b.miss / b.pages - a.miss / a.pages || b.wrong - a.wrong),
+        sections: Object.keys(sect).map((s) => sect[s]).filter((s) => s.tries > 0).sort((a, b) => b.wrong / b.tries - a.wrong / a.tries),
+        questions, rec_since: recSince,
+      };
+      } catch (e) { report = null; console.error("sop report", e); }
+      people.forEach((p) => { delete p.emp; });
+      return json({ ok: true, start: START, today, people, to_check: DOCS.filter((d) => d.q_status !== "checked").map((d) => d.code), hard: Object.keys(miss).sort((a, b) => miss[b] - miss[a]).slice(0, 8).map((c) => ({ code: c, title: docOf(c)?.title, wrong: miss[c] })), report });
     }
     if (action === "start") {
       const v = String(b.start ?? ""); if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) return json({ ok: false, error: "bad_date" });
