@@ -361,7 +361,7 @@ function sumUp(p, r){
 var SORTS = [
   ['pass', 'Most passed', function(a, b){ return b.s.pass - a.s.pass || a.s.tries - b.s.tries; }],
   ['tries', 'Most retakes', function(a, b){ return b.s.tries - a.s.tries; }],
-  ['first', 'Best first try', function(a, b){ return b.s.first - a.s.first; }],
+  ['first', 'Best first try', function(a, b){ return b.s.firstTry - a.s.firstTry || b.s.first - a.s.first; }],
   ['fast', 'Fastest', function(a, b){ return a.s.perQ - b.s.perQ; }],
   ['name', 'Name', function(a, b){ return String(a.name).localeCompare(String(b.name)); }]
 ];
@@ -404,11 +404,11 @@ function boardDraw(){
     h += '<div class="chips">' + SORTS.map(function(x){ return '<button class="chipb' + (x[0] === srt[0] ? ' on' : '') + '" data-sort="' + x[0] + '" aria-pressed="' + (x[0] === srt[0]) + '">' + x[1] + '</button>'; }).join('') + '</div>';
     h += going.map(function(p){
       var s = p.s, bits = s.tries ? [tries(s.tries)] : [];
-      if(s.stuck) bits.push(esc(s.stuck.name) + ': ' + tries(s.stuck.done) + ', not passed');
+      if(srt[0] === 'first'){ if(s.fn) bits = ['Passed first try: ' + s.firstTry + ' of ' + s.fn + (s.fn === 1 ? ' test' : ' tests'), 'first scores ' + Math.round(s.first * 100) + '%']; else bits = ['started, not finished']; }
+      else if(s.stuck) bits.push(esc(s.stuck.name) + ': ' + tries(s.stuck.done) + ', not passed');
       else if(s.pass && s.firstTry === s.pass) bits.push('all first try');
       else if(s.hard) bits.push(esc(s.hard.name) + ': passed on try ' + s.hard.n);
       else if(!s.tries) bits.push('started, not finished');
-      if(srt[0] === 'first' && s.first >= 0) bits.push('first tries ' + Math.round(s.first * 100) + '%');
       if(srt[0] === 'fast' && s.qn) bits.push(Math.round(s.perQ / 1000) + 's a question');
       var right = s.req ? s.reqPass + ' of ' + s.req : s.pass + ' passed';
       return '<button class="prow" data-emp="' + esc(p.emp || '') + '"><span><b>' + esc(p.name) + '</b><span class="hint">' + esc(p.role || '') + ' · ' + bits.join(' · ') + '</span></span><span class="pr ' + (s.req && s.reqPass === s.req ? 'good' : (!s.pass ? 'no' : '')) + '">' + right + ' ›</span></button>'; }).join('');
