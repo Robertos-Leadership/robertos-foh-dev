@@ -63,6 +63,18 @@ button{font-family:inherit}
 .req.on{background:var(--vino);border-color:var(--vino);color:var(--paper)}
 .req:disabled{opacity:.5;cursor:default}
 .link.mini{font-size:10px;padding:4px 0 0;letter-spacing:.04em;text-transform:none;font-weight:600;text-decoration:none}
+.tiles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:10px}
+.tile{background:#fff;border:1px solid rgba(65,2,7,.14);border-top:3px solid var(--oro);padding:12px 10px}
+.tile span{display:block;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#544418;font-weight:700;min-height:26px}
+.tile b{display:block;font-family:var(--serif);font-weight:500;font-size:24px;color:var(--vino);line-height:1.1;margin-top:4px}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 4px}
+.chipb{min-height:36px;padding:0 12px;border:1px solid #b9ab94;background:#fff;color:#4F4535;font-size:13px;cursor:pointer}
+.chipb.on{background:var(--vino);border-color:var(--vino);color:var(--paper)}
+.prow{display:flex;justify-content:space-between;align-items:center;gap:10px;width:100%;text-align:left;background:none;border:0;border-top:1px solid var(--sab);padding:12px 0;font:inherit;font-size:15px;color:var(--ink);cursor:pointer;min-height:48px}
+.prow b{font-weight:600;display:block}.prow .hint{display:block}
+.prow .pr{white-space:nowrap;font-size:13px;font-weight:600;text-align:right}
+.prow.try .pr{white-space:normal;max-width:55%}
+.tbox{padding:0 0 10px 10px;border-left:3px solid var(--oro);margin-bottom:6px}
 </style>
 </head><body><div class="wrap"><div id="app"><div class="card"><div class="hint">Loading…</div></div></div></div>
 <script>
@@ -320,35 +332,172 @@ function wineView(body){
   });
 }
 
-/* ---------- managers: who has passed what ---------- */
-function boardView(keep){
+/* ---------- managers: the team report (16 Nov 2026) ---------- */
+function dt(iso){ return new Date(iso).toLocaleString('en-GB', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit', hour12:false, timeZone:'Asia/Dubai' }); }
+function tries(n){ return n + (n === 1 ? ' try' : ' tries'); }
+function tname(r, k){ var t = r.topics.filter(function(x){ return x.key === k; })[0]; return t ? t.name : k; }
+// one person's numbers across the open topics
+function sumUp(p, r){
+  var o = { req:0, reqPass:0, pass:0, tries:0, firstTry:0, fs:0, fn:0, ms:0, qn:0, started:false, open:false, stuck:null, hard:null };
+  p.topics.forEach(function(t){
+    var ok = t.state === 'passed';
+    if(t.required){ o.req++; if(ok) o.reqPass++; }
+    if(ok) o.pass++;
+    o.tries += t.done || 0;
+    if(t.pass_try === 1) o.firstTry++;
+    if(t.first != null && t.n){ o.fs += t.first / t.n; o.fn++; }
+    o.ms += t.sum_ms || 0; o.qn += (t.done || 0) * (t.n || 5);
+    if(t.done || t.left || t.open) o.started = true;
+    if(t.open) o.open = true;
+    if(!ok && t.done && (!o.stuck || t.done > o.stuck.done)) o.stuck = { name:tname(r, t.key), done:t.done };
+    if(t.pass_try > 1 && (!o.hard || t.pass_try > o.hard.n)) o.hard = { name:tname(r, t.key), n:t.pass_try };
+  });
+  o.first = o.fn ? o.fs / o.fn : -1;
+  o.perQ = o.qn ? o.ms / o.qn : 1e12;
+  return o;
+}
+var SORTS = [
+  ['pass', 'Most passed', function(a, b){ return b.s.pass - a.s.pass || a.s.tries - b.s.tries; }],
+  ['tries', 'Most retakes', function(a, b){ return b.s.tries - a.s.tries; }],
+  ['first', 'Best first try', function(a, b){ return b.s.first - a.s.first; }],
+  ['fast', 'Fastest', function(a, b){ return a.s.perQ - b.s.perQ; }],
+  ['name', 'Name', function(a, b){ return String(a.name).localeCompare(String(b.name)); }]
+];
+function boardView(){
+  call({ action:'board', emp:S.emp, jwt:S.jwt }).then(function(r){
+    if(!r.ok){ S.err = say(r.error); return home(); }
+    S.board = r; boardDraw(); window.scrollTo(0, 0);
+  });
+}
+function boardDraw(){
+  var r = S.board, can = !!r.can_assign, key = S.sort || 'pass';
+  var h = '<div class="top"><button class="link" id="back">‹ Back</button><span class="eyebrow">Team</span></div>';
+  if(r.waiting.length) h += '<div class="card"><div class="eyebrow">Not open to the team yet</div>' + r.waiting.map(function(w){ return '<div class="row"><span>' + esc(w.name) + '</span><span>' + (w.status === 'checked' ? 'waiting for approval' : 'waiting for the check') + '</span></div>'; }).join('') + '</div>';
+  if(!r.topics.length){ h += '<div class="card"><p class="hint">No topic is open to the team yet, so there is nothing to track.</p></div>'; app.innerHTML = h; document.getElementById('back').onclick = home; return; }
+  var ppl = r.rows.map(function(p){ return { name:p.name, role:p.role, emp:p.emp, s:sumUp(p, r) }; });
+  var going = ppl.filter(function(p){ return p.s.started; }), idle = ppl.filter(function(p){ return !p.s.started && p.s.req; });
+  var tot = 0, got = 0, ft = 0;
+  ppl.forEach(function(p){ tot += p.s.req; got += p.s.reqPass; ft += p.s.firstTry; });
+  h += '<div class="tiles"><div class="tile"><span>Compulsory passed</span><b>' + got + ' / ' + tot + '</b></div><div class="tile"><span>People started</span><b>' + going.length + ' of ' + (going.length + idle.length) + '</b></div><div class="tile"><span>Passed first try</span><b>' + ft + '</b></div></div>';
+  var srt = SORTS.filter(function(x){ return x[0] === key; })[0] || SORTS[0];
+  going.sort(function(a, b){ return srt[2](a, b) || String(a.name).localeCompare(String(b.name)); });
+  h += '<div class="card"><div class="eyebrow">People who started</div>';
+  if(!going.length) h += '<p class="hint">Nobody has taken a test yet.</p>';
+  else {
+    h += '<div class="chips">' + SORTS.map(function(x){ return '<button class="chipb' + (x[0] === srt[0] ? ' on' : '') + '" data-sort="' + x[0] + '" aria-pressed="' + (x[0] === srt[0]) + '">' + x[1] + '</button>'; }).join('') + '</div>';
+    h += going.map(function(p){
+      var s = p.s, bits = s.tries ? [tries(s.tries)] : [];
+      if(s.stuck) bits.push(esc(s.stuck.name) + ': ' + tries(s.stuck.done) + ', not passed');
+      else if(s.pass && s.firstTry === s.pass) bits.push('all first try');
+      else if(s.hard) bits.push(esc(s.hard.name) + ': passed on try ' + s.hard.n);
+      else if(!s.tries) bits.push('started, not finished');
+      if(srt[0] === 'first' && s.first >= 0) bits.push('first tries ' + Math.round(s.first * 100) + '%');
+      if(srt[0] === 'fast' && s.qn) bits.push(Math.round(s.perQ / 1000) + 's a question');
+      var right = s.req ? s.reqPass + ' of ' + s.req : s.pass + ' passed';
+      return '<button class="prow" data-emp="' + esc(p.emp || '') + '"><span><b>' + esc(p.name) + '</b><span class="hint">' + esc(p.role || '') + ' · ' + bits.join(' · ') + '</span></span><span class="pr ' + (s.req && s.reqPass === s.req ? 'good' : (!s.pass ? 'no' : '')) + '">' + right + ' ›</span></button>'; }).join('');
+  }
+  h += '</div>';
+  if(idle.length) h += '<div class="card"><details><summary>' + idle.length + (idle.length === 1 ? ' person has' : ' people have') + ' a test to do and have not started</summary>' + idle.map(function(p){ return '<div class="row"><span>' + esc(p.name) + '<span class="hint"> · ' + esc(p.role || '') + '</span></span><span>' + p.s.req + ' to do</span></div>'; }).join('') + '</details></div>';
+  h += '<div class="card"><details id="missed"><summary>Questions the team gets wrong most</summary><div id="missedBox" class="hint" style="margin-top:8px">Loading…</div></details></div>';
+  if(can) h += '<button class="btn ghost" id="assign">Choose who must pass what</button>';
+  app.innerHTML = h;
+  document.getElementById('back').onclick = home;
+  Array.prototype.forEach.call(document.querySelectorAll('[data-sort]'), function(b){ b.onclick = function(){ S.sort = b.dataset.sort; var y = window.scrollY; boardDraw(); window.scrollTo(0, y); }; });
+  Array.prototype.forEach.call(document.querySelectorAll('.prow'), function(b){ b.onclick = function(){ if(b.dataset.emp) personView(b.dataset.emp); }; });
+  var as = document.getElementById('assign'); if(as) as.onclick = function(){ assignView(); };
+  var md = document.getElementById('missed');
+  md.addEventListener('toggle', function(){
+    if(!md.open || md.dataset.done) return; md.dataset.done = '1';
+    call({ action:'missed', emp:S.emp, jwt:S.jwt }).then(function(x){
+      var box = document.getElementById('missedBox'); if(!box) return;
+      if(!x.ok){ box.textContent = say(x.error); md.dataset.done = ''; return; }
+      var any = x.topics.some(function(t){ return t.qs.length; });
+      box.className = '';
+      box.innerHTML = any ? x.topics.filter(function(t){ return t.qs.length; }).map(function(t){
+        return '<div class="eyebrow" style="margin-top:12px">' + esc(t.name) + '</div>' + t.qs.map(function(q){ return '<div class="row"><span>' + esc(q.text) + '</span><span class="no" style="white-space:nowrap">' + q.wrong + ' of ' + q.asked + ' wrong</span></div>'; }).join(''); }).join('') :
+        '<p class="hint">Not enough tests taken yet to say.</p>';
+    });
+  });
+}
+
+/* ---------- managers: one person, every try, every question ---------- */
+function pickText(q){
+  if(q.out) return 'Ran out of time';
+  if(q.pick == null) return 'No answer';
+  if(q.type === 'match') return (q.lefts || []).map(function(l, k){ return l + ' → ' + (q.opts[(q.pick || [])[k]] || 'nothing'); }).join('; ');
+  var a = Array.isArray(q.pick) ? q.pick : [q.pick];
+  return a.length ? a.map(function(k){ return q.opts[k]; }).join(' + ') : 'Nothing picked';
+}
+function rightText(q){ return q.type === 'match' ? q.lefts.map(function(l, k){ return l + ' → ' + q.opts[q.correct[k]]; }).join('; ') : q.correct.map(function(k){ return q.opts[k]; }).join(' + '); }
+function personView(emp){
+  call({ action:'person', emp:S.emp, jwt:S.jwt, who:emp }).then(function(r){
+    if(!r.ok){ S.err = say(r.error); return home(); }
+    var h = '<div class="top"><button class="link" id="back">‹ Team</button><span class="eyebrow">Person</span></div>' +
+      '<div class="card" style="text-align:center"><h2>' + esc(r.name) + '</h2><div class="hint">' + esc(r.role || '') + '</div></div>';
+    r.topics.forEach(function(t){
+      var mine = r.tries.filter(function(a){ return a.topic === t.key; }), n = 0;
+      var real = mine.filter(function(a){ return a.finished && !a.left; });
+      var tag = t.state === 'passed' ? '<span class="tag ok">Passed</span>' : t.state === 'expired' ? '<span class="tag warn">Expired</span>' : real.length ? '<span class="tag warn">Not passed</span>' : t.required ? '<span class="tag warn">To do</span>' : '';
+      var bits = [], best = null;
+      real.forEach(function(a){ if(!best || a.score > best.score || (a.score === best.score && a.ms < best.ms)) best = a; });
+      if(real.length){
+        bits.push(tries(real.length));
+        bits.push(t.pass_try === 1 ? 'passed first try' : t.pass_try ? 'passed on try ' + t.pass_try : 'not passed yet');
+        if(real.length > 1) bits.push('first ' + real[0].score + '/' + real[0].n);
+        bits.push('best ' + best.score + '/' + best.n + ' in ' + mmss(best.ms));
+        if(real.length > 1) bits.push('average time ' + mmss(t.sum_ms / real.length));
+      }
+      h += '<div class="card"><div class="thead"><b>' + esc(t.name) + '</b>' + tag + '</div>' +
+        '<div class="hint">' + (bits.length ? bits.join(' · ') : mine.length ? 'Started, never finished a test.' : t.required ? 'Compulsory. Not started.' : 'Not taken.') + '</div>' +
+        mine.map(function(a){
+          var lab, cls = '';
+          if(!a.finished) lab = 'Open now, not finished';
+          else if(a.left) lab = 'Left before the end';
+          else { n++; lab = a.score + '/' + a.n + ' · ' + mmss(a.ms) + ' · ' + (a.passed ? 'passed' : 'not passed'); cls = a.passed ? 'good' : 'no'; }
+          return '<button class="prow try" data-try="' + esc(a.id) + '" aria-expanded="false"><span><b>' + (a.finished && !a.left ? 'Try ' + n : 'Unfinished') + '</b><span class="hint">' + dt(a.at) + (a.away ? ' · left the test screen ' + a.away + (a.away === 1 ? ' time' : ' times') : '') + '</span></span><span class="pr ' + cls + '">' + lab + ' ›</span></button><div class="tbox" id="t-' + esc(a.id) + '" hidden></div>'; }).join('') + '</div>';
+    });
+    if(!r.topics.length) h += '<div class="card"><p class="hint">No topic is open.</p></div>';
+    app.innerHTML = h; window.scrollTo(0, 0);
+    document.getElementById('back').onclick = function(){ if(S.board){ boardDraw(); window.scrollTo(0, 0); } else boardView(); };
+    Array.prototype.forEach.call(document.querySelectorAll('[data-try]'), function(b){ b.onclick = function(){
+      var box = document.getElementById('t-' + b.dataset.try);
+      if(!box.hidden){ box.hidden = true; b.setAttribute('aria-expanded', 'false'); return; }
+      box.hidden = false; b.setAttribute('aria-expanded', 'true');
+      if(box.dataset.done) return;
+      box.innerHTML = '<div class="hint">Loading…</div>';
+      call({ action:'attempt', emp:S.emp, jwt:S.jwt, attempt:b.dataset.try }).then(function(x){
+        if(!x.ok){ box.innerHTML = '<div class="msg">' + esc(say(x.error)) + '</div>'; return; }
+        box.dataset.done = '1';
+        box.innerHTML = x.review.length ? x.review.map(function(q, i){
+          return '<div class="ans"><b class="' + (q.right ? 'good' : 'no') + '">' + (q.right ? '✓' : '✗') + ' ' + (i+1) + '.</b> ' + esc(q.text) + (q.quote ? '<br><i>“' + esc(q.quote) + '”</i>' : '') +
+            ' <span class="hint">· ' + Math.round(q.ms/1000) + 's of ' + q.secs + 's</span>' +
+            (q.right ? '<br><span class="good">' + esc(rightText(q)) + '</span>' : '<br><span class="no">Answered: ' + esc(pickText(q)) + '</span><br><span class="good">Right answer: ' + esc(rightText(q)) + '</span>') + '</div>'; }).join('') +
+          (x.review.length < x.n ? '<div class="hint" style="margin-top:8px">Stopped after question ' + x.review.length + ' of ' + x.n + '.</div>' : '') :
+          '<div class="hint">No question was answered.</div>';
+      });
+    }; });
+  });
+}
+
+/* ---------- managers: who must pass what ---------- */
+function assignView(keep){
   var y = keep ? window.scrollY : 0;
   call({ action:'board', emp:S.emp, jwt:S.jwt }).then(function(r){
     if(!r.ok){ S.err = say(r.error); return home(); }
-    var can = !!r.can_assign;
-    var h = '<div class="top"><button class="link" id="back">‹ Back</button><span class="eyebrow">Team</span></div>';
-    if(r.waiting.length) h += '<div class="card"><div class="eyebrow">Not open to the team yet</div>' + r.waiting.map(function(w){ return '<div class="row"><span>' + esc(w.name) + '</span><span>' + (w.status === 'checked' ? 'waiting for approval' : 'waiting for the check') + '</span></div>'; }).join('') + '</div>';
-    if(!r.topics.length) h += '<div class="card"><p class="hint">No topic is open to the team yet, so there is nothing to track.</p></div>';
-    else {
-      var open = 0, total = 0;
-      r.rows.forEach(function(p){ p.topics.forEach(function(t){ if(t.required){ total++; if(t.state === 'passed') open++; } }); });
-      h += '<div class="card"><div class="eyebrow">Compulsory topics passed</div>' + (total ? '<div class="big">' + open + ' / ' + total + '</div>' :
-        '<p class="hint">Nothing is compulsory yet.' + (can ? ' Tap <b>Assign</b> next to a person to give them a test.' : '') + '</p>') + '</div>';
-      var who = function(k){ return r.rows.filter(function(p){ return p.emp; }).map(function(p){ return { emp:p.emp, on:p.topics.filter(function(t){ return t.key === k; })[0].required }; }); };
-      h += '<div class="card"><div class="eyebrow">By person</div><table class="board"><tr><th>Name</th>' + r.topics.map(function(t){
-          var all = who(t.key), full = all.length && all.every(function(x){ return x.on; });
-          return '<th>' + esc(t.name) + (can && all.length ? '<div><button class="link mini" data-all="' + t.key + '" data-on="' + (full ? '0' : '1') + '" data-name="' + esc(t.name) + '">' + (full ? 'Clear all' : 'Assign all') + '</button></div>' : '') + '</th>'; }).join('') + '</tr>' +
-        r.rows.map(function(p){
-          return '<tr><td>' + esc(p.name) + '<div class="hint">' + esc(p.role || '') + (p.emp ? '' : ' · no Employee ID') + '</div></td>' + p.topics.map(function(t){
-            var s = t.state === 'passed' ? '<span class="good">Passed</span>' : t.state === 'expired' ? '<span class="no">Expired</span>' : t.state === 'tried' ? '<span class="no">Not passed</span>' : (!can && t.required) ? '<span class="no">To do</span>' : (!can ? '–' : '');
-            var tog = can && p.emp ? '<button class="req' + (t.required ? ' on' : '') + '" data-emp="' + esc(p.emp) + '" data-t="' + t.key + '" data-on="' + (t.required ? '0' : '1') + '" aria-pressed="' + !!t.required + '">' + (t.required ? 'Required' : 'Assign') + '</button>' : '';
-            return '<td>' + s + (t.best ? '<div class="hint">' + t.best.score + '/' + (t.n || 5) + ' · ' + mmss(t.best.ms) + (t.tries > 1 ? ' · ' + t.tries + ' tries' : '') + '</div>' : '') + tog + '</td>'; }).join('') + '</tr>'; }).join('') + '</table>' +
-        '<div class="hint" style="margin-top:8px">' + (can ? 'Tap <b>Assign</b> to make a topic compulsory for that person; tap <b>Required</b> to take it off. ' : '') + 'Anyone can take any open test. Scores show the best try and its time.</div></div>';
-    }
-    app.innerHTML = h; document.getElementById('back').onclick = home;
+    S.board = r;
+    var who = function(k){ return r.rows.filter(function(p){ return p.emp; }).map(function(p){ return { emp:p.emp, on:p.topics.filter(function(t){ return t.key === k; })[0].required }; }); };
+    var h = '<div class="top"><button class="link" id="back">‹ Team</button><span class="eyebrow">Who must pass what</span></div>' +
+      '<div class="card"><table class="board"><tr><th>Name</th>' + r.topics.map(function(t){
+        var all = who(t.key), full = all.length && all.every(function(x){ return x.on; });
+        return '<th>' + esc(t.name) + (all.length ? '<div><button class="link mini" data-all="' + t.key + '" data-on="' + (full ? '0' : '1') + '" data-name="' + esc(t.name) + '">' + (full ? 'Clear all' : 'Assign all') + '</button></div>' : '') + '</th>'; }).join('') + '</tr>' +
+      r.rows.map(function(p){
+        return '<tr><td>' + esc(p.name) + '<div class="hint">' + esc(p.role || '') + (p.emp ? '' : ' · no Employee ID') + '</div></td>' + p.topics.map(function(t){
+          return '<td>' + (p.emp ? '<button class="req' + (t.required ? ' on' : '') + '" data-emp="' + esc(p.emp) + '" data-t="' + t.key + '" data-on="' + (t.required ? '0' : '1') + '" aria-pressed="' + !!t.required + '">' + (t.required ? 'Required' : 'Assign') + '</button>' : '') + '</td>'; }).join('') + '</tr>'; }).join('') + '</table>' +
+      '<div class="hint" style="margin-top:8px">Tap <b>Assign</b> to make a topic compulsory for that person; tap <b>Required</b> to take it off. Anyone can take any open test.</div></div>';
+    app.innerHTML = h; document.getElementById('back').onclick = function(){ boardDraw(); window.scrollTo(0, 0); };
     var send = function(btn, topic, ids, on){
       btn.disabled = true;
-      call({ action:'assign', emp:S.emp, jwt:S.jwt, topic:topic, who:ids, on:on }).then(function(x){ if(!x.ok){ S.err = say(x.error); btn.disabled = false; alert(S.err); S.err = ''; return; } boardView(true); });
+      call({ action:'assign', emp:S.emp, jwt:S.jwt, topic:topic, who:ids, on:on }).then(function(x){ if(!x.ok){ S.err = say(x.error); btn.disabled = false; alert(S.err); S.err = ''; return; } assignView(true); });
     };
     Array.prototype.forEach.call(document.querySelectorAll('button.req'), function(b){ b.onclick = function(){ send(b, b.dataset.t, [b.dataset.emp], b.dataset.on === '1'); }; });
     Array.prototype.forEach.call(document.querySelectorAll('[data-all]'), function(b){ b.onclick = function(){

@@ -125,6 +125,26 @@ const same = (a: unknown, raw: string) => {
   const s = String(a ?? "").trim(); if (!s) return false; if (s === raw) return true;
   const x = parseInt(s, 10), y = parseInt(raw, 10); return !isNaN(x) && !isNaN(y) && x === y;
 };
+// Every way one Employee ID has been typed (860, 0860, 000860): tries used to be saved under the typed form, so a
+// person's history is read by all of them. New tries are saved under the foh_staff form (16 Nov 2026).
+function idForms(id: string): string[] {
+  const s = String(id ?? "").trim(); if (!s) return [];
+  if (!/^\d+$/.test(s)) return [s];
+  const n = String(parseInt(s, 10)); const out = new Set<string>([s, n]);
+  for (let len = n.length + 1; len <= 8; len++) out.add(n.padStart(len, "0"));
+  return [...out];
+}
+// an abandoned try is closed with no score and no time; it is not a real try
+const left = (a: Row) => !!a.finished_at && !a.passed && !(a.total_ms > 0);
+// the manager's numbers for one person and one topic: real tries in order, first score, which try passed, time
+function statsOf(key: string, atts: Row[]) {
+  const mine = atts.filter((a) => a.topic === key).sort((x, y) => new Date(x.started_at).getTime() - new Date(y.started_at).getTime());
+  const done = mine.filter((a) => a.finished_at && !left(a));
+  const pi = done.findIndex((a) => a.passed);
+  const ms = done.reduce((s, a) => s + (a.total_ms || 0), 0);
+  return { done: done.length, left: mine.filter(left).length, open: mine.some((a) => !a.finished_at), first: done.length ? done[0].score : null,
+    pass_try: pi < 0 ? null : pi + 1, sum_ms: ms, last_at: mine.length ? mine[mine.length - 1].started_at : null };
+}
 
 // ---- who is asking: FOH staff only (the Kitchen's own Learning is separate) -------------------------------------
 async function fohStaff(db: ReturnType<typeof sb>, raw: string): Promise<{ name: string; role: string; id: string } | null> {
@@ -223,7 +243,7 @@ Deno.serve(async (req) => {
       if (!st && !au && !mn) return json({ ok: false, error: "no_emp" });
       const out: Row = { ok: true, name: st ? st.name : au ? au.name : mn, staff: !!st, manager: !!au?.manager || (!st && !!mn), admin: !!au?.admin, master: !st && !!mn };
       if (st) {
-        const at = await db.from("learn_attempts").select("topic,finished_at,score,passed,total_ms").eq("emp_id", emp).not("finished_at", "is", null);
+        const at = await db.from("learn_attempts").select("topic,finished_at,score,passed,total_ms").in("emp_id", idForms(st.id)).not("finished_at", "is", null);
         const need = await assigned(db, st.id);
         const ws = await wineSet(db);
         out.role = st.role;
@@ -360,18 +380,64 @@ Deno.serve(async (req) => {
       if ((!au || !au.manager) && !mn) return json({ ok: false, error: "not_manager" }, 403);
       const [sf, at, need] = await Promise.all([
         db.from("foh_staff").select("name,emp_id,role").eq("active", true).order("name"),
-        db.from("learn_attempts").select("emp_id,topic,finished_at,score,passed,total_ms").not("finished_at", "is", null),
+        db.from("learn_attempts").select("emp_id,topic,started_at,finished_at,score,passed,total_ms").order("started_at").limit(5000),
         assigned(db),
       ]);
       const live = TOPICS.filter(open);
       const ws = await wineSet(db);
       const rows = (sf.data || []).map((s: Row) => {
         const id = s.emp_id == null ? "" : String(s.emp_id).trim();
-        const mine = id ? (at.data || []).filter((a: Row) => String(a.emp_id) === id) : [];
+        const mine = id ? (at.data || []).filter((a: Row) => same(a.emp_id, id)) : [];
         return { name: s.name, role: s.role, emp: id || null, floor: onFloor(String(s.role ?? "")),
-          topics: live.map((t) => ({ key: t.key, required: !!id && need.has(id + "|" + t.key), ...sizing(t.key, ws), ...stateOf(t, mine) })) };
-      }).filter((r: Row) => r.floor || r.topics.some((t: Row) => t.required || t.state !== "not_yet"));
+          topics: live.map((t) => ({ key: t.key, required: !!id && need.has(id + "|" + t.key), ...sizing(t.key, ws), ...stateOf(t, mine), ...statsOf(t.key, mine) })) };
+      }).filter((r: Row) => r.floor || r.topics.some((t: Row) => t.required || t.state !== "not_yet" || t.open));
       return json({ ok: true, by: au ? au.name : mn, can_assign: !!au?.manager, topics: live.map((t) => ({ key: t.key, name: t.name })), rows, waiting: TOPICS.filter((t) => t.built && !open(t)).map((t) => ({ key: t.key, name: t.name, status: t.status })) });
+    }
+
+    // ----------------------------------------------------------------- managers: one person's tries, one try's questions,
+    // and the questions the team gets wrong most (16 Nov 2026). Read only; a master code may look, like the board.
+    if (action === "person" || action === "attempt" || action === "missed") {
+      const au = await appUser(db, b.jwt);
+      const mn = au ? null : await masterName(db, emp);
+      if ((!au || !au.manager) && !mn) return json({ ok: false, error: "not_manager" }, 403);
+      const tries = (a: Row) => { const n = Array.isArray(a.qs) ? a.qs.length : 0; return { id: a.id, topic: a.topic, at: a.started_at, finished: !!a.finished_at, left: left(a), score: a.score ?? 0, n, need: passMark(n), passed: !!a.passed, ms: a.total_ms || 0, away: a.away || 0 }; };
+
+      if (action === "person") {
+        const who = String(b.who ?? "").trim(); if (!who) return json({ ok: false, error: "no_emp" });
+        const sf = await db.from("foh_staff").select("name,emp_id,role").in("emp_id", idForms(who)).limit(1);
+        const s = ((sf.data && sf.data[0]) || undefined) as Row | undefined; if (!s) return json({ ok: false, error: "no_emp" });
+        const id = String(s.emp_id).trim();
+        const [at, need] = await Promise.all([
+          db.from("learn_attempts").select("id,topic,started_at,finished_at,score,passed,total_ms,away,qs").in("emp_id", idForms(id)).order("started_at").limit(500),
+          assigned(db, id),
+        ]);
+        const all: Row[] = at.data || [];
+        return json({ ok: true, name: s.name, role: s.role, emp: id,
+          topics: TOPICS.filter(open).map((t) => ({ key: t.key, name: t.name, required: need.has(id + "|" + t.key), ...stateOf(t, all), ...statsOf(t.key, all) })),
+          tries: all.map(tries) });
+      }
+
+      if (action === "attempt") {
+        const got = await db.from("learn_attempts").select("*").eq("id", String(b.attempt ?? "")).limit(1);
+        const a = ((got.data && got.data[0]) || undefined) as Row | undefined; if (!a) return json({ ok: false, error: "no_attempt" });
+        const ans: Row[] = Array.isArray(a.answers) ? a.answers : [];
+        return json({ ok: true, ...tries(a), name: a.name, answered: ans.length, review: review(a.qs, ans).slice(0, a.finished_at && !left(a) ? a.qs.length : ans.length) });
+      }
+
+      // most-missed: the latest 600 finished tries, grouped by the question's own words
+      const at = await db.from("learn_attempts").select("topic,qs,answers,finished_at,passed,total_ms").not("finished_at", "is", null).order("started_at", { ascending: false }).limit(600);
+      const tally = new Map<string, { topic: string; text: string; asked: number; wrong: number }>();
+      for (const a of (at.data || []) as Row[]) {
+        if (left(a) || !Array.isArray(a.qs)) continue;
+        (a.qs as Q[]).forEach((q, i) => {
+          const an = (a.answers || [])[i]; const k = a.topic + "|" + q.text;
+          const e = tally.get(k) || { topic: a.topic, text: q.text, asked: 0, wrong: 0 };
+          e.asked++; if (!an || an.out || !isRight(q, an.pick)) e.wrong++;
+          tally.set(k, e);
+        });
+      }
+      return json({ ok: true, topics: TOPICS.filter(open).map((t) => ({ key: t.key, name: t.name,
+        qs: [...tally.values()].filter((e) => e.topic === t.key && e.asked >= 3 && e.wrong > 0).sort((x, y) => y.wrong - x.wrong || y.wrong / y.asked - x.wrong / x.asked).slice(0, 5) })) });
     }
 
     // ----------------------------------------------------------------- managers: make a topic compulsory for people (or not)
@@ -395,14 +461,14 @@ Deno.serve(async (req) => {
     if (!st) return json({ ok: false, error: "no_emp" });
 
     if (action === "resume") {
-      const o = await db.from("learn_attempts").select("*").eq("emp_id", emp).is("finished_at", null).order("started_at", { ascending: false }).limit(1);
+      const o = await db.from("learn_attempts").select("*").in("emp_id", idForms(st.id)).is("finished_at", null).order("started_at", { ascending: false }).limit(1);
       const at: Row | undefined = o.data && o.data[0]; if (!at) return json({ ok: true, resumed: false });
       const t = topicOf(at.topic); if (!t) return json({ ok: true, resumed: false });
       return json(frame(at, t, true));
     }
 
     if (action === "start") {
-      const o = await db.from("learn_attempts").select("*").eq("emp_id", emp).is("finished_at", null).order("started_at", { ascending: false }).limit(1);
+      const o = await db.from("learn_attempts").select("*").in("emp_id", idForms(st.id)).is("finished_at", null).order("started_at", { ascending: false }).limit(1);
       const cur: Row | undefined = o.data && o.data[0];
       if (cur) { const t0 = topicOf(cur.topic); if (t0) return json(frame(cur, t0, true)); }
       const t = topicOf(b.topic); if (!t) return json({ ok: false, error: "no_topic" });
@@ -416,7 +482,7 @@ Deno.serve(async (req) => {
       if (!fixed && (data.dishes.length < 25 || data.wines.length < 8)) return json({ ok: false, error: "not_ready" });
       const qs = testQs(book, menu.id, set, t.key, Math.floor(Math.random() * 4294967295));
       if (qs.length !== (fixed ? set.qs.length : QUESTIONS_PER_TEST)) return json({ ok: false, error: "not_ready" });
-      const ins = await db.from("learn_attempts").insert({ emp_id: emp, name: st.name, role: st.role, topic: t.key, qs }).select("*").single();
+      const ins = await db.from("learn_attempts").insert({ emp_id: st.id || emp, name: st.name, role: st.role, topic: t.key, qs }).select("*").single();
       if (ins.error) { console.log("learn insert", ins.error.message); return json({ ok: false, error: "db" }, 500); }
       return json(frame(ins.data, t, false));
     }
@@ -424,7 +490,7 @@ Deno.serve(async (req) => {
     if (action === "answer") {
       const got = await db.from("learn_attempts").select("*").eq("id", String(b.attempt ?? "")).limit(1);
       const at = ((got.data && got.data[0]) || undefined) as Row | undefined;
-      if (!at || String(at.emp_id) !== emp) return json({ ok: false, error: "no_attempt" });
+      if (!at || !same(at.emp_id, emp)) return json({ ok: false, error: "no_attempt" });
       if (at.finished_at) return json({ ok: false, error: "finished" });
       if (b.idx !== undefined && Number(b.idx) !== at.cur) return json({ ok: false, error: "stale" });
       const t = topicOf(at.topic)!;
@@ -447,7 +513,7 @@ Deno.serve(async (req) => {
     if (action === "result") {
       const got = await db.from("learn_attempts").select("*").eq("id", String(b.attempt ?? "")).limit(1);
       const at = ((got.data && got.data[0]) || undefined) as Row | undefined;
-      if (!at || String(at.emp_id) !== emp) return json({ ok: false, error: "no_attempt" });
+      if (!at || !same(at.emp_id, emp)) return json({ ok: false, error: "no_attempt" });
       if (!at.finished_at) return json({ ok: false, error: "not_finished" });
       return json({ ok: true, result: resultOf(at, topicOf(at.topic)!, mark(at.qs, at.answers), at.answers) });
     }
@@ -455,7 +521,7 @@ Deno.serve(async (req) => {
     if (action === "abandon") {
       const got = await db.from("learn_attempts").select("id,emp_id,finished_at").eq("id", String(b.attempt ?? "")).limit(1);
       const at = ((got.data && got.data[0]) || undefined) as Row | undefined;
-      if (!at || String(at.emp_id) !== emp || at.finished_at) return json({ ok: false, error: "no_attempt" });
+      if (!at || !same(at.emp_id, emp) || at.finished_at) return json({ ok: false, error: "no_attempt" });
       await db.from("learn_attempts").update({ finished_at: new Date().toISOString(), score: 0, passed: false, total_ms: 0 }).eq("id", at.id);
       return json({ ok: true });
     }
