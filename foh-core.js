@@ -6548,17 +6548,36 @@ function fohSchedCloseShift(event, staffId, dateStr){
     // Clear manual override -> fall back to the machine punch
     var prevOut0=a.manual_out;
     a.manual_out=null; fohRenderSchedView();
-    sbKitchen.from('attendance').update({manual_out:null,closed_by:null,closed_at:null})
-      .eq('emp_id',staff.emp_id).eq('att_date',dateStr).select('id')
-      .then(function(res){ fohSchedClockOutSaved(res, a, prevOut0, staff.name); });
+    fohSchedSendClockOut(staff, dateStr, null, a, prevOut0);
     return;
   }
   if(!/^\d{1,2}:\d{2}$/.test(out)){ alert('Please use HH:MM (24h), or "-" to clear.'); return; }
   var prevOut=a.manual_out;
   a.manual_out=out; fohRenderSchedView();
-  sbKitchen.from('attendance').update({manual_out:out,closed_by:'foh-manager',closed_at:new Date().toISOString()})
-    .eq('emp_id',staff.emp_id).eq('att_date',dateStr).select('id')
-    .then(function(res){ fohSchedClockOutSaved(res, a, prevOut, staff.name); });
+  fohSchedSendClockOut(staff, dateStr, out, a, prevOut);
+}
+// The attendance table only takes writes from the Kitchen's own kitchen-guard
+// function (a direct update from here is refused without an error — that is why
+// clock-outs set on this screen stopped saving in July 2026). Send it that way,
+// then read the row back: the function answers ok even when it matched no row.
+function fohSchedSendClockOut(staff, dateStr, out, a, prevOut){
+  fetch(KITCHEN_URL+'/functions/v1/kitchen-guard', {
+    method:'POST',
+    headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+KITCHEN_KEY, 'apikey':KITCHEN_KEY },
+    body:JSON.stringify({ op:'manual_out', emp_id:staff.emp_id, att_date:dateStr, out:out })
+  }).then(function(r){
+    return r.json().catch(function(){ return {}; }).then(function(j){
+      if(!r.ok || !j || !j.ok) throw new Error((j && j.error) || ('refused ('+r.status+')'));
+      return sbKitchen.from('attendance').select('id,manual_out').eq('emp_id',staff.emp_id).eq('att_date',dateStr);
+    });
+  }).then(function(res){
+    var rows=res.data||[];
+    var want=out ? attHHMM(out) : '';
+    var landed=!res.error && rows.length>0 && rows.every(function(r){ return (r.manual_out ? attHHMM(r.manual_out) : '')===want; });
+    fohSchedClockOutSaved(landed ? { data:rows } : { error:res.error||null, data:[] }, a, prevOut, staff.name);
+  }).catch(function(e){
+    fohSchedClockOutSaved({ error:e, data:[] }, a, prevOut, staff.name);
+  });
 }
 // A clock-out the database did not take must not stay on screen as if it had:
 // no error AND no row back means nothing was written. Put the old time back and say so.
@@ -6566,7 +6585,7 @@ function fohSchedClockOutSaved(res, a, prevOut, name){
   if(!res.error && (res.data||[]).length) return;
   console.error('Clock-out not saved:', res.error || 'no row was updated');
   a.manual_out=prevOut; fohRenderSchedView();
-  toast('Clock-out for '+name+' was NOT saved — the time on screen is the machine one.', true);
+  toast('Clock-out for '+name+' was NOT saved — the screen shows the last saved time.', true);
 }
 
 // ── Reorder staff within a department (↑/↓) ──
