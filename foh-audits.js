@@ -258,6 +258,7 @@ function auListView(){
 async function auOpen(id){
   var a = (AU.list || []).filter(function(x){ return x.id === id; })[0];
   AU.open = a || { id: id, auditor: '' }; AU.report = null; AU.reportErr = null;
+  if(AU_PDF.forId !== id) AU_PDF = { busy: false, msg: '', file: null, err: null, forId: null };
   auRepaint(); try { window.scrollTo(0, 0); } catch(e){}
   // Andrea's Amman report is built by audit-amman (its own design, 11 Nov 2026); Chef Bartolini's and the guests' by audit-api.
   try { var r = await auApi('report', { id: id }, auKindOf(AU.open) === 'amman' ? 'audit-amman' : null); if(AU.open && AU.open.id === id) AU.report = r.html; }
@@ -271,6 +272,8 @@ function auReportView(){
   if(AU.reportErr) return h + '<div class="au-bad">The report could not be read: ' + auEsc(AU.reportErr) + ' <button class="au-btn quiet" onclick="auOpen(\'' + auEsc(a.id) + '\')">Try again</button></div>';
   if(!AU.report) return h + '<div class="loading">Preparing the report' + (a.auditor ? ' for ' + auEsc(a.auditor) : '') + '&hellip; notes are put into English first, which can take a few seconds.</div>';
   // The report is the function's own HTML (the same as Amin's email), shown in a frame with no scripts.
+  // Download PDF sits beside "All audits" once the report is here (20 Nov 2026).
+  h = h.replace(/<\/div>$/, '<span id="au-pdfbar" style="display:contents">' + auPdfBar() + '</span></div>');
   return h + '<iframe class="au-frame" id="au-frame" sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox" srcdoc="' + auEsc(AU.report) + '" onload="auFit(this)" title="Audit report"></iframe>';
 }
 function auFit(f){
@@ -468,3 +471,313 @@ async function admAuditRestore(id){
   catch(e){ toast('Could not put it back: ' + (e.message || e), true); }
   AUA.busy = null; AU.list = null; await admAuditsLoad();
 }
+
+
+// ── Download PDF (20 Nov 2026, Francesco: "every report should be able to be sent by email by
+// downloading the PDF in Roberto's brand") ─────────────────────────────────────────────────────
+// The PDF is the report itself: same masthead, colours and brand type (Forum + Outfit, embedded).
+// The browser lays the report out at its full width (640px, also on a phone) in a hidden frame;
+// every box, word and picture is then drawn into the PDF at the place the browser gave it, so the
+// text stays sharp and can be selected. Pages are cut between cards, never through one.
+// Works for every report: Chef Bartolini's, Amman, the guests'. jsPDF and the four font files are
+// only fetched when someone asks for a PDF.
+var AU_PDF = { busy: false, msg: '', file: null, err: null, forId: null };
+var AU_PDF_W = 640, AU_PDF_PAPER = [246, 240, 231];
+var AU_PDF_FONTS = [['Forum', 'Forum-Regular.ttf'], ['Outfit400', 'Outfit-Regular.ttf'], ['Outfit500', 'Outfit-Medium.ttf'], ['Outfit600', 'Outfit-SemiBold.ttf']];
+var AU_PDF_FONTDATA = null;
+function auLoadJsPdf(){
+  return new Promise(function(res, rej){
+    if(window.jspdf && window.jspdf.jsPDF) return res();
+    var s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+    s.onload = function(){ (window.jspdf && window.jspdf.jsPDF) ? res() : rej(new Error('the PDF maker did not start')); };
+    s.onerror = function(){ rej(new Error('the PDF maker could not load. Check the connection')); };
+    document.head.appendChild(s);
+  });
+}
+function auPdfB64(buf){
+  var b = new Uint8Array(buf), s = '';
+  for(var i = 0; i < b.length; i += 0x8000) s += String.fromCharCode.apply(null, b.subarray(i, i + 0x8000));
+  return btoa(s);
+}
+async function auPdfLoadFonts(){
+  if(AU_PDF_FONTDATA) return AU_PDF_FONTDATA;
+  var out = {};
+  for(var i = 0; i < AU_PDF_FONTS.length; i++){
+    var r = await fetch('audit-fonts/' + AU_PDF_FONTS[i][1]);
+    if(!r.ok) throw new Error('the brand fonts could not load');
+    out[AU_PDF_FONTS[i][0]] = auPdfB64(await r.arrayBuffer());
+  }
+  return (AU_PDF_FONTDATA = out);
+}
+function auPdfName(a){
+  var who = String((a && a.auditor) || 'audit').replace(/[·\\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim();
+  return "Roberto's audit - " + who + (a && a.visit_date ? ' - ' + a.visit_date : '') + '.pdf';
+}
+function auPdfRgb(c){
+  var m = /rgba?\(([^)]+)\)/.exec(c || ''); if(!m) return null;
+  var p = m[1].split(',').map(parseFloat);
+  if(p.length > 3 && p[3] === 0) return null;
+  return [p[0], p[1], p[2]];
+}
+// A hidden copy of the report at full width, in the brand fonts only, with its pictures loaded.
+function auPdfFrame(html){
+  return new Promise(function(res, rej){
+    var f = document.createElement('iframe');
+    f.setAttribute('sandbox', 'allow-same-origin');
+    f.setAttribute('aria-hidden', 'true');
+    f.style.cssText = 'position:fixed;left:-10000px;top:0;width:' + AU_PDF_W + 'px;height:1000px;border:0;visibility:hidden';
+    var done = false, t;
+    var fail = function(m){ if(!done){ done = true; clearTimeout(t); f.remove(); rej(new Error(m)); } };
+    t = setTimeout(function(){ fail('the report took too long to load'); }, 30000);
+    f.onload = function(){
+      var d = f.contentDocument;
+      // Anything not set in Forum or Outfit (the quotes are Georgia italic) is put into the brand
+      // type, so that what the browser measures is what the PDF can draw.
+      Array.prototype.forEach.call(d.body.querySelectorAll('*'), function(el){
+        var st = el.getAttribute('style') || '';
+        if(/Georgia,serif/.test(st) && /italic/.test(st)){ el.style.font = '400 17px/1.5 Forum,serif'; el.style.fontStyle = 'normal'; }
+        else if(/font:[^;]*Arial,sans-serif/.test(st) && !/Outfit/.test(st)) el.style.fontFamily = 'Outfit,Arial,sans-serif';
+      });
+      var imgs = Array.prototype.slice.call(d.querySelectorAll('img')).map(function(im){
+        im.loading = 'eager';
+        return im.complete ? null : new Promise(function(r){ im.addEventListener('load', r); im.addEventListener('error', r); });
+      });
+      var fonts = !d.fonts ? Promise.resolve() : Promise.all(['400 20px Forum', '400 14px Outfit', '500 14px Outfit', '600 14px Outfit'].map(function(x){ return d.fonts.load(x); })).then(function(){ return d.fonts.ready; });
+      Promise.race([Promise.all([fonts].concat(imgs)), new Promise(function(r){ setTimeout(r, 12000); })]).then(function(){
+        if(done) return;
+        if(d.fonts && !(d.fonts.check('400 20px Forum') && d.fonts.check('600 14px Outfit'))) return fail('the brand fonts could not load. Check the connection');
+        done = true; clearTimeout(t);
+        f.style.height = d.documentElement.scrollHeight + 'px';
+        setTimeout(function(){ res(f); }, 60);
+      }, function(){ fail('the brand fonts could not load. Check the connection'); });
+    };
+    f.srcdoc = html;
+    document.body.appendChild(f);
+  });
+}
+// Everything the browser drew, with its place on the long page: boxes, words, pictures.
+function auPdfCollect(d){
+  var win = d.defaultView, sy = win.pageYOffset || 0;
+  var boxes = [], words = [], pics = [], solid = [], heads = [], baseCache = {};
+  var fontOf = function(cs){
+    if(/^\s*["']?Forum/i.test(cs.fontFamily)) return 'Forum';
+    var w = parseInt(cs.fontWeight, 10) || 400;
+    return w >= 600 ? 'Outfit600' : w >= 500 ? 'Outfit500' : 'Outfit400';
+  };
+  // Where the baseline sits below the top of a line of text, per font (share of the font size).
+  var baseOf = function(font, cs){
+    if(baseCache[font] != null) return baseCache[font];
+    var s = d.createElement('span');
+    s.style.cssText = 'position:absolute;left:0;top:0;visibility:hidden;white-space:nowrap;line-height:normal;font-size:100px;font-family:' + cs.fontFamily + ';font-weight:' + cs.fontWeight;
+    s.appendChild(d.createTextNode('Hg'));
+    var m = d.createElement('i'); m.style.cssText = 'display:inline-block;width:1px;height:0;vertical-align:baseline'; s.appendChild(m);
+    d.body.appendChild(s);
+    var rg = d.createRange(); rg.selectNodeContents(s.firstChild);
+    var v = (m.getBoundingClientRect().top - rg.getBoundingClientRect().top) / 100;
+    s.remove();
+    return (baseCache[font] = v > 0.5 && v < 1.3 ? v : 0.95);
+  };
+  var all = d.body.querySelectorAll('*');
+  for(var n = 0; n < all.length; n++){
+    var el = all[n], r = el.getBoundingClientRect();
+    if(!r.width || !r.height) continue;
+    var cs = win.getComputedStyle(el), tag = el.tagName;
+    if(cs.visibility === 'hidden' || cs.display === 'none') continue;
+    var y = r.top + sy, rad = parseFloat(cs.borderTopLeftRadius) || 0;
+    var bg = auPdfRgb(cs.backgroundColor);
+    var side = function(k){ var w = parseFloat(cs['border' + k + 'Width']) || 0; return w && cs['border' + k + 'Style'] !== 'none' ? { w: w, c: auPdfRgb(cs['border' + k + 'Color']) } : { w: 0, c: null }; };
+    var bt = side('Top'), br = side('Right'), bb = side('Bottom'), bl = side('Left');
+    if(tag !== 'IMG' && (bg || bt.w || br.w || bb.w || bl.w)) boxes.push({ x: r.left, y: y, w: r.width, h: r.height, r: Math.min(rad, r.height / 2, r.width / 2), bg: bg, t: bt, rt: br, b: bb, l: bl });
+    if(tag === 'IMG'){
+      var a = el.closest ? el.closest('a') : null;
+      pics.push({ src: el.currentSrc || el.src, x: r.left, y: y, w: r.width, h: r.height, href: a ? a.href : '', png: /\.png(\?|$)/i.test(el.src) });
+    }
+    var hasText = false;
+    for(var c = 0; c < el.childNodes.length; c++){
+      var node = el.childNodes[c];
+      if(node.nodeType !== 3 || !node.nodeValue.trim()) continue;
+      hasText = true;
+      var font = fontOf(cs), fs = parseFloat(cs.fontSize) || 14, col = auPdfRgb(cs.color) || [58, 51, 44];
+      var ls = parseFloat(cs.letterSpacing) || 0, up = cs.textTransform === 'uppercase', base = baseOf(font, cs);
+      var re = /\S+/g, mm, rg = d.createRange();
+      while((mm = re.exec(node.nodeValue))){
+        rg.setStart(node, mm.index); rg.setEnd(node, mm.index + mm[0].length);
+        var rects = rg.getClientRects(); if(!rects.length) continue;
+        var q = rects[0];
+        words.push({ s: up ? mm[0].toUpperCase() : mm[0], x: q.left, y: q.top + sy, w: q.width, h: q.height, fs: fs, font: font, col: col, ls: ls, base: base });
+      }
+    }
+    // What must not be cut by a page end.
+    var st = el.getAttribute('style') || '';
+    // A row, a paragraph, a picture or a quote always stays whole; a card does too unless it is a long list (then it is cut between rows).
+    if(tag === 'IMG' || tag === 'TR' || hasText || /border-left:3px/.test(st)) solid.push({ a: y, b: y + r.height, max: 0.9 });
+    else if(/border-radius:\s*(9|1\d|2\d)px/.test(st)) solid.push({ a: y, b: y + r.height, max: 0.45 });
+    // A heading: a short table that sits straight in the page column (section titles, section names).
+    if(tag === 'TABLE' && r.height < 70 && el.parentNode && el.parentNode.parentNode && el.parentNode.parentNode.parentNode === d.body) heads.push({ a: y, b: y + r.height });
+  }
+  return { boxes: boxes, words: words, pics: pics, solid: solid, heads: heads };
+}
+// Where each page ends: at the page height, moved up so that no card, paragraph or picture is cut
+// and no heading is left alone at the foot of a page.
+function auPdfBreaks(solid, heads, total, first, rest){
+  var out = [], y = 0, room = first, guard = 0;
+  while(y < total - 1 && guard++ < 300){
+    var end = y + room;
+    if(end >= total){ out.push([y, total]); break; }
+    var moved = true, loops = 0;
+    while(moved && loops++ < 80){
+      moved = false;
+      for(var i = 0; i < solid.length; i++){
+        var s = solid[i];
+        if(s.a < end - 1.5 && s.b > end + 1.5 && (s.b - s.a) < room * s.max && s.a > y + 80){ end = s.a; moved = true; }
+      }
+      for(var j = 0; j < heads.length; j++){
+        var hd = heads[j];
+        if(hd.b <= end + 1.5 && end - hd.b < 40 && hd.a > y + 80){ end = hd.a; moved = true; }
+      }
+    }
+    out.push([y, end]); y = end; room = rest;
+  }
+  return out;
+}
+// A picture as data the PDF can hold. A picture that cannot be read is left out, never a broken page.
+async function auPdfImage(p){
+  try {
+    var r = await fetch(p.src, { mode: 'cors' }); if(!r.ok) return null;
+    var blob = await r.blob();
+    var url = URL.createObjectURL(blob);
+    var im = await new Promise(function(res, rej){ var i = new Image(); i.onload = function(){ res(i); }; i.onerror = rej; i.src = url; });
+    var sx = 0, sy = 0, sw = im.naturalWidth, sh = im.naturalHeight;
+    if(!p.png){   // a photo is shown cropped to its box (object-fit: cover)
+      var ar = p.w / p.h;
+      if(sw / sh > ar){ var nw = sh * ar; sx = (sw - nw) / 2; sw = nw; } else { var nh = sw / ar; sy = (sh - nh) / 2; sh = nh; }
+    }
+    var sc = Math.min(1, Math.max(p.w, p.h) * 3 / Math.max(sw, sh));
+    var cv = document.createElement('canvas'), cw = Math.max(1, Math.round(sw * sc)), ch = Math.max(1, Math.round(sh * sc));
+    cv.width = cw; cv.height = ch;
+    var cx = cv.getContext('2d');
+    if(!p.png){ cx.fillStyle = '#fff'; cx.fillRect(0, 0, cw, ch); }
+    cx.drawImage(im, sx, sy, sw, sh, 0, 0, cw, ch);
+    URL.revokeObjectURL(url);
+    return { data: cv.toDataURL(p.png ? 'image/png' : 'image/jpeg', 0.88), fmt: p.png ? 'PNG' : 'JPEG' };
+  } catch(e){ return null; }
+}
+async function auPdfBuild(html, onStep){
+  if(onStep) onStep(0, 0);
+  await auLoadJsPdf();
+  var fontData = await auPdfLoadFonts();
+  var f = await auPdfFrame(html);
+  var got, total;
+  try {
+    var d = f.contentDocument; total = Math.ceil(d.documentElement.scrollHeight);
+    got = auPdfCollect(d);
+  } finally { f.remove(); }
+  var jsPDF = window.jspdf.jsPDF, pdf = new jsPDF({ unit: 'pt', format: 'a4', compress: true, putOnlyUsedFonts: true });
+  AU_PDF_FONTS.forEach(function(x){ pdf.addFileToVFS(x[1], fontData[x[0]]); pdf.addFont(x[1], x[0], 'normal'); });
+  var PW = pdf.internal.pageSize.getWidth(), PH = pdf.internal.pageSize.getHeight(), k = PW / AU_PDF_W;
+  var pagePx = PH / k, TOP = 30, FOOT = 34;        // later pages start a little down; every page keeps a foot for its number
+  var pages = auPdfBreaks(got.solid, got.heads, total, pagePx - FOOT, pagePx - TOP - FOOT);
+  var imgData = [];
+  for(var p = 0; p < got.pics.length; p++) imgData.push(await auPdfImage(got.pics[p]));
+  var fill = function(c){ pdf.setFillColor(c[0], c[1], c[2]); };
+  var rr = function(x, y, w, h, r){ if(w <= 0 || h <= 0) return; if(r > 0.3) pdf.roundedRect(x, y, w, h, r, r, 'F'); else pdf.rect(x, y, w, h, 'F'); };
+  for(var i = 0; i < pages.length; i++){
+    if(onStep) onStep(i + 1, pages.length);
+    var y0 = pages[i][0], y1 = pages[i][1], off = i ? TOP : 0;
+    var Y = function(v){ return (v - y0 + off) * k; };
+    if(i) pdf.addPage();
+    fill(AU_PDF_PAPER); pdf.rect(0, 0, PW, PH, 'F');
+    // Only this page's slice of the long report may show.
+    pdf.saveGraphicsState();
+    pdf.rect(0, off * k, PW, (y1 - y0) * k, null); pdf.clip(); pdf.discardPath();
+    got.boxes.forEach(function(b){
+      if(b.y >= y1 || b.y + b.h <= y0) return;
+      var x = b.x * k, y = Y(b.y), w = b.w * k, h = b.h * k, r = b.r * k;
+      var even = b.t.w > 0 && b.t.w === b.rt.w && b.t.w === b.b.w && b.t.c;
+      if(even){
+        // a border all round: the border colour underneath, a wider left edge if it has one, the inside on top
+        var tw = b.t.w, lw = b.l.w || tw;
+        fill(b.t.c); rr(x, y, w, h, r);
+        if(b.l.w > tw && b.l.c){
+          pdf.saveGraphicsState(); pdf.rect(x, y, (lw + 0.5) * k, h, null); pdf.clip(); pdf.discardPath();
+          fill(b.l.c); rr(x, y, w, h, r); pdf.restoreGraphicsState();
+        }
+        fill(b.bg || AU_PDF_PAPER); rr(x + lw * k, y + tw * k, w - (lw + tw) * k, h - 2 * tw * k, Math.max(0, r - tw * k));
+        return;
+      }
+      if(b.bg){ fill(b.bg); rr(x, y, w, h, r); }
+      if(b.t.w && b.t.c){ fill(b.t.c); pdf.rect(x, y, w, b.t.w * k, 'F'); }
+      if(b.b.w && b.b.c){ fill(b.b.c); pdf.rect(x, y + h - b.b.w * k, w, b.b.w * k, 'F'); }
+      if(b.l.w && b.l.c){ fill(b.l.c); pdf.rect(x, y, b.l.w * k, h, 'F'); }
+      if(b.rt.w && b.rt.c){ fill(b.rt.c); pdf.rect(x + w - b.rt.w * k, y, b.rt.w * k, h, 'F'); }
+    });
+    got.pics.forEach(function(pc, n){
+      if(!imgData[n] || pc.y >= y1 || pc.y + pc.h <= y0) return;
+      try { pdf.addImage(imgData[n].data, imgData[n].fmt, pc.x * k, Y(pc.y), pc.w * k, pc.h * k, 'auimg' + n, 'FAST'); } catch(e){}
+      if(pc.href) try { pdf.link(pc.x * k, Y(pc.y), pc.w * k, pc.h * k, { url: pc.href }); } catch(e){}
+    });
+    got.words.forEach(function(w){
+      if(w.y < y0 - 1 || w.y >= y1 - 1) return;
+      pdf.setTextColor(w.col[0], w.col[1], w.col[2]);
+      if(/^●+$/.test(w.s)){   // the score dots are drawn, not typed: the brand fonts have no such sign
+        fill(w.col);
+        var each = w.w / w.s.length;
+        for(var c = 0; c < w.s.length; c++) pdf.circle((w.x + each * c + (each - w.ls) / 2) * k, Y(w.y + w.h * 0.56), w.fs * 0.27 * k, 'F');
+        return;
+      }
+      pdf.setFont(w.font, 'normal'); pdf.setFontSize(w.fs * k);
+      // The browser tightens some letter pairs and the PDF does not: each word is fitted to the width the browser gave it.
+      var opt = {};
+      if(w.ls) opt.charSpace = w.ls * k;
+      else { var nat = pdf.getTextWidth(w.s), fit = nat ? (w.w * k) / nat : 1; if(fit > 0.85 && fit < 1.15 && Math.abs(fit - 1) > 0.004) opt.horizontalScale = fit; }
+      pdf.text(w.s, w.x * k, Y(w.y + w.base * w.fs), opt);
+    });
+    pdf.restoreGraphicsState();
+    pdf.setFont('Outfit400', 'normal'); pdf.setFontSize(8); pdf.setTextColor(122, 102, 86);
+    pdf.text((i + 1) + ' / ' + pages.length, PW - 28 * k, PH - 13 * k, { align: 'right' });
+  }
+  return pdf.output('blob');
+}
+// On a phone or tablet the PDF goes to the share sheet (Mail, WhatsApp, Files); on a laptop it downloads.
+function auPdfCanShare(file){ try { return !!(navigator.canShare && navigator.canShare({ files: [file] })) && (navigator.maxTouchPoints || 0) > 0; } catch(e){ return false; } }
+function auPdfSave(){
+  var file = AU_PDF.file; if(!file) return;
+  var url = URL.createObjectURL(file), a = document.createElement('a');
+  a.href = url; a.download = file.name; a.rel = 'noopener';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(function(){ URL.revokeObjectURL(url); }, 60000);
+}
+function auPdfShare(){
+  var file = AU_PDF.file; if(!file) return;
+  navigator.share({ files: [file], title: file.name.replace(/\.pdf$/, '') }).catch(function(e){ if(!e || e.name !== 'AbortError') auPdfSave(); });
+}
+async function auPdf(){
+  if(AU_PDF.busy || !AU.report || !AU.open) return;
+  var id = AU.open.id;
+  AU_PDF = { busy: true, msg: 'Making the PDF…', file: null, err: null, forId: id };
+  auPdfPaint();
+  try {
+    var blob = await auPdfBuild(AU.report, function(i, n){ AU_PDF.msg = n ? 'Making the PDF… page ' + i + ' of ' + n : 'Making the PDF…'; auPdfPaint(); });
+    if(!AU.open || AU.open.id !== id){ AU_PDF.busy = false; return; }
+    var name = auPdfName(AU.open);
+    var file; try { file = new File([blob], name, { type: 'application/pdf' }); } catch(e){ file = blob; file.name = name; }
+    AU_PDF = { busy: false, msg: '', file: file, err: null, forId: id };
+    if(!auPdfCanShare(file)) auPdfSave();        // a laptop: it downloads straight away
+  } catch(e){
+    AU_PDF = { busy: false, msg: '', file: null, err: (e && e.message) || String(e), forId: id };
+  }
+  auPdfPaint();
+}
+function auPdfBar(){
+  var a = AU.open || {}, mine = AU_PDF.forId === a.id, h = '';
+  if(mine && AU_PDF.busy) return '<button class="au-btn pri" disabled style="opacity:.75">' + auEsc(AU_PDF.msg) + '</button>';
+  if(mine && AU_PDF.file){
+    if(auPdfCanShare(AU_PDF.file)) return '<button class="au-btn pri" onclick="auPdfShare()">Send or save the PDF</button><button class="au-btn" onclick="auPdfSave()">Download</button>';
+    return '<button class="au-btn pri" onclick="auPdfSave()">Download again</button><span class="au-sub" style="align-self:center">Saved as ' + auEsc(AU_PDF.file.name) + '. Attach it to your email.</span>';
+  }
+  h += '<button class="au-btn pri" onclick="auPdf()">Download PDF</button>';
+  if(mine && AU_PDF.err) h += '<span class="au-sub" style="align-self:center;color:#8f1d12">The PDF could not be made: ' + auEsc(AU_PDF.err) + '. Try again.</span>';
+  return h;
+}
+function auPdfPaint(){ var el = document.getElementById('au-pdfbar'); if(el) el.innerHTML = auPdfBar(); }
