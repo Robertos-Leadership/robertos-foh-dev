@@ -5812,18 +5812,18 @@ function fohSchedDayCellHtml(staff, sid, ds2, today){
     if(att.kind==='done'){
       wHours+=att.hours; wDays++;
       if(att.split){
-        inner+='<div class="sch-shift actual sch-split" onclick="fohSchedCloseShift(event,\''+sid+'\',\''+ds2+'\')" title="Tap to edit / override clock-out">'+
+        inner+='<div class="sch-shift actual sch-split" title="Tap to change the status or the clock-out">'+
           att.segs.map(function(s){ return '<span class="sch-seg">'+s.in+'–'+(s.out||'·')+'</span>'; }).join('')+
           (att.manual?'<span class="sch-actual-tag">edited</span>':'')+'</div>';
       } else {
-        inner+='<div class="sch-shift actual" onclick="fohSchedCloseShift(event,\''+sid+'\',\''+ds2+'\')" title="Tap to edit / override clock-out"><span>'+att.in+'</span><span>'+att.out+'</span>'+(att.manual?'<span class="sch-actual-tag">edited</span>':'')+'</div>';
+        inner+='<div class="sch-shift actual" title="Tap to change the status or the clock-out"><span>'+att.in+'</span><span>'+att.out+'</span>'+(att.manual?'<span class="sch-actual-tag">edited</span>':'')+'</div>';
       }
     } else if(att.kind==='in'){
       wDays++;
-      inner+='<div class="sch-shift actual-live" onclick="fohSchedCloseShift(event,\''+sid+'\',\''+ds2+'\')" title="Tap to set / close clock-out"><span>'+att.in+'</span><span class="sch-actual-open">working</span></div>';
+      inner+='<div class="sch-shift actual-live" title="Tap to change the status or the clock-out"><span>'+att.in+'</span><span class="sch-actual-open">working</span></div>';
     } else if(att.kind==='open'){
       wDays++;
-      inner+='<div class="sch-shift actual-open-flag" onclick="fohSchedCloseShift(event,\''+sid+'\',\''+ds2+'\')"><span>'+att.in+'</span><span class="sch-actual-close">tap to close</span></div>';
+      inner+='<div class="sch-shift actual-open-flag" title="Tap to change the status or the clock-out"><span>'+att.in+'</span><span class="sch-actual-close">tap to close</span></div>';
     } else if(att.kind==='absent'){
       wDays++;
       inner+='<div class="sch-shift actual-absent">'+(ts&&te?'<span>'+ts+'</span><span>'+te+'</span>':'')+'<span class="sch-actual-tag">no clock-in</span></div>';
@@ -6077,7 +6077,38 @@ function fohSchedOpenEdit(staffId, date){
   fohSchedDutyTeamRefresh();
   fohSchedRenderPresets();
   fohSchedStatusChange();
+  fohSchedRenderAttStrip(staff, date);
   document.getElementById('foh-sch-modal').style.display='flex';
+}
+// A day somebody clocked in on: say so at the top of the editor and keep the
+// clock-out one tap away. The cell itself opens this editor (it used to open the
+// clock-out box and nothing else, so a clocked-in day could never be set to UL,
+// SL, off…). Changing the status never touches the clock-in record.
+function fohSchedRenderAttStrip(staff, date){
+  var title=document.getElementById('foh-sch-modal-title'); if(!title) return;
+  var strip=document.getElementById('foh-sch-att-strip');
+  if(!strip){
+    strip=document.createElement('div'); strip.id='foh-sch-att-strip';
+    strip.style.cssText='display:none;align-items:center;justify-content:space-between;gap:10px;margin:-6px 0 14px;padding:8px 10px;background:#e8f0e9;border:1px solid #a9c9b0;border-radius:4px;font-family:var(--font-sans);font-size:13px;color:#1f3d25;font-weight:600';
+    title.parentNode.insertBefore(strip, title.nextSibling);
+    // the editor is taller with this line in it: let it scroll inside the screen
+    // instead of losing its title or its Save button off the edge on a short screen
+    var card=title.parentNode;
+    card.style.maxHeight=(window.CSS && CSS.supports && CSS.supports('height','94dvh')) ? '94dvh' : '94vh';
+    card.style.overflowY='auto'; card.style.boxSizing='border-box';
+  }
+  var att=(fohSchedPlanMode || !staff) ? { kind:'none' } : fohSchedAttState(staff, date);
+  if(att.kind!=='done' && att.kind!=='in' && att.kind!=='open'){ strip.style.display='none'; strip.innerHTML=''; return; }
+  var out=att.kind==='done' ? att.out : '';
+  strip.innerHTML='<span>Clocked in '+att.in+(out?' · out '+out:' · not clocked out')+'</span>'+
+    '<button type="button" id="foh-sch-att-out-btn" onclick="fohSchedAttStripClockOut()" style="flex:none;min-height:38px;padding:8px 12px;background:#fff;border:1px solid var(--vino);border-radius:4px;cursor:pointer;font-family:var(--font-sans);font-size:13px;color:var(--vino);font-weight:700">'+(out?'Change clock-out':'Set clock-out')+'</button>';
+  strip.style.display='flex';
+}
+function fohSchedAttStripClockOut(){
+  var t=fohSchedEditTarget; if(!t) return;
+  document.getElementById('foh-sch-modal').style.display='none';
+  fohSchedEditTarget=null;
+  fohSchedCloseShift({ stopPropagation:function(){} }, t.staffId, t.date);
 }
 // ── Training / outside event under a shift (stored in the shift's notes) ──
 var FOH_DUTY_PICKS = ['Training','Outside event','Meeting','Villa shift'];
@@ -6515,17 +6546,27 @@ function fohSchedCloseShift(event, staffId, dateStr){
   if(out===''){ return; } // no change
   if(out==='-'){
     // Clear manual override -> fall back to the machine punch
+    var prevOut0=a.manual_out;
     a.manual_out=null; fohRenderSchedView();
     sbKitchen.from('attendance').update({manual_out:null,closed_by:null,closed_at:null})
-      .eq('emp_id',staff.emp_id).eq('att_date',dateStr)
-      .then(function(res){ if(res.error){ console.error('Clear override error:',res.error); alert('Could not clear the override: '+res.error.message); } });
+      .eq('emp_id',staff.emp_id).eq('att_date',dateStr).select('id')
+      .then(function(res){ fohSchedClockOutSaved(res, a, prevOut0, staff.name); });
     return;
   }
   if(!/^\d{1,2}:\d{2}$/.test(out)){ alert('Please use HH:MM (24h), or "-" to clear.'); return; }
+  var prevOut=a.manual_out;
   a.manual_out=out; fohRenderSchedView();
   sbKitchen.from('attendance').update({manual_out:out,closed_by:'foh-manager',closed_at:new Date().toISOString()})
-    .eq('emp_id',staff.emp_id).eq('att_date',dateStr)
-    .then(function(res){ if(res.error){ console.error('Override clock-out error:',res.error); alert('Could not save the clock-out: '+res.error.message); } });
+    .eq('emp_id',staff.emp_id).eq('att_date',dateStr).select('id')
+    .then(function(res){ fohSchedClockOutSaved(res, a, prevOut, staff.name); });
+}
+// A clock-out the database did not take must not stay on screen as if it had:
+// no error AND no row back means nothing was written. Put the old time back and say so.
+function fohSchedClockOutSaved(res, a, prevOut, name){
+  if(!res.error && (res.data||[]).length) return;
+  console.error('Clock-out not saved:', res.error || 'no row was updated');
+  a.manual_out=prevOut; fohRenderSchedView();
+  toast('Clock-out for '+name+' was NOT saved — the time on screen is the machine one.', true);
 }
 
 // ── Reorder staff within a department (↑/↓) ──
