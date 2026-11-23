@@ -1288,7 +1288,8 @@ function pickDish(mode, id, name){
 }
 function submit(b){
   var miss = missingComments();
-  if (miss.length) { toast(MS.missingSend + ' (' + miss.length + ')', true); if (S.v !== 'final') go({ v: 'final' }); else render(); setTimeout(function(){ var x = document.getElementById(miss[0].overall && miss.length === 1 ? 'lbl-overall' : 'missbox') || document.getElementById('lbl-overall'); if (x) x.scrollIntoView({ block: 'center' }); }, 60); return; }
+  if (miss.length) { var nLow = miss.filter(function(m){ return !m.overall; }).length, noOv = miss.length > nLow;
+    toast([nLow ? nLow + ' ' + (nLow === 1 ? MS.missingOne : MS.missingMany) : '', noOv ? 'the overall comment is missing' : ''].filter(Boolean).join(' and ').replace(/^./, function(x){ return x.toUpperCase(); }) + '. ' + MS.missingSend + '.', true); if (S.v !== 'final') go({ v: 'final' }); else render(); setTimeout(function(){ var x = document.getElementById(miss[0].overall && miss.length === 1 ? 'lbl-overall' : 'missbox') || document.getElementById('lbl-overall'); if (x) x.scrollIntoView({ block: 'center' }); }, 60); return; }
   if (!b._sure) { b._sure = true; b.textContent = t('sendSure'); setTimeout(function(){ if (b.isConnected) { b._sure = false; b.textContent = isEnrico() ? t('send') : t('sendTeam'); } }, 5000); return; }
   b.disabled = true; b.textContent = t('saving');
   waitSaved().then(function(){ return api('submit', { page: location.origin + location.pathname }); }).then(function(r){ if (r && r.pct) D.pct = r.pct; D.visit.status = D.visit.status === 'test' ? 'test' : 'submitted'; go({ v: 'thanks' }); }, function(er){ b.disabled = false; b._sure = false; b.textContent = t('send'); toast(er.message, true); });
