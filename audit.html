@@ -250,6 +250,11 @@ function ls(k, v){ try { if (v === undefined) return localStorage.getItem(k); lo
 // Italian first for Enrico; English first for anyone a shared link reaches (staff or a guest). The IT/EN switch stays.
 var LANG = ls('auditLang') || (ADMIN || (TOK && TOK.n) ? 'en' : 'it');
 var DICT = ls('auditDict') === 'it' || ls('auditDict') === 'en' ? ls('auditDict') : ((navigator.language || '').slice(0, 2) === 'it' ? 'it' : LANG);   // the language the microphone listens in
+// Mystery Shopper (23 Nov 2026, Francesco): anyone but Chef Bartolini gets English only, no microphone,
+// and the visit is called Mystery Shopper, not audit. Set in reload() from the link that was opened.
+var EN_ONLY = false;
+function enOnly(on){ EN_ONLY = !!on; if (EN_ONLY) { LANG = 'en'; document.documentElement.lang = 'en'; document.title = "Mystery Shopper · Roberto's DIFC"; } }
+var MS = { closed:'This Mystery Shopper report has been sent. Thank you!', startTitle:'Mystery Shopper', formfb:'Feedback on this form', startNew:'New visit', earlier:'Your earlier visits on this phone', another:'Start another visit', begin:'Start', cont:'Continue your visit', newOne:'or start a new visit', sentTeamLine:"Roberto's management team can already see your report. You can still add or correct anything: it saves by itself." };
 function speakLabel(){ return LANG === 'it' ? 'Parla' : 'Speak'; }
 var ENRICO = 'Chef Enrico Bartolini';
 function isEnrico(){ return !D || !D.visit || D.visit.auditor === ENRICO; }
@@ -280,13 +285,13 @@ var T = {
     uploading:'Carico…', photoFail:'Foto non caricata. Riprova.', removeDish:'Togli questo piatto dalla lista', liked:'tenere', att:'attenzione', notes:'note',
     anchorAll:'1 = scarso · 3 = accettabile · 5 = eccellente', started:'iniziato', allNa:'Non visto — tutto N/A', undoNa:'Togli i N/A',
     startTitle:'Audit', startSub:'Scrivi il tuo nome e quando sei venuto.', yourName:'Il tuo nome', visitDate:'Data della visita', visitTime:'Ora', badDate:'Controlla la data della visita',
-    prenota:'Prenotazione', servito:'Chi ti ha servito', bookOpt:'Facoltativo', walkIn:'Sono entrato senza prenotare: salta', walkedIn:'Senza prenotazione, saltato', walkInSub:'Se sei entrato senza prenotare, salta questa sezione.', seatQ:'Dove eri seduto?', seatBar:'Al bancone', seatLounge:'A un tavolo del lounge', seatChange:'cambia', bagno:'Bagno', congedo:'Conto e saluto', food:'Cibo',
+    opinione:'La tua opinione', prenota:'Prenotazione', servito:'Chi ti ha servito', bookOpt:'Facoltativo', walkIn:'Sono entrato senza prenotare: salta', walkedIn:'Senza prenotazione, saltato', walkInSub:'Se sei entrato senza prenotare, salta questa sezione.', seatQ:'Dove eri seduto?', seatBar:'Al bancone', seatLounge:'A un tavolo del lounge', seatChange:'cambia', bagno:'Bagno', congedo:'Conto e saluto', food:'Cibo',
     where:'Dove sei stato?', kRest:'Ristorante', kRestSub:'Prenotazione, accoglienza, sala, vino, cibo, bagno, conto', kScala:'Scala', kScalaSub:'Bar & lounge: prenotazione, accoglienza, servizio, drink, bagno, conto', pickKind:'Scegli Ristorante o Scala',
     doneN:'Fatto', nextUp:'Prossima', qs:'domande', tasted:'assaggiati', piattiG:'I piatti assaggiati', piattiSubG:'Un voto per ogni piatto',
     finalG:'Prima di inviare', finalSubG:'Il momento migliore, una cosa da migliorare', addPhoto:'Aggiungi una foto', cont2:'Continua', startS:'Inizia',
     noted:'nota', photos:'foto', yes:'Sì', no:'No', notSeen:"Non l'ho visto", noIsNo:"Non è successo? Tocca No. «Non l'ho visto» solo se non potevi saperlo.", bagnoR:'Bagno del ristorante', bagnoS:'Bagno della Scala', anything:'Vuoi aggiungere qualcosa?', optional:'Facoltativo',
-    nextQ:'Domanda successiva', nextSec:'Sezione successiva', kRest:'Il ristorante', kRestSub:'Dalla prenotazione al saluto · 52 domande',
-    kScala:'Scala, bar & lounge', kScalaSub:"Dall'accoglienza al conto · 44 domande", kVenue:'Tutto il locale', atTable:'Al tavolo', atScala:'Alla Scala',
+    nextQ:'Domanda successiva', nextSec:'Sezione successiva', kRest:'Il ristorante', kRestSub:'Dalla prenotazione al saluto · 60 domande',
+    kScala:'Scala, bar & lounge', kScalaSub:"Dall'accoglienza al conto · 50 domande", kVenue:'Tutto il locale', atTable:'Al tavolo', atScala:'Alla Scala',
     best:'Il momento migliore', fixone:'Una cosa da migliorare', other:'Altro', bestPh:'Cosa ti è piaciuto di più?', fixonePh:'Se potessi cambiare una cosa…', otherPh:'Qualsiasi altra cosa', formfb:'Feedback su questo audit', formfbPh:'Cosa cambieresti nelle domande o nella app?',
     youSent:'Cosa hai inviato', answeredW:'risposte', notSeenW:'non viste', stillEdit:'Puoi ancora aggiungere o correggere qualcosa dalle sezioni: si salva da solo.',
     orSection:'Oppure apri una sezione del menu:',
@@ -318,13 +323,13 @@ var T = {
     uploading:'Uploading…', photoFail:'Photo not uploaded. Try again.', removeDish:'Remove this dish from the list', liked:'keep', att:'attention', notes:'notes',
     anchorAll:'1 = poor · 3 = acceptable · 5 = excellent', started:'started', allNa:'Not experienced — all N/A', undoNa:'Clear the N/As',
     startTitle:'Audit', startSub:'Type your name and when you visited.', yourName:'Your name', visitDate:'Date of your visit', visitTime:'Time', badDate:'Check the date of your visit',
-    prenota:'Booking', servito:'Who served you', bookOpt:'Optional', walkIn:'I walked in: skip Booking', walkedIn:'Walked in, skipped', walkInSub:'If you walked in without booking, skip this section.', seatQ:'Where did you sit?', seatBar:'At the bar counter', seatLounge:'At a lounge table', seatChange:'change', bagno:'Washroom', congedo:'Bill & goodbye', food:'Food',
+    opinione:'Your opinion', prenota:'Booking', servito:'Who served you', bookOpt:'Optional', walkIn:'I walked in: skip Booking', walkedIn:'Walked in, skipped', walkInSub:'If you walked in without booking, skip this section.', seatQ:'Where did you sit?', seatBar:'At the bar counter', seatLounge:'At a lounge table', seatChange:'change', bagno:'Washroom', congedo:'Bill & goodbye', food:'Food',
     where:'Where did you go?', kRest:'Restaurant', kRestSub:'Booking, welcome, service, wine, food, washroom, bill', kScala:'Scala', kScalaSub:'Bar & lounge: booking, welcome, service, drinks, washroom, bill', pickKind:'Choose Restaurant or Scala',
     doneN:'Done', nextUp:'Next up', qs:'questions', tasted:'tasted', piattiG:'Dishes you tasted', piattiSubG:'A score for each dish',
     finalG:'Before you send', finalSubG:'The best moment, one thing to fix', addPhoto:'Add a photo', cont2:'Continue', startS:'Start',
     noted:'note', photos:'photos', yes:'Yes', no:'No', notSeen:"I didn't see this", noIsNo:"Didn't happen? Tap No. «I didn't see this» only if you couldn't tell.", bagnoR:'Restaurant washroom', bagnoS:'Scala washroom', anything:'Anything to add?', optional:'Optional',
-    nextQ:'Next question', nextSec:'Next section', kRest:'The restaurant', kRestSub:'Booking to goodbye · 52 questions',
-    kScala:'Scala, bar & lounge', kScalaSub:'Welcome to the bill · 44 questions', kVenue:'Whole venue', atTable:'At the table', atScala:'At Scala',
+    nextQ:'Next question', nextSec:'Next section', kRest:'The restaurant', kRestSub:'Booking to goodbye · 60 questions',
+    kScala:'Scala, bar & lounge', kScalaSub:'Welcome to the bill · 50 questions', kVenue:'Whole venue', atTable:'At the table', atScala:'At Scala',
     best:'The best moment', fixone:'One thing to fix', other:'Anything else', bestPh:'What did you enjoy most?', fixonePh:'If you could change one thing…', otherPh:'Anything else', formfb:'Feedback on this audit', formfbPh:'What would you change in the questions or the app?',
     youSent:'What you sent', answeredW:'answered', notSeenW:'not seen', stillEdit:'You can still add or correct anything from the sections: it saves by itself.',
     orSection:'Or open a section of the menu:',
@@ -336,7 +341,7 @@ var T = {
     sendTeam:"Send to Roberto's management team", sentTeamTitle:'Thank you', scoreRest:'Your score for the restaurant', scoreScala:'Your score for Scala', scoreNote:"The average of everything you scored. Anything marked N/A isn't counted.", sentTeamLine:"Roberto's management team can already see your audit. You can still add or correct anything: it saves by itself.", begin:'Start the audit', cont:'Continue your audit', newOne:'or start a new audit'
   }
 };
-function t(k){ return (T[LANG] && T[LANG][k]) || T.it[k] || k; }
+function t(k){ return (EN_ONLY && MS[k]) || (T[LANG] && T[LANG][k]) || T.it[k] || k; }
 function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
 // For a guest (Restaurant visit) the kitchen section is the food on the plate.
 function areaName(a){
@@ -372,7 +377,7 @@ var root = document.getElementById('root');
 
 /* ── API ─────────────────────────────────────────────────────────────────── */
 function api(action, payload){
-  var body = Object.assign({ action: action, pv: 3, qset: 4 }, TOK, payload || {});
+  var body = Object.assign({ action: action, pv: 3, qset: 5 }, TOK, payload || {});
   // forceFunctionRegion: the function runs in Sydney, next to the database. From Mumbai every database query was a
   // long round trip and a load took 1.5-7 s; here it takes about 0.5 s (30 Oct 2026).
   return fetch(FN + '?forceFunctionRegion=ap-southeast-2' + (action === 'load' ? '&read=1' : ''), {
@@ -509,6 +514,7 @@ function like(area){
   var a = 0, b = 0, n = 0;
   D.catalog.forEach(function(c){
     if (area && c.area !== area) return;
+    if (c.scored === false) return;   // an opinion question is never counted (set 5)
     var r = scoreRow(c.code);
     if (has(r) && old[c.code] != null) { a += r.score; b += old[c.code]; n++; }
   });
@@ -524,10 +530,10 @@ function isDone(code){ var r = scoreRow(code); return !!(has(r) || r.na); }
 function nextOpen(items, i){ return items.slice(i + 1).filter(function(c){ return !isDone(c.code); })[0] || null; }
 function areaStats(a){
   var items = cat(a), n = 0, s = 0, k = 0;
-  items.forEach(function(c){ var r = scoreRow(c.code); if (has(r) || r.na) n++; if (has(r)) { s += r.score; k++; } });
+  items.forEach(function(c){ var r = scoreRow(c.code); if (has(r) || r.na) n++; if (has(r) && c.scored !== false) { s += r.score; k++; } });
   return { done: n, total: items.length, avg: k ? (s / k) : null, pct: k ? Math.round(s / (5 * k) * 100) : null };
 }
-function overallPct(){ var s = 0, k = 0, codes = {}; D.catalog.forEach(function(c){ codes[c.code] = 1; }); D.scores.forEach(function(r){ if (codes[r.code] && has(r)) { s += r.score; k++; } }); return k ? Math.round(s / (5 * k) * 100) : null; }
+function overallPct(){ var s = 0, k = 0, codes = {}; D.catalog.forEach(function(c){ if (c.scored !== false) codes[c.code] = 1; }); D.scores.forEach(function(r){ if (codes[r.code] && has(r)) { s += r.score; k++; } }); return k ? Math.round(s / (5 * k) * 100) : null; }
 
 /* ── navigation (the iPhone back swipe works) ───────────────────────────── */
 function go(next, replace){
@@ -553,11 +559,11 @@ function pics(row, target, ref){
 }
 /* A note: textarea + Speak + Photo. target/ref say where it saves. */
 function noteBlock(o){
-  var en = (LANG === 'en' && o.en && o.it) ? '<div class="en"><b>EN</b> ' + esc(o.en) + '</div>' : '';
+  var en = (!EN_ONLY && LANG === 'en' && o.en && o.it) ? '<div class="en"><b>EN</b> ' + esc(o.en) + '</div>' : '';
   return '<div class="card note">' +
     '<textarea id="' + o.id + '" data-save="' + o.target + '" data-ref="' + esc(o.ref) + '" class="' + (o.small ? 'small' : '') + '" placeholder="' + esc(o.ph || t('ph')) + '" aria-label="' + esc(o.label || t('note')) + '">' + esc(o.it || '') + '</textarea>' +
     (o.nopics ? '' : pics(o.row, o.target, o.ref)) +
-    '<div class="tools"><button class="mic" data-act="mic" data-for="' + o.id + '">' + MIC_SVG + '<span>' + speakLabel() + '</span></button><button class="mic dict" data-act="dict" aria-label="Dictation language">' + DICT.toUpperCase() + '</button>' +
+    '<div class="tools">' + (EN_ONLY ? '' : '<button class="mic" data-act="mic" data-for="' + o.id + '">' + MIC_SVG + '<span>' + speakLabel() + '</span></button><button class="mic dict" data-act="dict" aria-label="Dictation language">' + DICT.toUpperCase() + '</button>') +
     (o.nopics ? '' : '<button class="cam" data-act="photo" data-target="' + o.target + '" data-ref="' + esc(o.ref) + '">' + CAM_SVG + '<span>' + t('photo') + '</span></button>') +
     '</div>' + saidLine(o.id, o.target + ':' + o.ref, o.it) + en + '</div>';
 }
@@ -588,7 +594,7 @@ var BACK_SVG = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stro
 // The header: the official Roberto's wordmark on cream (never re-typed), the language switch, then the screen's own lines.
 function topBar(sub){   // not "top": window.top cannot be redeclared
   return '<div class="top"><div class="row"><div class="brand"><img src="robertos-logo-burgundy.svg" alt="Roberto\'s"></div>' +
-    '<div class="lang"><button data-act="lang" data-l="it" class="' + (LANG === 'it' ? 'on' : '') + '">IT</button><button data-act="lang" data-l="en" class="' + (LANG === 'en' ? 'on' : '') + '">EN</button></div></div>' + (sub || '') + '</div>';
+    (EN_ONLY ? '' : '<div class="lang"><button data-act="lang" data-l="it" class="' + (LANG === 'it' ? 'on' : '') + '">IT</button><button data-act="lang" data-l="en" class="' + (LANG === 'en' ? 'on' : '') + '">EN</button></div>') + '</div>' + (sub || '') + '</div>';
 }
 function head(backTo, backLabel, right, title, extra){
   return '<div class="head"><div class="row"><button class="back" data-act="go" data-to=\'' + esc(JSON.stringify(backTo)) + '\'>' + BACK_SVG + esc(backLabel) + '</button>' +
@@ -633,7 +639,7 @@ function closedBanner(){
 function vHome(){
   var total = D.catalog.length, done = D.catalog.filter(function(c){ return isDone(c.code); }).length;
   var pct = total ? Math.round(done / total * 100) : 0;
-  var hello = isEnrico() ? t('hello') : (LANG === 'en' ? esc(who()) + "'s audit" : "L'audit di " + esc(who()));
+  var hello = isEnrico() ? t('hello') : (EN_ONLY ? 'Mystery Shopper · ' + esc(who()) : LANG === 'en' ? esc(who()) + "'s audit" : "L'audit di " + esc(who()));
   var when = esc(shortDate(D.visit.visit_date)) + (D.visit.visit_time ? ', ' + esc(D.visit.visit_time) : '');
   var h = topBar(adminTabs() + '<div><div class="kick">' + esc(kindName()) + ' · ' + when + '</div><h1>' + hello + '</h1></div>' +
     '<div class="bar"><div class="track"><div class="fill" style="width:' + pct + '%"></div></div><b>' + done + ' ' + t('of') + ' ' + total + '</b><span class="saved ok">' + t('saved') + '</span></div>');
@@ -956,7 +962,7 @@ function begin(b){
 /* Francesco: every audit started from the shared link. */
 function vList(){
   var link = location.origin + location.pathname + '?n=' + D.invite_token;
-  var h = topBar('<h1>Audits from the shared link</h1><div class="sub">' + D.audits.length + ' started · newest first · times are Dubai</div>') + '<div class="body">';
+  var h = topBar('<h1>' + (EN_ONLY ? 'Mystery Shopper visits' : 'Audits') + ' from the shared link</h1><div class="sub">' + D.audits.length + ' started · newest first · times are Dubai</div>') + '<div class="body">';
   h += '<div class="card rtext"><div class="lbl" style="margin:0">Link to share</div><div style="font-size:13px;word-break:break-all"><a href="' + esc(link) + '" target="_blank" rel="noopener">' + esc(link) + '</a></div>' +
        '<button class="cam" data-act="copy" data-text="' + esc(link) + '" style="align-self:flex-start">Copy link</button></div>';
   if (!D.audits.length) h += '<div class="msg info">Nobody has started one yet. Share the link: each person types their name and gets their own audit.</div>';
@@ -974,7 +980,7 @@ function vList(){
 }
 
 /* ── Francesco's report (English) ───────────────────────────────────────── */
-var AREA_EN = { arrivo: 'Arrival & welcome', decor: 'Interior decor', cucina: 'Inside the kitchen', ristorante: 'Restaurant', vino: 'Wine', scala: 'Scala', piatto: 'Dish' };
+var AREA_EN = { opinione: 'Your opinion', arrivo: 'Arrival & welcome', decor: 'Interior decor', cucina: 'Inside the kitchen', ristorante: 'Restaurant', vino: 'Wine', scala: 'Scala', piatto: 'Dish' };
 function vReport(){
   var ov = overallPct(), pv = D.previous, lfAll = like();
   // Action plan, by the same rule as the email Amin gets: a No, a quality score of 1-2, a dish of 1-2,
@@ -996,7 +1002,7 @@ function vReport(){
   var stline = st === 'sent' ? 'Sent to Amin ' + (D.visit.sent_at ? new Date(D.visit.sent_at).toLocaleString('en-GB', { timeZone: 'Asia/Dubai', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '') :
                st === 'submitted' ? who() + ' has finished. Check the English, set owners, then send.' :
                st === 'test' ? 'Test visit — it can only be emailed to you.' : who() + ' has not sent it yet. It fills in live as they work.';
-  var h = topBar(adminTabs() + '<h1>Audit report</h1><div class="sub">' + esc(D.visit.auditor) + ' · ' + (isEnrico() ? esc(fmtDate(D.visit.visit_date, 'en')) : 'started ' + esc(dubaiTime(D.visit.created_at))) + '</div>' +
+  var h = topBar(adminTabs() + '<h1>' + (EN_ONLY ? 'Mystery Shopper report' : 'Audit report') + '</h1><div class="sub">' + esc(D.visit.auditor) + ' · ' + (isEnrico() ? esc(fmtDate(D.visit.visit_date, 'en')) : 'started ' + esc(dubaiTime(D.visit.created_at))) + '</div>' +
     '<div class="tiles"><div class="tile"><b>' + (ov == null ? '—' : ov + '%') + '</b><span>Overall</span></div>' +
     '<div class="tile"><b>' + (lfAll ? signed(lfAll.diff) : '—') + '</b><span>vs ' + esc(pv ? pv.title.replace('Novembre', 'Nov') : 'last') + (lfAll ? ' · same ' + lfAll.n + ' items' : '') + '</span></div>' +
     '<div class="tile"><b>' + urgent + '</b><span>Urgent</span></div><div class="tile"><b>' + tofix + '</b><span>To fix</span></div></div>');
@@ -1019,7 +1025,7 @@ function vReport(){
   } else {
     // A guest writes the best moment, one thing to fix, anything else and feedback on the form, not
     // Enrico's overall / improvements / top 3 (those boxes stood empty on a guest's report).
-    [['best', 'The best moment'], ['fixone', 'One thing to fix'], ['other', 'Anything else'], ['formfb', 'Feedback on the audit form']].forEach(function(x){
+    [['best', 'The best moment'], ['fixone', 'One thing to fix'], ['other', 'Anything else'], ['formfb', 'Feedback on the form']].forEach(function(x){
       var r = textRow(x[0]);
       if (!r.it && !r.en && (x[0] === 'other' || x[0] === 'formfb')) return;
       h += '<div class="lbl">' + x[1] + '</div><div class="card rtext">' + (r.it || r.en ? enEdit('text', x[0], r.en, r.it) : '<div class="muted">Not written yet.</div>') + pics(r, 'text', x[0]) + '</div>';
@@ -1389,7 +1395,7 @@ function toggleMic(btn){
 function reload(){
   return api('load').then(function(d){
     if (d.role === 'invite' || d.role === 'invite_admin') {
-      D = d;
+      D = d; enOnly(!d.enrico);
       // Chef Bartolini's own invite (30 Oct 2026): Italian first, like his own audit, unless he chose otherwise.
       if (d.enrico && !ls('auditLang') && LANG !== 'it') { LANG = 'it'; document.documentElement.lang = 'it'; }
       render(); return;
@@ -1398,7 +1404,7 @@ function reload(){
     var local = {};
     if (D) { D.scores.forEach(function(r){ if (r._local != null) local['s:' + r.code] = r._local; }); D.texts.forEach(function(r){ if (r._local != null) local['t:' + r.key] = r._local; });
              D.dishes.forEach(function(r){ if (r._local != null) local['d:' + r.id] = r._local; }); D.flags.forEach(function(r){ if (r._local != null) local['f:' + r.id] = r._local; }); }
-    D = d; setAreas();
+    D = d; setAreas(); enOnly(D.visit && D.visit.auditor !== ENRICO);
     // Italian first is for Enrico only: anyone else opening their own audit link gets English
     // unless they chose otherwise (a guest landed on Italian after Start, 22 Oct 2026).
     if (!ls('auditLang') && D.visit && D.visit.auditor !== ENRICO && LANG !== 'en') { LANG = 'en'; document.documentElement.lang = 'en'; }
