@@ -54,6 +54,8 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,a:focus-visible{
 .body{padding:16px;display:flex;flex-direction:column;gap:10px;flex:1}
 .lbl{font-size:13px;font-weight:600;color:var(--vino);padding:0 2px;margin-top:8px}
 .lbl small{font-weight:400;color:var(--muted)}
+.lbl.req,.lbl.req small{color:var(--err)}
+.note.req textarea{border-color:var(--err);background:var(--err-bg)}
 .card{background:#fff;border:1px solid var(--line);border-radius:12px}
 .sec{display:flex;align-items:center;gap:14px;padding:13px 15px;width:100%;text-align:left;background:#fff;border:1px solid var(--line);border-radius:12px;min-height:64px}
 .sec:hover{border-color:var(--vino)}
@@ -254,7 +256,7 @@ var DICT = ls('auditDict') === 'it' || ls('auditDict') === 'en' ? ls('auditDict'
 // and the visit is called Mystery Shopper, not audit. Set in reload() from the link that was opened.
 var EN_ONLY = false;
 function enOnly(on){ EN_ONLY = !!on; if (EN_ONLY) { LANG = 'en'; document.documentElement.lang = 'en'; document.title = "Mystery Shopper · Roberto's DIFC"; } }
-var MS = { ph:'Type here…', scoreNote:"The average of everything you scored. “I didn't see this” and Your opinion are not counted.", closed:'This Mystery Shopper report has been sent. Thank you!', startTitle:'Mystery Shopper', formfb:'Feedback on this form', startNew:'New Mystery Shopper visit', earlier:'Your earlier visits on this phone', another:'Start another visit', begin:'Start', cont:'Continue your visit', newOne:'or start a new visit', sentTeamLine:"Roberto's management team can already see your report. You can still add or correct anything: it saves by itself." };
+var MS = { whatHappened:'What happened?', required:'Required', lowPh:'How long it took, who served you, what you saw\u2026', overall:'Overall comment on your visit', overallPh:'In a few lines: how did the visit feel from start to finish?', finalWhere:'Before you send', missingOne:'answer still needs a comment', missingMany:'answers still need a comment', missingSend:'Add the missing comments before sending', ph:'Type here\u2026', scoreNote:"The average of everything you scored. “I didn't see this” and Your opinion are not counted.", closed:'This Mystery Shopper report has been sent. Thank you!', startTitle:'Mystery Shopper', formfb:'Feedback on this form', startNew:'New Mystery Shopper visit', earlier:'Your earlier visits on this phone', another:'Start another visit', begin:'Start', cont:'Continue your visit', newOne:'or start a new visit', sentTeamLine:"Roberto's management team can already see your report. You can still add or correct anything: it saves by itself." };
 function speakLabel(){ return LANG === 'it' ? 'Parla' : 'Speak'; }
 var ENRICO = 'Chef Enrico Bartolini';
 function isEnrico(){ return !D || !D.visit || D.visit.auditor === ENRICO; }
@@ -537,6 +539,24 @@ function areaStats(a){
 // sum only before that exists. An opinion section has none.
 function areaPctShown(a){ if (!cat(a).some(function(c){ return c.scored !== false; })) return null; return D.pct && D.pct.area && D.pct.area[a] != null ? D.pct.area[a] : areaStats(a).pct; }
 function areaNoPct(a){ return !cat(a).some(function(c){ return c.scored !== false; }) ? 'not counted' : (a === 'prenota' && D.kind !== 'venue') ? 'walked in' : 'not seen'; }
+// Mystery Shopper comments (23 Nov 2026, Francesco): a No or a score of 1-2 (a question or a dish) needs a comment,
+// and the visit needs an overall comment. The shopper can move on and write it later; Send waits until it is done.
+// Chef Bartolini's audit is not affected.
+function isLow(sc){ return sc != null && sc !== '' && !isNaN(Number(sc)) && Number(sc) <= 2; }
+function filled(x){ return !!String(x == null ? '' : x).trim(); }
+function needsNote(c, r){ return EN_ONLY && !!r && !r.na && isLow(r.score); }
+function dishNeedsNote(d){ return EN_ONLY && !!d && !d.removed && Number(d.score) > 0 && Number(d.score) <= 2; }
+function missingComments(){
+  if (!EN_ONLY || !D || !D.catalog) return [];
+  var out = [];
+  D.catalog.slice().sort(function(x, y){ return (ORDER.indexOf(x.area) - ORDER.indexOf(y.area)) || (x.position - y.position); }).forEach(function(c){
+    var r = scoreRow(c.code); if (needsNote(c, r) && !filled(r._local != null ? r._local : r.note_it)) out.push({ to: { v: 'item', code: c.code }, what: lab(c), where: areaName(c.area) });
+  });
+  D.dishes.forEach(function(d){ if (dishNeedsNote(d) && !filled(d._local != null ? d._local : d.note_it)) out.push({ to: { v: 'dish', id: d.id }, what: d.dish_name, where: t(D.kind === 'restaurant' ? 'ordered' : 'piattiG') }); });
+  var ov = textRow('overall'); if (!filled(ov._local != null ? ov._local : ov.it)) out.push({ to: { v: 'final' }, what: MS.overall, where: MS.finalWhere, overall: true });
+  return out;
+}
+function noteLabel(req, empty){ return req ? '<div class="lbl' + (empty ? ' req' : '') + '" style="margin:0">' + MS.whatHappened + ' <small>' + MS.required + '</small></div>' : '<div class="lbl" style="margin:0">' + t('anything') + ' <small>' + t('optional') + '</small></div>'; }
 function overallPct(){ var s = 0, k = 0, codes = {}; D.catalog.forEach(function(c){ if (c.scored !== false) codes[c.code] = 1; }); D.scores.forEach(function(r){ if (codes[r.code] && has(r)) { s += r.score; k++; } }); return k ? Math.round(s / (5 * k) * 100) : null; }
 
 /* ── navigation (the iPhone back swipe works) ───────────────────────────── */
@@ -564,7 +584,7 @@ function pics(row, target, ref){
 /* A note: textarea + Speak + Photo. target/ref say where it saves. */
 function noteBlock(o){
   var en = (!EN_ONLY && LANG === 'en' && o.en && o.it) ? '<div class="en"><b>EN</b> ' + esc(o.en) + '</div>' : '';
-  return '<div class="card note">' +
+  return '<div class="card note' + (o.req ? ' req' : '') + '">' +
     '<textarea id="' + o.id + '" data-save="' + o.target + '" data-ref="' + esc(o.ref) + '" class="' + (o.small ? 'small' : '') + '" placeholder="' + esc(o.ph || t('ph')) + '" aria-label="' + esc(o.label || t('note')) + '">' + esc(o.it || '') + '</textarea>' +
     (o.nopics ? '' : pics(o.row, o.target, o.ref)) +
     '<div class="tools">' + (EN_ONLY ? '' : '<button class="mic" data-act="mic" data-for="' + o.id + '">' + MIC_SVG + '<span>' + speakLabel() + '</span></button><button class="mic dict" data-act="dict" aria-label="Dictation language">' + DICT.toUpperCase() + '</button>') +
@@ -737,8 +757,9 @@ function vItem(){
     } else h += '<div class="muted">' + (isEnrico() ? t('anchor') : t('anchorAll')) + '</div>';
     h += '<div><button class="pill dash' + (r.na ? ' on' : '') + '" data-act="score" data-v="na">' + t('notSeen') + '</button></div>';
   }
-  h += '<div style="display:flex;flex-direction:column;gap:8px"><div class="lbl" style="margin:0">' + t('anything') + ' <small>' + t('optional') + '</small></div>' +
-       noteBlock({ id: 'n-' + c.code, target: 'score', ref: c.code, row: r, it: r._local != null ? r._local : r.note_it, en: r.note_en, small: true }) + '</div>';
+  var nIt = r._local != null ? r._local : r.note_it, nReq = needsNote(c, r), nMiss = nReq && !filled(nIt);
+  h += '<div style="display:flex;flex-direction:column;gap:8px">' + noteLabel(nReq, nMiss) +
+       noteBlock({ id: 'n-' + c.code, target: 'score', ref: c.code, row: r, it: nIt, en: r.note_en, small: true, req: nMiss, ph: nReq ? MS.lowPh : null }) + '</div>';
   if (isEnrico()) {
     h += '<div class="lbl" style="margin:0">' + t('action') + '</div><div class="verd">';
     ['ok', 'fix', 'urgent'].forEach(function(v){ h += '<button class="vbtn ' + v + (r.verdict === v ? ' on' : '') + '" data-act="verdict" data-v="' + v + '">' + t(v) + '</button>'; });
@@ -812,8 +833,9 @@ function vDish(){
   [1, 2, 3, 4, 5].forEach(function(n){ h += '<button class="sbtn' + (d.score === n ? ' on' : '') + '" data-act="dscore" data-v="' + n + '">' + n + '</button>'; });
   h += '</div>';
   if (!isEnrico()) h += '<div class="anc">' + [[5, 'dish5'], [3, 'dish3'], [1, 'dish1']].map(function(x){ return '<div class="' + (d.score === x[0] ? 'on' : '') + '"><b>' + x[0] + '</b><span>' + t(x[1]) + '</span></div>'; }).join('') + '</div>';
-  h += '<div style="display:flex;flex-direction:column;gap:8px"><div class="lbl" style="margin:0">' + t('anything') + ' <small>' + t('optional') + '</small></div>' +
-       noteBlock({ id: 'n-d-' + d.id, target: 'dish', ref: d.id, row: d, it: d._local != null ? d._local : d.note_it, en: d.note_en, small: true, ph: LANG === 'en' ? 'Taste, temperature, presentation…' : 'Gusto, temperatura, presentazione…' }) + '</div>';
+  var dIt = d._local != null ? d._local : d.note_it, dReq = dishNeedsNote(d), dMiss = dReq && !filled(dIt);
+  h += '<div style="display:flex;flex-direction:column;gap:8px">' + noteLabel(dReq, dMiss) +
+       noteBlock({ id: 'n-d-' + d.id, target: 'dish', ref: d.id, row: d, it: dIt, en: d.note_en, small: true, req: dMiss, ph: dReq ? MS.lowPh : (LANG === 'en' ? 'Taste, temperature, presentation…' : 'Gusto, temperatura, presentazione…') }) + '</div>';
   if (isEnrico()) {
     h += '<div class="lbl" style="margin:0">' + t('action') + '</div><div class="verd">';
     [['keep', 'ok', t('dKeep')], ['fix', 'fix', t('dFix')], ['remove', 'urgent', t('dRemove')]].forEach(function(v){
@@ -866,8 +888,13 @@ function vFinal(){
     if (open) h += '<div class="msg info">' + (LANG === 'en' ? open + ' of ' + total + ' questions still open. You can send anyway: they count as not seen.' : open + ' domande su ' + total + ' ancora aperte. Puoi inviare lo stesso: contano come non viste.') + '</div>';
     if (open) h += '<div class="card" style="margin:0 0 10px">' + D.catalog.filter(function(c){ return !isDone(c.code); }).sort(function(x, y){ return (ORDER.indexOf(x.area) - ORDER.indexOf(y.area)) || (x.position - y.position); }).map(function(c, n){
       return '<button class="sec" style="border:0;border-top:' + (n ? '1px solid var(--soft)' : '0') + ';border-radius:0;min-height:52px" data-act="item" data-code="' + c.code + '"><span class="grow"><span class="t" style="font-size:16px">' + esc(lab(c)) + '</span><span class="s">' + esc(areaName(c.area)) + '</span></span>' + CHEV_SVG + '</button>'; }).join('') + '</div>';
-    [['best', 'bestPh'], ['fixone', 'fixonePh'], ['other', 'otherPh'], ['formfb', 'formfbPh']].forEach(function(x){
+    var miss = missingComments().filter(function(m){ return !m.overall; });
+    if (miss.length) h += '<div class="msg err" id="missbox">' + miss.length + ' ' + (miss.length === 1 ? MS.missingOne : MS.missingMany) + '</div><div class="card" style="margin:0 0 10px">' + miss.map(function(m, n){
+      return '<button class="sec" style="border:0;border-top:' + (n ? '1px solid var(--soft)' : '0') + ';border-radius:0;min-height:52px" data-act="go" data-to=\'' + esc(JSON.stringify(m.to)) + '\'><span class="grow"><span class="t" style="font-size:16px">' + esc(m.what) + '</span><span class="s">' + esc(m.where) + '</span></span>' + CHEV_SVG + '</button>'; }).join('') + '</div>';
+    (EN_ONLY ? [['overall', 'overallPh']] : []).concat([['best', 'bestPh'], ['fixone', 'fixonePh'], ['other', 'otherPh'], ['formfb', 'formfbPh']]).forEach(function(x){
       var r = textRow(x[0]);
+      if (x[0] === 'overall') { var oIt = r._local != null ? r._local : r.it, oMiss = !filled(oIt);
+        h += '<div class="lbl' + (oMiss ? ' req' : '') + '" id="lbl-overall">' + MS.overall + ' <small>' + MS.required + '</small></div>' + noteBlock({ id: 'n-t-overall', target: 'text', ref: 'overall', row: r, it: oIt, en: r.en, ph: MS.overallPh, nopics: true, req: oMiss, label: MS.overall }); return; }
       h += '<div class="lbl">' + t(x[0]) + (x[0] === 'other' || x[0] === 'formfb' ? ' <small>' + t('optional') + '</small>' : '') + '</div>' + noteBlock({ id: 'n-t-' + x[0], target: 'text', ref: x[0], row: r, it: r._local != null ? r._local : r.it, en: r.en, ph: t(x[1]), nopics: x[0] !== 'best' });
     });
   }
@@ -895,9 +922,9 @@ function vThanks(){
     h += '</div>';
     if (D.dishes.length) h += '<div class="lbl">' + t(D.kind === 'restaurant' ? 'ordered' : 'piattiG') + '</div><div class="card">' + D.dishes.map(function(d, i){
       return '<div class="sec" style="border:0;border-top:' + (i ? '1px solid var(--soft)' : '0') + ';border-radius:0;min-height:48px"><span class="grow"><span class="t" style="font-size:17px">' + esc(d.dish_name) + '</span></span><span class="sc">' + (d.score ? d.score + ' / 5' : '') + '</span></div>'; }).join('') + '</div>';
-    ['best', 'fixone', 'other', 'formfb'].forEach(function(k){
+    ['overall', 'best', 'fixone', 'other', 'formfb'].forEach(function(k){
       var r = textRow(k), txt = r._local != null ? r._local : r.it;
-      if (txt) h += '<div class="lbl">' + t(k) + '</div><div class="card" style="padding:12px 14px;font-size:15px;line-height:1.5;white-space:pre-line">' + esc(txt) + '</div>';
+      if (txt) h += '<div class="lbl">' + (k === 'overall' ? MS.overall : t(k)) + '</div><div class="card" style="padding:12px 14px;font-size:15px;line-height:1.5;white-space:pre-line">' + esc(txt) + '</div>';
     });
     h += '<div class="muted" style="padding:6px 2px">' + t('stillEdit') + '</div>';
   }
@@ -1029,9 +1056,9 @@ function vReport(){
   } else {
     // A guest writes the best moment, one thing to fix, anything else and feedback on the form, not
     // Enrico's overall / improvements / top 3 (those boxes stood empty on a guest's report).
-    [['best', 'The best moment'], ['fixone', 'One thing to fix'], ['other', 'Anything else'], ['formfb', 'Feedback on the form']].forEach(function(x){
+    [['overall', 'Overall comment on the visit'], ['best', 'The best moment'], ['fixone', 'One thing to fix'], ['other', 'Anything else'], ['formfb', 'Feedback on the form']].forEach(function(x){
       var r = textRow(x[0]);
-      if (!r.it && !r.en && (x[0] === 'other' || x[0] === 'formfb')) return;
+      if (!r.it && !r.en && (x[0] === 'other' || x[0] === 'formfb' || x[0] === 'overall')) return;
       h += '<div class="lbl">' + x[1] + '</div><div class="card rtext">' + (r.it || r.en ? enEdit('text', x[0], r.en, r.it) : '<div class="muted">Not written yet.</div>') + pics(r, 'text', x[0]) + '</div>';
     });
   }
@@ -1127,7 +1154,7 @@ function applyPending(){
 root.addEventListener('input', function(e){
   var el = e.target;
   if (el.matches('textarea')) { el.style.height = 'auto'; el.style.height = (el.scrollHeight + 2) + 'px'; }
-  if (el.matches('textarea[data-save]')) saveNote(el);
+  if (el.matches('textarea[data-save]')) { saveNote(el); var nc = el.closest('.note.req'); if (nc && filled(el.value)) { nc.classList.remove('req'); var lb = nc.previousElementSibling || (nc.parentNode && nc.parentNode.firstElementChild); if (lb && lb.classList.contains('lbl')) lb.classList.remove('req'); } }
   else if (el.matches('textarea[data-en]')) {
     var tg = el.getAttribute('data-target'), rf = el.getAttribute('data-ref');
     setLocal(tg, rf, tg === 'text' ? 'en' : 'note_en', el.value);
@@ -1260,6 +1287,8 @@ function pickDish(mode, id, name){
   queue('flag:' + f.id + ':d', 'flag', { id: f.id, dish_name: name, recipe_id: id }); render();
 }
 function submit(b){
+  var miss = missingComments();
+  if (miss.length) { toast(MS.missingSend + ' (' + miss.length + ')', true); if (S.v !== 'final') go({ v: 'final' }); else render(); setTimeout(function(){ var x = document.getElementById(miss[0].overall && miss.length === 1 ? 'lbl-overall' : 'missbox') || document.getElementById('lbl-overall'); if (x) x.scrollIntoView({ block: 'center' }); }, 60); return; }
   if (!b._sure) { b._sure = true; b.textContent = t('sendSure'); setTimeout(function(){ if (b.isConnected) { b._sure = false; b.textContent = isEnrico() ? t('send') : t('sendTeam'); } }, 5000); return; }
   b.disabled = true; b.textContent = t('saving');
   waitSaved().then(function(){ return api('submit', { page: location.origin + location.pathname }); }).then(function(r){ if (r && r.pct) D.pct = r.pct; D.visit.status = D.visit.status === 'test' ? 'test' : 'submitted'; go({ v: 'thanks' }); }, function(er){ b.disabled = false; b._sure = false; b.textContent = t('send'); toast(er.message, true); });
