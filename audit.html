@@ -533,6 +533,10 @@ function areaStats(a){
   items.forEach(function(c){ var r = scoreRow(c.code); if (has(r) || r.na) n++; if (has(r) && c.scored !== false) { s += r.score; k++; } });
   return { done: n, total: items.length, avg: k ? (s / k) : null, pct: k ? Math.round(s / (5 * k) * 100) : null };
 }
+// The % of a section as the report shows it: the server's number (it also counts the dish scores); the page's own
+// sum only before that exists. An opinion section has none.
+function areaPctShown(a){ if (!cat(a).some(function(c){ return c.scored !== false; })) return null; return D.pct && D.pct.area && D.pct.area[a] != null ? D.pct.area[a] : areaStats(a).pct; }
+function areaNoPct(a){ return !cat(a).some(function(c){ return c.scored !== false; }) ? 'not counted' : (a === 'prenota' && D.kind !== 'venue') ? 'walked in' : 'not seen'; }
 function overallPct(){ var s = 0, k = 0, codes = {}; D.catalog.forEach(function(c){ if (c.scored !== false) codes[c.code] = 1; }); D.scores.forEach(function(r){ if (codes[r.code] && has(r)) { s += r.score; k++; } }); return k ? Math.round(s / (5 * k) * 100) : null; }
 
 /* ── navigation (the iPhone back swipe works) ───────────────────────────── */
@@ -1012,7 +1016,7 @@ function vReport(){
     h += '<div class="card rtext"><div class="lbl" style="margin:0">' + esc(who()) + '\'s link</div><div style="font-size:13px;word-break:break-all"><a href="' + esc(link) + '" target="_blank" rel="noopener">' + esc(link) + '</a></div>' +
          '<button class="cam" data-act="copy" data-text="' + esc(link) + '" style="align-self:flex-start">Copy link</button></div>';
   }
-  h += '<div class="muted">English is editable: change any line and it saves. The original stays underneath.</div>';
+  h += '<div class="muted">' + (EN_ONLY ? 'The notes are editable: change any line and it saves.' : 'English is editable: change any line and it saves. The original stays underneath.') + '</div>';
 
   if (isEnrico()) {
     ['overall', 'improve'].forEach(function(k){
@@ -1034,8 +1038,8 @@ function vReport(){
 
   h += '<div class="lbl">Scores by area</div><div class="card" style="padding:4px 12px"><table class="tbl"><tr><th>Area</th><th>Score</th>' + (pv ? '<th>' + esc(pv.title) + '</th><th>Trend</th>' : '') + '</tr>';
   AREAS.forEach(function(a){
-    var s = areaStats(a), o = pv && pv.area_pct ? pv.area_pct[a] : null, lf = like(a);
-    h += '<tr><td class="a">' + esc(AREA_EN[a] || a) + '</td><td style="color:' + (s.pct == null ? 'var(--muted)' : s.pct >= 85 ? 'var(--ok)' : 'var(--err)') + ';font-weight:600">' + (s.pct == null ? 'not seen' : s.pct + '%') + '</td>' +
+    var s = { pct: areaPctShown(a) }, o = pv && pv.area_pct ? pv.area_pct[a] : null, lf = like(a);
+    h += '<tr><td class="a">' + esc(AREA_EN[a] || a) + '</td><td style="color:' + (s.pct == null ? 'var(--muted)' : s.pct >= 85 ? 'var(--ok)' : 'var(--err)') + ';font-weight:600">' + (s.pct == null ? areaNoPct(a) : s.pct + '%') + '</td>' +
       (pv ? '<td>' + (o == null ? '—' : o + '%') + '</td><td>' + (lf ? signed(lf.diff) + ' <small class="muted">(' + lf.n + ')</small>' : '—') + '</td>' : '') + '</tr>';
   });
   h += '</table></div>';
@@ -1069,7 +1073,7 @@ function vReport(){
 
   h += '<div class="lbl">Every item</div>';
   AREAS.forEach(function(a){
-    var s = areaStats(a);
+    var s = { pct: areaPctShown(a) };
     h += '<div class="card"><div class="item" style="background:var(--door)"><div class="h"><span style="font-family:var(--display);font-size:19px;color:var(--vino)">' + AREA_EN[a] + '</span><b>' + (s.pct == null ? '' : s.pct + '%') + '</b></div></div>';
     cat(a).forEach(function(c){
       var r = scoreRow(c.code);
@@ -1086,7 +1090,7 @@ function vReport(){
 }
 function enEdit(target, ref, en, it){
   return '<textarea class="en-edit" data-en="1" data-target="' + target + '" data-ref="' + esc(ref) + '" aria-label="English" placeholder="' + (it ? 'Not translated yet — press Translate new notes' : '') + '">' + esc(en || '') + '</textarea>' +
-    (it ? '<div class="it" style="font-size:12.5px;color:var(--muted);font-style:italic">Original: ' + esc(it) + '</div>' : '');
+    (it && String(it).trim() !== String(en || '').trim() ? '<div class="it" style="font-size:12.5px;color:var(--muted);font-style:italic">Original: ' + esc(it) + '</div>' : '');
 }
 
 /* ── behaviour ──────────────────────────────────────────────────────────── */
