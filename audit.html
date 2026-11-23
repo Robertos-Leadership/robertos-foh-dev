@@ -1426,6 +1426,11 @@ function toggleMic(btn){
 }
 
 /* ── start ──────────────────────────────────────────────────────────────── */
+// Load time (23 Nov 2026, Francesco: 'still too long to load'): a reopened visit draws at once from the copy
+// this phone kept of the last load, then the server's answer replaces it. A first open still waits for the server.
+function cacheKey(){ return TOK && (TOK.k || TOK.a) ? 'auditCache:' + (TOK.k || TOK.a) : null; }
+function cacheSave(d){ var k = cacheKey(); if (!k || !d || !d.visit) return; try { localStorage.setItem(k, JSON.stringify({ at: Date.now(), d: d })); } catch(e){ try { Object.keys(localStorage).forEach(function(x){ if (x.indexOf('auditCache:') === 0 && x !== k) localStorage.removeItem(x); }); localStorage.setItem(k, JSON.stringify({ at: Date.now(), d: d })); } catch(e2){} } }
+function cacheLoad(){ var k = cacheKey(); if (!k) return null; try { var o = JSON.parse(localStorage.getItem(k) || 'null'); return o && o.d && o.d.visit && Date.now() - o.at < 7 * 86400000 ? o.d : null; } catch(e){ return null; } }
 function reload(){
   return api('load').then(function(d){
     if (d.role === 'invite' || d.role === 'invite_admin') {
@@ -1438,6 +1443,7 @@ function reload(){
     var local = {};
     if (D) { D.scores.forEach(function(r){ if (r._local != null) local['s:' + r.code] = r._local; }); D.texts.forEach(function(r){ if (r._local != null) local['t:' + r.key] = r._local; });
              D.dishes.forEach(function(r){ if (r._local != null) local['d:' + r.id] = r._local; }); D.flags.forEach(function(r){ if (r._local != null) local['f:' + r.id] = r._local; }); }
+    cacheSave(d);
     D = d; setAreas(); enOnly(D.visit && D.visit.auditor !== ENRICO);
     // Italian first is for Enrico only: anyone else opening their own audit link gets English
     // unless they chose otherwise (a guest landed on Italian after Start, 22 Oct 2026).
@@ -1455,7 +1461,13 @@ if (!TOK) render();
 else {
   document.documentElement.lang = LANG;
   try { history.replaceState(S, '', location.search); } catch(e){}
+  var cached = cacheLoad();
+  if (cached) { try { D = cached; setAreas(); enOnly(D.visit && D.visit.auditor !== ENRICO);
+    if (!ls('auditLang') && D.visit && D.visit.auditor !== ENRICO && LANG !== 'en') { LANG = 'en'; document.documentElement.lang = 'en'; }
+    applyPending(); render(); } catch(e){ D = null; } }
   reload().then(function(){ flushSoon(0); }, function(er){
+    if (cached && D && er.status !== 403) { toast(navigator.onLine ? er.message : t('offline'), true); return; }
+    if (er.status === 403) { try { localStorage.removeItem(cacheKey()); } catch(e){} }
     root.innerHTML = topBar('<h1>Audit</h1>') + '<div class="body"><div class="msg err">' + esc(er.status === 403 ? t('badLink') : (navigator.onLine ? er.message : t('offline'))) + '</div></div>';
   });
 }
