@@ -254,7 +254,7 @@ var DICT = ls('auditDict') === 'it' || ls('auditDict') === 'en' ? ls('auditDict'
 // and the visit is called Mystery Shopper, not audit. Set in reload() from the link that was opened.
 var EN_ONLY = false;
 function enOnly(on){ EN_ONLY = !!on; if (EN_ONLY) { LANG = 'en'; document.documentElement.lang = 'en'; document.title = "Mystery Shopper · Roberto's DIFC"; } }
-var MS = { ph:'Type here…', scoreNote:"The average of everything you scored. “I didn't see this” and Your opinion are not counted.", closed:'This Mystery Shopper report has been sent. Thank you!', startTitle:'Mystery Shopper', formfb:'Feedback on this form', startNew:'New visit', earlier:'Your earlier visits on this phone', another:'Start another visit', begin:'Start', cont:'Continue your visit', newOne:'or start a new visit', sentTeamLine:"Roberto's management team can already see your report. You can still add or correct anything: it saves by itself." };
+var MS = { ph:'Type here…', scoreNote:"The average of everything you scored. “I didn't see this” and Your opinion are not counted.", closed:'This Mystery Shopper report has been sent. Thank you!', startTitle:'Mystery Shopper', formfb:'Feedback on this form', startNew:'New Mystery Shopper visit', earlier:'Your earlier visits on this phone', another:'Start another visit', begin:'Start', cont:'Continue your visit', newOne:'or start a new visit', sentTeamLine:"Roberto's management team can already see your report. You can still add or correct anything: it saves by itself." };
 function speakLabel(){ return LANG === 'it' ? 'Parla' : 'Speak'; }
 var ENRICO = 'Chef Enrico Bartolini';
 function isEnrico(){ return !D || !D.visit || D.visit.auditor === ENRICO; }
