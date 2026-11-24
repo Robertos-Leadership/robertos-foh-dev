@@ -1517,7 +1517,7 @@ function rrRepThreeVisits(pull, opt){
   var byMonth = {};
   rrThreeCandidates(L, opt).forEach(function(c){ (byMonth[c.ym] || (byMonth[c.ym] = [])).push(c); });
   var rows = [], three = [], tot = { n:0, s:0, t:0, sOk:true, tOk:true, before:0, unchecked:0, again:0 };
-  var uncheckedBy = [];
+  var uncheckedBy = [], vis = [], visThree = [];
   order.forEach(function(ym){
     var mEnd = rrMonthEnd(ym);
     var secondReady = rrAddDays(mEnd, W) <= readTo;
@@ -1534,7 +1534,7 @@ function rrRepThreeVisits(pull, opt){
       var second = !!d2 && rrDaysBetween(d1, d2) <= W;
       var third = second && !!d3 && (rule === 'prev' ? rrDaysBetween(d2, d3) <= W : rrDaysBetween(d1, d3) <= W);
       if(second) s2++;
-      if(third){ s3++; three.push([g.name || 'Guest', resDateLabel(d1), resDateLabel(d2), resDateLabel(d3), rrMonthLabel(ym, pull.from, pull.to)]); }
+      if(third){ s3++; visThree.push({ name: g.name || 'Guest', d1: d1, d2: d2, d3: d3 }); three.push([g.name || 'Guest', resDateLabel(d1), resDateLabel(d2), resDateLabel(d3), rrMonthLabel(ym, pull.from, pull.to)]); }
     });
     tot.n += n; if(secondReady) tot.s += s2; else tot.sOk = false; if(thirdReady) tot.t += s3; else tot.tOk = false;
     tot.before += before; tot.unchecked += unchecked; tot.again += again;
@@ -1543,6 +1543,8 @@ function rrRepThreeVisits(pull, opt){
     // before" and "last visit over a year ago" (they add up), then one cell per
     // visit with the count, its % and, while the window is open, "still counting".
     var final2 = rrAddDays(mEnd, W + 1), final3 = rrAddDays(mEnd, (rule === 'prev' ? 2 * W : W) + 1);
+    vis.push({ ym: ym, label: rrMonthLabel(ym, pull.from, pull.to), n: n, never: n - again, again: again, s2: s2, s3: s3,
+      p2: rrPct(s2, n), p3: rrPct(s3, n), until2: secondReady ? null : final2, until3: thirdReady ? null : final3 });
     rows.push([rrMonthLabel(ym, pull.from, pull.to), n, n - again, again,
       rrVisitCell(s2, rrPct(s2, n), secondReady ? null : final2),
       rrVisitCell(s3, rrPct(s3, n), thirdReady ? null : final3)]);
@@ -1552,6 +1554,7 @@ function rrRepThreeVisits(pull, opt){
   var widths = [24,16,17,22,26,26], num = [1,2,3,4,5];
   return {
     title: '3 visits — first, second, third',
+    visual: { kind: 'three', months: vis, three: visThree },
     sub: 'Rule: ' + rrThreeRuleText(rule, W) + '. First-time = never been, or last visit more than a year ago — checked against each guest\'s SevenRooms history.',
     tables: [
       { name: 'By month',
@@ -2245,9 +2248,133 @@ function rrTableHtml(t){
   return h.join('');
 }
 
+// ── THE LOOK (24 Nov 2026, Francesco: "very plain, make it high standard";
+// approved mock-up https://claude.ai/artifact/RWrAnDBVRd1MLSrZJGyunN). The result
+// sits on white cards with larger type and quieter tables; the explanations fold
+// behind "How we count"; 3 visits opens with headline cards and bars. The app's
+// own wine and fonts stay (30 Jul 2026: the team keeps the look it knows).
+// Screen only: the Excel is unchanged.
+var RR_V2_CSS = '<style>'
+  + '.rr-v2 .rr-res{background:transparent;border:0;padding:0}'
+  + '.rr-v2 .rr-res-h{background:#fff;border:1px solid #E6DCD0;border-radius:16px;padding:22px 24px;margin-bottom:18px}'
+  + '.rr-v2 .rr-res-t{font-family:"Playfair Display",Georgia,serif;font-size:30px;font-weight:600;color:#2C1810}'
+  + '.rr-v2 .rr-res-s{font-size:14px;color:#5E4B38;margin-top:6px}'
+  + '.rr-v2 .rr-res-m{font-size:13px;color:#5E4B38}.rr-v2 .rr-res-m i{font-size:12px;color:#5E4B38}'
+  + '.rr-v2 .rr-tblwrap{background:#fff;border:1px solid #E6DCD0;border-radius:16px;padding:20px 22px;margin-bottom:18px}'
+  + '.rr-v2 .rr-tblname{font-family:"Playfair Display",Georgia,serif;font-size:21px;font-weight:600;letter-spacing:0;text-transform:none;color:#2C1810;margin-bottom:12px}'
+  + '.rr-v2 .rr-scroll{border:0;border-radius:0}'
+  + '.rr-v2 .rr-tbl{font-size:14px}'
+  + '.rr-v2 .rr-tbl th{background:transparent;color:#5E4B38;font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;border-bottom:2px solid #6B1F2A;padding:10px 12px}'
+  + '.rr-v2 .rr-tbl td{padding:12px;border-top:1px solid #EFE6DC;color:#2C1810}'
+  + '.rr-v2 .rr-tbl tbody tr:nth-child(even) td{background:#FBF8F4}'
+  + '.rr-v2 .rr-tbl tr.rr-total td{background:#6B1F2A;color:#fff}'
+  + '.rr-v2 .rr-note{font-size:12.5px;color:#5E4B38;margin-top:10px}'
+  + '.rr-v2 details.rr-how{background:#FBF8F4;border:1px solid #E6DCD0;border-radius:16px;padding:16px 22px;margin-top:4px}'
+  + '.rr-v2 details.rr-how summary{cursor:pointer;font-weight:600;font-size:15px;color:#6B1F2A;list-style:none;min-height:24px}'
+  + '.rr-v2 details.rr-how summary::-webkit-details-marker{display:none}'
+  + '.rr-v2 details.rr-how p{font-size:13.5px;color:#3E3026;line-height:1.55;margin:10px 0 0}'
+  + '.rr3-k{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin-bottom:18px}'
+  + '.rr3-c{background:#fff;border:1px solid #E6DCD0;border-radius:16px;padding:20px;display:flex;flex-direction:column;gap:8px}'
+  + '.rr3-c b{font-size:13px;color:#5E4B38;font-weight:600}'
+  + '.rr3-c strong{font-family:"Playfair Display",Georgia,serif;font-size:40px;font-weight:600;line-height:1;color:#2C1810}'
+  + '.rr3-c span{font-size:13px;color:#5E4B38}.rr3-c em{font-family:Inter,Arial,sans-serif;font-style:normal;font-size:14px;font-weight:600;color:#8A2A16;margin-left:8px}'
+  + '.rr3-c.dark{background:#6B1F2A;border-color:#6B1F2A}.rr3-c.dark b,.rr3-c.dark span{color:#F3E3E5}'
+  + '.rr3-c.dark strong{font-size:21px;line-height:1.3;color:#fff}'
+  + '.rr3-box{background:#fff;border:1px solid #E6DCD0;border-radius:16px;padding:22px;margin-bottom:18px}'
+  + '.rr3-box h3{margin:0 0 14px;font-family:"Playfair Display",Georgia,serif;font-size:21px;font-weight:600;color:#2C1810}'
+  + '.rr3-leg{display:flex;flex-wrap:wrap;gap:16px;font-size:12.5px;color:#3E3026;margin-bottom:14px}'
+  + '.rr3-leg span{display:flex;align-items:center;gap:6px}.rr3-leg i{display:inline-block;width:14px;height:10px;border-radius:3px}'
+  + '.rr3-m{display:grid;grid-template-columns:minmax(120px,190px) minmax(0,1fr);gap:16px;align-items:center;padding:10px 0;border-top:1px solid #F2EAE1}'
+  + '.rr3-ml b{display:block;font-size:15px;color:#2C1810}.rr3-ml span{display:block;font-size:12.5px;color:#5E4B38;margin-top:3px}'
+  + '.rr3-ml em{display:block;font-style:normal;font-size:12px;font-weight:600;margin-top:3px}'
+  + '.rr3-b{display:flex;align-items:center;gap:10px;margin:5px 0}'
+  + '.rr3-t{position:relative;flex:1;background:#F2EAE1;border-radius:6px}'
+  + '.rr3-t>i{display:block;height:100%;border-radius:6px}'
+  + '.rr3-g{position:absolute;top:-4px;bottom:-4px;width:2px;background:#2C1810}'
+  + '.rr3-v{width:130px;text-align:right;font-size:13.5px;font-weight:600;color:#2C1810}.rr3-v small{font-weight:400;color:#5E4B38;font-size:12px}'
+  + '.rr3-sp{display:grid;grid-template-columns:minmax(80px,140px) minmax(0,1fr) 70px;gap:12px;align-items:center;margin:8px 0;font-size:14px}'
+  + '.rr3-sp div{display:flex;height:18px;border-radius:5px;overflow:hidden}.rr3-sp div i{display:block;height:100%}.rr3-sp span:last-child{text-align:right}'
+  + '.rr3-gs{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px}'
+  + '.rr3-gc{border:1px solid #EFE6DC;border-radius:12px;padding:12px 14px}.rr3-gc b{display:block;font-size:14px;color:#2C1810}'
+  + '.rr3-gc span{font-size:12.5px;color:#5E4B38}'
+  + '@media(max-width:640px){.rr3-m{grid-template-columns:1fr}.rr3-v{width:96px}.rr-v2 .rr-res-t{font-size:24px}}'
+  + '</style>';
+var RR3_TARGET = { v: undefined };   // the 2nd-visit goal, read from the plan (point 6) when this login can see it
+function rr3LoadTarget(){
+  if(RR3_TARGET.v !== undefined || RR3_TARGET.busy || typeof sb === 'undefined') return;
+  RR3_TARGET.busy = true;
+  sb.from('ap_measures').select('target').eq('key', 'visits3').limit(1).then(function(r){
+    var t = r && r.data && r.data[0] && String(r.data[0].target || ''), m = /([0-9]+(?:\.[0-9]+)?)\s*%/.exec(t || '');
+    RR3_TARGET.v = m ? Number(m[1]) : null; RR3_TARGET.busy = false;
+    if(typeof state === 'object' && state.currentTab === 'resreports' && typeof renderMain === 'function') renderMain();
+  }, function(){ RR3_TARGET.v = null; RR3_TARGET.busy = false; });
+}
+function rr3MonthName(ym){ try{ return new Date(ym + '-15T12:00:00').toLocaleDateString('en-GB', { month: 'long' }); }catch(e){ return ym; } }
+function rr3DayMonth(iso){ try{ return new Date(iso + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }); }catch(e){ return iso; } }
+function rr3Visual(v){
+  var M = v.months || [];
+  if(!M.length) return '';
+  rr3LoadTarget();
+  var goal = RR3_TARGET.v;
+  var all = M.reduce(function(a, m){ return { n: a.n + m.n, never: a.never + m.never, again: a.again + m.again }; }, { n: 0, never: 0, again: 0 });
+  var f2 = M.filter(function(m){ return !m.until2; }), f3 = M.filter(function(m){ return !m.until3; });
+  var sum = function(list, k){ return list.reduce(function(a, m){ return a + m[k]; }, 0); };
+  var n2 = sum(f2, 'n'), s2 = sum(f2, 's2'), n3 = sum(f3, 'n'), s3 = sum(f3, 's3');
+  var p2 = rrPct(s2, n2), p3 = rrPct(s3, n3);
+  var names = function(list){ return list.map(function(m){ return rr3MonthName(m.ym); }).join(' and '); };
+  var h = ['<div class="rr3-k">'];
+  h.push('<div class="rr3-c"><b>First-time guests</b><strong>' + resNum(all.n) + '</strong><span>' + resNum(all.never) + ' never been &middot; ' + resNum(all.again) + ' back after over a year</span></div>');
+  h.push('<div class="rr3-c"><b>Came back a 2nd time</b><strong>' + (p2 == null ? '&mdash;' : p2 + '%') + (goal ? '<em>goal ' + goal + '%</em>' : '') + '</strong>'
+    + '<span>' + (f2.length ? resNum(s2) + ' of ' + resNum(n2) + ' &middot; ' + resEsc(names(f2)) + ', final' : 'No month finished yet') + '</span></div>');
+  h.push('<div class="rr3-c"><b>Came back a 3rd time</b><strong>' + (p3 == null ? '&mdash;' : p3 + '%') + '</strong>'
+    + '<span>' + (f3.length ? resNum(s3) + ' of ' + resNum(n3) + ' &middot; ' + resEsc(names(f3)) + ', final' : 'No month finished yet') + '</span></div>');
+  if(goal && p2 != null){
+    var gap = Math.round((goal - p2) * 10) / 10;
+    h.push('<div class="rr3-c dark"><b>Where we stand</b><strong>' + (gap > 0 ? gap + ' points short of the ' + goal + '% goal on the 2nd visit' : 'At or above the ' + goal + '% goal on the 2nd visit') + '</strong><span>Goal set in the Roberto&rsquo;s 3.0 plan, point 6</span></div>');
+  }
+  h.push('</div>');
+  // Month by month: bars on one scale, the goal as a line, open months striped.
+  var top = Math.max(8, goal ? goal + 1 : 0, Math.ceil(Math.max.apply(null, M.map(function(m){ return m.p2 || 0; })) * 1.2));
+  var w = function(p){ return Math.max(0, Math.min(100, (p || 0) / top * 100)); };
+  var fill = function(col, open){ return open ? 'repeating-linear-gradient(135deg,' + col + ' 0 3px,#F1E2D2 3px 6px)' : col; };
+  h.push('<div class="rr3-box"><h3>Month by month</h3><div class="rr3-leg">'
+    + '<span><i style="background:#6B1F2A"></i>2nd visit</span><span><i style="background:#C28A52"></i>3rd visit</span>'
+    + (goal ? '<span><i style="width:2px;height:14px;background:#2C1810"></i>' + goal + '% goal</span>' : '')
+    + '<span><i style="background:' + fill('#6B1F2A', true) + '"></i>still counting</span></div>');
+  M.forEach(function(m, k){
+    var status = (!m.until2 && !m.until3) ? '<em style="color:#1F5A2E">Final</em>'
+      : '<em style="color:#8A4B12">' + (m.until2 ? '2nd final ' + rr3DayMonth(m.until2) + ' &middot; ' : '') + '3rd final ' + rr3DayMonth(m.until3) + '</em>';
+    h.push('<div class="rr3-m"' + (k === 0 ? ' style="border-top:0"' : '') + '><div class="rr3-ml"><b>' + resEsc(m.label) + '</b><span>' + resNum(m.n) + ' first-timers</span>' + status + '</div><div>');
+    h.push('<div class="rr3-b"><div class="rr3-t" style="height:22px"><i style="width:' + w(m.p2) + '%;background:' + fill('#6B1F2A', !!m.until2) + '"></i>'
+      + (goal ? '<span class="rr3-g" style="left:' + w(goal) + '%"></span>' : '') + '</div>'
+      + '<span class="rr3-v">' + resNum(m.s2) + ' &middot; ' + (m.p2 == null ? '&mdash;' : m.p2 + '%') + (m.until2 ? ' <small>so far</small>' : '') + '</span></div>');
+    h.push('<div class="rr3-b"><div class="rr3-t" style="height:14px"><i style="width:' + w(m.p3) + '%;background:' + fill('#C28A52', !!m.until3) + '"></i></div>'
+      + '<span class="rr3-v">' + resNum(m.s3) + ' &middot; ' + (m.p3 == null ? '&mdash;' : m.p3 + '%') + (m.until3 ? ' <small>so far</small>' : '') + '</span></div>');
+    h.push('</div></div>');
+  });
+  h.push('<div class="rr-note">Bars run from 0 to ' + top + '%.' + (goal ? ' The black line is the ' + goal + '% goal.' : '') + '</div></div>');
+  // Who the first-timers are.
+  h.push('<div class="rr3-box"><h3>Who the first-timers are</h3>');
+  M.forEach(function(m){
+    var a = m.n ? Math.round(m.never / m.n * 1000) / 10 : 0;
+    h.push('<div class="rr3-sp"><b>' + resEsc(rr3MonthName(m.ym)) + '</b><div><i style="width:' + a + '%;background:#6B1F2A"></i><i style="width:' + (100 - a) + '%;background:#D9B9A0"></i></div><span>' + resNum(m.n) + '</span></div>');
+  });
+  h.push('<div class="rr3-leg" style="margin:10px 0 0"><span><i style="background:#6B1F2A"></i>Never been before</span><span><i style="background:#D9B9A0"></i>Last visit over a year ago</span></div></div>');
+  // Made all three visits: cards.
+  var T = v.three || [];
+  h.push('<div class="rr3-box"><h3>Made all three visits &middot; ' + resNum(T.length) + '</h3>');
+  if(!T.length) h.push('<div class="rr-note">Nobody in this period yet.</div>');
+  else {
+    h.push('<div class="rr3-gs">');
+    T.forEach(function(g){ h.push('<div class="rr3-gc"><b>' + resEsc(g.name) + '</b><span>' + rr3DayMonth(g.d1) + ' &rarr; ' + rr3DayMonth(g.d2) + ' &rarr; ' + rr3DayMonth(g.d3) + '</span></div>'); });
+    h.push('</div>');
+  }
+  h.push('</div>');
+  return h.join('');
+}
 function renderResReports(){
   var money = !fohBlocked('revenue');
-  var h = ['<div class="res-wrap rr-wrap">'];
+  var h = ['<div class="res-wrap rr-wrap rr-v2">' + RR_V2_CSS];
 
   h.push('<div class="res-head"><div class="res-head-l">');
   h.push('<div class="res-kicker">Reservations &middot; reports</div>');
@@ -2297,12 +2424,18 @@ function renderResReports(){
       + '. Run it again to try them.</div>');
   }
 
-  (R.out.tables||[]).forEach(function(t){ h.push(rrTableHtml(t)); });
+  var vis3 = R.out.visual && R.out.visual.kind === 'three';
+  if(vis3) h.push(rr3Visual(R.out.visual));
+  (R.out.tables||[]).forEach(function(t){
+    if(vis3 && t.name === 'Made all three visits') return;     // shown as cards above; still in the Excel
+    h.push(rrTableHtml(vis3 && t.name === 'By month' ? Object.assign({}, t, { name: 'The numbers' }) : t));
+  });
 
   if((R.out.notes||[]).length){
-    h.push('<div class="rr-notes"><div class="rr-notes-h">Read this before using the numbers</div>');
+    // Explanations fold away (one tap to open), so the numbers come first.
+    h.push('<details class="rr-how"><summary>How we count &#9662;</summary>');
     (R.out.notes||[]).forEach(function(n){ h.push('<p>'+resEsc(n)+'</p>'); });
-    h.push('</div>');
+    h.push('</details>');
   }
   h.push('</div>');
 
