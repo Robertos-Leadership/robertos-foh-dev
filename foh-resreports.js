@@ -676,22 +676,34 @@ function rrMonthEnd(ym){
 // She chooses the look-back, the report prints it in its own title, and every
 // sheet says it. A three-month look-back means "new as far back as we looked",
 // which is a smaller claim than "new ever" and is the true one.
+// 24 Nov 2026, Francesco: "new should be never being in Roberto's before, not
+// last 90 days". So NEW is now checked against each guest's own SevenRooms
+// history at this venue, the same check the 3 visits report makes: a guest is
+// new only if there is no earlier real visit at all (cancellations and no-shows
+// do not count). The look-back is now only a cheap first filter.
+// Candidates: a guest whose FIRST night in everything we read falls in the
+// month. Anyone seen earlier in what we read has been before: returning.
+function rrNewCandidates(L, opt){
+  var out = [], fromYm = rrMonth(opt.from), toYm = rrMonth(opt.to);
+  Object.keys(L.guests).forEach(function(id){
+    var g = L.guests[id];
+    if(g.placeholder || !g.dates.length) return;
+    var ym = rrMonth(g.dates[0]);
+    if(ym < fromYm || ym > toYm) return;
+    out.push({ id: id, ym: ym, i: 0, d1: g.dates[0] });
+  });
+  return out;
+}
 function rrRepNewReturning(pull, opt){
-  var back = Number(opt.lookback) || 3;
   var L = rrLedger(pull.nights);
   var rows = [], order = [];
-  var seenBefore = {};       // guest id -> earliest date anywhere in the pull
-  Object.keys(L.guests).forEach(function(id){
-    if(L.guests[id].placeholder) return;
-    seenBefore[id] = L.guests[id].dates[0];
-  });
-  // Report months are the ones inside the window she asked for, not the
-  // look-back months we only pulled to answer the question.
   var ym = rrMonth(opt.from), endYm = rrMonth(opt.to);
   while(ym <= endYm){ order.push(ym); ym = rrMonth(rrAddDays(rrMonthEnd(ym), 1)); }
-
+  var cand = {};
+  rrNewCandidates(L, opt).forEach(function(c){ cand[c.id] = c; });
+  var anyUnchecked = 0;
   order.forEach(function(ym){
-    var nw = 0, ret = 0, n = 0;
+    var nw = 0, ret = 0, n = 0, unk = 0;
     Object.keys(L.guests).forEach(function(id){
       var g = L.guests[id];
       if(g.placeholder) return;
@@ -699,26 +711,31 @@ function rrRepNewReturning(pull, opt){
       for(var i=0;i<g.dates.length;i++) if(rrMonth(g.dates[i]) === ym){ inMonth = true; break; }
       if(!inMonth) return;
       n++;
-      // NEW if the earliest night we have them on ANYWHERE in what we read —
-      // the look-back months included — falls inside this month. Otherwise we
-      // had already seen them, so they are returning.
-      if(rrMonth(seenBefore[id]) === ym) nw++; else ret++;
+      var c = cand[id];
+      if(!c || c.ym !== ym){ ret++; return; }                       // seen earlier in what we read
+      var v = RRFE[rrFeKey(c.id, c.d1)];
+      if(v === undefined || v === -1){ unk++; return; }               // history would not load: never guessed
+      if(v === '') nw++; else ret++;                                  // '' = no earlier real visit, ever
     });
-    rows.push([rrMonthLabel(ym, pull.from, pull.to), n, nw, rrPct(nw, n), ret, rrPct(ret, n)]);
+    anyUnchecked += unk;
+    rows.push([rrMonthLabel(ym, pull.from, pull.to), n, nw, rrPct(nw, n), ret, rrPct(ret, n), unk]);
   });
-
+  var head = ['Month','Guests who came','New: never been before','%','Returning','%'];
+  var widths = [22,15,20,8,13,8], num = [1,2,4];
+  if(anyUnchecked){ head.push('Could not check'); widths.push(16); num.push(6); }
+  else rows.forEach(function(r){ r.pop(); });
   return {
     title: 'New vs returning guests, by month',
-    sub: 'NEW means we have no record of them in the ' + back + ' month' + (back===1?'':'s') + ' before this period. That is the claim, and it is the whole claim.',
+    sub: 'NEW means never been to Roberto\'s before: SevenRooms shows no earlier visit for the guest at this venue.',
     tables: [
       { name: 'By month',
-        head: ['Month','Guests who came','New to us','%','Returning','%'],
-        widths: [22,15,13,8,13,8], num:[1,2,4], pct:[3,5],
+        head: head, widths: widths, num: num, pct:[3,5],
         rows: rows,
-        note: 'The monthly lines cannot be added up — a guest who came in two months appears in both.' }
+        note: 'The monthly lines cannot be added up — a guest who came in two months appears in both.'
+          + (anyUnchecked ? ' "Could not check" are guests whose SevenRooms history would not load; they are left out of both new and returning, so those months are short, never inflated.' : '') }
     ],
     notes: [
-      'HOW "NEW" IS DECIDED: we read the book for ' + back + ' month' + (back===1?'':'s') + ' before your start date as well as the period itself, and a guest is NEW in a month if they appear nowhere earlier in any of it. So this says "new as far back as we looked", not "new ever". Widen the look-back in the pop-up if you need a stronger claim — it costs about 3 minutes per extra quarter.',
+      'HOW "NEW" IS DECIDED: a guest is NEW in a month only if SevenRooms\' own history for them at this venue shows no earlier visit at all. Cancellations and no-shows do not count as visits. Anyone with an earlier real visit, however long ago, is RETURNING.',
       'WHY WE DO NOT USE SEVENROOMS\' "GUEST SINCE" DATE, which would have been quicker: it is when the guest RECORD was created, not when they first came. Measured 31 Jul 2026 on 392 guests, 89 of the 234 who have visited exactly once carry a guest-since date earlier than that one visit, and 4 carry one later than a night we had already served them. A first-visit date cannot come after the visit, so we do not treat it as one.',
       RR_WALKIN_NOTE
     ]
@@ -1557,8 +1574,8 @@ var RR_REPORTS = [
     blurb:'By month, with the honest warning about why the months are not comparable.',
     profiles:true, run:rrRepOneVisit },
   { id:'newreturning', qkey:'r-newreturning', name:'New vs returning guests',
-    blurb:'Per month, split into first-time and returning, over a look-back you choose.',
-    lookback:true, run:rrRepNewReturning },
+    blurb:'Per month: guests who had never been to Roberto’s before, and guests who had.',
+    lookback:true, everCheck:true, run:rrRepNewReturning },
   { id:'returnwindow', qkey:'r-returnwindow', name:'Came back within 30 / 60 / 90 days',
     blurb:'The one to use when you want months compared fairly. Every month on the same clock.',
     followUp:90, run:rrRepReturnWindow },
@@ -1644,7 +1661,7 @@ function rrPreloadForEstimate(){
   if(!rep || !RR.from || !RR.to || RR.from > RR.to) return;
   var win = rrPullWindow(rep, RR.from, RR.to), id = RR.pick + RR.from + RR.to + RR.lookback;
   RR.preId = id;
-  Promise.all([rrLoadSaved(rrDates(win.from, win.to)), rep.firstEver ? rrLoadSavedFirst(RR.from, RR.to) : null])
+  Promise.all([rrLoadSaved(rrDates(win.from, win.to)), (rep.firstEver || rep.everCheck) ? rrLoadSavedFirst(RR.from, RR.to) : null])
     .then(function(){ if(RR.open && !RR.busy && RR.preId === id) rrPaint(); });
 }
 function rrClose(){ if(RR.busy) return; RR.open = false; rrPaint(); }
@@ -1718,11 +1735,12 @@ async function rrRun(show){
         rrPaint();
       });
     }
-    if(rep.firstEver){
+    if(rep.firstEver || rep.everCheck){
       // Every guest the look-back calls new is checked against their whole
       // SevenRooms history -- see rrFirstEver. Same progress bar as the profiles.
       var LF = rrLedger(pulled.nights);
-      var cands = rrThreeCandidates(LF, { from: RR.from, to: RR.to, lookback: RR.lookback });
+      var cands = rep.everCheck ? rrNewCandidates(LF, { from: RR.from, to: RR.to })
+                                : rrThreeCandidates(LF, { from: RR.from, to: RR.to, lookback: RR.lookback });
       RR.phase = 'guests'; RR.gdone = 0; RR.gtotal = cands.length;
       RR.note = 'Checking who has been here before…';
       rrPaint();
@@ -2054,7 +2072,7 @@ function rrPopHtml(){
   // 1,122 guests to check over 31 nights, ~40s of profiles plus ~2 min of
   // history calls -- call it 36 guests and 6 seconds a night. Only the nights
   // she picked count; the look-back months produce no one to check.
-  if(rep.firstEver && RR.from && RR.to && RR.from <= RR.to){
+  if((rep.firstEver || rep.everCheck) && RR.from && RR.to && RR.from <= RR.to){
     var picked = rrDates(RR.from, RR.to).filter(function(d){ return !RRSAVED.fv[d]; }).length;
     gTodo += picked * 36; gSecs += picked * 6;
   }
@@ -2081,7 +2099,7 @@ function rrPopHtml(){
     [1,3,6,12].forEach(function(n){
       h.push('<option value="'+n+'"'+(Number(RR.lookback)===n?' selected':'')+'>'+n+' month'+(n===1?'':'s')+'</option>');
     });
-    h.push('</select></label><i>' + (rep.firstEver
+    h.push('</select></label><i>' + ((rep.firstEver || rep.everCheck)
       ? 'Guests seen in the look-back are dropped at once. Everyone else is checked against their whole SevenRooms history, so this changes how long it takes, not the answer.'
       : 'A guest is “new” if they appear nowhere in the look-back. A longer look-back is a stronger claim and takes longer to read.') + '</i></div>');
   }
