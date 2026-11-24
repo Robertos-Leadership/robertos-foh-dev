@@ -1535,7 +1535,7 @@ function rrRepThreeVisits(pull, opt){
       { name: 'By month',
         head: head, widths: widths, num: num, pct:[4,6,7],
         rows: rows,
-        note: '"So far" means that month has not had the full window yet (' + W + ' days after its last day for the 2nd visit, ' + (rule === 'prev' ? 2 * W : W) + ' for the 3rd): the count is real up to ' + resDateLabel(readTo) + ' and can only go up until the final date shown. Totals use finished months only.'
+        note: '"So far" means that month has not had the full window yet (' + W + ' days after its last day for the 2nd visit, ' + (rule === 'prev' ? 2 * W : W) + ' for the 3rd): the count is real up to ' + resDateLabel(readTo) + ' and can only go up until the final date shown.'
           + (tot.unchecked ? ' "Could not check" are guests whose SevenRooms history would not load; they are left out, so those months are short, never inflated.' : '') },
       { name: 'Made all three visits',
         head: ['Guest','1st visit','2nd visit','3rd visit','Month of first visit'],
