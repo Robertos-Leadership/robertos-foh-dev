@@ -64,10 +64,24 @@ async function auLoad(quiet){
   if(AU.loading) return;
   AU.loading = true;
   try {
-    if(!AU.me) AU.me = await auApi('me');
-    if(AU.me.read){ var l = await auApi('list'); AU.list = l.audits || []; }
-    if(AU.me.admin && AU.amman === undefined){ try { AU.amman = await auAmmanLink(); } catch(e){ AU.amman = null; } }
+    // 24 Nov 2026: the three calls used to wait for each other (me 1.8 s, then
+    // list 1.0 s, then the Amman link 1.7 s = 4.7 s before the screen showed).
+    // The list is read-only, so it now starts alongside 'me'; 'me' still decides
+    // whether it is shown. The Amman link is asked for only once 'me' says Admin,
+    // as before, and fills in after the list is already on screen.
+    var pMe = AU.me ? Promise.resolve(AU.me) : auApi('me');
+    var pList = auApi('list').catch(function(e){ return { _err: e }; });
+    AU.me = await pMe;
+    if(AU.me.read){ var l = await pList; if(l._err) throw l._err; AU.list = l.audits || []; }
     AU.err = null;
+    AU.loading = false;
+    auRepaint();
+    if(AU.me.admin && AU.amman === undefined && !AU.ammanBusy){
+      AU.ammanBusy = true;
+      try { AU.amman = await auAmmanLink(); } catch(e){ AU.amman = null; }
+      AU.ammanBusy = false;
+      auRepaint();
+    }
   } catch(e){ if(!quiet || !AU.me) AU.err = e.message || String(e); }
   AU.loading = false;
   auRepaint();
