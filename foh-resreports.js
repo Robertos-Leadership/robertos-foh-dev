@@ -99,6 +99,61 @@ function rrIsBooking(r){ return !rrIsGone(r); }
 // the same period is then instant, which matters because she will run several.
 var RRN = { nights: {}, ok: null };   // date -> rows ; ok = did the feed honour include=all
 
+// ── SAVED NIGHTS (24 Nov 2026) ─────────────────────────────────────────────
+// On 23 Nov the 3 visits report took 10-13 minutes in front of the Chairman:
+// every run read ~200 nights and hundreds of guest histories live from
+// SevenRooms and kept nothing once the page closed. A finished night never
+// changes, so the rr-cache job saves each one (rr_nights) and works out each
+// first-visit check ahead (rr_first_visit). The reports read those first and
+// only ask SevenRooms for what is not saved: today, yesterday, anything new.
+// A saved read that fails costs nothing: the report reads live, as before.
+var RRSAVED = { fv: {} };   // fv: night -> true when its first-visit checks were loaded
+var RR_DROP = { items: 1, notes: 1 };   // the till lines and host notes: no report reads them
+async function rrLoadSaved(dates){
+  if(typeof sb === 'undefined') return;
+  var want = dates.filter(function(d){ return !RRN.nights[d] && rrNightSettled(d); });
+  for(var i = 0; i < want.length; i += 31){
+    var chunk = want.slice(i, i + 31);
+    try{
+      var res = await sb.from('rr_nights').select('night,rows,includes_cancelled').in('night', chunk);
+      if(res.error) throw res.error;
+      (res.data || []).forEach(function(n){
+        if(n.includes_cancelled !== true || !Array.isArray(n.rows)) return;
+        if(typeof resShiftOf === 'function') n.rows.forEach(function(r){ r.shift = resShiftOf(r); });
+        RRN.nights[n.night] = n.rows;
+        RRN.ok = (RRN.ok === false) ? false : true;
+      });
+    }catch(e){ console.warn('[resreports] saved nights not read', e); return; }
+  }
+}
+// A settled night read live is saved for everyone after (insert only; a night
+// already saved is left alone).
+function rrSaveNight(d, rows, inc){
+  if(typeof sb === 'undefined' || inc !== true || !rrNightSettled(d)) return;
+  try{
+    var slim = rows.map(function(r){ var c = {}; for(var k in r) if(Object.prototype.hasOwnProperty.call(r, k) && !RR_DROP[k]) c[k] = r[k]; return c; });
+    sb.from('rr_nights').upsert({ night: d, rows: slim, n: slim.length, includes_cancelled: true, source: 'app' }, { onConflict: 'night', ignoreDuplicates: true })
+      .then(function(r){ if(r && r.error) console.warn('[resreports] night not saved', d, r.error); });
+  }catch(e){}
+}
+// Saved first-visit checks for the nights a run is about to check.
+async function rrLoadSavedFirst(from, to){
+  if(typeof sb === 'undefined' || !from || !to) return;
+  try{
+    for(var off = 0; ; off += 1000){
+      var res = await sb.from('rr_first_visit').select('client_id,night,last_before').gte('night', from).lte('night', to)
+        .order('night').order('client_id').range(off, off + 999);
+      if(res.error) throw res.error;
+      (res.data || []).forEach(function(r){
+        var k = rrFeKey(r.client_id, r.night);
+        if(RRFE[k] === undefined || RRFE[k] === -1) RRFE[k] = r.last_before || '';
+        RRSAVED.fv[r.night] = true;
+      });
+      if(!res.data || res.data.length < 1000) break;
+    }
+  }catch(e){ console.warn('[resreports] saved first-visit checks not read', e); }
+}
+
 // The echo check. An older deployment of sevenrooms-sync ignores an unknown
 // query parameter and answers 200 with a perfectly normal payload — so a
 // no-show report built against it would quietly print "0 no-shows" and read as
@@ -126,6 +181,7 @@ async function rrFetchNight(d){
   // Lunch 12:00-17:00 / dinner 17:01-close by booking time, same as the book.
   if(typeof resShiftOf === 'function') j.reservations.forEach(function(r){ r.shift = resShiftOf(r); });
   RRN.nights[d] = j.reservations;
+  rrSaveNight(d, j.reservations, j.includes_cancelled);
   return j.reservations;
 }
 
@@ -205,6 +261,7 @@ function rrEta(secs){
 // worse than no report.
 var RR_PARALLEL = 5;
 async function rrPull(dates, onProgress){
+  await rrLoadSaved(dates);
   var got = {}, failed = [], done = 0;
   var queue = dates.slice();
   async function worker(){
@@ -1329,6 +1386,29 @@ function rrThreeCandidates(L, opt){
 //    settle them).
 // Both cached for the page, like the nights.
 async function rrFirstEver(L, cands, venue, onProgress){
+  if(cands.length){
+    var lo = cands[0].d1, hi = cands[0].d1;
+    cands.forEach(function(c){ if(c.d1 < lo) lo = c.d1; if(c.d1 > hi) hi = c.d1; });
+    await rrLoadSavedFirst(lo, hi);
+  }
+  var before = {};
+  cands.forEach(function(c){ var k = rrFeKey(c.id, c.d1); before[k] = RRFE[k]; });
+  try{ return await rrFirstEverLive(L, cands, venue, onProgress); }
+  finally{
+    // Every answer worked out live here is saved for the next run.
+    var add = [];
+    cands.forEach(function(c){
+      var k = rrFeKey(c.id, c.d1), v = RRFE[k];
+      if((before[k] === undefined || before[k] === -1) && v !== undefined && v !== -1)
+        add.push({ client_id: c.id, night: c.d1, last_before: v || null, how: 'app' });
+    });
+    for(var i = 0; i < add.length && typeof sb !== 'undefined'; i += 500){
+      try{ sb.from('rr_first_visit').upsert(add.slice(i, i + 500), { onConflict: 'client_id,night', ignoreDuplicates: true })
+        .then(function(r){ if(r && r.error) console.warn('[resreports] checks not saved', r.error); }); }catch(e){}
+    }
+  }
+}
+async function rrFirstEverLive(L, cands, venue, onProgress){
   var open = cands.filter(function(c){ var v = RRFE[rrFeKey(c.id, c.d1)]; return v === undefined || v === -1; });
   if(onProgress) onProgress(0, open.length, 'profiles');
   await rrProfiles(open.map(function(c){ return c.id; }), venue, function(done, total){
@@ -1528,9 +1608,19 @@ function rrOpen(id){
   var d = r.lapsed ? rrLastFullMonths(3, 3) : rrLastFullMonths(3);
   RR.from = d.from; RR.to = d.to;
   rrPaint();
+  rrPreloadForEstimate();
+}
+// Load what is saved for the dates picked, so the time shown is the real one.
+function rrPreloadForEstimate(){
+  var rep = rrReport(RR.pick);
+  if(!rep || !RR.from || !RR.to || RR.from > RR.to) return;
+  var win = rrPullWindow(rep, RR.from, RR.to), id = RR.pick + RR.from + RR.to + RR.lookback;
+  RR.preId = id;
+  Promise.all([rrLoadSaved(rrDates(win.from, win.to)), rep.firstEver ? rrLoadSavedFirst(RR.from, RR.to) : null])
+    .then(function(){ if(RR.open && !RR.busy && RR.preId === id) rrPaint(); });
 }
 function rrClose(){ if(RR.busy) return; RR.open = false; rrPaint(); }
-function rrSet(k, v){ RR[k] = v; RR.err = ''; rrPaint(); }
+function rrSet(k, v){ RR[k] = v; RR.err = ''; rrPaint(); if(k === 'from' || k === 'to' || k === 'lookback') rrPreloadForEstimate(); }
 
 // The nights a report actually has to read, from the dates she picked.
 function rrPullWindow(rep, from, to){
@@ -1937,7 +2027,7 @@ function rrPopHtml(){
   // history calls -- call it 36 guests and 6 seconds a night. Only the nights
   // she picked count; the look-back months produce no one to check.
   if(rep.firstEver && RR.from && RR.to && RR.from <= RR.to){
-    var picked = rrDates(RR.from, RR.to).length;
+    var picked = rrDates(RR.from, RR.to).filter(function(d){ return !RRSAVED.fv[d]; }).length;
     gTodo += picked * 36; gSecs += picked * 6;
   }
   var bad = (RR.from && RR.to && RR.from > RR.to) ? 'The "from" date is after the "to" date.' : '';
