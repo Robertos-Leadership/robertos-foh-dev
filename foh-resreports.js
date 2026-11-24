@@ -448,6 +448,22 @@ async function rrProfiles(ids, venue, onProgress){
   var want = ids.filter(function(id){ return id && !RESH.got[id] && !RESH.failed[id]; });
   var uniq = [], seen = {};
   want.forEach(function(id){ if(!seen[id]){ seen[id]=1; uniq.push(id); } });
+  // 24 Nov 2026: figures read in the last 24 hours are saved (rr_profiles) and
+  // reused, so a report over 3,800 guests does not wait 8 minutes on SevenRooms.
+  // Lifetime visits and spend move by at most a day; anything older is re-read.
+  var total0 = uniq.length;
+  if(uniq.length && typeof sb !== 'undefined'){
+    var since = new Date(Date.now() - 24 * 3600e3).toISOString();
+    for(var s0 = 0; s0 < uniq.length; s0 += 150){
+      try{
+        var res = await sb.from('rr_profiles').select('client_id,p').in('client_id', uniq.slice(s0, s0 + 150)).gte('read_at', since);
+        if(res.error) throw res.error;
+        (res.data || []).forEach(function(r){ if(r.p && r.p.scope === 'venue') RESH.got[r.client_id] = r.p; });
+      }catch(e){ console.warn('[resreports] saved guest figures not read', e); break; }
+      if(onProgress) onProgress(Math.min(s0 + 150, total0), total0);
+    }
+    uniq = uniq.filter(function(id){ return !RESH.got[id]; });
+  }
   for(var i=0; i<uniq.length; i+=60){
     var slice = uniq.slice(i, i+60);
     try{
@@ -461,6 +477,12 @@ async function rrProfiles(ids, venue, onProgress){
       if(!j || !j.ok) throw new Error((j && j.error) || 'no data');
       var map = j.guests || {};
       slice.forEach(function(id){ if(map[id]) RESH.got[id] = map[id]; else RESH.failed[id] = 1; });
+      try{
+        var keep = slice.filter(function(id){ return map[id] && map[id].scope === 'venue'; })
+          .map(function(id){ return { client_id: id, p: map[id], read_at: new Date().toISOString() }; });
+        if(keep.length && typeof sb !== 'undefined') sb.from('rr_profiles').upsert(keep, { onConflict: 'client_id' })
+          .then(function(r){ if(r && r.error) console.warn('[resreports] guest figures not saved', r.error); });
+      }catch(e2){}
     }catch(e){
       console.warn('[resreports] profiles failed', e);
       // NOT marked failed — a network blip must not permanently blank a column.
@@ -1302,6 +1324,7 @@ function rrRepNoShowRate(pull, opt){
 // A month that has not had the whole window yet says "not yet", never a low
 // number that is only the calendar.
 function rrDaysBetween(a, b){ return Math.round((Date.parse(b+'T12:00:00') - Date.parse(a+'T12:00:00')) / 864e5); }
+function rrShortDate(iso){ try{ return new Date(iso + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }); }catch(e){ return iso; } }
 function rrThreeRuleText(rule, w){
   return rule === 'first'
     ? '2nd and 3rd visit both within ' + w + ' days of the first'
@@ -1489,10 +1512,15 @@ function rrRepThreeVisits(pull, opt){
     });
     tot.n += n; if(secondReady) tot.s += s2; else tot.sOk = false; if(thirdReady) tot.t += s3; else tot.tOk = false;
     tot.before += before; tot.unchecked += unchecked; tot.again += again;
+    // 24 Nov 2026, Francesco: show the 2nd and 3rd visits counted so far, even
+    // before the window closes. A month still counting carries "so far" and the
+    // day its figure becomes final, so it can never be read as the final number.
+    var final2 = rrAddDays(mEnd, W + 1), final3 = rrAddDays(mEnd, (rule === 'prev' ? 2 * W : W) + 1);
+    var soFar = function(pct, fin){ return (pct == null ? '—' : pct + '%') + ' so far · final ' + rrShortDate(fin); };
     rows.push([rrMonthLabel(ym, pull.from, pull.to), n, again,
-      secondReady ? s2 : null, secondReady ? rrPct(s2, n) : 'not yet',
-      thirdReady ? s3 : null, thirdReady ? rrPct(s3, n) : 'not yet',
-      thirdReady && secondReady ? rrPct(s3, s2) : 'not yet', unchecked]);
+      s2, secondReady ? rrPct(s2, n) : soFar(rrPct(s2, n), final2),
+      s3, thirdReady ? rrPct(s3, n) : soFar(rrPct(s3, n), final3),
+      thirdReady && secondReady ? rrPct(s3, s2) : soFar(rrPct(s3, s2), final3), unchecked]);
   });
   // The "could not check" column only appears when there is something in it --
   // but when there is, it is never folded away: those months are SHORT.
@@ -1507,7 +1535,7 @@ function rrRepThreeVisits(pull, opt){
       { name: 'By month',
         head: head, widths: widths, num: num, pct:[4,6,7],
         rows: rows,
-        note: '"not yet" means that month has not had the full window yet (' + (rule === 'prev' ? 2 * W : W) + ' days after its last day for the 3rd visit). It is not a zero.'
+        note: '"So far" means that month has not had the full window yet (' + W + ' days after its last day for the 2nd visit, ' + (rule === 'prev' ? 2 * W : W) + ' for the 3rd): the count is real up to ' + resDateLabel(readTo) + ' and can only go up until the final date shown. Totals use finished months only.'
           + (tot.unchecked ? ' "Could not check" are guests whose SevenRooms history would not load; they are left out, so those months are short, never inflated.' : '') },
       { name: 'Made all three visits',
         head: ['Guest','1st visit','2nd visit','3rd visit','Month of first visit'],
