@@ -1341,6 +1341,14 @@ function rrRepNoShowRate(pull, opt){
 // A month that has not had the whole window yet says "not yet", never a low
 // number that is only the calendar.
 function rrDaysBetween(a, b){ return Math.round((Date.parse(b+'T12:00:00') - Date.parse(a+'T12:00:00')) / 864e5); }
+// A visit cell: count, its %, and "still counting" while the window is open.
+// The screen draws html; the Excel gets text (see rrXlSheet).
+function rrVisitCell(n, pct, until){
+  var p = pct == null ? '' : ' · ' + pct + '%';
+  var wait = until ? 'still counting, final ' + rrShortDate(until) : '';
+  return { text: n + p + (wait ? ' (' + wait + ')' : ''),
+    html: '<b>' + resNum(n) + '</b>' + resEsc(p) + (wait ? '<div style="font-size:11px;font-style:italic;color:#8B7355;margin-top:2px">' + resEsc(wait) + '</div>' : '') };
+}
 function rrShortDate(iso){ try{ return new Date(iso + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }); }catch(e){ return iso; } }
 function rrThreeRuleText(rule, w){
   return rule === 'first'
@@ -1509,6 +1517,7 @@ function rrRepThreeVisits(pull, opt){
   var byMonth = {};
   rrThreeCandidates(L, opt).forEach(function(c){ (byMonth[c.ym] || (byMonth[c.ym] = [])).push(c); });
   var rows = [], three = [], tot = { n:0, s:0, t:0, sOk:true, tOk:true, before:0, unchecked:0, again:0 };
+  var uncheckedBy = [];
   order.forEach(function(ym){
     var mEnd = rrMonthEnd(ym);
     var secondReady = rrAddDays(mEnd, W) <= readTo;
@@ -1529,31 +1538,28 @@ function rrRepThreeVisits(pull, opt){
     });
     tot.n += n; if(secondReady) tot.s += s2; else tot.sOk = false; if(thirdReady) tot.t += s3; else tot.tOk = false;
     tot.before += before; tot.unchecked += unchecked; tot.again += again;
-    // 24 Nov 2026, Francesco: show the 2nd and 3rd visits counted so far, even
-    // before the window closes. A month still counting carries "so far" and the
-    // day its figure becomes final, so it can never be read as the final number.
+    // 24 Nov 2026, Francesco: show the 2nd and 3rd visits counted so far, and
+    // make the table plain to read: first-time guests split into "never been
+    // before" and "last visit over a year ago" (they add up), then one cell per
+    // visit with the count, its % and, while the window is open, "still counting".
     var final2 = rrAddDays(mEnd, W + 1), final3 = rrAddDays(mEnd, (rule === 'prev' ? 2 * W : W) + 1);
-    var soFar = function(pct, fin){ return (pct == null ? '—' : pct + '%') + ' so far · final ' + rrShortDate(fin); };
-    rows.push([rrMonthLabel(ym, pull.from, pull.to), n, again,
-      s2, secondReady ? rrPct(s2, n) : soFar(rrPct(s2, n), final2),
-      s3, thirdReady ? rrPct(s3, n) : soFar(rrPct(s3, n), final3),
-      thirdReady && secondReady ? rrPct(s3, s2) : soFar(rrPct(s3, s2), final3), unchecked]);
+    rows.push([rrMonthLabel(ym, pull.from, pull.to), n, n - again, again,
+      rrVisitCell(s2, rrPct(s2, n), secondReady ? null : final2),
+      rrVisitCell(s3, rrPct(s3, n), thirdReady ? null : final3)]);
+    if(unchecked) uncheckedBy.push(rrMonthLabel(ym, pull.from, pull.to) + ': ' + unchecked);
   });
-  // The "could not check" column only appears when there is something in it --
-  // but when there is, it is never folded away: those months are SHORT.
-  var head = ['Month of first visit','First-time guests','Of which back after 12+ months','Came a 2nd time','% of first-timers','Came a 3rd time','% of first-timers','% of 2nd-timers who came a 3rd'];
-  var widths = [22,16,18,15,16,15,16,24], num = [1,2,3,5];
-  if(tot.unchecked){ head.push('Could not check'); widths.push(16); num.push(8); }
-  else rows.forEach(function(r){ r.pop(); });
+  var head = ['Month of first visit','First-time guests','Never been before','Last visit over a year ago','Came back a 2nd time','Came back a 3rd time'];
+  var widths = [24,16,17,22,26,26], num = [1,2,3,4,5];
   return {
     title: '3 visits — first, second, third',
-    sub: 'Rule: ' + rrThreeRuleText(rule, W) + '. First-time = never been, or not in for 12 months or more — checked against each guest\'s SevenRooms history.',
+    sub: 'Rule: ' + rrThreeRuleText(rule, W) + '. First-time = never been, or last visit more than a year ago — checked against each guest\'s SevenRooms history.',
     tables: [
       { name: 'By month',
-        head: head, widths: widths, num: num, pct:[4,6,7],
+        head: head, widths: widths, num: num,
         rows: rows,
-        note: '"So far" means that month has not had the full window yet (' + W + ' days after its last day for the 2nd visit, ' + (rule === 'prev' ? 2 * W : W) + ' for the 3rd): the count is real up to ' + resDateLabel(readTo) + ' and can only go up until the final date shown.'
-          + (tot.unchecked ? ' "Could not check" are guests whose SevenRooms history would not load; they are left out, so those months are short, never inflated.' : '') },
+        note: 'First-time guests = Never been before + Last visit over a year ago. '
+          + 'Still counting = that month\'s window is not over yet (' + W + ' days for the 2nd visit, ' + (rule === 'prev' ? 2 * W : W) + ' for the 3rd), so the number can only go up until the date shown.'
+          + (uncheckedBy.length ? ' Could not check (SevenRooms history would not load, left out, never guessed): ' + uncheckedBy.join(', ') + '.' : '') },
       { name: 'Made all three visits',
         head: ['Guest','1st visit','2nd visit','3rd visit','Month of first visit'],
         widths: [30,16,16,16,22],
@@ -1836,7 +1842,7 @@ function rrXlSheet(wb, C, name, t, subText){
 
   (t.rows||[]).forEach(function(r, i){
     var isTotal = String(r[0]||'').indexOf('TOTAL') === 0 || String(r[0]||'').indexOf('WHOLE WINDOW') === 0;
-    var row = ws.addRow(r);
+    var row = ws.addRow(r.map(function(v){ return (v && typeof v === 'object' && v.text != null) ? v.text : v; }));
     row.height = 15;
     row.eachCell({includeEmpty:true}, function(cell, ci){
       var c = ci - 1;
@@ -2201,6 +2207,7 @@ function rrPopHtml(){
 // THE FULL PAGE (f-popup, second half — "but then build the full page too")
 // ══════════════════════════════════════════════════════════════════════════
 function rrCell(v, kind){
+  if(v && typeof v === 'object' && v.html != null) return v.html;
   if(v == null || v === '') return '<i class="rr-none">&mdash;</i>';
   if(typeof v === 'number'){
     if(kind === 'money') return resNum(Math.round(v));
