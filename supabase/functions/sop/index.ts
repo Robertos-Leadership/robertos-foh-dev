@@ -147,13 +147,19 @@ Deno.serve(async (req) => {
     const seesAll = !!checker || (!!myGrp && SEES_RESTRICTED.includes(myGrp));
     const DOCS: Row[] = (docsQ.data || []).filter((d: Row) => seesAll || !RESTRICTED.includes(d.code));
     const docOf = (c: unknown) => DOCS.find((d) => d.code === String(c ?? ""));
-    const setQ = await db.from("sop_settings").select("val").eq("key", "start_date").limit(1);
-    const START = String((setQ.data && setQ.data[0] && setQ.data[0].val) || dubaiToday());
+    const setQ = await db.from("sop_settings").select("key,val").in("key", ["start_date", "not_required"]);
+    const setOf = (k: string) => { const r = (setQ.data || []).find((x: Row) => x.key === k); return r ? r.val : null; };
+    const START = String(setOf("start_date") || dubaiToday());
+    // people the SOPs are not asked of (25 Nov 2026): on the staff list for the rota, but with no list of their own and
+    // not on the managers' board. sop_settings key not_required = a list of Employee IDs. They can still read everything.
+    const skipRaw = setOf("not_required");
+    const SKIP: string[] = Array.isArray(skipRaw) ? skipRaw.map((x: unknown) => String(x ?? "").trim()).filter(Boolean) : [];
+    const grpFor = (empId: unknown, section: string, role: string) => SKIP.some((x) => same(empId, x)) ? null : grpOf(section, role);
     const today = dubaiToday();
 
     // what one person must read, and where they are with it
     async function listFor(person: Row) {
-      const grp = grpOf(person.section, person.role);
+      const grp = grpFor(person.emp, person.section, person.role);
       const [mp, sg] = await Promise.all([
         grp ? db.from("sop_map").select("code,week").eq("grp", grp) : Promise.resolve({ data: [] as Row[] }),
         db.from("sop_signs").select("code,ver,signed_at").eq("emp_id", person.emp).order("signed_at", { ascending: false }),
@@ -273,7 +279,7 @@ Deno.serve(async (req) => {
       const last: Record<string, Row> = {};
       signs.forEach((s: Row) => { last[String(s.emp_id) + "|" + s.code] = s; });   // oldest first, so the newest wins
       const people = (staff.data || []).filter((p: Row) => !p.end_date && p.in_schedule !== false && p.emp_id).map((p: Row) => {
-        const grp = grpOf(String(p.section ?? ""), String(p.role ?? "")); if (!grp) return null;
+        const grp = grpFor(p.emp_id, String(p.section ?? ""), String(p.role ?? "")); if (!grp) return null;
         const mine = (map.data || []).filter((m: Row) => m.grp === grp && verOf[m.code]);
         const rows = mine.map((m: Row) => { const s = last[String(p.emp_id) + "|" + m.code]; return { week: m.week, done: !!s && s.ver === verOf[m.code], again: !!s && s.ver !== verOf[m.code] }; });
         const weeks = weeksOf(START, today, rows);
