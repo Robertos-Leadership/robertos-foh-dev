@@ -73,6 +73,25 @@ function apRepaint(){
 // ── status ────────────────────────────────────────────────────────────────
 function apStepLate(s){ return !s.done_at && s.due_date && s.due_date < apToday(); }
 function apStepSoon(s){ var t = apToday(); return !s.done_at && s.due_date && s.due_date >= t && s.due_date <= apAdd(t, 7); }
+// Completed points (completed_at set) leave the working lists; they stay readable under Points -> Completed.
+function apOpenPoints(){ return AP.points.filter(function(p){ return !p.completed_at; }).sort(function(a, b){ return a.num - b.num; }); }
+function apDonePoints(){ return AP.points.filter(function(p){ return p.completed_at; }).sort(function(a, b){ return a.num - b.num; }); }
+function apPointOpen(pid){ var p = AP.points.filter(function(x){ return x.id === pid; })[0]; return !(p && p.completed_at); }
+function apCanClose(){ return apIsApprover() || (typeof fohIsAdmin === 'function' && fohIsAdmin()); }
+async function apSetCompleted(pid, on){
+  if(!apCanClose()) return;
+  var p = AP.points.filter(function(x){ return x.id === pid; })[0]; if(!p) return;
+  var st = apPointSteps(pid);
+  if(on && st.some(function(s){ return !s.done_at; })){ AP.msg = { bad: true, text: 'Tick every step first. A point moves to Completed only when all its steps are done.' }; apRepaint(); return; }
+  if(on && !confirm('Move point ' + p.num + ' to Completed? It leaves the working lists and can be brought back.')) return;
+  var patch = on ? { completed_at: new Date().toISOString(), completed_by: apMe() } : { completed_at: null, completed_by: null };
+  var r = await sb.rpc('ap_set_completed', { p_point: pid, p_on: !!on });
+  if(r.error){ AP.msg = { bad: true, text: 'Not saved: ' + r.error.message }; apRepaint(); return; }
+  Object.assign(p, patch);
+  AP.msg = { text: on ? 'Point ' + p.num + ' moved to Completed' : 'Point ' + p.num + ' is back on the plan' };
+  if(on){ AP.open = null; AP.filter = 'done'; }
+  apRepaint();
+}
 function apPointSteps(pid){ return AP.steps.filter(function(s){ return s.point_id === pid; }).sort(function(a, b){ return a.sort - b.sort; }); }
 function apPointStatus(steps){
   var done = steps.filter(function(s){ return s.done_at; }).length;
@@ -496,23 +515,26 @@ function apOverview(msg){
     + (days > 0 ? days + ' day' + (days === 1 ? '' : 's') + ' to go' : (days === 0 ? 'today' : 'done')) + '</div></div></div>');
   h.push(apApproveBar());
   var f = AP.filter;
-  var tab = (f === 'all' || f === 'late' || f === 'week') ? 'points' : f;
+  var tab = (f === 'all' || f === 'late' || f === 'week' || f === 'done') ? 'points' : f;
   var myN = apMyOpen().length, myLate = apMyOpen().filter(apStepLate).length;
   h.push('<div class="ap-tabs" role="tablist">' + [['mine', 'My tasks'], ['dash', 'Dashboard'], ['points', 'Points'], ['plan', 'Owners &amp; dates'], ['numbers', 'Data']].map(function(x){
     var badge = x[0] === 'mine' && myN ? ' <span class="ap-tcount' + (myLate ? ' late' : '') + '">' + myN + '</span>' : '';
     return '<button role="tab" class="' + (tab === x[0] ? 'on' : '') + '" onclick="apFilter(\'' + (x[0] === 'points' ? 'all' : x[0]) + '\')">' + x[1] + badge + '</button>'; }).join('') + '</div>');
   if(tab === 'points'){
-    h.push('<div class="ap-subtabs">' + [['all', 'All'], ['late', 'Late'], ['week', 'This week']].map(function(x){
-      return '<button class="' + (f === x[0] ? 'on' : '') + '" onclick="apFilter(\'' + x[0] + '\')">' + x[1] + '</button>'; }).join('') + '</div>');
+    h.push('<div class="ap-subtabs">' + [['all', 'Open'], ['late', 'Late'], ['week', 'This week'], ['done', 'Completed']].map(function(x){
+      var n = x[0] === 'done' ? apDonePoints().length : 0;
+      return '<button class="' + (f === x[0] ? 'on' : '') + '" onclick="apFilter(\'' + x[0] + '\')">' + x[1] + (n ? ' <span class="ap-tcount">' + n + '</span>' : '') + '</button>'; }).join('') + '</div>');
     if(f === 'all'){
       h.push('<div class="ap-card ap-list">');
-      AP.points.slice().sort(function(a, b){ return a.num - b.num; }).forEach(function(p){
+      apOpenPoints().forEach(function(p){
         var st = apPointSteps(p.id), pc = apPct(st);
         h.push('<button class="ap-row" onclick="apOpen(\'' + p.id + '\')"><span class="ap-num">' + p.num + '</span><span class="ap-ptitle">' + apEsc(p.title) + apClip(apPointFiles(p.id).length)
           + '<span class="ap-gtag">' + apEsc(p.group) + '</span></span>'
           + '<span class="ap-rowbar">' + apBar(pc) + '</span><span class="ap-pct">' + pc + '%</span>' + apPill(apPointStatus(st)) + '</button>');
       });
       h.push('</div>');
+    } else if(f === 'done'){
+      h.push(apCompletedList());
     } else h.push(apStepList(f));
   } else if(f === 'mine'){
     h.push(apMyTasks());
@@ -529,6 +551,19 @@ function apOverview(msg){
 // Owner is free text (a step can belong to anyone), but typing the same person
 // three ways breaks "My steps", so the box suggests the plan's people and every
 // name already used.
+function apCompletedList(){
+  var pts = apDonePoints();
+  if(!pts.length) return '<div class="ap-card ap-empty">No point is completed yet. When every step of a point is done, open it and press <b>Move to Completed</b>.</div>';
+  var h = ['<div class="ap-card ap-list">'];
+  pts.forEach(function(p){
+    var st = apPointSteps(p.id);
+    h.push('<button class="ap-row" onclick="apOpen(\'' + p.id + '\')"><span class="ap-num">' + p.num + '</span><span class="ap-ptitle">' + apEsc(p.title) + apClip(apPointFiles(p.id).length)
+      + '<span class="ap-gtag">Completed ' + apDoneDate(p.completed_at) + (p.completed_by ? ' &middot; ' + apEsc(apName(p.completed_by)) : '') + '</span></span>'
+      + '<span class="ap-rowbar">' + apBar(100) + '</span><span class="ap-pct">' + st.length + '/' + st.length + '</span>' + apPill('done') + '</button>');
+  });
+  h.push('</div><div class="ap-small ap-done-note">Completed points leave the working lists. Their steps, files and notes stay here, and they still count in the plan figures at the top.</div>');
+  return h.join('');
+}
 function apOwnersList(){
   var seen = {}, out = [];
   ((AP.settings && AP.settings.members) || []).map(apName).concat(AP.steps.map(function(s){ return s.owner; }))
@@ -548,12 +583,12 @@ function apMovePanel(s){
 }
 // Every step on one page, so owners and dates can be filled in one sitting.
 function apPlanList(){
-  var open = AP.steps.filter(function(s){ return !s.done_at; });
+  var open = AP.steps.filter(function(s){ return !s.done_at && apPointOpen(s.point_id); });
   var set = open.filter(function(s){ return s.owner && s.due_date; }).length;
   var h = ['<div class="ap-card ap-plan-head"><b>' + set + ' of ' + open.length + '</b> open steps have an owner and a date.'
     + (set < open.length ? ' <span class="ap-small">Each box saves as soon as you leave it.</span>' : '') + '</div>'];
   [0].forEach(function(){   // one pass, points in 1-10 order (same as the overview)
-    AP.points.slice().sort(function(a, b){ return a.num - b.num; }).forEach(function(p){
+    apOpenPoints().forEach(function(p){
       h.push('<div class="ap-group">' + p.num + '. ' + apEsc(p.title) + '</div><div class="ap-card ap-steps">');
       apPointSteps(p.id).forEach(function(s){
         var late = apStepLate(s);
@@ -571,6 +606,7 @@ function apPlanList(){
 function apStepList(f){
   var t = apToday();
   var pick = AP.steps.filter(function(s){
+    if(!apPointOpen(s.point_id)) return false;
     if(f === 'late') return apStepLate(s);
     if(f === 'week') return !s.done_at && s.due_date && s.due_date <= apAdd(t, 7);
     return true;
@@ -868,7 +904,7 @@ function apMeasureBlock(list, withPoint){
 function apNumbersView(){
   var t = apAutoRead();
   var ordered = [];
-  AP.points.slice().sort(function(a, b){ return a.num - b.num; }).forEach(function(p){
+  apOpenPoints().forEach(function(p){
     AP.measures.filter(function(m){ return m.point_id === p.id; }).forEach(function(m){ ordered.push(m); });
   });
   var h = ['<div class="ap-datahead"><div><div class="ap-dtitle">Data</div>'
@@ -894,11 +930,15 @@ function apPointPage(pid, msg){
   if(!p){ AP.open = null; return apOverview(msg); }
   var st = apPointSteps(pid), pc = apPct(st), done = st.filter(function(s){ return s.done_at; }).length;
   var h = [];
-  h.push('<button class="ap-back" onclick="apOpen(null)">&lsaquo; All 10 points</button>');
+  h.push('<button class="ap-back" onclick="' + (p.completed_at ? 'AP.filter=\'done\';' : '') + 'apOpen(null)">&lsaquo; ' + (p.completed_at ? 'Completed points' : 'All points') + '</button>');
   h.push('<div class="ap-head"><div class="ap-kick">Point ' + p.num + '</div><div class="ap-title">' + apEsc(p.title) + '</div><div class="ap-sub">' + done + ' of ' + st.length + ' steps done</div></div>');
   h.push(msg);
   h.push('<div class="ap-goal">' + apEsc(p.goal || '') + '</div>');
   if(p.lead) h.push('<div class="ap-lead"><span>Lead</span>' + apEsc(p.lead) + '</div>');
+  if(p.completed_at) h.push('<div class="ap-donebar"><div><b>Completed</b> ' + apDoneDate(p.completed_at) + (p.completed_by ? ' by ' + apEsc(apName(p.completed_by)) : '') + '. Off the working lists.</div>'
+    + (apCanClose() ? '<button class="btn-q" onclick="apSetCompleted(\'' + pid + '\',false)">Bring back to the plan</button>' : '') + '</div>');
+  else if(st.length && done === st.length && apCanClose()) h.push('<div class="ap-donebar"><div><b>All ' + st.length + ' steps are done.</b> Move this point to Completed to make room on the plan.</div>'
+    + '<button class="btn-q main" onclick="apSetCompleted(\'' + pid + '\',true)">Move to Completed</button></div>');
   h.push('<div class="ap-card"><div class="ap-head-row"><div class="ap-big">' + pc + '%</div>' + apPill(apPointStatus(st)) + '</div>' + apBar(pc) + '</div>');
 
   // Steps
@@ -1142,8 +1182,9 @@ function apDashTile(p, forceOpen){
   return h + '</div>';
 }
 function apDashboard(){
-  var pts = AP.points.slice().sort(function(a, b){ return a.num - b.num; });
-  var h = ['<div class="ap-secbar"><div><div class="ap-sect">The 10 points</div><div class="ap-secsub">Tap a card for its charts and notes &middot; figures read ' + apAgo(apAutoRead()) + '</div></div>'
+  var pts = apOpenPoints(), nDone = apDonePoints().length;
+  var h = ['<div class="ap-secbar"><div><div class="ap-sect">The ' + pts.length + ' open points</div><div class="ap-secsub">Tap a card for its charts and notes &middot; figures read ' + apAgo(apAutoRead())
+    + (nDone ? ' &middot; <a href="#" onclick="apFilter(\'done\');return false">' + nDone + ' completed</a>' : '') + '</div></div>'
     + '<div class="ap-ab-btns"><button class="btn-q" ' + (AP.busyDl ? 'disabled' : '') + ' onclick="apExcel()">' + (AP.busyDl === 'xlsx' ? 'Building&hellip;' : 'Download Excel') + '</button>'
     + '<button class="btn-q" onclick="apPdf()">PDF</button></div></div>'];
   h.push('<div class="ap-cgrid">' + pts.map(apCard).join('') + '</div>');
@@ -1435,6 +1476,7 @@ function apCss(){
     '.ap-tcount{display:inline-block;min-width:18px;margin-left:5px;padding:0 6px;border-radius:999px;background:#EDE5DA;color:var(--text);font-size:11px;font-weight:600;line-height:18px}.ap-tcount.late{background:#F6D8D8;color:#8B1E1E}',
     '.ap-my-head{margin:16px 0 4px;font-size:14px}.ap-my-head a{color:var(--vino)}.ap-my .ap-slink{flex:1 1 auto;min-width:0}.ap-mydate{flex:none;font-size:13px;color:var(--text-mid);white-space:nowrap;padding-left:8px;align-self:center}',
     '.ap-tabs button.on{background:#fff;color:var(--text);font-weight:600;box-shadow:0 1px 2px rgba(0,0,0,.08)}',
+    '.ap-donebar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;background:#F3EEE6;border:1px solid #DDD0BF;border-radius:12px;padding:12px 14px;margin:10px 0;font-size:13px}.ap-done-note{margin:8px 2px 0}.ap-secsub a{color:var(--vino);font-weight:600}',
     '.ap-subtabs{display:flex;gap:6px;margin:14px 0 10px;flex-wrap:wrap}.ap-subtabs button{font:inherit;font-size:12px;padding:6px 12px;border-radius:999px;border:1px solid #DDD0BF;background:#fff;color:var(--text-mid);cursor:pointer;min-height:32px}.ap-subtabs button.on{background:var(--vino);border-color:var(--vino);color:#fff}',
     '.ap-secbar{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;margin:22px 2px 10px}',
     '.ap-sect{font-family:var(--font-serif);font-size:22px;color:var(--vino)}.ap-secsub{font-size:12px;color:var(--text-light);margin-top:2px}',
