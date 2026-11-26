@@ -28,6 +28,9 @@ async function clOpen(ds){
   C.comps=(row&&Array.isArray(row.comps))?row.comps.slice():[];
   C.good=(row&&Array.isArray(row.comments_good))?row.comments_good.slice():[];
   C.bad=(row&&Array.isArray(row.comments_bad))?row.comments_bad.slice():[];
+  // Any issue on the shift? An old report has no answer saved: a written challenge means yes.
+  C.issue={}; CL_SHIFTS.forEach(function(k){ var o=(row&&row.shifts&&row.shifts[k])||{}; C.issue[k]=(o.issue===true||o.issue===false)?o.issue:((o.challenges&&String(o.challenges).trim())?true:null); });
+  clHostInit(row);
   // SevenRooms covers SERVED — live from the Kitchen edge function (actual COMPLETE
   // bookings, split by venue: PIEMONTE = Restaurant, everything else = Scala Lounge).
   // Fetched non-blocking so the modal opens immediately; clRecalc re-runs when it lands.
@@ -50,11 +53,12 @@ async function clOpen(ds){
     });
   })();
   // Manager(s) on duty — from the schedule (foh_staff Management + foh_roster working)
-  C.onDuty=[];
+  C.onDuty=[]; C.mgrAll=[];
   // (clOnAt is defined at the foot of this file — "is this shift running at hh:mm?")
   try{
     var stf=await sb.from('foh_staff').select('id,name').eq('section','Management').eq('active',true);
     var byId={}; (stf.data||[]).forEach(function(s){byId[s.id]=s.name;}); var ids=Object.keys(byId);
+    C.mgrAll=(stf.data||[]).map(function(s){return s.name;}).filter(Boolean).sort();   // the pick lists: who approved a comp, who hosted
     if(ids.length){
       var ros=await sb.from('foh_roster').select('staff_id,status,shift_start,shift_end').eq('work_date',ds).in('staff_id',ids);
       C.onDuty=(ros.data||[]).filter(function(r){return r.status==='working';}).map(function(r){return {name:byId[r.staff_id], start:r.shift_start, end:r.shift_end};}).filter(function(x){return x.name;});
@@ -62,7 +66,8 @@ async function clOpen(ds){
   }catch(e){}
   document.getElementById('cl-modal').style.display='flex';
   var delBtn=document.getElementById('cl-delete'); if(delBtn) delBtn.style.display = row ? '' : 'none';   // only deletable once saved
-  clFill(row); clRenderComps(); clRenderComments();
+  clFill(row); clRenderComps(); clRenderComments(); clRenderIssues(); clHostRender();
+  clHostLoad(ds);   // not awaited: the form opens at once, the first-time list lands when SevenRooms answers
   // Auto-fill manager on duty for a NEW report (never overwrite a saved one).
   //
   // A manager belongs to the service they were actually STANDING IN, not the one
@@ -167,21 +172,187 @@ function clRecalc(){
     } else g('cl-sr-covers').textContent='';
   }
 }
+// ── Tidy pass, 26 Nov 2026 (Francesco: "easy to fill and easy to read once we received it") ──
+// Read off the 25 Nov report: 14 comps as loose rows, the Guest box empty on all 14, reasons
+// typed three ways ("DRINK", "DRINKS", blank), manager names typed five ways, three long shift
+// paragraphs that all said "no issues", and the five Host cards buried inside the dinner one.
+// So: reason and manager are picked, a shift is one question and one line, and the Host
+// programme is its own list. Old reports still open: a reason or a name that is not on the
+// list is kept exactly as it was typed.
+var CL_REASONS=['Dessert','Drinks','Side dish','Voucher','Business meeting','Complaint','Other'];
+var CL_HOST_ITEMS=['Pistachio Tiramisu','Choc-Choc','Roberto’s Pizza','Bresaola','Mushroom risotto','Glass of Prosecco'];
+// One name for the same reason, so the email can add them up. Anything it does not
+// recognise is shown as it was typed, never forced into a group it may not belong to.
+function clReasonGroup(c){
+  var t=String((c&&c.reason)==null?'':c.reason).trim(); if(!t) return '';
+  var l=t.toLowerCase();
+  for(var i=0;i<CL_REASONS.length;i++) if(CL_REASONS[i].toLowerCase()===l){
+    if(CL_REASONS[i]==='Other' && c.note && String(c.note).trim()) return 'Other: '+String(c.note).trim();
+    return CL_REASONS[i];
+  }
+  if(l.indexOf('dessert')>=0) return 'Dessert';
+  if(l.indexOf('drink')>=0) return 'Drinks';
+  if(l.indexOf('side')>=0) return 'Side dish';
+  if(l.indexOf('voucher')>=0) return 'Voucher';
+  if(l.indexOf('meeting')>=0) return 'Business meeting';
+  if(l.indexOf('complain')>=0) return 'Complaint';
+  return t.charAt(0).toUpperCase()+t.slice(1).toLowerCase();
+}
+function clMgrNames(){
+  var out=[], seen={};
+  (clInit().mgrAll||[]).forEach(function(nm){ nm=String(nm||'').trim(); if(nm && !seen[nm]){ seen[nm]=1; out.push(nm); } });
+  return out;
+}
 function clAddComp(){ clInit().comps.push({table:'',guest:'',amount:'',reason:'',manager:''}); clRenderComps(); }
 function clRemoveComp(i){ clInit().comps.splice(i,1); clRenderComps(); clRecalc(); }
 function clCompField(i,f,v){ clInit().comps[i][f]=v; if(f==='amount') clRecalc(); }
+function clCompReason(i,v){ clInit().comps[i].reason=v; clRenderComps(); }
+function clCompMgr(i,v){
+  var c=clInit().comps[i];
+  if(v==='__other'){ c._typed=true; c.manager=''; clRenderComps(); var el=document.getElementById('cl-comp-mgr-'+i); if(el) el.focus(); return; }
+  c.manager=v;
+}
 function clRenderComps(){
-  var C=clInit(), box=document.getElementById('cl-comps'); if(!box) return; var h='';
+  var C=clInit(), box=document.getElementById('cl-comps'); if(!box) return; var h='', mgrs=clMgrNames();
+  if(C.comps.length) h+='<div class="cl-comp-row cl-comp-head"><span>Table</span><span>AED</span><span>Reason</span><span>Approved by</span><span></span></div>';
   C.comps.forEach(function(c,i){
+    var r=String(c.reason==null?'':c.reason), inList=CL_REASONS.indexOf(r)>=0;
+    var need=(c.table||c.amount) && !r.trim();
+    var ro='<option value="">Choose a reason</option>'
+      +CL_REASONS.map(function(o){ return '<option'+(o===r?' selected':'')+'>'+clEsc(o)+'</option>'; }).join('')
+      +((r && !inList)?'<option selected>'+clEsc(r)+'</option>':'');
+    var m=String(c.manager==null?'':c.manager), typed=c._typed || (m && mgrs.indexOf(m)<0) || !mgrs.length;
+    var mg= typed
+      ? '<input id="cl-comp-mgr-'+i+'" placeholder="Approved by" value="'+clEsc(m)+'" oninput="clCompField('+i+',\'manager\',this.value)">'
+      : '<select aria-label="Approved by" onchange="clCompMgr('+i+',this.value)"><option value="">Approved by</option>'
+        +mgrs.map(function(o){ return '<option'+(o===m?' selected':'')+'>'+clEsc(o)+'</option>'; }).join('')
+        +'<option value="__other">Someone else…</option></select>';
     h+='<div class="cl-comp-row">'
       +'<input placeholder="Table" value="'+clEsc(c.table)+'" oninput="clCompField('+i+',\'table\',this.value)">'
-      +'<input placeholder="Guest" value="'+clEsc(c.guest)+'" oninput="clCompField('+i+',\'guest\',this.value)">'
       +'<input placeholder="AED" type="number" inputmode="decimal" value="'+clEsc(c.amount)+'" oninput="clCompField('+i+',\'amount\',this.value)">'
-      +'<input placeholder="Reason" value="'+clEsc(c.reason)+'" oninput="clCompField('+i+',\'reason\',this.value)">'
-      +'<input placeholder="Mgr" value="'+clEsc(c.manager)+'" oninput="clCompField('+i+',\'manager\',this.value)">'
-      +'<button class="cl-x" onclick="clRemoveComp('+i+')" title="Remove">&times;</button></div>';
+      +'<select aria-label="Reason"'+(need?' class="cl-need"':'')+' onchange="clCompReason('+i+',this.value)">'+ro+'</select>'
+      +mg
+      +'<button class="cl-x" onclick="clRemoveComp('+i+')" title="Remove">&times;</button>'
+      +(r==='Other'?'<input class="cl-comp-note" placeholder="What for" value="'+clEsc(c.note)+'" oninput="clCompField('+i+',\'note\',this.value)">':'')
+      +'</div>';
   });
   box.innerHTML=h;
+}
+
+// ── Shifts: one question, one line. The second box only opens on Yes. ──
+var CL_SHIFTS=['day','night','late'];
+function clSetIssue(k,v){ var C=clInit(); if(!C.issue) C.issue={}; C.issue[k]=(C.issue[k]===v)?null:v; clRenderIssues(); }
+function clRenderIssues(){
+  var C=clInit(); if(!C.issue) C.issue={};
+  CL_SHIFTS.forEach(function(k){
+    var v=C.issue[k], box=document.getElementById('cl-'+k+'-issue'), ch=document.getElementById('cl-'+k+'-ch');
+    if(box) box.innerHTML='<span>Any issue on this shift?</span>'
+      +'<button type="button" class="cl-yn'+(v===false?' on-no':'')+'" aria-pressed="'+(v===false)+'" onclick="clSetIssue(\''+k+'\',false)">No</button>'
+      +'<button type="button" class="cl-yn'+(v===true?' on-yes':'')+'" aria-pressed="'+(v===true)+'" onclick="clSetIssue(\''+k+'\',true)">Yes</button>';
+    if(ch) ch.style.display=(v===true)?'':'none';
+  });
+}
+
+// ── Host programme (ROB-SOP-GX-001): who got the card tonight, and what was promised. ──
+// The list is tonight's guests SevenRooms shows no earlier visit for. It is a help, not a
+// gate: a guest it misses is added by hand, and a guest it could not check is said so.
+function clHostInit(row){
+  var C=clInit(), saved=((row&&row.shifts&&row.shifts.host)||{}), cards=Array.isArray(saved.cards)?saved.cards:[];
+  C.host={ status:'idle', unknown:0, firstN:(typeof saved.first_tables==='number'?saved.first_tables:null),
+    by:(cards[0]&&cards[0].host)||'',
+    first:[], rows:cards.map(function(x){ return {client:x.client||'', name:x.name||'', table:x.table||'', pax:x.pax||null, promised:x.promised||'', given:true, manual:!x.client}; }) };
+}
+function clHostKey(x){ return x.client ? ('c:'+x.client) : ('n:'+String(x.name||'').trim().toLowerCase()); }
+async function clHostLoad(ds){
+  var C=clInit(), H=C.host; if(!H) return;
+  H.status='loading'; clHostRender();
+  try{
+    if(typeof resFetchDaysheet!=='function' || typeof rrProfiles!=='function' || typeof rrProf!=='function') throw new Error('reservations module not loaded');
+    var j=await resFetchDaysheet(ds);
+    if(clInit().date!==ds || clInit().host!==H) return;
+    var seen={}, list=[], venue='';
+    (j.reservations||[]).forEach(function(r){
+      var st=String(r.state||r.status||'').toLowerCase();
+      if(st.indexOf('cancel')>=0 || st.indexOf('no_show')>=0 || st.indexOf('noshow')>=0) return;
+      if(r.venue && !venue) venue=r.venue;
+      if(!r.client || seen[r.client]) return; seen[r.client]=1;
+      list.push({client:r.client, name:String(r.name||'').trim(), table:Array.isArray(r.tables)?r.tables.join('–'):String(r.tables||''), pax:Number(r.pax)||null});
+    });
+    await rrProfiles(list.map(function(x){ return x.client; }), venue);
+    if(clInit().date!==ds || clInit().host!==H) return;
+    var first=[], unknown=0;
+    list.forEach(function(x){ var p=rrProf(x.client); if(!p){ unknown++; return; } if((Number(p.visits)||0)<=1) first.push(x); });
+    var have={}; H.rows.forEach(function(x){ have[clHostKey(x)]=x; });
+    first.forEach(function(x){
+      var old=have['c:'+x.client] || have['n:'+x.name.toLowerCase()];
+      if(old){ old.client=x.client; old.manual=false; if(!old.table) old.table=x.table; if(!old.pax) old.pax=x.pax; }
+    });
+    // 25 first-time guests on 24 Nov: listing every one made the form three screens long.
+    // Only the cards are rows; the rest wait in a pick list.
+    H.first=first; H.firstN=first.length; H.unknown=unknown; H.status='ok';
+  }catch(e){
+    console.warn('[closing] first-time guests not read', e);
+    if(clInit().host===H) H.status='err';
+  }
+  if(clInit().host===H) clHostRender();
+}
+function clHostAdd(){ var H=clInit().host; if(!H) return; H.rows.push({client:'', name:'', table:'', pax:null, promised:'', given:true, manual:true}); clHostRender(); }
+function clHostField(i,f,v){ var H=clInit().host; if(H && H.rows[i]) H.rows[i][f]=v; }
+function clHostPick(id){
+  var H=clInit().host; if(!H || !id) return;
+  var x=(H.first||[]).filter(function(f){ return f.client===id; })[0]; if(!x) return;
+  H.rows.push({client:x.client, name:x.name, table:x.table, pax:x.pax, promised:'', given:true, manual:false});
+  clHostRender();
+  var el=document.getElementById('cl-host-item-'+(H.rows.length-1)); if(el) el.focus();
+}
+function clHostRemove(i){ var H=clInit().host; if(!H) return; H.rows.splice(i,1); clHostRender(); }
+function clHostRender(){
+  var C=clInit(), H=C.host, box=document.getElementById('cl-host'), note=document.getElementById('cl-host-note'); if(!box || !H) return;
+  var given=H.rows.filter(function(x){ return x.given; }).length;
+  if(note){
+    var t='';
+    if(H.status==='loading') t='Reading tonight’s first-time guests from SevenRooms…';
+    else if(H.status==='err') t='<span style="color:#8E2C1F">SevenRooms could not be read — add the guests who got a card by hand.</span>';
+    else if(H.status==='ok') t='First-time guests tonight: <b>'+H.firstN+'</b> · cards given: <b>'+given+'</b>'+(H.unknown?(' · '+H.unknown+' guest'+(H.unknown>1?'s':'')+' could not be checked'):'');
+    note.innerHTML=t;
+  }
+  var h='';
+  if(H.rows.length) h+='<div class="cl-host-row cl-host-head"><span>Guest</span><span>Table</span><span>Promised for next visit</span><span></span></div>';
+  H.rows.forEach(function(x,i){
+    var need=x.given && !String(x.promised||'').trim();
+    h+='<div class="cl-host-row'+(x.given?' is-on':'')+'">'
+      +(x.manual
+        ? '<input placeholder="Guest name" value="'+clEsc(x.name)+'" oninput="clHostField('+i+',\'name\',this.value)">'
+          +'<input placeholder="Table" value="'+clEsc(x.table)+'" oninput="clHostField('+i+',\'table\',this.value)">'
+        : '<span class="cl-host-name">'+clEsc(x.name||'Guest')+(x.pax?(' · '+x.pax):'')+'</span><span>'+clEsc(x.table||'—')+'</span>')
+      +'<input id="cl-host-item-'+i+'" list="cl-host-items" placeholder="Item promised" value="'+clEsc(x.promised)+'"'+(need?' class="cl-need"':'')+' oninput="clHostField('+i+',\'promised\',this.value);this.classList.remove(\'cl-need\')">'
+      +'<button type="button" class="cl-x" title="Remove this card" onclick="clHostRemove('+i+')">&times;</button>'
+      +'</div>';
+  });
+  var taken={}; H.rows.forEach(function(x){ if(x.client) taken[x.client]=1; });
+  var left=(H.first||[]).filter(function(f){ return !taken[f.client]; });
+  if(left.length) h+='<select class="cl-inp cl-host-pick" aria-label="Add a first-time guest" onchange="clHostPick(this.value)"><option value="">Who got a card? Pick a first-time guest…</option>'
+    +left.map(function(f){ return '<option value="'+clEsc(f.client)+'">'+clEsc(f.name||'Guest')+(f.table?(' · table '+clEsc(f.table)):'')+(f.pax?(' · '+f.pax+' guests'):'')+'</option>'; }).join('')+'</select>';
+  box.innerHTML=h;
+  var dl=document.getElementById('cl-host-items');
+  if(dl && !dl.childNodes.length) dl.innerHTML=CL_HOST_ITEMS.map(function(o){ return '<option value="'+clEsc(o)+'">'; }).join('');
+  var by=document.getElementById('cl-host-by');
+  if(by){
+    var mgrs=clMgrNames(), cur=H.by||'';
+    by.innerHTML='<option value="">Choose the host</option>'+mgrs.map(function(o){ return '<option'+(o===cur?' selected':'')+'>'+clEsc(o)+'</option>'; }).join('')
+      +((cur && mgrs.indexOf(cur)<0)?'<option selected>'+clEsc(cur)+'</option>':'');
+  }
+}
+// What is saved with the report: only the cards given, plus how many first-time tables
+// SevenRooms showed (null when it could not be read — unknown is never written as 0).
+function clHostForSave(){
+  var H=clInit().host; if(!H) return null;
+  var byEl=document.getElementById('cl-host-by'); if(byEl) H.by=byEl.value||'';
+  var cards=H.rows.filter(function(x){ return x.given && String(x.name||'').trim(); }).map(function(x){
+    return {client:x.client||null, name:String(x.name).trim(), table:String(x.table||'').trim(), pax:x.pax||null, promised:String(x.promised||'').trim(), host:H.by||''};
+  });
+  if(!cards.length && H.firstN==null) return null;
+  return {first_tables:H.firstN, cards:cards};
 }
 function clAddComment(type){ (type==='good'?clInit().good:clInit().bad).push(''); clRenderComments(); }
 function clRemoveComment(type,i){ (type==='good'?clInit().good:clInit().bad).splice(i,1); clRenderComments(); }
@@ -196,40 +367,111 @@ function clRenderComments(){
   });
 }
 // Build the branded HTML email from a saved closing-report row.
+// Reordered 26 Nov 2026 so it reads top-down: the four numbers, then anything that does not
+// add up, then the detail. A section with nothing in it is left out rather than shown empty.
 function clEmailHTML(c, ds){
   function n(x){ return x==null?0:Number(x); }
   function m(x){ return 'AED '+Math.round(n(x)).toLocaleString(); }
+  function num(x){ return Math.round(n(x)).toLocaleString(); }
   function e(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
   var rln=n(c.rest_lunch_net),rlc=n(c.rest_lunch_covers),rdn=n(c.rest_dinner_net),rdc=n(c.rest_dinner_covers);
   var lln=n(c.lounge_lunch_net),llc=n(c.lounge_lunch_covers),ldn=n(c.lounge_dinner_net),ldc=n(c.lounge_dinner_covers);
   var restNet=rln+rdn,restCov=rlc+rdc,lounNet=lln+ldn,lounCov=llc+ldc,net=restNet+lounNet,totCov=restCov+lounCov;
   function avg(x,cov){ return cov?('AED '+Math.round(x/cov).toLocaleString()):'—'; }
-  var sr=clInit().srCovers,srLine='';
-  if(sr){ srLine='SevenRooms served — Restaurant <b>'+n(sr.restaurant)+'</b> · Scala <b>'+n(sr.lounge)+'</b> · total <b>'+n(sr.total)+'</b> covers'+(n(sr.total)===totCov?' &check;':' · entered '+totCov); }
+  var sr=clInit().srCovers;
   var tips=n(c.cc_tips)+n(c.cash_tips), comps=c.comps||[], compsTot=comps.reduce(function(s,x){return s+n(x.amount);},0);
   var dateLabel=new Date(ds+'T12:00:00').toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
-  var sh=c.shifts||{}, good=c.comments_good||[], bad=c.comments_bad||[];
+  var sh=c.shifts||{}, good=c.comments_good||[], bad=c.comments_bad||[], host=sh.host||null;
+  var SANS='font-family:Arial,sans-serif;', SERIF='font-family:Georgia,serif;';
+  var H2='style="'+SERIF+'font-size:15px;color:#400207;border-bottom:2px solid #C9A84C;padding-bottom:5px;margin-bottom:10px;"';
   var TD='style="text-align:right;padding:8px 9px;"', TH='style="text-align:right;padding:7px 9px;font-size:11px;text-transform:uppercase;"';
+
+  // ── To check: only what does not add up. Nothing to check, no box. ──
+  var chk=[];
+  function off(a,b){ var d=Math.abs(a-b); return d>=5 && d>0.1*Math.max(a,b); }
+  if(sr){
+    var ar=[];
+    if(off(restCov,n(sr.restaurant))) ar.push('Restaurant '+restCov+' typed, '+n(sr.restaurant)+' served');
+    if(off(lounCov,n(sr.lounge))) ar.push('Scala '+lounCov+' typed, '+n(sr.lounge)+' served');
+    if(ar.length) chk.push('Guests by area do not match SevenRooms: '+ar.join(' &middot; '));
+    else if(off(totCov,n(sr.total))) chk.push('Guests do not match SevenRooms: '+totCov+' typed, '+n(sr.total)+' served');
+  }
+  var noReason=comps.filter(function(x){ return n(x.amount) && !String(x.reason==null?'':x.reason).trim(); });
+  if(noReason.length) chk.push(noReason.length+' comp'+(noReason.length>1?'s have':' has')+' no reason: '+noReason.map(function(x){ return e(x.table||'no table')+' '+m(x.amount); }).join(' &middot; '));
+  var split=n(c.food_net)+n(c.bev_net)+n(c.tobacco_net)+n(c.other_net);
+  if(split>0 && Math.abs(split-net)>=1) chk.push('Sales split is '+m(Math.abs(split-net))+' '+(split>net?'over':'under')+' net revenue');
+  var cards=(host&&Array.isArray(host.cards))?host.cards:[];
+  var noItem=cards.filter(function(x){ return !String(x.promised||'').trim(); });
+  if(noItem.length) chk.push(noItem.length+' Host card'+(noItem.length>1?'s':'')+' with no item promised: '+noItem.map(function(x){ return e(x.name); }).join(', '));
+  var chkBox=chk.length?('<div style="background:#FBF0D9;border:1px solid #E3C77A;border-radius:6px;padding:10px 14px;margin:14px 0 0;'+SANS+'font-size:13px;color:#5A3D05;line-height:1.6;"><strong>To check</strong><br>'+chk.join('<br>')+'</div>'):'';
+
+  // ── The four numbers ──
+  function cell(lbl,val){ return '<td style="width:25%;padding:0 4px;vertical-align:top;"><div style="background:#F3EADA;border-radius:6px;padding:10px 8px;text-align:center;"><div style="'+SANS+'font-size:11px;color:#5b4a36;">'+lbl+'</div><div style="'+SERIF+'font-size:19px;color:#400207;font-weight:bold;margin-top:4px;white-space:nowrap;">'+val+'</div></div></td>'; }
+  var head4='<table style="width:100%;border-collapse:collapse;margin:0 -4px;"><tr>'
+    +cell('Net revenue',m(net))+cell('Guests',num(totCov))+cell('Per guest',avg(net,totCov))+cell('Comps',net?((compsTot/net*100).toFixed(1)+'%'):'—')+'</tr></table>';
+
   function row(name,lun,din,cov,av){ return '<tr style="border-bottom:1px solid #E3D8C6;"><td style="padding:8px 9px;font-weight:bold;">'+name+'</td><td '+TD+'>'+lun+'</td><td '+TD+'>'+din+'</td><td '+TD+'>'+cov+'</td><td '+TD+'>'+av+'</td></tr>'; }
-  var compRows = comps.length? comps.map(function(x){ return '<tr style="border-top:1px solid #E3D8C6;"><td style="padding:6px;">'+e(x.table)+'</td><td style="padding:6px;">'+e(x.guest)+'</td><td style="padding:6px;text-align:right;">'+m(x.amount)+'</td><td style="padding:6px;">'+e(x.reason)+'</td><td style="padding:6px;">'+e(x.manager)+'</td></tr>'; }).join('') : '<tr><td style="padding:6px;color:#4F4535;" colspan="5">None</td></tr>';
-  function shiftLine(label,o){ o=o||{}; return '<strong style="color:#400207;">'+label+':</strong> '+(e(o.feedback)||'—')+(o.challenges?(' &nbsp;<em>Challenges:</em> '+e(o.challenges)):'')+'<br>'; }
-  function bullets(arr){ return arr.length? arr.map(function(t){return '&bull; '+e(t);}).join('<br>') : '<span style="color:#4F4535;">—</span>'; }
+
+  // ── Comps, added up by reason. The tables stay visible under each line. ──
+  var groups={}, order=[];
+  comps.forEach(function(x){
+    var k=clReasonGroup(x); if(!groups[k]){ groups[k]={n:0,amt:0,mgr:[],tables:[]}; order.push(k); }
+    var g=groups[k]; g.n++; g.amt+=n(x.amount);
+    var mg=String(x.manager==null?'':x.manager).trim(); if(mg && g.mgr.indexOf(mg)<0) g.mgr.push(mg);
+    if(x.table) g.tables.push(String(x.table)+(n(x.amount)?(' '+num(x.amount)):''));
+  });
+  order.sort(function(a,b){ return groups[b].amt-groups[a].amt; });
+  var compRows=order.map(function(k){ var g=groups[k];
+    return '<tr style="border-top:1px solid #E3D8C6;"><td style="padding:7px 6px;'+(k?'':'color:#8E2C1F;font-weight:bold;')+'">'+(k?e(k):'No reason given')
+      +'<div style="font-size:11px;color:#6b5a45;font-weight:normal;margin-top:2px;">'+e(g.tables.join(' · '))+'</div></td>'
+      +'<td style="padding:7px 6px;text-align:right;vertical-align:top;">'+g.n+'</td><td style="padding:7px 6px;text-align:right;vertical-align:top;white-space:nowrap;">'+m(g.amt)+'</td>'
+      +'<td style="padding:7px 6px;vertical-align:top;">'+(e(g.mgr.join(', '))||'—')+'</td></tr>'; }).join('');
+  var compsBlock=comps.length?('<div style="padding:10px 30px;"><div '+H2+'>Comps &middot; '+m(compsTot)+' &middot; '+comps.length+' table'+(comps.length>1?'s':'')+'</div>'
+    +'<table style="width:100%;border-collapse:collapse;'+SANS+'font-size:13px;color:#3d2f20;"><tr style="color:#5b4a36;font-size:11px;"><td style="padding:3px 6px;">Reason</td><td style="padding:3px 6px;text-align:right;">Tables</td><td style="padding:3px 6px;text-align:right;">Amount</td><td style="padding:3px 6px;">Approved by</td></tr>'+compRows+'</table></div>'):'';
+
+  // ── Host programme ──
+  var hostBlock='';
+  if(host && (cards.length || typeof host.first_tables==='number')){
+    var hostBy=''; cards.forEach(function(x){ if(x.host && !hostBy) hostBy=x.host; });
+    hostBlock='<div style="padding:10px 30px;"><div '+H2+'>Host programme &middot; '+cards.length+' card'+(cards.length===1?'':'s')+' given</div>'
+      +'<div style="'+SANS+'font-size:13px;color:#3d2f20;line-height:1.6;">'
+      +(typeof host.first_tables==='number'?('First-time guests tonight (SevenRooms): <strong>'+host.first_tables+'</strong>'+(hostBy?' &middot; ':'')):'')
+      +(hostBy?('Host: <strong>'+e(hostBy)+'</strong>'):'')+'</div>'
+      +(cards.length?('<table style="width:100%;border-collapse:collapse;'+SANS+'font-size:13px;color:#3d2f20;margin-top:6px;"><tr style="color:#5b4a36;font-size:11px;"><td style="padding:3px 6px;">Guest</td><td style="padding:3px 6px;">Table</td><td style="padding:3px 6px;">Promised for next visit</td></tr>'
+        +cards.map(function(x){ return '<tr style="border-top:1px solid #E3D8C6;"><td style="padding:6px;">'+e(x.name)+(x.pax?(' &middot; '+e(x.pax)):'')+'</td><td style="padding:6px;">'+(e(x.table)||'—')+'</td><td style="padding:6px;">'+(e(x.promised)||'<span style="color:#8E2C1F;">not written</span>')+'</td></tr>'; }).join('')+'</table>'):'')
+      +'</div>';
+  }
+
+  // ── Shifts: a mark, then the line. An old report with no answer shows no mark. ──
+  function pill(txt,bg){ return '<span style="display:inline-block;background:'+bg+';color:#FFFFFF;border-radius:10px;padding:1px 9px;font-size:11px;font-weight:bold;">'+txt+'</span> '; }
+  function shiftLine(label,o){ o=o||{};
+    var fb=String(o.feedback||'').trim(), ch=String(o.challenges||'').trim();
+    var issue=(o.issue===true || o.issue===false) ? o.issue : (ch?true:null);
+    if(!fb && !ch && issue==null) return '';
+    return '<div style="margin-bottom:8px;">'+(issue===true?pill('Issue','#8E2C1F'):(issue===false?pill('No issues','#1F5A3A'):''))
+      +'<strong style="color:#400207;">'+label+'</strong>'+(fb?(' &middot; '+e(fb)):'')
+      +(ch?('<div style="margin-top:3px;color:#8E2C1F;"><strong>Issue:</strong> '+e(ch)+'</div>'):'')+'</div>'; }
+  var shiftsHtml=shiftLine('Day (12&ndash;7)',sh.day)+shiftLine('Night (7&ndash;11)',sh.night)+shiftLine('Late (11&ndash;close)',sh.late);
+  function bullets(arr){ return arr.map(function(t){return '&bull; '+e(t);}).join('<br>'); }
+
   return '<!doctype html><html><body style="margin:0;padding:0;background:#EFE7DA;font-family:Georgia,serif;color:#2C1810;"><div style="max-width:640px;margin:0 auto;background:#FBF7F0;">'
     +'<div style="background:#400207;padding:24px 30px;"><div style="font-size:10px;letter-spacing:.28em;text-transform:uppercase;color:#C9A84C;font-weight:bold;">Roberto\'s DIFC &middot; Operations</div><div style="font-family:Georgia,serif;font-size:25px;color:#FBF7F0;margin-top:8px;">Daily Closing Report</div><div style="font-size:13px;color:#E8D9C7;margin-top:6px;">'+dateLabel+'</div></div>'
-    +'<div style="padding:16px 30px;border-bottom:1px solid #E3D8C6;font-family:Arial,sans-serif;font-size:13px;color:#5b4a36;"><strong style="color:#400207;">Manager on duty</strong> &middot; AM: '+(e(c.manager_am)||'—')+' &middot; PM: '+(e(c.manager_pm)||'—')+'</div>'
-    +'<div style="padding:20px 30px 6px;"><div style="font-family:Georgia,serif;font-size:16px;color:#400207;border-bottom:2px solid #C9A84C;padding-bottom:6px;margin-bottom:12px;">Revenue</div>'
-    +'<div style="background:#400207;border-radius:8px;padding:16px 20px;margin-bottom:14px;text-align:center;"><div style="font-family:Arial,sans-serif;font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:#C9A84C;font-weight:bold;">Total Net Revenue</div><div style="font-family:Georgia,serif;font-size:34px;color:#FBF7F0;font-weight:bold;margin:6px 0 4px;">'+m(net)+'</div><div style="font-family:Arial,sans-serif;font-size:12px;color:#E8D9C7;">'+totCov+' covers &middot; avg '+avg(net,totCov)+'</div></div>'
-    +'<table style="width:100%;border-collapse:collapse;font-family:Arial,sans-serif;font-size:13px;"><tr style="background:#400207;color:#FBF7F0;"><th style="text-align:left;padding:7px 9px;font-size:11px;text-transform:uppercase;">Area</th><th '+TH+'>Lunch<br><span style="font-weight:400;font-size:10px;">12:00–17:00</span></th><th '+TH+'>Dinner<br><span style="font-weight:400;font-size:10px;">17:01–close</span></th><th '+TH+'>Covers</th><th '+TH+'>Avg</th></tr>'
+    +'<div style="padding:18px 30px 6px;">'+head4+chkBox+'</div>'
+    +'<div style="padding:14px 30px 6px;"><div '+H2+'>Revenue</div>'
+    +'<table style="width:100%;border-collapse:collapse;font-family:Arial,sans-serif;font-size:13px;"><tr style="background:#400207;color:#FBF7F0;"><th style="text-align:left;padding:7px 9px;font-size:11px;text-transform:uppercase;">Area</th><th '+TH+'>Lunch<br><span style="font-weight:400;font-size:10px;">12:00–17:00</span></th><th '+TH+'>Dinner<br><span style="font-weight:400;font-size:10px;">17:01–close</span></th><th '+TH+'>Guests</th><th '+TH+'>Per guest</th></tr>'
     +row('Restaurant', rln?m(rln):'—', rdn?m(rdn):'—', restCov, avg(restNet,restCov))
     +row('Scala Lounge &amp; Bar', lln?m(lln):'—', ldn?m(ldn):'—', lounCov, avg(lounNet,lounCov))
     +'<tr style="background:#F3EADA;font-weight:bold;color:#400207;"><td style="padding:9px;">Total</td><td style="padding:9px;text-align:right;">'+((rln+lln)?m(rln+lln):'—')+'</td><td style="padding:9px;text-align:right;">'+m(rdn+ldn)+'</td><td style="padding:9px;text-align:right;">'+totCov+'</td><td style="padding:9px;text-align:right;">'+avg(net,totCov)+'</td></tr></table>'
-    +(srLine?'<div style="font-family:Arial,sans-serif;font-size:11px;color:#4F4535;margin-top:8px;">'+srLine+'</div>':'')+'</div>'
-    +'<div style="padding:12px 30px;"><table style="width:100%;font-family:Arial,sans-serif;font-size:13px;"><tr><td style="vertical-align:top;width:50%;padding-right:12px;"><div style="font-family:Georgia,serif;font-size:14px;color:#400207;margin-bottom:6px;">Sales split</div><div style="color:#5b4a36;line-height:1.7;">Food <strong>'+m(c.food_net)+'</strong><br>Beverage <strong>'+m(c.bev_net)+'</strong><br>Tobacco <strong>'+m(c.tobacco_net)+'</strong>'+(n(c.other_net)?'<br>Miscellaneous <strong>'+m(c.other_net)+'</strong>':'')+'</div></td><td style="vertical-align:top;width:50%;padding-left:12px;border-left:1px solid #E3D8C6;"><div style="font-family:Georgia,serif;font-size:14px;color:#400207;margin-bottom:6px;">Tips</div><div style="color:#5b4a36;line-height:1.7;">CC <strong>'+m(c.cc_tips)+'</strong><br>Cash <strong>'+m(c.cash_tips)+'</strong><br>Total <strong>'+m(tips)+'</strong></div></td></tr></table></div>'
-    +'<div style="padding:10px 30px;"><div style="font-family:Georgia,serif;font-size:14px;color:#400207;border-bottom:2px solid #C9A84C;padding-bottom:5px;margin-bottom:10px;">Comps &middot; '+m(compsTot)+(net?(' ('+(compsTot/net*100).toFixed(1)+'% of net)'):'')+'</div><table style="width:100%;border-collapse:collapse;font-family:Arial,sans-serif;font-size:12px;color:#5b4a36;"><tr style="color:#4F4535;text-transform:uppercase;font-size:10px;"><td style="padding:3px 6px;">Table</td><td style="padding:3px 6px;">Guest</td><td style="padding:3px 6px;text-align:right;">Amount</td><td style="padding:3px 6px;">Reason</td><td style="padding:3px 6px;">Mgr</td></tr>'+compRows+'</table></div>'
-    +(c.private_events?'<div style="padding:8px 30px;font-family:Arial,sans-serif;font-size:13px;color:#5b4a36;"><span style="font-family:Georgia,serif;color:#400207;">Private events:</span> '+e(c.private_events)+'</div>':'')
-    +'<div style="padding:12px 30px;"><div style="font-family:Georgia,serif;font-size:14px;color:#400207;border-bottom:2px solid #C9A84C;padding-bottom:5px;margin-bottom:10px;">Shift logs</div><div style="font-family:Arial,sans-serif;font-size:12px;color:#5b4a36;line-height:1.7;">'+shiftLine('Day (12&ndash;7)',sh.day)+shiftLine('Night (7&ndash;11)',sh.night)+shiftLine('Late (11&ndash;close)',sh.late)+'</div></div>'
-    +'<div style="padding:8px 30px 14px;"><table style="width:100%;font-family:Arial,sans-serif;font-size:12px;"><tr><td style="vertical-align:top;width:50%;padding-right:12px;"><div style="color:#296E48;text-transform:uppercase;font-size:11px;font-weight:bold;margin-bottom:6px;">What went well</div><div style="color:#5b4a36;line-height:1.7;">'+bullets(good)+'</div></td><td style="vertical-align:top;width:50%;padding-left:12px;border-left:1px solid #E3D8C6;"><div style="color:#AB3D2D;text-transform:uppercase;font-size:11px;font-weight:bold;margin-bottom:6px;">What didn\'t</div><div style="color:#5b4a36;line-height:1.7;">'+bullets(bad)+'</div></td></tr></table></div>'
-    +(c.support?'<div style="padding:4px 30px 18px;font-family:Arial,sans-serif;font-size:13px;color:#5b4a36;"><span style="font-family:Georgia,serif;color:#400207;">Support needed:</span> '+e(c.support)+'</div>':'')
+    +'<div style="'+SANS+'font-size:13px;color:#3d2f20;margin-top:10px;line-height:1.7;">Food <strong>'+m(c.food_net)+'</strong> &middot; Beverage <strong>'+m(c.bev_net)+'</strong> &middot; Tobacco <strong>'+m(c.tobacco_net)+'</strong>'+(n(c.other_net)?' &middot; Miscellaneous <strong>'+m(c.other_net)+'</strong>':'')
+    +'<br>Tips <strong>'+m(tips)+'</strong> (card '+num(c.cc_tips)+' &middot; cash '+num(c.cash_tips)+')'
+    +(sr?('<br><span style="font-size:12px;color:#5b4a36;">SevenRooms served: Restaurant '+n(sr.restaurant)+' &middot; Scala '+n(sr.lounge)+' &middot; total '+n(sr.total)+'</span>'):'')+'</div></div>'
+    +compsBlock
+    +hostBlock
+    +(c.private_events?'<div style="padding:10px 30px;"><div '+H2+'>Private events and groups</div><div style="'+SANS+'font-size:13px;color:#3d2f20;line-height:1.6;">'+e(c.private_events)+'</div></div>':'')
+    +(shiftsHtml?'<div style="padding:10px 30px;"><div '+H2+'>Shifts</div><div style="'+SANS+'font-size:13px;color:#3d2f20;line-height:1.6;">'+shiftsHtml+'</div></div>':'')
+    +((good.length||bad.length)?'<div style="padding:8px 30px 10px;'+SANS+'font-size:13px;color:#3d2f20;line-height:1.6;">'+(good.length?('<div style="color:#1F5A3A;font-weight:bold;">What went well</div>'+bullets(good)):'')+(bad.length?('<div style="color:#8E2C1F;font-weight:bold;margin-top:6px;">What didn\'t</div>'+bullets(bad)):'')+'</div>':'')
+    +(c.support?'<div style="padding:10px 30px;"><div '+H2+'>Support needed</div><div style="'+SANS+'font-size:13px;color:#3d2f20;line-height:1.6;">'+e(c.support)+'</div></div>':'')
+    +'<div style="padding:12px 30px 16px;'+SANS+'font-size:12px;color:#5b4a36;border-top:1px solid #E3D8C6;margin-top:8px;"><strong style="color:#400207;">Managers on duty</strong> &middot; AM: '+(e(c.manager_am)||'—')+' &middot; PM: '+(e(c.manager_pm)||'—')+'</div>'
     +'<div style="background:#400207;padding:14px 30px;font-family:Arial,sans-serif;font-size:11px;color:#C9A84C;">Submitted by '+(e(c.created_by)||'—')+' &middot; Roberto\'s DIFC</div></div></body></html>';
 }
 var CL_EMAIL_URL='https://paoaivwtkzujmrgrfjuq.supabase.co/functions/v1/send-closing-report';
@@ -281,8 +523,11 @@ async function clSave(andEmail){
   var food=clNum('cl-food'),bev=clNum('cl-bev'),tob=clNum('cl-tob'),misc=clNum('cl-misc');
   var restNet=sum(rl,rd), restCov=sum(rlc,rdc), lounNet=sum(ll,ld), lounCov=sum(llc,ldc);
   var net=(restNet==null&&lounNet==null)?null:((restNet||0)+(lounNet||0));
-  var shifts={ day:{feedback:clVal('cl-day-fb'),challenges:clVal('cl-day-ch')}, night:{feedback:clVal('cl-night-fb'),challenges:clVal('cl-night-ch')}, late:{feedback:clVal('cl-late-fb'),challenges:clVal('cl-late-ch')} };
-  var comps=C.comps.filter(function(c){return c.table||c.guest||c.amount||c.reason||c.manager;}).map(function(c){return {table:c.table,guest:c.guest,amount:(Number(c.amount)||0),reason:c.reason,manager:c.manager};});
+  // The issue box only counts when the answer is Yes; a No never carries an old challenge along.
+  var shifts={};
+  CL_SHIFTS.forEach(function(k){ var is=(C.issue||{})[k]; shifts[k]={feedback:clVal('cl-'+k+'-fb'), challenges:(is===false?'':clVal('cl-'+k+'-ch')), issue:(is===true||is===false)?is:null}; });
+  var hostSave=clHostForSave(); if(hostSave) shifts.host=hostSave;
+  var comps=C.comps.filter(function(c){return c.table||c.guest||c.amount||c.reason||c.manager;}).map(function(c){var o={table:c.table,guest:c.guest||'',amount:(Number(c.amount)||0),reason:c.reason,manager:c.manager}; if(c.reason==='Other'&&c.note&&String(c.note).trim()) o.note=String(c.note).trim(); return o;});
   var good=C.good.filter(function(t){return t&&t.trim();}), bad=C.bad.filter(function(t){return t&&t.trim();});
   var crow={ service_date:ds,
     rest_lunch_net:rl, rest_lunch_covers:rlc, rest_dinner_net:rd, rest_dinner_covers:rdc,
@@ -311,7 +556,7 @@ async function clSave(andEmail){
   var clSendWho = null;
   if(andEmail){
     var anyShiftNote=['day','night','late'].some(function(k){ return (shifts[k].feedback||'').trim() || (shifts[k].challenges||'').trim(); });
-    var hasAny = net!=null || clVal('cl-mgr-am') || clVal('cl-mgr-pm') || good.length || bad.length || comps.length || clVal('cl-events') || clVal('cl-support') || anyShiftNote;
+    var hasAny = net!=null || (hostSave&&hostSave.cards.length) || clVal('cl-mgr-am') || clVal('cl-mgr-pm') || good.length || bad.length || comps.length || clVal('cl-events') || clVal('cl-support') || anyShiftNote;
     if(!hasAny){ alert('Nothing to email — this closing report is empty.\n\nAdd revenue, a manager, or notes before using Save & Email.'); return; }
   }
   // Traceable: require a validated Employee ID to EMAIL the team OR to EDIT an
