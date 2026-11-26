@@ -305,6 +305,23 @@ function clHostPick(id){
   clHostRender();
   var el=document.getElementById('cl-host-item-'+(H.rows.length-1)); if(el) el.focus();
 }
+// The promised item: pick one of the usual ones, or "Something else" to type it.
+// (26 Nov 2026, Francesco: "need an option to pick by hand too". A typing box with
+// suggestions already took any text, but it looked like a closed list.)
+function clHostItem(i,v){
+  var H=clInit().host; if(!H || !H.rows[i]) return;
+  if(v==='__other'){ H.rows[i]._typed=true; H.rows[i].promised=''; clHostRender(); var el=document.getElementById('cl-host-item-'+i); if(el) el.focus(); return; }
+  H.rows[i].promised=v; clHostRender();
+}
+function clHostItemList(i){ var H=clInit().host; if(!H || !H.rows[i]) return; H.rows[i]._typed=false; H.rows[i].promised=''; clHostRender(); }
+function clHostItemBox(x,i,need){
+  var p=String(x.promised==null?'':x.promised), typed=x._typed || (p && CL_HOST_ITEMS.indexOf(p)<0);
+  if(typed) return '<span class="cl-host-item cl-host-typed"><input id="cl-host-item-'+i+'" placeholder="Type the item promised" value="'+clEsc(p)+'"'+(need?' class="cl-need"':'')
+    +' oninput="clHostField('+i+',\'promised\',this.value);this.classList.remove(\'cl-need\')"><button type="button" class="cl-host-back" title="Back to the list" onclick="clHostItemList('+i+')">List</button></span>';
+  return '<select id="cl-host-item-'+i+'" class="cl-host-item'+(need?' cl-need':'')+'" aria-label="Item promised" onchange="clHostItem('+i+',this.value)"><option value="">Choose the item promised</option>'
+    +CL_HOST_ITEMS.map(function(o){ return '<option'+(o===p?' selected':'')+'>'+clEsc(o)+'</option>'; }).join('')
+    +'<option value="__other">Something else — type it…</option></select>';
+}
 function clHostRemove(i){ var H=clInit().host; if(!H) return; H.rows.splice(i,1); clHostRender(); }
 function clHostRender(){
   var C=clInit(), H=C.host, box=document.getElementById('cl-host'), note=document.getElementById('cl-host-note'); if(!box || !H) return;
@@ -325,7 +342,7 @@ function clHostRender(){
         ? '<input placeholder="Guest name" value="'+clEsc(x.name)+'" oninput="clHostField('+i+',\'name\',this.value)">'
           +'<input placeholder="Table" value="'+clEsc(x.table)+'" oninput="clHostField('+i+',\'table\',this.value)">'
         : '<span class="cl-host-name">'+clEsc(x.name||'Guest')+(x.pax?(' · '+x.pax):'')+'</span><span>'+clEsc(x.table||'—')+'</span>')
-      +'<input id="cl-host-item-'+i+'" list="cl-host-items" placeholder="Item promised" value="'+clEsc(x.promised)+'"'+(need?' class="cl-need"':'')+' oninput="clHostField('+i+',\'promised\',this.value);this.classList.remove(\'cl-need\')">'
+      +clHostItemBox(x,i,need)
       +'<button type="button" class="cl-x" title="Remove this card" onclick="clHostRemove('+i+')">&times;</button>'
       +'</div>';
   });
@@ -334,8 +351,6 @@ function clHostRender(){
   if(left.length) h+='<select class="cl-inp cl-host-pick" aria-label="Add a first-time guest" onchange="clHostPick(this.value)"><option value="">Who got a card? Pick a first-time guest…</option>'
     +left.map(function(f){ return '<option value="'+clEsc(f.client)+'">'+clEsc(f.name||'Guest')+(f.table?(' · table '+clEsc(f.table)):'')+(f.pax?(' · '+f.pax+' guests'):'')+'</option>'; }).join('')+'</select>';
   box.innerHTML=h;
-  var dl=document.getElementById('cl-host-items');
-  if(dl && !dl.childNodes.length) dl.innerHTML=CL_HOST_ITEMS.map(function(o){ return '<option value="'+clEsc(o)+'">'; }).join('');
   var by=document.getElementById('cl-host-by');
   if(by){
     var mgrs=clMgrNames(), cur=H.by||'';
