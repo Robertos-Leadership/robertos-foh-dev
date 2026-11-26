@@ -260,8 +260,12 @@ function clHostInit(row){
   var C=clInit(), saved=((row&&row.shifts&&row.shifts.host)||{}), cards=Array.isArray(saved.cards)?saved.cards:[];
   C.host={ status:'idle', unknown:0, firstN:(typeof saved.first_tables==='number'?saved.first_tables:null),
     by:(cards[0]&&cards[0].host)||'',
-    first:[], rows:cards.map(function(x){ return {client:x.client||'', name:x.name||'', table:x.table||'', pax:x.pax||null, promised:x.promised||'', given:true, manual:!x.client}; }) };
+    first:[], rows:cards.map(function(x){ return {client:x.client||'', name:x.name||'', table:x.table||'', pax:x.pax||null, promised:x.promised||'', host:x.host||'', given:true, manual:!x.client}; }) };
 }
+// Cards as a share of tonight's first-time tables. A card added by hand is a first-time
+// table SevenRooms did not list, so it counts on both sides and the share cannot pass 100%.
+function clHostPct(cards,first,byHand){ var d=(Number(first)||0)+(Number(byHand)||0); return d>0 ? Math.round(cards/d*100) : null; }
+function clHostShare(cards,first,byHand){ var p=clHostPct(cards,first,byHand); return p==null?'':(' (<b>'+p+'%</b>)'); }
 function clHostKey(x){ return x.client ? ('c:'+x.client) : ('n:'+String(x.name||'').trim().toLowerCase()); }
 async function clHostLoad(ds){
   var C=clInit(), H=C.host; if(!H) return;
@@ -296,14 +300,28 @@ async function clHostLoad(ds){
   }
   if(clInit().host===H) clHostRender();
 }
-function clHostAdd(){ var H=clInit().host; if(!H) return; H.rows.push({client:'', name:'', table:'', pax:null, promised:'', given:true, manual:true}); clHostRender(); }
+function clHostAdd(){ var H=clInit().host; if(!H) return; H.rows.push({client:'', name:'', table:'', pax:null, promised:'', host:H.by||'', given:true, manual:true}); clHostRender(); }
 function clHostField(i,f,v){ var H=clInit().host; if(H && H.rows[i]) H.rows[i][f]=v; }
 function clHostPick(id){
   var H=clInit().host; if(!H || !id) return;
   var x=(H.first||[]).filter(function(f){ return f.client===id; })[0]; if(!x) return;
-  H.rows.push({client:x.client, name:x.name, table:x.table, pax:x.pax, promised:'', given:true, manual:false});
+  H.rows.push({client:x.client, name:x.name, table:x.table, pax:x.pax, promised:'', host:H.by||'', given:true, manual:false});
   clHostRender();
   var el=document.getElementById('cl-host-item-'+(H.rows.length-1)); if(el) el.focus();
+}
+// Who gave the card. The last name chosen is offered on the next card, so one manager
+// giving five cards picks the name once.
+function clHostBy(i,v){
+  var H=clInit().host; if(!H || !H.rows[i]) return;
+  if(v==='__other'){ H.rows[i]._byTyped=true; H.rows[i].host=''; clHostRender(); var el=document.getElementById('cl-host-by-'+i); if(el) el.focus(); return; }
+  H.rows[i].host=v; if(v) H.by=v; clHostRender();
+}
+function clHostByBox(x,i){
+  var mgrs=clMgrNames(), v=String(x.host==null?'':x.host), typed=x._byTyped || (v && mgrs.indexOf(v)<0) || !mgrs.length, need=!v.trim();
+  if(typed) return '<input id="cl-host-by-'+i+'" class="cl-host-by'+(need?' cl-need':'')+'" placeholder="Given by" value="'+clEsc(v)+'" oninput="clHostField('+i+',\'host\',this.value);this.classList.remove(\'cl-need\')">';
+  return '<select id="cl-host-by-'+i+'" class="cl-host-by'+(need?' cl-need':'')+'" aria-label="Given by" onchange="clHostBy('+i+',this.value)"><option value="">Given by</option>'
+    +mgrs.map(function(o){ return '<option'+(o===v?' selected':'')+'>'+clEsc(o)+'</option>'; }).join('')
+    +'<option value="__other">Someone else\u2026</option></select>';
 }
 // The promised item: pick one of the usual ones, or "Something else" to type it.
 // (26 Nov 2026, Francesco: "need an option to pick by hand too". A typing box with
@@ -326,15 +344,16 @@ function clHostRemove(i){ var H=clInit().host; if(!H) return; H.rows.splice(i,1)
 function clHostRender(){
   var C=clInit(), H=C.host, box=document.getElementById('cl-host'), note=document.getElementById('cl-host-note'); if(!box || !H) return;
   var given=H.rows.filter(function(x){ return x.given; }).length;
+  var byHand=H.rows.filter(function(x){ return x.given && !x.client; }).length;
   if(note){
     var t='';
     if(H.status==='loading') t='Reading tonight’s first-time guests from SevenRooms…';
     else if(H.status==='err') t='<span style="color:#8E2C1F">SevenRooms could not be read — add the guests who got a card by hand.</span>';
-    else if(H.status==='ok') t='First-time guests tonight: <b>'+H.firstN+'</b> · cards given: <b>'+given+'</b>'+(H.unknown?(' · '+H.unknown+' guest'+(H.unknown>1?'s':'')+' could not be checked'):'');
+    else if(H.status==='ok') t='First-time tables tonight: <b>'+(H.firstN+byHand)+'</b> · cards given: <b>'+given+'</b>'+clHostShare(given,H.firstN,byHand)+(H.unknown?(' · '+H.unknown+' guest'+(H.unknown>1?'s':'')+' could not be checked'):'');
     note.innerHTML=t;
   }
   var h='';
-  if(H.rows.length) h+='<div class="cl-host-row cl-host-head"><span>Guest</span><span>Table</span><span>Promised for next visit</span><span></span></div>';
+  if(H.rows.length) h+='<div class="cl-host-row cl-host-head"><span>Guest</span><span>Table</span><span>Promised for next visit</span><span>Given by</span><span></span></div>';
   H.rows.forEach(function(x,i){
     var need=x.given && !String(x.promised||'').trim();
     h+='<div class="cl-host-row'+(x.given?' is-on':'')+'">'
@@ -343,6 +362,7 @@ function clHostRender(){
           +'<input placeholder="Table" value="'+clEsc(x.table)+'" oninput="clHostField('+i+',\'table\',this.value)">'
         : '<span class="cl-host-name">'+clEsc(x.name||'Guest')+(x.pax?(' · '+x.pax):'')+'</span><span>'+clEsc(x.table||'—')+'</span>')
       +clHostItemBox(x,i,need)
+      +clHostByBox(x,i)
       +'<button type="button" class="cl-x" title="Remove this card" onclick="clHostRemove('+i+')">&times;</button>'
       +'</div>';
   });
@@ -351,20 +371,13 @@ function clHostRender(){
   if(left.length) h+='<select class="cl-inp cl-host-pick" aria-label="Add a first-time guest" onchange="clHostPick(this.value)"><option value="">Who got a card? Pick a first-time guest…</option>'
     +left.map(function(f){ return '<option value="'+clEsc(f.client)+'">'+clEsc(f.name||'Guest')+(f.table?(' · table '+clEsc(f.table)):'')+(f.pax?(' · '+f.pax+' guests'):'')+'</option>'; }).join('')+'</select>';
   box.innerHTML=h;
-  var by=document.getElementById('cl-host-by');
-  if(by){
-    var mgrs=clMgrNames(), cur=H.by||'';
-    by.innerHTML='<option value="">Choose the host</option>'+mgrs.map(function(o){ return '<option'+(o===cur?' selected':'')+'>'+clEsc(o)+'</option>'; }).join('')
-      +((cur && mgrs.indexOf(cur)<0)?'<option selected>'+clEsc(cur)+'</option>':'');
-  }
 }
 // What is saved with the report: only the cards given, plus how many first-time tables
 // SevenRooms showed (null when it could not be read — unknown is never written as 0).
 function clHostForSave(){
   var H=clInit().host; if(!H) return null;
-  var byEl=document.getElementById('cl-host-by'); if(byEl) H.by=byEl.value||'';
   var cards=H.rows.filter(function(x){ return x.given && String(x.name||'').trim(); }).map(function(x){
-    return {client:x.client||null, name:String(x.name).trim(), table:String(x.table||'').trim(), pax:x.pax||null, promised:String(x.promised||'').trim(), host:H.by||''};
+    return {client:x.client||null, name:String(x.name).trim(), table:String(x.table||'').trim(), pax:x.pax||null, promised:String(x.promised||'').trim(), host:String(x.host||'').trim()};
   });
   if(!cards.length && H.firstN==null) return null;
   return {first_tables:H.firstN, cards:cards};
@@ -417,6 +430,8 @@ function clEmailHTML(c, ds){
   if(split>0 && Math.abs(split-net)>=1) chk.push('Sales split is '+m(Math.abs(split-net))+' '+(split>net?'over':'under')+' net revenue');
   var cards=(host&&Array.isArray(host.cards))?host.cards:[];
   var noItem=cards.filter(function(x){ return !String(x.promised||'').trim(); });
+  var noBy=cards.filter(function(x){ return !String(x.host||'').trim(); });
+  if(noBy.length) chk.push(noBy.length+' Host card'+(noBy.length>1?'s':'')+' with no name of who gave it: '+noBy.map(function(x){ return e(x.name); }).join(', '));
   if(noItem.length) chk.push(noItem.length+' Host card'+(noItem.length>1?'s':'')+' with no item promised: '+noItem.map(function(x){ return e(x.name); }).join(', '));
   var chkBox=chk.length?('<div style="background:#FBF0D9;border:1px solid #E3C77A;border-radius:6px;padding:10px 14px;margin:14px 0 0;'+SANS+'font-size:13px;color:#5A3D05;line-height:1.6;"><strong>To check</strong><br>'+chk.join('<br>')+'</div>'):'';
 
@@ -447,13 +462,13 @@ function clEmailHTML(c, ds){
   // ── Host programme ──
   var hostBlock='';
   if(host && (cards.length || typeof host.first_tables==='number')){
-    var hostBy=''; cards.forEach(function(x){ if(x.host && !hostBy) hostBy=x.host; });
-    hostBlock='<div style="padding:10px 30px;"><div '+H2+'>Host programme &middot; '+cards.length+' card'+(cards.length===1?'':'s')+' given</div>'
+    var byHand=cards.filter(function(x){ return !x.client; }).length, hasFirst=(typeof host.first_tables==='number');
+    var firstAll=hasFirst?(host.first_tables+byHand):null, pct=hasFirst?clHostPct(cards.length,host.first_tables,byHand):null;
+    hostBlock='<div style="padding:10px 30px;"><div '+H2+'>Host programme &middot; '+cards.length+' card'+(cards.length===1?'':'s')+' given'+(pct!=null?(' &middot; '+pct+'% of first-time tables'):'')+'</div>'
       +'<div style="'+SANS+'font-size:13px;color:#3d2f20;line-height:1.6;">'
-      +(typeof host.first_tables==='number'?('First-time guests tonight (SevenRooms): <strong>'+host.first_tables+'</strong>'+(hostBy?' &middot; ':'')):'')
-      +(hostBy?('Host: <strong>'+e(hostBy)+'</strong>'):'')+'</div>'
-      +(cards.length?('<table style="width:100%;border-collapse:collapse;'+SANS+'font-size:13px;color:#3d2f20;margin-top:6px;"><tr style="color:#5b4a36;font-size:11px;"><td style="padding:3px 6px;">Guest</td><td style="padding:3px 6px;">Table</td><td style="padding:3px 6px;">Promised for next visit</td></tr>'
-        +cards.map(function(x){ return '<tr style="border-top:1px solid #E3D8C6;"><td style="padding:6px;">'+e(x.name)+(x.pax?(' &middot; '+e(x.pax)):'')+'</td><td style="padding:6px;">'+(e(x.table)||'—')+'</td><td style="padding:6px;">'+(e(x.promised)||'<span style="color:#8E2C1F;">not written</span>')+'</td></tr>'; }).join('')+'</table>'):'')
+      +(hasFirst?('First-time tables tonight: <strong>'+firstAll+'</strong> &middot; cards given: <strong>'+cards.length+'</strong>'+(pct!=null?(' &middot; <strong>'+pct+'%</strong>'):'')):'First-time tables tonight: not read from SevenRooms')+'</div>'
+      +(cards.length?('<table style="width:100%;border-collapse:collapse;'+SANS+'font-size:13px;color:#3d2f20;margin-top:6px;"><tr style="color:#5b4a36;font-size:11px;"><td style="padding:3px 6px;">Guest</td><td style="padding:3px 6px;">Table</td><td style="padding:3px 6px;">Promised for next visit</td><td style="padding:3px 6px;">Given by</td></tr>'
+        +cards.map(function(x){ return '<tr style="border-top:1px solid #E3D8C6;"><td style="padding:6px;">'+e(x.name)+(x.pax?(' &middot; '+e(x.pax)):'')+'</td><td style="padding:6px;">'+(e(x.table)||'—')+'</td><td style="padding:6px;">'+(e(x.promised)||'<span style="color:#8E2C1F;">not written</span>')+'</td><td style="padding:6px;">'+(e(x.host)||'<span style="color:#8E2C1F;">not written</span>')+'</td></tr>'; }).join('')+'</table>'):'')
       +'</div>';
   }
 
