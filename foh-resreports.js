@@ -1573,7 +1573,7 @@ function rrRepThreeVisits(pull, opt){
     ],
     notes: [
       'A VISIT is a distinct night with a booking that was not cancelled or a no-show, counted by SevenRooms client id. Two bookings on one night are one visit.',
-      'FIRST-TIME means SevenRooms\' own history for the guest (back to 2015) shows no visit at all before this night. ' + resNum(tot.before) + ' guest' + (tot.before===1?' that the book alone would have called new had been in before, more than a year earlier, and is':'s that the book alone would have called new had been in before, more than a year earlier, and are') + ' not counted. Until 26 Nov 2026 a guest not seen for 12 months counted as new again; that rule was dropped.',
+      'FIRST-TIME means SevenRooms\' own history for the guest (back to 2015) shows no visit at all before this night. ' + resNum(tot.before) + ' guest' + (tot.before===1?' that the book alone would have called new had been in before (any time, however long ago) and is':'s that the book alone would have called new had been in before (any time, however long ago) and are') + ' not counted. Until 26 Nov 2026 a guest not seen for 12 months counted as new again; that rule was dropped.',
       'WHY THIS AND NOT "CAME BACK WITHIN 90 DAYS": that report counts anyone who returned once at any time in three months. This one follows the 1st, 2nd and 3rd visit with a window between them, which is what the 3 Visit Rule works on.',
       RR_WALKIN_NOTE
     ]
