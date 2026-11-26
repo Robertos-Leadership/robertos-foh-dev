@@ -1378,7 +1378,10 @@ function rrThreeRuleText(rule, w){
 // back (Thamer Abdullah last in Jan 2025, Galen Koller Aug 2024 ...) and left
 // out the three who had been in within the year (Amit Kumar, Naji Abboud,
 // Khalil Al Mamoori).
-var RR_GAP_MONTHS = 12;
+// 26 Nov 2026, Francesco: "the team want to count first timer only people came
+// for the first time so the 12 months rule will not apply anymore". Any real
+// visit before the night, however long ago, makes the guest RETURNING.
+var RR_GAP_MONTHS = 12;   // kept only to label old saved checks; no longer decides anything
 var RRFE = {};   // 'id|date' -> latest real visit before that date ('' = none ever), or -1 = could not read
 function rrFeKey(id, d){ return id + '|' + d; }
 // -1 could not check · 0 never been · 1 returning (in within 12 months) · 2 back after 12+ months
@@ -1527,8 +1530,7 @@ function rrRepThreeVisits(pull, opt){
       var g = L.guests[c.id], i = c.i;
       var st = rrFeState(c.id, c.d1);
       if(st < 0){ unchecked++; return; }                             // could not read: never guessed new
-      if(st === 1){ before++; return; }                              // in within the last 12 months
-      if(st === 2) again++;                                          // back after 12+ months: starts again
+      if(st === 1 || st === 2){ before++; return; }                  // been before (any time): not a first-timer
       n++;
       var d1 = g.dates[i], d2 = g.dates[i + 1], d3 = g.dates[i + 2];
       var second = !!d2 && rrDaysBetween(d1, d2) <= W;
@@ -1543,24 +1545,24 @@ function rrRepThreeVisits(pull, opt){
     // before" and "last visit over a year ago" (they add up), then one cell per
     // visit with the count, its % and, while the window is open, "still counting".
     var final2 = rrAddDays(mEnd, W + 1), final3 = rrAddDays(mEnd, (rule === 'prev' ? 2 * W : W) + 1);
-    vis.push({ ym: ym, label: rrMonthLabel(ym, pull.from, pull.to), n: n, never: n - again, again: again, s2: s2, s3: s3,
+    vis.push({ ym: ym, label: rrMonthLabel(ym, pull.from, pull.to), n: n, never: n, again: 0, before: before, s2: s2, s3: s3,
       p2: rrPct(s2, n), p3: rrPct(s3, n), until2: secondReady ? null : final2, until3: thirdReady ? null : final3 });
-    rows.push([rrMonthLabel(ym, pull.from, pull.to), n, n - again, again,
+    rows.push([rrMonthLabel(ym, pull.from, pull.to), n, before,
       rrVisitCell(s2, rrPct(s2, n), secondReady ? null : final2),
       rrVisitCell(s3, rrPct(s3, n), thirdReady ? null : final3)]);
     if(unchecked) uncheckedBy.push(rrMonthLabel(ym, pull.from, pull.to) + ': ' + unchecked);
   });
-  var head = ['Month of first visit','First-time guests','Never been before','Last visit over a year ago','Came back a 2nd time','Came back a 3rd time'];
-  var widths = [24,16,17,22,26,26], num = [1,2,3,4,5];
+  var head = ['Month of first visit','First-time guests','Had been before (not counted)','Came back a 2nd time','Came back a 3rd time'];
+  var widths = [24,16,24,26,26], num = [1,2,3,4];
   return {
     title: '3 visits — first, second, third',
     visual: { kind: 'three', months: vis, three: visThree },
-    sub: 'Rule: ' + rrThreeRuleText(rule, W) + '. First-time = never been, or last visit more than a year ago — checked against each guest\'s SevenRooms history.',
+    sub: 'Rule: ' + rrThreeRuleText(rule, W) + '. First-time = never been to Roberto\'s before, checked against each guest\'s SevenRooms history.',
     tables: [
       { name: 'By month',
         head: head, widths: widths, num: num,
         rows: rows,
-        note: 'First-time guests = Never been before + Last visit over a year ago. '
+        note: 'First-time guests = never been before. A guest with any earlier visit, however long ago, is under "Had been before" and not counted. '
           + 'Still counting = that month\'s window is not over yet (' + W + ' days for the 2nd visit, ' + (rule === 'prev' ? 2 * W : W) + ' for the 3rd), so the number can only go up until the date shown.'
           + (uncheckedBy.length ? ' Could not check (SevenRooms history would not load, left out, never guessed): ' + uncheckedBy.join(', ') + '.' : '') },
       { name: 'Made all three visits',
@@ -1571,7 +1573,7 @@ function rrRepThreeVisits(pull, opt){
     ],
     notes: [
       'A VISIT is a distinct night with a booking that was not cancelled or a no-show, counted by SevenRooms client id. Two bookings on one night are one visit.',
-      'FIRST-TIME means SevenRooms\' own history for the guest (back to 2015) shows no visit in the 12 months before this night. ' + resNum(tot.again) + ' of them had been before, more than 12 months earlier: for the 3 Visit Rule they start again here, and their 2nd and 3rd visit are counted from this night. ' + resNum(tot.before) + ' guest' + (tot.before===1?'':'s') + ' who had been in within the 12 months before are returning guests and are not counted.',
+      'FIRST-TIME means SevenRooms\' own history for the guest (back to 2015) shows no visit at all before this night. ' + resNum(tot.before) + ' guest' + (tot.before===1?' that the book alone would have called new had been in before, more than a year earlier, and is':'s that the book alone would have called new had been in before, more than a year earlier, and are') + ' not counted. Until 26 Nov 2026 a guest not seen for 12 months counted as new again; that rule was dropped.',
       'WHY THIS AND NOT "CAME BACK WITHIN 90 DAYS": that report counts anyone who returned once at any time in three months. This one follows the 1st, 2nd and 3rd visit with a window between them, which is what the 3 Visit Rule works on.',
       RR_WALKIN_NOTE
     ]
@@ -1589,7 +1591,7 @@ var RR_REPORTS = [
     blurb:'The one to use when you want months compared fairly. Every month on the same clock.',
     followUp:90, run:rrRepReturnWindow },
   { id:'threevisits', qkey:'r-threevisits', name:'3 visits — first, second, third',
-    blurb:'First-time guests (never been, or not in for 12 months or more): how many came a 2nd time, then a 3rd, within the window you choose.',
+    blurb:'First-time guests (never been to Roberto’s before): how many came a 2nd time, then a 3rd, within the window you choose.',
     lookback:true, visits:true, firstEver:true, followUp:function(){ return (RR.visitRule === 'first' ? 1 : 2) * (Number(RR.visitWindow) || 30); },
     run:rrRepThreeVisits },
   { id:'channel', qkey:'r-channel', name:'Where bookings come from',
@@ -2316,14 +2318,14 @@ function rr3Visual(v){
   if(!M.length) return '';
   rr3LoadTarget();
   var goal = RR3_TARGET.v;
-  var all = M.reduce(function(a, m){ return { n: a.n + m.n, never: a.never + m.never, again: a.again + m.again }; }, { n: 0, never: 0, again: 0 });
+  var all = M.reduce(function(a, m){ return { n: a.n + m.n, before: a.before + (m.before || 0) }; }, { n: 0, before: 0 });
   var f2 = M.filter(function(m){ return !m.until2; }), f3 = M.filter(function(m){ return !m.until3; });
   var sum = function(list, k){ return list.reduce(function(a, m){ return a + m[k]; }, 0); };
   var n2 = sum(f2, 'n'), s2 = sum(f2, 's2'), n3 = sum(f3, 'n'), s3 = sum(f3, 's3');
   var p2 = rrPct(s2, n2), p3 = rrPct(s3, n3);
   var names = function(list){ return list.map(function(m){ return rr3MonthName(m.ym); }).join(' and '); };
   var h = ['<div class="rr3-k">'];
-  h.push('<div class="rr3-c"><b>First-time guests</b><strong>' + resNum(all.n) + '</strong><span>' + resNum(all.never) + ' never been &middot; ' + resNum(all.again) + ' back after over a year</span></div>');
+  h.push('<div class="rr3-c"><b>First-time guests</b><strong>' + resNum(all.n) + '</strong><span>never been before &middot; ' + resNum(all.before) + ' who had been before not counted</span></div>');
   h.push('<div class="rr3-c"><b>Came back a 2nd time</b><strong>' + (p2 == null ? '&mdash;' : p2 + '%') + (goal ? '<em>goal ' + goal + '%</em>' : '') + '</strong>'
     + '<span>' + (f2.length ? resNum(s2) + ' of ' + resNum(n2) + ' &middot; ' + resEsc(names(f2)) + ', final' : 'No month finished yet') + '</span></div>');
   h.push('<div class="rr3-c"><b>Came back a 3rd time</b><strong>' + (p3 == null ? '&mdash;' : p3 + '%') + '</strong>'
@@ -2353,13 +2355,6 @@ function rr3Visual(v){
     h.push('</div></div>');
   });
   h.push('<div class="rr-note">Bars run from 0 to ' + top + '%.' + (goal ? ' The black line is the ' + goal + '% goal.' : '') + '</div></div>');
-  // Who the first-timers are.
-  h.push('<div class="rr3-box"><h3>Who the first-timers are</h3>');
-  M.forEach(function(m){
-    var a = m.n ? Math.round(m.never / m.n * 1000) / 10 : 0;
-    h.push('<div class="rr3-sp"><b>' + resEsc(rr3MonthName(m.ym)) + '</b><div><i style="width:' + a + '%;background:#6B1F2A"></i><i style="width:' + (100 - a) + '%;background:#D9B9A0"></i></div><span>' + resNum(m.n) + '</span></div>');
-  });
-  h.push('<div class="rr3-leg" style="margin:10px 0 0"><span><i style="background:#6B1F2A"></i>Never been before</span><span><i style="background:#D9B9A0"></i>Last visit over a year ago</span></div></div>');
   // Made all three visits: cards.
   var T = v.three || [];
   h.push('<div class="rr3-box"><h3>Made all three visits &middot; ' + resNum(T.length) + '</h3>');
