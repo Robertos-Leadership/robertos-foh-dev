@@ -45,6 +45,40 @@ function apHowBlock(st){ var h = apHowParts(st); if(!h) return ''; var w = apHow
     + (h.act ? '<div class="ap-how-row ap-how-fix"><div class="ap-how-lbl">How we fix it</div><div class="ap-how-txt">' + apEsc(h.act) + '</div></div>' : '') + '</div>'; }
 function apHowPrint(st){ var h = apHowParts(st); if(!h) return ''; var w = apHowSaid(h);
   return (w.txt ? '<b>' + w.lbl + (w.score ? ' (' + apEsc(w.score) + ')' : '') + ':</b> ' + apEsc(w.txt) + '<br>' : '') + (h.act ? '<b>How we fix it:</b> ' + apEsc(h.act) : ''); }
+// Grouped by audit area (27 Nov 2026): Does (owner) → Checks (checker confirms) → Approves (Justin, spend).
+function apCanConfirm(s){ var me = String(apName(apMe()) || '').toLowerCase(); return (!!s.checker && !!me && String(s.checker).toLowerCase() === me) || (typeof fohIsAdmin === 'function' && fohIsAdmin()); }
+function apAreaStep(s){
+  var p = apHowParts(s), w = p ? apHowSaid(p) : null, late = apStepLate(s), sc = w && w.score ? parseInt(w.score, 10) : 0, st;
+  if(s.confirmed_at) st = '<span class="ap-st ap-st-ok">Confirmed by ' + apEsc(apName(s.confirmed_by)) + ' ' + apDoneDate(s.confirmed_at) + '</span>' + (apCanConfirm(s) ? ' <button class="ap-lnk" onclick="apConfirm(\'' + s.id + '\',false)">Undo</button>' : '');
+  else if(s.done_at) st = '<span class="ap-st ap-st-wait">Done ' + apDoneDate(s.done_at) + (s.checker ? ' &middot; waiting for ' + apEsc(s.checker) + ' to confirm' : '') + '</span>' + (apCanConfirm(s) ? ' <button class="btn-q main ap-confirm" onclick="apConfirm(\'' + s.id + '\',true)">Confirm</button>' : '');
+  else st = s.due_date ? (late ? '<span class="ap-st ap-st-late">Late &middot; was due ' + apDate(s.due_date) + '</span>' : '<span class="ap-st">Due ' + apDate(s.due_date) + '</span>') : '<span class="ap-st">No date yet</span>';
+  var who = '<span class="ap-who">Does <b>' + apEsc(s.owner || '-') + '</b></span>' + (s.checker ? '<span class="ap-arr">&rarr;</span><span class="ap-who">Checks <b>' + apEsc(s.checker) + '</b></span>' : '') + (s.approver ? '<span class="ap-arr">&rarr;</span><span class="ap-who ap-who-j">Approves <b>' + apEsc(s.approver) + '</b></span>' : '');
+  return '<div class="ap-step ap-astep"><input type="checkbox" class="ap-check" ' + (s.done_at ? 'checked ' : '') + 'onchange="apTick(\'' + s.id + '\',this.checked)" aria-label="Done">'
+    + '<div class="ap-sbody"><div class="ap-astop"><div class="ap-stitle">' + apEsc(s.title) + apClip(apStepFiles(s.id).length) + '</div>' + (sc ? '<span class="ap-sc ap-sc' + sc + '">' + sc + '/5</span>' : '') + '</div>'
+    + (p ? (w.txt ? '<div class="ap-asaid">Enrico: <i>' + apEsc(w.txt) + '</i></div>' : '') + (p.act ? '<div class="ap-afix"><b>Fix:</b> ' + apEsc(p.act) + '</div>' : '') : '')
+    + '<div class="ap-awho">' + who + '</div><div class="ap-astatus">' + st + '</div>'
+    + apFilesBlock(s, false) + apEditors(s) + apMovePanel(s) + '</div></div>';
+}
+function apAreaSteps(st){
+  var out = [], areas = [];
+  st.forEach(function(s){ var a = s.area || 'Other'; if(areas.indexOf(a) === -1) areas.push(a); });
+  areas.forEach(function(a){
+    var g = st.filter(function(s){ return (s.area || 'Other') === a; });
+    var chk = g.map(function(s){ return s.checker; }).filter(Boolean), same = chk.length === g.length && chk.every(function(c){ return c === chk[0]; });
+    var ok = g.filter(function(s){ return s.confirmed_at; }).length;
+    out.push('<div class="ap-area-head"><h3>' + apEsc(a) + '</h3><span>' + g.length + (g.length === 1 ? ' item' : ' items') + (same ? ' &middot; checked by ' + apEsc(chk[0]) : '') + ' &middot; ' + ok + ' confirmed</span></div><div class="ap-card ap-steps">');
+    g.forEach(function(s){ out.push(apAreaStep(s)); });
+    out.push('</div>');
+  });
+  return out.join('');
+}
+function apPrintWho(s){ if(!s.checker) return apEsc(s.owner || ''); return 'Does ' + apEsc(s.owner || '-') + '<br>Checks ' + apEsc(s.checker) + (s.approver ? '<br>Approves ' + apEsc(s.approver) : ''); }
+async function apConfirm(id, on){
+  var s = AP.steps.filter(function(x){ return x.id === id; })[0]; if(!s) return;
+  var r = await sb.from('ap_steps').update(on ? { confirmed_at: new Date().toISOString(), confirmed_by: apMe() } : { confirmed_at: null, confirmed_by: null }).eq('id', id).select();
+  if(r.error || !r.data || !r.data.length) return apFail('Could not save', r.error || 'no row changed');
+  Object.assign(s, r.data[0]); apSay(on ? 'Confirmed' : 'Confirmation removed');
+}
 function apMe(){ return String(state.userEmail || '').toLowerCase(); }
 function apName(e){ e = String(e || '').toLowerCase(); return AP_NAMES[e] || e.split('@')[0]; }
 function apToday(){ return new Date(Date.now() + 4 * 3600e3).toISOString().slice(0, 10); }   // Dubai calendar date
@@ -164,7 +198,7 @@ function apSay(text, ms){ var m = { bad: false, text: text }; AP.msg = m; apRepa
 // Every write goes to the database first and the screen follows what it says.
 async function apTick(id, on){
   var s = AP.steps.filter(function(x){ return x.id === id; })[0]; if(!s) return;
-  var r = await sb.from('ap_steps').update({ done_at: on ? new Date().toISOString() : null }).eq('id', id).select();
+  var r = await sb.from('ap_steps').update(on ? { done_at: new Date().toISOString() } : { done_at: null, confirmed_at: null, confirmed_by: null }).eq('id', id).select();
   if(r.error || !r.data || !r.data.length) return apFail('Could not save the tick', r.error || 'no row changed');
   Object.assign(s, r.data[0]);
   if(on && !apIsApprover()) AP.askFiles = id; else if(!on && AP.askFiles === id) AP.askFiles = null;
@@ -952,7 +986,8 @@ function apPointPage(pid, msg){
     + '<button class="btn-q main" onclick="apSetCompleted(\'' + pid + '\',true)">Move to Completed</button></div>');
   h.push('<div class="ap-card"><div class="ap-head-row"><div class="ap-big">' + pc + '%</div>' + apPill(apPointStatus(st)) + '</div>' + apBar(pc) + '</div>');
 
-  // Steps
+  // Steps (grouped by audit area when the point has areas, 27 Nov 2026)
+  if(st.some(function(s){ return s.area; })) h.push(apAreaSteps(st)); else {
   h.push('<div class="ap-card ap-steps">');
   st.forEach(function(s){
     var late = apStepLate(s);
@@ -964,6 +999,7 @@ function apPointPage(pid, msg){
     h.push('</div></div>');
   });
   h.push('</div>');
+  }
 
   // How we check
   var ms = AP.measures.filter(function(m){ return m.point_id === pid; });
@@ -1381,7 +1417,7 @@ function apPdf(){
       var hasHow = apPointSteps(p.id).some(function(s){ return !!apHowParts(s); });
       h += '<div class="ap-print-point"><h2>' + p.num + '. ' + apEsc(p.title) + '</h2><div class="ap-small">' + apEsc(p.goal || '') + '</div>' + (p.lead ? '<div class="ap-small"><b>Lead:</b> ' + apEsc(p.lead) + '</div>' : '')
         + '<table class="ap-print-table"><thead><tr><th>Step</th>' + (hasHow ? '<th>What Enrico said / how we fix it</th>' : '') + '<th>Owner</th><th>Due</th><th>Status</th></tr></thead><tbody>'
-        + apPointSteps(p.id).map(function(s){ return '<tr><td>' + apEsc(s.title) + '</td>' + (hasHow ? '<td>' + apHowPrint(s) + '</td>' : '') + '<td>' + apEsc(s.owner || '') + '</td><td>' + (s.due_date ? apDate(s.due_date) : '') + '</td><td>' + apStepStatus(s) + (s.done_at ? ' ' + apDoneDate(s.done_at) : '') + '</td></tr>'; }).join('')
+        + apPointSteps(p.id).map(function(s, i, arr){ return (s.area && (i === 0 || arr[i - 1].area !== s.area) ? '<tr class="ap-print-area"><td colspan="' + (hasHow ? 5 : 4) + '">' + apEsc(s.area) + '</td></tr>' : '') + '<tr><td>' + apEsc(s.title) + '</td>' + (hasHow ? '<td>' + apHowPrint(s) + '</td>' : '') + '<td>' + apPrintWho(s) + '</td><td>' + (s.due_date ? apDate(s.due_date) : '') + '</td><td>' + apStepStatus(s) + (s.done_at ? ' ' + apDoneDate(s.done_at) : '') + (s.confirmed_at ? '<br>Confirmed by ' + apEsc(apName(s.confirmed_by)) : (s.done_at && s.checker ? '<br>To confirm: ' + apEsc(s.checker) : '')) + '</td></tr>'; }).join('')
         + '</tbody></table>';
       var ns = AP.results.filter(function(r){ return r.point_id === p.id; }).map(function(r){ return '<li><b>Week of ' + apDate(r.week_start) + ', ' + apEsc(apName(r.author_email)) + ':</b> ' + apEsc(r.note) + '</li>'; })
         .concat(AP.comments.filter(function(c){ return c.point_id === p.id; }).map(function(c){ return '<li><b>' + apEsc(apName(c.author_email)) + ', ' + apDoneDate(c.created_at) + ':</b> ' + apEsc(c.body) + '</li>'; }));
@@ -1458,6 +1494,12 @@ function apCss(){
     + '.ap-how-score{display:inline-block;margin-left:4px;background:#6B1F2A;color:#fff;border-radius:5px;padding:0 6px;font-size:11.5px;letter-spacing:0}'
     + '.ap-how-txt{color:var(--text);overflow-wrap:anywhere}'
     + '@media(max-width:560px){.ap-how-row{grid-template-columns:1fr;gap:3px}}',
+    '.ap-area-head{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin:22px 0 8px;border-bottom:2px solid var(--vino);padding-bottom:4px}.ap-area-head h3{font-family:var(--font-serif);font-weight:400;font-size:22px;margin:0;color:var(--vino)}.ap-area-head span{font-size:13px;color:var(--text-light)}'
+    + '.ap-astop{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}.ap-sc{flex:none;font-size:12.5px;font-weight:700;color:#fff;border-radius:6px;padding:1px 8px}.ap-sc1,.ap-sc2{background:#A32D2D}.ap-sc3{background:#B8860B}.ap-sc4,.ap-sc5{background:#5E8C61}'
+    + '.ap-asaid{font-size:14px;color:var(--text-light);margin-top:4px;line-height:1.45}.ap-asaid i{color:var(--text)}.ap-afix{font-size:14px;margin-top:3px;line-height:1.45}'
+    + '.ap-awho{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:9px;font-size:13px}.ap-who{border:1px solid var(--border-strong);border-radius:999px;padding:2px 10px;color:var(--text-light)}.ap-who b{color:var(--text)}.ap-who-j{background:#FBF1F2;border-color:#d9b3b9}.ap-arr{color:var(--text-light)}'
+    + '.ap-astatus{margin-top:8px;font-size:13px}.ap-st{color:var(--text-light)}.ap-st-late{color:#B3261E;font-weight:600}.ap-st-wait{background:#FFF3D6;color:#6B4A00;border-radius:999px;padding:3px 10px}.ap-st-ok{background:#E6F2EA;color:#1E5B35;border-radius:999px;padding:3px 10px}'
+    + '.ap-confirm{margin-left:6px;min-height:32px;padding:4px 14px}.ap-lnk{background:none;border:0;color:var(--vino);text-decoration:underline;cursor:pointer;font-size:13px}',
     '.ap-step{display:flex;gap:14px;padding:14px 0;border-bottom:1px solid var(--border)}.ap-step:last-child{border-bottom:0}',
     '.ap-check{width:26px;height:26px;accent-color:#1E6B3A;flex:none;margin-top:2px;cursor:pointer}',
     '.ap-sbody{flex:1;min-width:0}.ap-stitle{font-size:17px}.ap-ssub{font-size:14px;color:var(--text-light);margin-top:3px}',
@@ -1548,7 +1590,7 @@ function apCss(){
     '.ap-tile-coming{font-size:12px;color:var(--text-light);border-top:1px solid var(--border);padding-top:8px;line-height:1.5}',
     '.ap-tile-note{font-size:13px;color:var(--text);background:var(--surface2);border-radius:10px;padding:10px 12px;line-height:1.5}.ap-tile-note span{display:block;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--text-light);margin-bottom:2px}',
     '#ap-print{display:none}',
-    '@media print{@page{size:A4;margin:12mm}body.ap-printing>*:not(#ap-print){display:none!important}body.ap-printing #ap-print{display:block!important;font-family:Arial,sans-serif;color:#2C1810}#ap-print .ap-tiles{grid-template-columns:1fr 1fr;gap:8px}#ap-print .ap-tile{border:1px solid #DDD3C6;padding:10px 12px;gap:6px}#ap-print .ap-tile-title{font-size:15px}#ap-print .ap-dfig-val{font-size:22px}#ap-print .ap-chart{height:60px}.ap-print-head{margin-bottom:10px}.ap-print-head h1{font-family:Georgia,serif;color:#6B1F2A;font-size:24px;margin:4px 0}.ap-print-point{break-inside:avoid;margin-top:16px}#ap-print .ap-tile-more{display:none}.ap-print-point h2{font-family:Georgia,serif;color:#6B1F2A;font-size:18px;margin:0 0 4px}.ap-print-table{width:100%;border-collapse:collapse;font-size:11px;margin-top:8px}.ap-print-table th{text-align:left;background:#6B1F2A;color:#fff;padding:5px 6px}.ap-print-table td{border-bottom:1px solid #E6DED2;padding:5px 6px;vertical-align:top}.ap-print-notes{font-size:11px;margin-top:10px}.ap-print-notes ul{margin:4px 0 0 16px}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}}',
+    '@media print{@page{size:A4;margin:12mm}body.ap-printing>*:not(#ap-print){display:none!important}body.ap-printing #ap-print{display:block!important;font-family:Arial,sans-serif;color:#2C1810}#ap-print .ap-tiles{grid-template-columns:1fr 1fr;gap:8px}#ap-print .ap-tile{border:1px solid #DDD3C6;padding:10px 12px;gap:6px}#ap-print .ap-tile-title{font-size:15px}#ap-print .ap-dfig-val{font-size:22px}#ap-print .ap-chart{height:60px}.ap-print-head{margin-bottom:10px}.ap-print-head h1{font-family:Georgia,serif;color:#6B1F2A;font-size:24px;margin:4px 0}.ap-print-point{break-inside:avoid;margin-top:16px}#ap-print .ap-tile-more{display:none}.ap-print-point h2{font-family:Georgia,serif;color:#6B1F2A;font-size:18px;margin:0 0 4px}.ap-print-table{width:100%;border-collapse:collapse;font-size:11px;margin-top:8px}.ap-print-table th{text-align:left;background:#6B1F2A;color:#fff;padding:5px 6px}.ap-print-table td{border-bottom:1px solid #E6DED2;padding:5px 6px;vertical-align:top}.ap-print-area td{background:#F4EDE1;color:#6B1F2A;font-weight:bold;font-size:12px;padding-top:8px}.ap-print-notes{font-size:11px;margin-top:10px}.ap-print-notes ul{margin:4px 0 0 16px}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}}',
     '@media (max-width:820px){.ap-tiles{grid-template-columns:1fr}.ap-datahead{flex-wrap:wrap}}',
     '.ap-datahead{display:flex;justify-content:space-between;align-items:flex-end;gap:14px;margin:6px 2px 14px}',
     '.ap-dtitle{font-family:var(--font-serif);font-size:26px;color:var(--vino);line-height:1.1}',
