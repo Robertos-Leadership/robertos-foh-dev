@@ -34,6 +34,13 @@ var AP_NAMES = { 'fguarracino@robertos.ae': 'Francesco', 'onafid@robertos.ae': '
 var AP_GROUPS = ['Standards', 'People', 'Business growth', 'Relaunch'];
 
 function apEsc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]; }); }
+// Step detail (27 Nov 2026): `how` = "Enrico 3/5: his comment" NEWLINE "the action".
+// One-line notes (older points) stay hidden, as before.
+function apHowParts(st){ var t = String(st.how || '').trim(), i = t.indexOf(String.fromCharCode(10)); if(i === -1) return null; return { said: t.slice(0, i).trim(), act: t.slice(i + 1).trim() }; }
+function apHowBlock(st){ var h = apHowParts(st); if(!h) return ''; var m = h.said.match(/^(Enrico\s+\d\/5)\s*:?\s*([\s\S]*)$/);
+  return '<div class="ap-how">' + (h.said ? '<div class="ap-how-said">' + (m ? '<b>' + apEsc(m[1]) + '</b> &middot; <i>' + apEsc(m[2]) + '</i>' : '<i>' + apEsc(h.said) + '</i>') + '</div>' : '')
+    + (h.act ? '<div class="ap-how-act"><b>Action</b> &middot; ' + apEsc(h.act) + '</div>' : '') + '</div>'; }
+function apHowPrint(st){ var h = apHowParts(st); if(!h) return ''; return (h.said ? '<i>' + apEsc(h.said) + '</i><br>' : '') + apEsc(h.act); }
 function apMe(){ return String(state.userEmail || '').toLowerCase(); }
 function apName(e){ e = String(e || '').toLowerCase(); return AP_NAMES[e] || e.split('@')[0]; }
 function apToday(){ return new Date(Date.now() + 4 * 3600e3).toISOString().slice(0, 10); }   // Dubai calendar date
@@ -948,7 +955,7 @@ function apPointPage(pid, msg){
     var sub = s.done_at ? 'Done ' + apDoneDate(s.done_at) + (s.done_by && s.done_by !== 'seed' ? ' &middot; ' + apEsc(apName(s.done_by)) : '')
       : (s.due_date ? (late ? '<b class="ap-red">Late &middot; was due ' + apDate(s.due_date) + '</b>' : 'Due ' + apDate(s.due_date)) : 'No date yet');
     h.push('<div class="ap-step"><input type="checkbox" class="ap-check" ' + (s.done_at ? 'checked ' : '') + 'onchange="apTick(\'' + s.id + '\',this.checked)" aria-label="Done">'
-      + '<div class="ap-sbody"><div class="ap-stitle">' + apEsc(s.title) + (s.is_app ? ' <span class="ap-app">App</span>' : '') + apClip(apStepFiles(s.id).length) + '</div><div class="ap-ssub">' + sub + '</div>'
+      + '<div class="ap-sbody"><div class="ap-stitle">' + apEsc(s.title) + (s.is_app ? ' <span class="ap-app">App</span>' : '') + apClip(apStepFiles(s.id).length) + '</div><div class="ap-ssub">' + sub + '</div>' + apHowBlock(s)
       + apFilesBlock(s, false) + apEditors(s) + apMovePanel(s));
     h.push('</div></div>');
   });
@@ -1367,9 +1374,10 @@ function apPdf(){
       + '<div>As of ' + apDate(apToday()) + ' ' + new Date().getFullYear() + ' &middot; plan progress <b>' + apPct(all) + '%</b> &middot; ' + done + ' of ' + all.length + ' steps done &middot; ' + all.filter(apStepLate).length + ' late</div></div>';
     h += '<div class="ap-tiles">' + pts.map(function(p){ return apDashTile(p, true); }).join('') + '</div>';
     pts.forEach(function(p){
+      var hasHow = apPointSteps(p.id).some(function(s){ return !!apHowParts(s); });
       h += '<div class="ap-print-point"><h2>' + p.num + '. ' + apEsc(p.title) + '</h2><div class="ap-small">' + apEsc(p.goal || '') + '</div>' + (p.lead ? '<div class="ap-small"><b>Lead:</b> ' + apEsc(p.lead) + '</div>' : '')
-        + '<table class="ap-print-table"><thead><tr><th>Step</th><th>Owner</th><th>Due</th><th>Status</th></tr></thead><tbody>'
-        + apPointSteps(p.id).map(function(s){ return '<tr><td>' + apEsc(s.title) + '</td><td>' + apEsc(s.owner || '') + '</td><td>' + (s.due_date ? apDate(s.due_date) : '') + '</td><td>' + apStepStatus(s) + (s.done_at ? ' ' + apDoneDate(s.done_at) : '') + '</td></tr>'; }).join('')
+        + '<table class="ap-print-table"><thead><tr><th>Step</th>' + (hasHow ? '<th>Enrico said / action</th>' : '') + '<th>Owner</th><th>Due</th><th>Status</th></tr></thead><tbody>'
+        + apPointSteps(p.id).map(function(s){ return '<tr><td>' + apEsc(s.title) + '</td>' + (hasHow ? '<td>' + apHowPrint(s) + '</td>' : '') + '<td>' + apEsc(s.owner || '') + '</td><td>' + (s.due_date ? apDate(s.due_date) : '') + '</td><td>' + apStepStatus(s) + (s.done_at ? ' ' + apDoneDate(s.done_at) : '') + '</td></tr>'; }).join('')
         + '</tbody></table>';
       var ns = AP.results.filter(function(r){ return r.point_id === p.id; }).map(function(r){ return '<li><b>Week of ' + apDate(r.week_start) + ', ' + apEsc(apName(r.author_email)) + ':</b> ' + apEsc(r.note) + '</li>'; })
         .concat(AP.comments.filter(function(c){ return c.point_id === p.id; }).map(function(c){ return '<li><b>' + apEsc(apName(c.author_email)) + ', ' + apDoneDate(c.created_at) + ':</b> ' + apEsc(c.body) + '</li>'; }));
@@ -1439,6 +1447,7 @@ function apCss(){
     '.ap-goal{font-size:16px;color:var(--text-mid);margin:0 4px 14px;line-height:1.5}',
     '.ap-lead{font-size:14px;color:var(--text-dark,#2C1810);margin:-6px 4px 14px;line-height:1.45}.ap-lead span{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#6B1F2A;margin-right:8px}',
     '.ap-steps{padding:6px 20px}',
+    '.ap-how{margin-top:8px;padding:8px 12px;border-left:3px solid var(--vino);background:#FBF7F0;font-size:13px;line-height:1.5}.ap-how-said{color:var(--text-light)}.ap-how-said b{color:var(--text)}.ap-how-act{margin-top:4px}',
     '.ap-step{display:flex;gap:14px;padding:14px 0;border-bottom:1px solid var(--border)}.ap-step:last-child{border-bottom:0}',
     '.ap-check{width:26px;height:26px;accent-color:#1E6B3A;flex:none;margin-top:2px;cursor:pointer}',
     '.ap-sbody{flex:1;min-width:0}.ap-stitle{font-size:17px}.ap-ssub{font-size:14px;color:var(--text-light);margin-top:3px}',
