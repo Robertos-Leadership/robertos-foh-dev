@@ -37,10 +37,14 @@ function apEsc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, functio
 // Step detail (27 Nov 2026): `how` = "Enrico 3/5: his comment" NEWLINE "the action".
 // One-line notes (older points) stay hidden, as before.
 function apHowParts(st){ var t = String(st.how || '').trim(), i = t.indexOf(String.fromCharCode(10)); if(i === -1) return null; return { said: t.slice(0, i).trim(), act: t.slice(i + 1).trim() }; }
-function apHowBlock(st){ var h = apHowParts(st); if(!h) return ''; var m = h.said.match(/^(Enrico\s+\d\/5)\s*:?\s*([\s\S]*)$/);
-  return '<div class="ap-how">' + (h.said ? '<div class="ap-how-said">' + (m ? '<b>' + apEsc(m[1]) + '</b> &middot; <i>' + apEsc(m[2]) + '</i>' : '<i>' + apEsc(h.said) + '</i>') + '</div>' : '')
-    + (h.act ? '<div class="ap-how-act"><b>Action</b> &middot; ' + apEsc(h.act) + '</div>' : '') + '</div>'; }
-function apHowPrint(st){ var h = apHowParts(st); if(!h) return ''; return (h.said ? '<i>' + apEsc(h.said) + '</i><br>' : '') + apEsc(h.act); }
+// Shown as two labelled rows, "What Enrico said" (score as a badge) and "How we fix it" (27 Nov 2026,
+// Francesco picked it from a mock-up: the first version showed his words in small grey italics).
+function apHowSaid(h){ var m = h.said.match(/^Enrico\s+(\d)\/5\s*:?\s*([\s\S]*)$/); return m ? { lbl: 'What Enrico said', score: m[1] + '/5', txt: m[2] } : { lbl: 'What was said', score: '', txt: h.said }; }
+function apHowBlock(st){ var h = apHowParts(st); if(!h) return ''; var w = apHowSaid(h);
+  return '<div class="ap-how">' + (w.txt ? '<div class="ap-how-row"><div class="ap-how-lbl">' + w.lbl + (w.score ? ' <span class="ap-how-score">' + apEsc(w.score) + '</span>' : '') + '</div><div class="ap-how-txt">' + apEsc(w.txt) + '</div></div>' : '')
+    + (h.act ? '<div class="ap-how-row ap-how-fix"><div class="ap-how-lbl">How we fix it</div><div class="ap-how-txt">' + apEsc(h.act) + '</div></div>' : '') + '</div>'; }
+function apHowPrint(st){ var h = apHowParts(st); if(!h) return ''; var w = apHowSaid(h);
+  return (w.txt ? '<b>' + w.lbl + (w.score ? ' (' + apEsc(w.score) + ')' : '') + ':</b> ' + apEsc(w.txt) + '<br>' : '') + (h.act ? '<b>How we fix it:</b> ' + apEsc(h.act) : ''); }
 function apMe(){ return String(state.userEmail || '').toLowerCase(); }
 function apName(e){ e = String(e || '').toLowerCase(); return AP_NAMES[e] || e.split('@')[0]; }
 function apToday(){ return new Date(Date.now() + 4 * 3600e3).toISOString().slice(0, 10); }   // Dubai calendar date
@@ -1376,7 +1380,7 @@ function apPdf(){
     pts.forEach(function(p){
       var hasHow = apPointSteps(p.id).some(function(s){ return !!apHowParts(s); });
       h += '<div class="ap-print-point"><h2>' + p.num + '. ' + apEsc(p.title) + '</h2><div class="ap-small">' + apEsc(p.goal || '') + '</div>' + (p.lead ? '<div class="ap-small"><b>Lead:</b> ' + apEsc(p.lead) + '</div>' : '')
-        + '<table class="ap-print-table"><thead><tr><th>Step</th>' + (hasHow ? '<th>Enrico said / action</th>' : '') + '<th>Owner</th><th>Due</th><th>Status</th></tr></thead><tbody>'
+        + '<table class="ap-print-table"><thead><tr><th>Step</th>' + (hasHow ? '<th>What Enrico said / how we fix it</th>' : '') + '<th>Owner</th><th>Due</th><th>Status</th></tr></thead><tbody>'
         + apPointSteps(p.id).map(function(s){ return '<tr><td>' + apEsc(s.title) + '</td>' + (hasHow ? '<td>' + apHowPrint(s) + '</td>' : '') + '<td>' + apEsc(s.owner || '') + '</td><td>' + (s.due_date ? apDate(s.due_date) : '') + '</td><td>' + apStepStatus(s) + (s.done_at ? ' ' + apDoneDate(s.done_at) : '') + '</td></tr>'; }).join('')
         + '</tbody></table>';
       var ns = AP.results.filter(function(r){ return r.point_id === p.id; }).map(function(r){ return '<li><b>Week of ' + apDate(r.week_start) + ', ' + apEsc(apName(r.author_email)) + ':</b> ' + apEsc(r.note) + '</li>'; })
@@ -1447,7 +1451,13 @@ function apCss(){
     '.ap-goal{font-size:16px;color:var(--text-mid);margin:0 4px 14px;line-height:1.5}',
     '.ap-lead{font-size:14px;color:var(--text-dark,#2C1810);margin:-6px 4px 14px;line-height:1.45}.ap-lead span{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#6B1F2A;margin-right:8px}',
     '.ap-steps{padding:6px 20px}',
-    '.ap-how{margin-top:8px;padding:8px 12px;border-left:3px solid var(--vino);background:#FBF7F0;font-size:13px;line-height:1.5}.ap-how-said{color:var(--text-light)}.ap-how-said b{color:var(--text)}.ap-how-act{margin-top:4px}',
+    '.ap-how{margin-top:10px;border:1px solid rgba(107,31,42,.18);border-radius:10px;overflow:hidden;background:#fff}'
+    + '.ap-how-row{display:grid;grid-template-columns:150px minmax(0,1fr);gap:12px;padding:9px 12px;font-size:14.5px;line-height:1.45}'
+    + '.ap-how-fix{border-top:1px solid rgba(107,31,42,.12);background:#FBF7F0}'
+    + '.ap-how-lbl{font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#6B1F2A;padding-top:2px}.ap-how-fix .ap-how-lbl{color:#1E5B35}'
+    + '.ap-how-score{display:inline-block;margin-left:4px;background:#6B1F2A;color:#fff;border-radius:5px;padding:0 6px;font-size:11.5px;letter-spacing:0}'
+    + '.ap-how-txt{color:var(--text);overflow-wrap:anywhere}'
+    + '@media(max-width:560px){.ap-how-row{grid-template-columns:1fr;gap:3px}}',
     '.ap-step{display:flex;gap:14px;padding:14px 0;border-bottom:1px solid var(--border)}.ap-step:last-child{border-bottom:0}',
     '.ap-check{width:26px;height:26px;accent-color:#1E6B3A;flex:none;margin-top:2px;cursor:pointer}',
     '.ap-sbody{flex:1;min-width:0}.ap-stitle{font-size:17px}.ap-ssub{font-size:14px;color:var(--text-light);margin-top:3px}',
