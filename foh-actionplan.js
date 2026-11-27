@@ -392,6 +392,14 @@ function apOpenFileLink(fid){
   var w = apFileWhere(f); if(w.p.id){ AP.open = w.p.id; apRepaint(); }
   apView(fid);
 }
+// Checks / Approves (27 Nov 2026). Changing the checker moves the Confirm button to them.
+async function apSetRole(id, field, v){
+  if(field !== 'checker' && field !== 'approver') return;
+  var o = {}; o[field] = String(v || '').trim() || null;
+  var r = await sb.from('ap_steps').update(o).eq('id', id).select();
+  if(r.error || !r.data || !r.data.length) return apFail('Could not save', r.error || 'no row changed');
+  var s = AP.steps.filter(function(x){ return x.id === id; })[0]; Object.assign(s, r.data[0]); apSay(field === 'checker' ? 'Checker saved' : 'Approver saved'); apRepaint();
+}
 async function apSetOwner(id, v){
   var r = await sb.from('ap_steps').update({ owner: String(v || '').trim() || null }).eq('id', id).select();
   if(r.error || !r.data || !r.data.length) return apFail('Could not save the owner', r.error || 'no row changed');
@@ -617,6 +625,8 @@ function apOwnersList(){
 }
 function apEditors(s){
   return '<div class="ap-sedit"><label>Owner <input id="ap-o-' + s.id + '" class="ap-in" list="ap-owners" autocomplete="off" value="' + apEsc(s.owner || '') + '" placeholder="Who" onchange="apSetOwner(\'' + s.id + '\',this.value)"></label>'
+    + (s.area ? '<label class="ap-lbl-new">Checks <input id="ap-c-' + s.id + '" class="ap-in" list="ap-owners" autocomplete="off" value="' + apEsc(s.checker || '') + '" placeholder="Who confirms" onchange="apSetRole(\'' + s.id + '\',\'checker\',this.value)"></label>'
+      + '<label class="ap-lbl-new">Approves <input id="ap-a-' + s.id + '" class="ap-in" list="ap-owners" autocomplete="off" value="' + apEsc(s.approver || '') + '" placeholder="Only if it costs" onchange="apSetRole(\'' + s.id + '\',\'approver\',this.value)"></label>' : '')
     + '<label>Date <input id="ap-d-' + s.id + '" class="ap-in" type="date" value="' + apEsc(s.due_date || '') + '" onchange="apSetDate(\'' + s.id + '\',this.value)"></label></div>';
 }
 function apMovePanel(s){
@@ -1500,6 +1510,7 @@ function apCss(){
     + '.ap-awho{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:9px;font-size:13px}.ap-who{border:1px solid var(--border-strong);border-radius:999px;padding:2px 10px;color:var(--text-light)}.ap-who b{color:var(--text)}.ap-who-j{background:#FBF1F2;border-color:#d9b3b9}.ap-arr{color:var(--text-light)}'
     + '.ap-astatus{margin-top:8px;font-size:13px}.ap-st{color:var(--text-light)}.ap-st-late{color:#B3261E;font-weight:600}.ap-st-wait{background:#FFF3D6;color:#6B4A00;border-radius:999px;padding:3px 10px}.ap-st-ok{background:#E6F2EA;color:#1E5B35;border-radius:999px;padding:3px 10px}'
     + '.ap-confirm{margin-left:6px;min-height:32px;padding:4px 14px}.ap-lnk{background:none;border:0;color:var(--vino);text-decoration:underline;cursor:pointer;font-size:13px}',
+    '.ap-lbl-new{background:#EEF3FA;border-radius:8px;padding:2px 6px}',
     '.ap-step{display:flex;gap:14px;padding:14px 0;border-bottom:1px solid var(--border)}.ap-step:last-child{border-bottom:0}',
     '.ap-check{width:26px;height:26px;accent-color:#1E6B3A;flex:none;margin-top:2px;cursor:pointer}',
     '.ap-sbody{flex:1;min-width:0}.ap-stitle{font-size:17px}.ap-ssub{font-size:14px;color:var(--text-light);margin-top:3px}',
